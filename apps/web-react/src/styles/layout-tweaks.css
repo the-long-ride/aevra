@@ -1,0 +1,59 @@
+#page.page {
+  width: 100%;
+  max-width: 1280px;
+}
+
+#page[data-page='dashboard'] {
+  max-width: 1440px;
+}
+
+#page[data-page='workspaces'],
+#page[data-page='permissions'] {
+  max-width: 1400px;
+}
+
+#page[data-page='sessions'],
+#page[data-page='processes'],
+#page[data-page='changes'] {
+  max-width: 1360px;
+}
+
+#page[data-page='audit'] {
+  max-width: 1400px;
+}
+
+#page[data-page='settings'] {
+  max-width: 1320px;
+}
+
+#page[data-page='guide'] {
+  max-width: 1480px;
+}
+
+button {
+  min-width: 40px;
+}
+
+.dt-pages button {
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  place-items: center;
+  padding: 0;
+}
+
+.guide-layout {
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+@media (max-width: 1023px) {
+  #page.page {
+    max-width: none;
+  }
+
+  .guide-layout {
+    grid-template-columns: 1fr;
+  }
+}

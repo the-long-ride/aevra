@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { classifyCommand } from '../src/policy/command-family.js';
+test('command families and effects are conservative', () => {
+  assert.equal(classifyCommand(['git', 'status']).effect, 'READ_ONLY');
+  assert.equal(classifyCommand(['git', 'reset', '--hard']).effect, 'REPOSITORY_STATE');
+  assert.equal(classifyCommand(['git', 'reset', '--hard']).risk, 'HIGH');
+  assert.equal(classifyCommand(['dotnet', 'test']).effect, 'BUILD_OUTPUT');
+  assert.equal(classifyCommand(['mystery']).effect, 'UNKNOWN');
+});
+test('raw shell commands are always high risk and privilege scripts become critical', () => {
+  const bash = classifyCommand(['bash', '-lc', 'pwd']);
+  assert.equal(bash.family, 'shell:bash');
+  assert.equal(bash.risk, 'HIGH');
+  const powershell = classifyCommand([
+    'powershell.exe',
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    'Get-ChildItem',
+  ]);
+  assert.equal(powershell.family, 'shell:powershell');
+  assert.equal(powershell.risk, 'HIGH');
+  assert.equal(classifyCommand(['bash', '-lc', 'sudo rm -rf /tmp/example']).risk, 'CRITICAL');
+});

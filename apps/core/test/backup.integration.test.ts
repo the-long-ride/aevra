@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtempSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { AevraDatabase } from '../../../packages/store/src/database.js';
+import { BackupService } from '../src/backup/backup-service.js';
+test('backup is SQLite-consistent and contains no secret value column', () => {
+  const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-backup-')),
+    db = AevraDatabase.open(path.join(d, 'live.db'));
+  const file = new BackupService(db, path.join(d, 'backups')).create();
+  assert.equal(existsSync(file), true);
+  const copy = AevraDatabase.open(file);
+  assert.equal(copy.tableColumns('secret_references').includes('value'), false);
+  copy.close();
+  db.close();
+});

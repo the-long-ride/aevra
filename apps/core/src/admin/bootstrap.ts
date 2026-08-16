@@ -1,0 +1,121 @@
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
+import path from 'node:path';
+import type { DatabaseSync } from 'node:sqlite';
+function hash(value: string) {
+  return createHash('sha256').update(value).digest('hex');
+}
+export class AdminBootstrapService {
+  constructor(
+    private db: DatabaseSync,
+    private ttlMs = 60_000,
+    private sessionTtlMs = 12 * 60 * 60_000,
+  ) {}
+  async issue() {
+    const token = randomBytes(32).toString('base64url'),
+      now = Date.now(),
+      expiresAt = new Date(now + this.ttlMs).toISOString();
+    this.db
+      .prepare('INSERT INTO bootstrap_tokens(token_hash,created_at,expires_at) VALUES(?,?,?)')
+      .run(hash(token), new Date(now).toISOString(), expiresAt);
+    return { token, expiresAt };
+  }
+  async consume(token: string) {
+    const tokenHash = hash(token);
+    const row = this.db
+      .prepare('SELECT * FROM bootstrap_tokens WHERE token_hash=?')
+      .get(tokenHash) as any;
+    if (!row || row.consumed_at || Date.parse(row.expires_at) < Date.now()) return null;
+    this.db
+      .prepare('UPDATE bootstrap_tokens SET consumed_at=? WHERE token_hash=?')
+      .run(new Date().toISOString(), tokenHash);
+    const sessionId = randomBytes(32).toString('base64url'),
+      h = hash(sessionId),
+      now = new Date().toISOString(),
+      expires = new Date(Date.now() + this.sessionTtlMs).toISOString();
+    this.db
+      .prepare(
+        'INSERT INTO admin_sessions(id_hash,created_at,expires_at,last_used_at) VALUES(?,?,?,?)',
+      )
+      .run(h, now, expires, now);
+    return { sessionId };
+  }
+  async issueSession() {
+    const sessionId = randomBytes(32).toString('base64url');
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + this.sessionTtlMs).toISOString();
+    this.db
+      .prepare(
+        'INSERT INTO admin_sessions(id_hash,created_at,expires_at,last_used_at) VALUES(?,?,?,?)',
+      )
+      .run(hash(sessionId), now, expiresAt, now);
+    return { sessionId, expiresAt };
+  }
+  revokeSession(sessionId: string | undefined) {
+    if (!sessionId) return { revoked: false };
+    const result = this.db
+      .prepare('DELETE FROM admin_sessions WHERE id_hash=?')
+      .run(hash(sessionId));
+    return { revoked: Number(result.changes ?? 0) > 0 };
+  }
+  async revokeAll() {
+    this.db.exec('DELETE FROM admin_sessions');
+  }
+  revokeAllExcept(sessionId: string | undefined) {
+    const before = Number(
+      (this.db.prepare('SELECT COUNT(*) count FROM admin_sessions').get() as any)?.count ?? 0,
+    );
+    if (!sessionId) {
+      this.db.exec('DELETE FROM admin_sessions');
+      return { revoked: before, preserved: 0 };
+    }
+    const keep = hash(sessionId);
+    this.db.prepare('DELETE FROM admin_sessions WHERE id_hash<>?').run(keep);
+    const preserved = Number(
+      (
+        this.db
+          .prepare('SELECT COUNT(*) count FROM admin_sessions WHERE id_hash=?')
+          .get(keep) as any
+      )?.count ?? 0,
+    );
+    return { revoked: Math.max(0, before - preserved), preserved };
+  }
+  listSessions() {
+    return this.db
+      .prepare(
+        'SELECT id_hash idHash,created_at createdAt,expires_at expiresAt,last_used_at lastUsedAt FROM admin_sessions ORDER BY created_at DESC',
+      )
+      .all();
+  }
+  revokeSessionHash(idHash: string) {
+    this.db.prepare('DELETE FROM admin_sessions WHERE id_hash=?').run(idHash);
+  }
+  validateSession(value: string | undefined) {
+    if (!value) return false;
+    const h = hash(value);
+    const row = this.db
+      .prepare('SELECT expires_at FROM admin_sessions WHERE id_hash=?')
+      .get(h) as any;
+    if (!row || Date.parse(row.expires_at) < Date.now()) return false;
+    this.db
+      .prepare('UPDATE admin_sessions SET last_used_at=? WHERE id_hash=?')
+      .run(new Date().toISOString(), h);
+    return true;
+  }
+}
+export function ensureLocalControlSecret(stateDir: string) {
+  const file = path.join(stateDir, 'local-control.secret');
+  if (existsSync(file)) return readFileSync(file, 'utf8').trim();
+  const value = randomBytes(32).toString('base64url');
+  writeFileSync(file, value, { mode: 0o600 });
+  try {
+    chmodSync(file, 0o600);
+  } catch {}
+  return value;
+}
+export function secretEquals(a: string | undefined, b: string) {
+  if (!a) return false;
+  const x = Buffer.from(a),
+    y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}

@@ -1,0 +1,39 @@
+import path from 'node:path';
+import type { ServiceIo, UserServiceAdapter } from './service-manager.js';
+export class MacosServiceAdapter implements UserServiceAdapter {
+  readonly label = 'com.aevra.gateway';
+  constructor(
+    private nodeExe: string,
+    private cliPath: string,
+    private io: ServiceIo,
+  ) {}
+  get file() {
+    return path.join(this.io.home, 'Library', 'LaunchAgents', `${this.label}.plist`);
+  }
+  get domain() {
+    return `gui/${this.io.uid ?? 501}`;
+  }
+  async install() {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${this.label}</string><key>ProgramArguments</key><array><string>${esc(this.nodeExe)}</string><string>${esc(this.cliPath)}</string><string>start</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/></dict></plist>`;
+    await this.io.write(this.file, xml);
+  }
+  async start() {
+    const r = await this.io.run('launchctl', ['bootstrap', this.domain, this.file]);
+    if (r.code && !/already bootstrapped/i.test(r.stderr)) throw new Error(r.stderr);
+  }
+  async stop() {
+    await this.io.run('launchctl', ['bootout', this.domain, this.file]);
+  }
+  async restart() {
+    await this.stop();
+    await this.start();
+  }
+  async status() {
+    const r = await this.io.run('launchctl', ['print', `${this.domain}/${this.label}`]);
+    if (r.code) return 'not-installed';
+    return /state = running/.test(r.stdout) ? 'running' : 'stopped';
+  }
+}
+function esc(s: string) {
+  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}

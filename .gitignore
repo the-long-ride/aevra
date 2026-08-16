@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.test-dist/
+*.tsbuildinfo
+
+*.patch
+*.diff
+docs/superpowers/
+.superpowers/
+.verification
+.agents/
+.agents-crew/
+.coverage-dist/
+.coverage-v8/
+test-results/
+playwright-report/
+coverage/

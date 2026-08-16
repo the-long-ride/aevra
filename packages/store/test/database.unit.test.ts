@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtempSync } from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { AevraDatabase } from '../src/database.js';
+test('gateway schema and integrity', () => {
+  const db = AevraDatabase.open(':memory:');
+  assert.deepEqual(db.integrityCheck(), { ok: true });
+  assert.equal(db.tableNames().includes('pending_approvals'), true);
+  assert.equal(db.tableColumns('secret_references').includes('value'), false);
+  db.close();
+});
+test('VACUUM INTO backup is openable', () => {
+  const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-db-'));
+  const db = AevraDatabase.open(path.join(d, 'a.db'));
+  db.raw().prepare("INSERT INTO settings(key,value_json) VALUES('x','1')").run();
+  const b = path.join(d, 'b.db');
+  db.backup(b);
+  // Backup over existing file
+  db.backup(b);
+  const copy = AevraDatabase.open(b);
+  assert.equal(copy.tableNames().includes('settings'), true);
+  copy.close();
+
+  // Test db.transaction success
+  const txVal = db.transaction(() => {
+    db.raw().prepare("INSERT INTO settings(key,value_json) VALUES('tx_key','\"ok\"')").run();
+    return 123;
+  });
+  assert.equal(txVal, 123);
+
+  // Test db.transaction rollback on error
+  assert.throws(() => {
+    db.transaction(() => {
+      db.raw().prepare("INSERT INTO settings(key,value_json) VALUES('fail_key','\"no\"')").run();
+      throw new Error('tx fail');
+    });
+  }, /tx fail/);
+
+  db.close();
+});

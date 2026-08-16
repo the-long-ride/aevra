@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtempSync } from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { EncryptedVault } from '../src/vault.js';
+test('vault round trip and lock', async () => {
+  const f = path.join(mkdtempSync(path.join(os.tmpdir(), 'aevra-vault-')), 'vault.json');
+  const v = new EncryptedVault(f);
+  await assert.rejects(() => v.get('x'), /VAULT_LOCKED/);
+  v.unlock('pass');
+  await v.set('x', 'secret');
+  assert.equal(await v.get('x'), 'secret');
+  v.lock();
+  await assert.rejects(() => v.get('x'), /VAULT_LOCKED/);
+});

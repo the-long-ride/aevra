@@ -1,0 +1,39 @@
+.common-dialog {
+  width: min(540px, calc(100vw - 24px));
+}
+
+.dialog-body {
+  display: grid;
+  gap: 14px;
+}
+
+.dialog-message {
+  color: var(--body);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.dialog-field {
+  margin-top: 2px;
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.dialog-actions button {
+  min-width: 96px;
+}
+
+@media (max-width: 640px) {
+  .common-dialog {
+    width: 100vw;
+  }
+
+  .dialog-actions button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

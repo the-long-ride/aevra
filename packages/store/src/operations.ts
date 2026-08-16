@@ -1,0 +1,39 @@
+import type { DatabaseSync } from 'node:sqlite';
+export class OperationRepository {
+  constructor(private db: DatabaseSync) {}
+  put(o: any) {
+    const n = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT OR REPLACE INTO operations(id,session_id,workspace_id,kind,state,intent_json,expected_state_json,result_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        o.id,
+        o.sessionId ?? null,
+        o.workspaceId ?? null,
+        o.kind,
+        o.state,
+        JSON.stringify(o.intent ?? {}),
+        JSON.stringify(o.expectedState ?? {}),
+        o.result === undefined ? null : JSON.stringify(o.result),
+        o.createdAt ?? n,
+        n,
+      );
+    return o;
+  }
+  updateState(id: string, state: string, result?: unknown) {
+    this.db
+      .prepare('UPDATE operations SET state=?,result_json=?,updated_at=? WHERE id=?')
+      .run(
+        state,
+        result === undefined ? null : JSON.stringify(result),
+        new Date().toISOString(),
+        id,
+      );
+  }
+  incomplete() {
+    return this.db
+      .prepare("SELECT * FROM operations WHERE state IN ('PREPARING','AUTHORIZED','EXECUTING')")
+      .all() as any[];
+  }
+}

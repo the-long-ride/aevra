@@ -1,0 +1,31 @@
+import { generateKeyPairSync, createSign } from 'node:crypto';
+export function createTestIssuer(
+  issuer = 'https://test.cloudflareaccess.com',
+  audience = 'aud-test',
+) {
+  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const jwk = publicKey.export({ format: 'jwk' });
+  jwk['kid'] = 'k1';
+  const provider = {
+    async get() {
+      return { keys: [jwk] };
+    },
+  };
+  function sign(overrides: Record<string, unknown> = {}) {
+    const header = { alg: 'RS256', typ: 'JWT', kid: 'k1' },
+      claims = {
+        iss: issuer,
+        aud: audience,
+        sub: 'sub-1',
+        email: 'alice@example.com',
+        exp: Math.floor(Date.now() / 1000) + 300,
+        ...overrides,
+      };
+    const a = Buffer.from(JSON.stringify(header)).toString('base64url'),
+      b = Buffer.from(JSON.stringify(claims)).toString('base64url');
+    const s = createSign('RSA-SHA256');
+    s.update(`${a}.${b}`);
+    return `${a}.${b}.${s.sign(privateKey).toString('base64url')}`;
+  }
+  return { issuer, audience, provider, sign };
+}

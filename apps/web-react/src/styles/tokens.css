@@ -1,0 +1,238 @@
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --canvas: #fdfcfc;
+  --surface-soft: #f8f7f7;
+  --surface-card: #f1eeee;
+  --surface-strong: #e7e3e3;
+  --ink: #201d1d;
+  --ink-deep: #0f0000;
+  --body: #424245;
+  --mute: #646262;
+  --stone: #6e6e73;
+  --ash: #9a9898;
+  --hairline: rgb(15 0 0 / 12%);
+  --hairline-strong: #646262;
+  --accent: #007aff;
+  --accent-hover: #0056b3;
+  --accent-active: #004085;
+  --warning: #ff9f0a;
+  --danger: #ff3b30;
+  --success: #30d158;
+  --on-ink: #fdfcfc;
+  --backdrop: rgb(32 29 29 / 36%);
+
+  --bg: var(--canvas);
+  --panel: var(--canvas);
+  --panel-2: var(--surface-soft);
+  --text: var(--ink);
+  --muted: var(--mute);
+  --line: var(--hairline);
+  --line-strong: var(--hairline-strong);
+  --accent-text: var(--on-ink);
+  --radius-sm: 4px;
+  --radius: 0px;
+  --radius-lg: 0px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: #171515;
+  --surface-soft: #1e1b1b;
+  --surface-card: #292525;
+  --surface-strong: #353030;
+  --ink: #fdfcfc;
+  --ink-deep: #ffffff;
+  --body: #d5d1d1;
+  --mute: #aaa5a5;
+  --stone: #908b8b;
+  --ash: #747070;
+  --hairline: rgb(253 252 252 / 14%);
+  --hairline-strong: #817b7b;
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-active: #0071e3;
+  --warning: #ff9f0a;
+  --danger: #ff453a;
+  --success: #32d74b;
+  --on-ink: #171515;
+  --backdrop: rgb(0 0 0 / 58%);
+
+  --bg: var(--canvas);
+  --panel: var(--canvas);
+  --panel-2: var(--surface-soft);
+  --text: var(--ink);
+  --muted: var(--mute);
+  --line: var(--hairline);
+  --line-strong: var(--hairline-strong);
+  --accent-text: var(--on-ink);
+  --radius-sm: 4px;
+  --radius: 0px;
+  --radius-lg: 0px;
+}
+
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink) 24%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+html {
+  background: var(--canvas);
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family:
+    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+  min-height: 32px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+button {
+  border: 1px solid var(--hairline-strong);
+  border-radius: 4px;
+  background: var(--canvas);
+  color: var(--ink);
+  padding: 5px 9px;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--surface-soft);
+  border-color: var(--ink);
+}
+
+button:active:not(:disabled) {
+  background: var(--surface-card);
+}
+
+button:disabled {
+  background: var(--surface-card);
+  color: var(--ash);
+  cursor: default;
+  opacity: 0.72;
+}
+
+button.primary {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  border-color: var(--ink-deep);
+  background: var(--ink-deep);
+}
+
+button.danger-button,
+.danger-button {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+input,
+select,
+textarea {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  padding: 5px 9px;
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--hairline-strong);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ink);
+  outline: none;
+  background: var(--canvas);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+select option {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ash);
+}
+
+a {
+  color: var(--ink);
+  text-decoration-color: var(--hairline-strong);
+}
+
+code,
+pre {
+  font-family: inherit;
+}
+
+code {
+  overflow-wrap: anywhere;
+}

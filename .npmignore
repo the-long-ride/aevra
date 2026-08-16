@@ -1,0 +1,35 @@
+# Development and tooling — never ship to npm
+.github/
+.agents/
+.superpowers/
+.verification/
+.test-dist/
+scripts/
+tests/
+coverage/
+test-results/
+apps/web-react/src/
+assets/
+docs/specs/
+docs/superpowers/
+docs/README.md
+docs/ROADMAP.md
+examples/
+
+# Config files not needed at runtime
+*.config.ts
+tsconfig*.json
+eslint.config.js
+knip.json
+playwright.config.ts
+.prettierrc.json
+.prettierignore
+.gitattributes
+.gitignore
+.env.example
+
+# Compiled test files inside dist — belt-and-suspenders
+dist/tests/
+dist/**/test/
+dist/**/*.test.js
+dist/**/*.spec.js
