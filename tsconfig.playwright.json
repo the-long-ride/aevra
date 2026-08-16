@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noCheck": false,
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"]
+  },
+  "include": ["playwright.config.ts", "tests/ui-parity/**/*.ts"],
+  "exclude": ["dist", "node_modules", "test-results", "playwright-report"]
+}

@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { AevraDatabase } from '../../../packages/store/src/database.js';
+import { WorkspaceRepository } from '../../../packages/store/src/workspaces.js';
+import { WorkspaceService } from '../src/workspaces/workspace-service.js';
+test('remote views omit host roots and mounts expose logical paths only', () => {
+  const db = AevraDatabase.open(':memory:');
+  const s = new WorkspaceService(new WorkspaceRepository(db.raw()));
+  const w = s.create({ name: 'V', hostRoot: '/private/v' });
+  s.addMount(w.id, {
+    logicalPath: '/external/sdk',
+    hostRoot: '/private/sdk',
+    capabilities: ['files.read'],
+  });
+  assert.equal('hostRoot' in s.listRemote()[0]!, false);
+  assert.equal('hostRoot' in s.listMountsRemote(w.id)[0]!, false);
+  db.close();
+});

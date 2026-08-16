@@ -1,0 +1,20 @@
+import type { DatabaseSync } from 'node:sqlite';
+export class SettingsRepository {
+  constructor(private db: DatabaseSync) {}
+  get<T>(key: string, fallback: T): T {
+    const r = this.db.prepare('SELECT value_json FROM settings WHERE key=?').get(key) as any;
+    return r ? JSON.parse(r.value_json) : fallback;
+  }
+  set(key: string, value: unknown) {
+    this.db
+      .prepare(
+        `INSERT INTO settings(key,value_json,revision) VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,revision=settings.revision+1`,
+      )
+      .run(key, JSON.stringify(value));
+  }
+  revision(key: string) {
+    return Number(
+      (this.db.prepare('SELECT revision FROM settings WHERE key=?').get(key) as any)?.revision ?? 0,
+    );
+  }
+}

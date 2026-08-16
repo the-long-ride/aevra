@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { HmacEnvelopeSigner } from '../src/envelope.js';
+const base = () => ({
+  version: 1 as const,
+  daemonInstanceId: 'd',
+  operationId: 'o',
+  sessionId: 's',
+  workspaceId: 'w',
+  issuedAt: new Date().toISOString(),
+  expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  nonce: Math.random().toString(),
+  executionMode: 'sandbox' as const,
+  capabilityRoots: [],
+  operation: { kind: 'sandbox.inspect' as const },
+});
+test('envelope rejects tamper expiry instance and replay', () => {
+  const s = new HmacEnvelopeSigner(Buffer.alloc(32, 7), 'd');
+  const e = s.sign(base());
+  assert.equal(s.verify(e).operationId, 'o');
+  assert.throws(() => s.verify(e), /replay/);
+  const t = s.sign(base());
+  assert.throws(() => s.verify({ ...t, workspaceId: 'x' }), /mac/);
+  const expired = s.sign({
+    ...base(),
+    issuedAt: new Date(Date.now() - 2000).toISOString(),
+    expiresAt: new Date(Date.now() - 1000).toISOString(),
+  });
+  assert.throws(() => s.verify(expired), /expired/);
+});
+test('envelope MAC survives JSON transport semantics for undefined values', () => {
+  const secret = Buffer.alloc(32, 9),
+    signer = new HmacEnvelopeSigner(secret, 'd');
+  const envelope = signer.sign({
+    ...base(),
+    nonce: 'json-roundtrip',
+    executionMode: 'host',
+    operation: {
+      kind: 'command.run',
+      command: {
+        executable: 'npm',
+        args: ['test', undefined],
+        env: { VISIBLE: '1', OMITTED: undefined },
+        timeoutMs: undefined,
+      },
+    },
+  } as any);
+  const transported = JSON.parse(JSON.stringify(envelope));
+  const verifier = new HmacEnvelopeSigner(secret, 'd');
+  assert.equal(verifier.verify(transported).operationId, 'o');
+  const tampered = structuredClone(transported);
+  tampered.operation.command.executable = 'node';
+  assert.throws(() => new HmacEnvelopeSigner(secret, 'd').verify(tampered), /mac/);
+});

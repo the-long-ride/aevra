@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { CloudflareAccessVerifier } from '../src/auth/cloudflare.js';
+import { createTestIssuer } from './support/test-issuer.js';
+function req(token?: string, spoof = false) {
+  return {
+    headers: {
+      ...(token ? { 'cf-access-jwt-assertion': token } : {}),
+      ...(spoof ? { 'cf-access-authenticated-user-email': 'mallory@example.com' } : {}),
+    },
+  } as any;
+}
+test('valid Access JWT yields verified actor', async () => {
+  const i = createTestIssuer();
+  const v = new CloudflareAccessVerifier(i.issuer, i.audience, i.provider);
+  const id = await v.verifyRequest(req(i.sign()));
+  assert.equal(id.actor, 'alice@example.com');
+});
+test('issuer audience expiry and raw-header spoof are rejected', async () => {
+  const i = createTestIssuer();
+  const v = new CloudflareAccessVerifier(i.issuer, i.audience, i.provider);
+  await assert.rejects(() => v.verifyRequest(req(undefined, true)), /missing/);
+  await assert.rejects(() => v.verifyRequest(req(i.sign({ iss: 'https://wrong' }))), /issuer/);
+  await assert.rejects(() => v.verifyRequest(req(i.sign({ aud: 'wrong' }))), /audience/);
+  await assert.rejects(() => v.verifyRequest(req(i.sign({ exp: 1 }))), /expired/);
+});

@@ -1,0 +1,85 @@
+name: Branch verification report
+
+on:
+  push:
+    branches:
+      - feat/mcp-long-running-processes-permissions-switches
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - id: install
+        continue-on-error: true
+        run: npm ci
+      - id: format
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run format:check
+      - id: lint
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run lint
+      - id: typecheck
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run typecheck
+      - id: test
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm test
+      - id: coverage
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run test:coverage
+      - id: build
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run build
+      - name: Publish verification result
+        if: always()
+        shell: bash
+        env:
+          INSTALL: ${{ steps.install.outcome }}
+          FORMAT: ${{ steps.format.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          TEST: ${{ steps.test.outcome }}
+          COVERAGE: ${{ steps.coverage.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+        run: |
+          mkdir -p .verification
+          cat > .verification/branch-ci.json <<EOF
+          {"commit":"$GITHUB_SHA","install":"$INSTALL","format":"$FORMAT","lint":"$LINT","typecheck":"$TYPECHECK","test":"$TEST","coverage":"$COVERAGE","build":"$BUILD"}
+          EOF
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .verification/branch-ci.json
+          git commit -m "ci: record branch verification [skip ci]" || exit 0
+          git push origin HEAD:${GITHUB_REF_NAME}
+      - name: Fail if verification failed
+        if: always()
+        shell: bash
+        env:
+          INSTALL: ${{ steps.install.outcome }}
+          FORMAT: ${{ steps.format.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          TEST: ${{ steps.test.outcome }}
+          COVERAGE: ${{ steps.coverage.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+        run: |
+          for result in "$INSTALL" "$FORMAT" "$LINT" "$TYPECHECK" "$TEST" "$COVERAGE" "$BUILD"; do
+            if [ "$result" != success ]; then exit 1; fi
+          done

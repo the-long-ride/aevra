@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { AevraDatabase } from '../../../packages/store/src/database.js';
+import { SessionRepository } from '../../../packages/store/src/sessions.js';
+import { CapabilityProfileService } from '../src/policy/capabilities.js';
+import { SessionManager } from '../src/sessions/session-manager.js';
+test('restart invalidates sessions and leases', () => {
+  const db = AevraDatabase.open(':memory:');
+  const repo = new SessionRepository(db.raw());
+  const p = new CapabilityProfileService(db.raw());
+  db.raw()
+    .prepare(
+      "INSERT INTO workspaces(id,name,host_root,created_at,updated_at) VALUES('w','W','/tmp',?,?)",
+    )
+    .run(new Date().toISOString(), new Date().toISOString());
+  p.mapActor('a', 'w', 'read-only', 'auto');
+  const m = new SessionManager(repo, p);
+  const s = m.create({ subject: 's', actor: 'a', issuer: 'i', audience: 'x', expiresAt: 'x' });
+  m.admitWorkspace(s.id, 'w');
+  m.invalidateForRestart();
+  assert.equal(m.get(s.id), null);
+  assert.equal(db.raw().prepare('SELECT valid FROM sessions WHERE id=?').get(s.id).valid, 0);
+  db.close();
+});

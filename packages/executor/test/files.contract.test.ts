@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileRead, fileSearch } from '../src/files.js';
+test('file primitives return logical metadata without host path', async () => {
+  const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-files-'));
+  writeFileSync(path.join(d, 'a.txt'), 'hello world');
+  const roots = [
+    {
+      id: 'w',
+      kind: 'workspace' as const,
+      logicalPrefix: '/',
+      hostRoot: d,
+      capabilities: ['files.read' as const, 'files.search' as const],
+    },
+  ];
+  const r = await fileRead('/a.txt', roots);
+  assert.equal(r.content, 'hello world');
+  assert.equal('hostPath' in r, false);
+  assert.equal((await fileSearch('/', 'world', roots))[0]!.path, '/a.txt');
+});

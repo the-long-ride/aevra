@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtempSync } from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { resolveEnvironmentProfile, managedCacheRoot } from '../src/sandbox.js';
+test('environment resolution and caches stay Aevra-owned', () => {
+  const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-sbx-'));
+  assert.equal(resolveEnvironmentProfile(d).source, 'generic');
+  const c = managedCacheRoot(d, 'npm', 'workspace', 'w')!;
+  assert.equal(c.startsWith(path.join(d, 'sandbox-cache')), true);
+  assert.equal(managedCacheRoot(d, 'npm', 'disabled', 'w'), null);
+});

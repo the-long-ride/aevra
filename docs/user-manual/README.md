@@ -1,0 +1,18 @@
+# Aevra user manual
+
+1. [Quick start](00-quick-start.md)
+2. [Install](01-install.md)
+3. [First start](02-first-start.md)
+4. [Remote access](03-remote-access.md)
+5. [Connect ChatGPT](04-connect-chatgpt.md)
+6. [Connect Claude](05-connect-claude.md)
+7. [Connect Gemini](06-connect-gemini.md)
+8. [Workspaces](07-workspaces.md)
+9. [Permissions and approvals](08-permissions-approvals.md)
+10. [Skills](09-skills.md)
+11. [Changes and recovery](10-changes-recovery.md)
+12. [Processes](11-processes.md)
+13. [Run as a service](12-service.md)
+14. [Security and authentication](13-security-authentication.md)
+15. [Troubleshooting](14-troubleshooting.md)
+16. [Explore Aevra](15-explore.md)

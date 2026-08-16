@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noCheck": false,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["node"]
+  },
+  "exclude": [
+    "dist",
+    "node_modules",
+    ".test-dist",
+    ".coverage-dist",
+    "coverage",
+    "apps/web-react",
+    "tests",
+    "**/test/**",
+    "**/tests/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}

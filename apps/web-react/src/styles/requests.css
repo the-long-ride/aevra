@@ -1,0 +1,255 @@
+.request-drawer {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.request-drawer.open {
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.request-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.request-drawer.open .request-drawer-backdrop {
+  opacity: 1;
+}
+
+.request-drawer aside {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(560px, 94vw);
+  border-left: 1px solid var(--hairline-strong);
+  background: var(--canvas);
+  transform: translateX(100%);
+  transition: transform 170ms ease;
+}
+
+.request-drawer.open aside {
+  transform: translateX(0);
+}
+
+.request-drawer aside > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.request-drawer aside > header > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.request-drawer h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.request-drawer header p {
+  margin: 2px 0 0;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.request-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  overflow-x: auto;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.request-tabs button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+.request-tabs button.active {
+  border-bottom-color: var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+.request-panel {
+  min-width: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.request-card {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  background: var(--canvas);
+  padding: 12px;
+}
+
+.request-card-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.request-card-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.request-card-head b {
+  font-size: 13px;
+}
+
+.request-card-head span:not(.risk),
+.request-card small {
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.risk.medium {
+  color: var(--warning);
+}
+
+.risk.high,
+.risk.critical {
+  border-color: color-mix(in srgb, var(--danger) 44%, transparent);
+  color: var(--danger);
+}
+
+.request-detail {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+  padding: 9px;
+}
+
+.request-detail > b {
+  font-size: 11px;
+}
+
+.request-detail > span {
+  color: var(--body);
+  font-size: 12px;
+}
+
+.request-preview {
+  display: block;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.request-saved-matcher {
+  display: grid;
+  gap: 4px;
+  color: var(--mute) !important;
+}
+
+.request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+#enable-browser-notifications {
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mute);
+  font-size: 10px;
+}
+
+@media (max-width: 640px) {
+  .request-drawer aside {
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .request-drawer aside > header {
+    padding-inline: 12px;
+  }
+
+  #enable-browser-notifications {
+    display: none;
+  }
+
+  .request-panel {
+    padding: 10px;
+  }
+
+  .request-actions {
+    justify-content: stretch;
+  }
+
+  .request-actions button {
+    flex: 1 1 140px;
+  }
+}
+
+.yolo-action {
+  --yolo-gradient: linear-gradient(
+    90deg,
+    var(--warning),
+    var(--danger),
+    var(--accent),
+    var(--warning)
+  );
+  border: 1px solid transparent;
+  border-image: var(--yolo-gradient) 1;
+  background-image: var(--yolo-gradient);
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: yolo-gradient-shift 3s linear infinite;
+}
+
+.yolo-action:hover:not(:disabled),
+.yolo-action:focus-visible {
+  filter: brightness(1.15);
+}
+
+@keyframes yolo-gradient-shift {
+  0% {
+    background-position: 0% 50%;
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    background-position: 220% 50%;
+    filter: hue-rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yolo-action {
+    animation: none;
+  }
+}

@@ -1,0 +1,88 @@
+import net from 'node:net';
+import { randomBytes } from 'node:crypto';
+import { encodeFrame, FrameDecoder } from './framing.js';
+import { handshakeMac } from './envelope.js';
+import type { OperationEnvelope, WorkerResult } from '../../protocol/src/worker.js';
+export interface WorkerClient {
+  execute(envelope: OperationEnvelope, signal?: AbortSignal): Promise<WorkerResult>;
+  health(): Promise<{ ready: boolean; pid: number }>;
+  close(): Promise<void>;
+}
+export class SocketWorkerClient implements WorkerClient {
+  private socket?: net.Socket;
+  private next = 0;
+  private pending = new Map<string, (v: any) => void>();
+  constructor(
+    private endpoint: string,
+    private secret: Buffer,
+    private daemonInstanceId: string,
+  ) {}
+  async connect() {
+    if (this.socket) return;
+    const socket = net.createConnection(this.endpoint);
+    this.socket = socket;
+    const decoder = new FrameDecoder();
+    socket.on('data', (c) => {
+      for (const frame of decoder.push(c)) {
+        const f = frame as any;
+        if (f.type === 'helloAck') {
+          const expected = handshakeMac(
+            this.secret,
+            this.daemonInstanceId,
+            f.challengeA,
+            f.challengeB,
+          );
+          if (expected !== f.mac) {
+            socket.destroy(new Error('worker handshake failed'));
+            continue;
+          }
+          socket.write(
+            encodeFrame({
+              type: 'ready',
+              challengeB: f.challengeB,
+              mac: handshakeMac(this.secret, this.daemonInstanceId, f.challengeB),
+            }),
+          );
+        } else if (f.requestId) {
+          this.pending.get(f.requestId)?.(f);
+          this.pending.delete(f.requestId);
+        }
+      }
+    });
+    await new Promise<void>((res, rej) => {
+      socket.once('connect', () => {
+        const a = randomBytes(16).toString('hex');
+        socket.write(
+          encodeFrame({ type: 'hello', daemonInstanceId: this.daemonInstanceId, challengeA: a }),
+        );
+        setTimeout(res, 15);
+      });
+      socket.once('error', rej);
+    });
+  }
+  private async rpc(type: string, payload: any) {
+    await this.connect();
+    const requestId = `r${++this.next}`;
+    const p = new Promise<any>((res, rej) => {
+      this.pending.set(requestId, res);
+      setTimeout(() => {
+        if (this.pending.delete(requestId)) rej(new Error('worker timeout'));
+      }, 10_000);
+    });
+    this.socket!.write(encodeFrame({ type, requestId, ...payload }));
+    return p;
+  }
+  async execute(envelope: OperationEnvelope, signal?: AbortSignal): Promise<WorkerResult> {
+    if (signal?.aborted) throw signal.reason;
+    const r = await this.rpc('execute', { envelope });
+    return r.result;
+  }
+  async health() {
+    const r = await this.rpc('health', {});
+    return r.health;
+  }
+  async close() {
+    this.socket?.destroy();
+    this.socket = undefined;
+  }
+}

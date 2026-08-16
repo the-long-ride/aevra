@@ -1,0 +1,92 @@
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import type {
+  CommandInput,
+  CommandResult,
+  ManagedChild,
+  NetworkPolicy,
+  SandboxHandle,
+  SandboxInspection,
+  SandboxPrepareInput,
+} from '../../protocol/src/index.js';
+export interface SandboxBackend {
+  readonly id: 'docker' | 'podman';
+  available(): Promise<boolean>;
+  prepare(input: SandboxPrepareInput): Promise<SandboxHandle>;
+  run(handle: SandboxHandle, input: CommandInput): Promise<CommandResult>;
+  startProcess(handle: SandboxHandle, input: CommandInput): Promise<ManagedChild>;
+  applyNetworkPolicy(handle: SandboxHandle, policy: NetworkPolicy): Promise<void>;
+  terminate(handle: SandboxHandle): Promise<void>;
+  inspect(handle: SandboxHandle): Promise<SandboxInspection>;
+}
+export interface EnvironmentProfile {
+  source: 'workspace' | 'devcontainer' | 'dockerfile' | 'detected' | 'generic';
+  image: string;
+  metadataHash: string;
+  profileUpdatePending: boolean;
+}
+export function resolveEnvironmentProfile(
+  root: string,
+  override?: { image: string },
+): EnvironmentProfile {
+  if (override)
+    return {
+      source: 'workspace',
+      image: override.image,
+      metadataHash: `override:${override.image}`,
+      profileUpdatePending: false,
+    };
+  if (existsSync(path.join(root, '.devcontainer', 'devcontainer.json')))
+    return {
+      source: 'devcontainer',
+      image: 'devcontainer',
+      metadataHash: 'devcontainer',
+      profileUpdatePending: false,
+    };
+  if (existsSync(path.join(root, 'Dockerfile')))
+    return {
+      source: 'dockerfile',
+      image: 'dockerfile',
+      metadataHash: 'dockerfile',
+      profileUpdatePending: false,
+    };
+  const files = [
+    'package.json',
+    'global.json',
+    'rust-toolchain.toml',
+    'Cargo.toml',
+    'pyproject.toml',
+    'go.mod',
+  ].filter((f) => existsSync(path.join(root, f)));
+  const image = files.some((f) => f === 'Cargo.toml')
+    ? 'rust:1-bookworm'
+    : files.some((f) => f === 'go.mod')
+      ? 'golang:1-bookworm'
+      : files.some((f) => f === 'pyproject.toml')
+        ? 'python:3.12-slim'
+        : 'node:22-bookworm-slim';
+  return {
+    source: files.length ? 'detected' : 'generic',
+    image,
+    metadataHash:
+      files.map((f) => `${f}:${readFileSync(path.join(root, f), 'utf8').length}`).join('|') ||
+      'generic',
+    profileUpdatePending: false,
+  };
+}
+export function managedCacheRoot(
+  stateDir: string,
+  ecosystem: string,
+  policy: 'shared' | 'workspace' | 'disabled',
+  workspaceId: string,
+) {
+  if (policy === 'disabled') return null;
+  const root = path.join(
+    stateDir,
+    'sandbox-cache',
+    ecosystem,
+    policy === 'workspace' ? workspaceId : 'shared',
+  );
+  mkdirSync(root, { recursive: true });
+  return root;
+}

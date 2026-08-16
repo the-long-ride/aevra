@@ -1,0 +1,71 @@
+import { realpath, lstat } from 'node:fs/promises';
+import path from 'node:path';
+import type {
+  Capability,
+  CapabilityRoot,
+  ResolvedCapabilityPath,
+} from '../../protocol/src/index.js';
+export class WorkspaceEscapeError extends Error {
+  code = 'WORKSPACE_ESCAPE' as const;
+  constructor(public logicalPath: string) {
+    super(`Path escapes registered capability roots: ${logicalPath}`);
+  }
+}
+function normalized(p: string) {
+  const r = path.resolve(p);
+  return process.platform === 'win32' ? r.toLowerCase() : r;
+}
+function inside(root: string, target: string) {
+  const rr = normalized(root),
+    tt = normalized(target);
+  const rel = path.relative(rr, tt);
+  return rel === '' || (!rel.startsWith(`..${path.sep}`) && rel !== '..' && !path.isAbsolute(rel));
+}
+function capabilityFor(mode: 'read' | 'write' | 'command'): Capability[] {
+  return mode === 'read'
+    ? ['files.read', 'files.search']
+    : mode === 'write'
+      ? ['files.write', 'files.delete']
+      : ['commands.run'];
+}
+async function canonicalExistingOrParent(candidate: string, mode: 'read' | 'write' | 'command') {
+  try {
+    return await realpath(candidate);
+  } catch (e) {
+    if (mode === 'read' || mode === 'command') throw e;
+    const parent = await realpath(path.dirname(candidate));
+    return path.join(parent, path.basename(candidate));
+  }
+}
+export async function resolveCapabilityPath(
+  logicalPath: string,
+  roots: CapabilityRoot[],
+  mode: 'read' | 'write' | 'command',
+): Promise<ResolvedCapabilityPath> {
+  const logical = ('/' + logicalPath.replaceAll('\\', '/')).replace(/\/+/g, '/');
+  const sorted = [...roots].sort((a, b) => b.logicalPrefix.length - a.logicalPrefix.length);
+  const root = sorted.find(
+    (r) =>
+      logical === r.logicalPrefix ||
+      logical.startsWith(r.logicalPrefix.endsWith('/') ? r.logicalPrefix : r.logicalPrefix + '/'),
+  );
+  if (!root) throw new WorkspaceEscapeError(logicalPath);
+  if (!capabilityFor(mode).some((c) => root.capabilities.includes(c)))
+    throw new Error(`Capability root ${root.id} does not allow ${mode}`);
+  const relative = logical.slice(root.logicalPrefix.length).replace(/^\//, '');
+  if (relative.split('/').some((x) => x === '..')) throw new WorkspaceEscapeError(logicalPath);
+  const canonicalRoot = await realpath(root.hostRoot);
+  const candidate = path.resolve(canonicalRoot, ...relative.split('/').filter(Boolean));
+  const canonical = await canonicalExistingOrParent(candidate, mode);
+  if (!inside(canonicalRoot, canonical)) throw new WorkspaceEscapeError(logicalPath);
+  return {
+    rootId: root.id,
+    logicalPath: logical,
+    hostPath: candidate,
+    canonicalHostPath: canonical,
+  };
+}
+export async function isSymlinkLike(p: string) {
+  const s = await lstat(p);
+  return s.isSymbolicLink();
+}

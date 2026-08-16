@@ -1,0 +1,95 @@
+.mcp-activity-panel {
+  min-width: 0;
+}
+
+.live-activity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.live-activity-head p {
+  margin: 0;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.activity-stream-state,
+.activity-state {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 22px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--mute);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.activity-stream-state.live,
+.activity-state.success {
+  border-color: color-mix(in srgb, var(--success) 52%, transparent);
+  color: var(--success);
+}
+
+.activity-stream-state.connecting,
+.activity-stream-state.reconnecting,
+.activity-state.running {
+  border-color: color-mix(in srgb, var(--warning) 52%, transparent);
+  color: var(--warning);
+}
+
+.activity-state.error {
+  border-color: color-mix(in srgb, var(--danger) 52%, transparent);
+  color: var(--danger);
+}
+
+.mcp-activity-panel .data-table {
+  min-width: 960px;
+}
+
+.mcp-activity-panel .data-table td {
+  white-space: nowrap;
+}
+
+.activity-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.activity-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.activity-detail section {
+  display: grid;
+  gap: 6px;
+}
+
+.activity-detail pre {
+  max-height: 280px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  padding: 10px;
+  background: var(--surface-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  .live-activity-head {
+    display: grid;
+    align-items: start;
+  }
+}

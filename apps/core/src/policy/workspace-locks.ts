@@ -1,0 +1,41 @@
+import type { CommandEffect } from '../../../../packages/protocol/src/index.js';
+export interface LockRequest {
+  operationId: string;
+  sessionId: string;
+  workspaceId: string;
+  effect: CommandEffect;
+  outputKeys: string[];
+}
+export interface LockTicket {
+  release(): void;
+}
+function conflict(a: LockRequest, b: LockRequest) {
+  if (a.workspaceId !== b.workspaceId) return false;
+  if (a.effect === 'READ_ONLY' && b.effect === 'READ_ONLY') return false;
+  if (
+    (a.effect === 'BUILD_OUTPUT' && b.effect === 'READ_ONLY') ||
+    (b.effect === 'BUILD_OUTPUT' && a.effect === 'READ_ONLY')
+  )
+    return false;
+  if (a.effect === 'BUILD_OUTPUT' && b.effect === 'BUILD_OUTPUT')
+    return a.outputKeys.some((x) => b.outputKeys.includes(x));
+  return true;
+}
+export class WorkspaceLockCoordinator {
+  private active: LockRequest[] = [];
+  async acquire(req: LockRequest, onWait?: (holder: LockRequest) => void): Promise<LockTicket> {
+    while (true) {
+      const holder = this.active.find((x) => conflict(req, x));
+      if (!holder) {
+        this.active.push(req);
+        return {
+          release: () => {
+            this.active = this.active.filter((x) => x !== req);
+          },
+        };
+      }
+      onWait?.(holder);
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+}

@@ -1,0 +1,58 @@
+.admin-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--canvas);
+}
+
+.admin-login-panel {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 18px;
+}
+
+.admin-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-login-brand img {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 5px;
+}
+
+.admin-login-brand h1,
+.admin-login-brand p {
+  margin: 0;
+}
+
+.admin-login-brand h1 {
+  font-size: 18px;
+}
+
+.admin-login-brand p {
+  margin-top: 4px;
+  color: var(--mute);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.admin-login .stack-form > button {
+  width: 100%;
+}
+
+@media (max-width: 520px) {
+  .admin-login {
+    align-items: start;
+    padding: 16px;
+    padding-top: max(16px, 10vh);
+  }
+
+  .admin-login-panel {
+    padding: 14px;
+  }
+}

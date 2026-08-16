@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { classifySensitivity, maskSecretFile } from '../src/sensitive.js';
+test('secret and sensitive paths classify conservatively', () => {
+  assert.equal(classifySensitivity({ path: '/.env' }), 'SECRET');
+  assert.equal(classifySensitivity({ path: '/home/id_ed25519' }), 'SECRET');
+  assert.equal(classifySensitivity({ path: '/src/a.ts' }), 'NORMAL');
+  assert.equal(classifySensitivity({ path: '/tmp/x', gitIgnored: true }), 'SENSITIVE');
+  assert.equal(maskSecretFile('.env', 'A=one\nB=two'), 'A=[REDACTED]\nB=[REDACTED]');
+});
