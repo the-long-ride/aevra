@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.test-dist/
+*.tsbuildinfo
+
+*.patch
+*.diff
+docs/superpowers/
+.agents/

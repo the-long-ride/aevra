@@ -1,0 +1,2 @@
+import assert from 'node:assert/strict';import test from 'node:test';import {STABLE_TOOL_NAMES} from '../src/registry.js';
+test('stable tool vocabulary includes read and future policy tools but no root mutation',()=>{for(const n of ['aevra_status','workspace_select','file_read','approval_wait','change_rollback'])assert.ok(STABLE_TOOL_NAMES.includes(n as any));for(const n of ['workspace_add','workspace_remove','mount_add','mount_remove'])assert.equal(STABLE_TOOL_NAMES.includes(n as any),false);});
