@@ -16,6 +16,13 @@ function fixture(){
   return{db,repo,service,advance:(ms:number)=>{now+=ms;}};
 }
 
+function issueGrant(service:AevraOAuthService,client:any,verifier:string){
+  const pending=service.beginAuthorization({client_id:client.client_id,redirect_uri:client.redirect_uris[0]!,response_type:'code',scope:'mcp offline_access',resource:'https://mcp.example.com/mcp',code_challenge:challenge(verifier),code_challenge_method:'S256'},'203.0.113.4');
+  service.approveAuthorization(pending.id);
+  const {code}=service.continueAuthorization(pending.id);
+  return service.exchangeAuthorizationCode({grant_type:'authorization_code',client_id:client.client_id,code,redirect_uri:client.redirect_uris[0]!,code_verifier:verifier,resource:'https://mcp.example.com/mcp'});
+}
+
 test('OAuth discovery advertises MCP resource, DCR, PKCE S256, and offline access',()=>{
   const {db,service}=fixture();
   assert.deepEqual(service.protectedResourceMetadata(),{
@@ -110,5 +117,31 @@ test('OAuth public endpoint can be switched after Web-first tunnel setup',()=>{
   assert.equal(service.issuer,'https://new.example.com');
   assert.equal(service.resource,'https://new.example.com/mcp');
   assert.equal(service.protectedResourceMetadata().resource,'https://new.example.com/mcp');
+  db.close();
+});
+
+test('separate authorizations for the same client receive different OAuth connection subjects',()=>{
+  const {db,service}=fixture();
+  const client=service.registerClient({client_name:'ChatGPT',redirect_uris:['https://chatgpt.com/oauth/callback']});
+  const verifier='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';
+  const first=issueGrant(service,client,verifier);
+  const second=issueGrant(service,client,verifier);
+  const firstIdentity=service.verifyAccessToken(first.access_token);
+  const secondIdentity=service.verifyAccessToken(second.access_token);
+  assert.notEqual(firstIdentity.subject,secondIdentity.subject);
+  assert.equal(firstIdentity.actor,'oauth:ChatGPT');
+  assert.equal(secondIdentity.actor,'oauth:ChatGPT');
+  db.close();
+});
+
+test('refresh rotation preserves the OAuth connection subject',()=>{
+  const {db,service}=fixture();
+  const client=service.registerClient({client_name:'ChatGPT',redirect_uris:['https://chatgpt.com/oauth/callback']});
+  const verifier='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';
+  const tokens=issueGrant(service,client,verifier);
+  const original=service.verifyAccessToken(tokens.access_token);
+  const refreshed=service.exchangeRefreshToken({grant_type:'refresh_token',client_id:client.client_id,refresh_token:tokens.refresh_token!,resource:'https://mcp.example.com/mcp'});
+  const rotated=service.verifyAccessToken(refreshed.access_token);
+  assert.equal(rotated.subject,original.subject);
   db.close();
 });
