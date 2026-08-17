@@ -85,7 +85,14 @@ export async function handleAdminApi(req:IncomingMessage,res:ServerResponse,url:
 
     if(p==='/api/approvals'&&method==='GET'){send(res,200,context.approvals?.list?.()??[]);return true;}
     m=p.match(/^\/api\/approvals\/([^/]+)\/(approve|deny)$/);
-    if(m&&method==='POST'){const x=await body(req);const scope=x.scope??'once';const ticket=m[2]==='approve'?context.approvals.approve(m[1],scope):context.approvals.deny(m[1]);if(m[2]==='approve'&&scope!=='once'&&ticket.risk!=='CRITICAL'&&context.permissions){const ruleScope=scope==='session'?'session':scope==='workspace'?'workspace':'global';context.permissions.upsert({id:`perm_${randomUUID()}`,effect:'allow',capability:ticket.operation.capability,scope:ruleScope,workspaceId:ruleScope==='workspace'?ticket.workspaceId:undefined,actor:ticket.actor,sessionId:ruleScope==='session'?ticket.sessionId:undefined,matcher:ticket.operation.family,createdAt:new Date().toISOString()});}send(res,200,{ok:true,revision:Date.now(),ticket});return true;}
+    if(m&&method==='POST'){
+      const x=await body(req),before=context.approvals?.status?.(m[1]);
+      const admission=before?.operation?.family==='workspace:select';
+      const scope=admission?'once':(x.scope??'once');
+      const ticket=m[2]==='approve'?context.approvals.approve(m[1],scope):context.approvals.deny(m[1]);
+      if(m[2]==='approve'&&!admission&&scope!=='once'&&ticket.risk!=='CRITICAL'&&context.permissions){const ruleScope=scope==='session'?'session':scope==='workspace'?'workspace':'global';context.permissions.upsert({id:`perm_${randomUUID()}`,effect:'allow',capability:ticket.operation.capability,scope:ruleScope,workspaceId:ruleScope==='workspace'?ticket.workspaceId:undefined,actor:ticket.actor,sessionId:ruleScope==='session'?ticket.sessionId:undefined,matcher:ticket.operation.family,createdAt:new Date().toISOString()});}
+      send(res,200,{ok:true,revision:Date.now(),ticket});return true;
+    }
 
     if(p==='/api/permissions'&&method==='GET'){send(res,200,context.permissions?.list?.()??[]);return true;}
     if(p==='/api/permissions'&&method==='POST'){const x=await body(req);if(criticalPersistentRule(x)){send(res,400,{error:{code:'CRITICAL_RULE_FORBIDDEN',message:'Critical operations cannot receive persistent always-allow rules'}});return true;}const rule={id:x.id??`perm_${randomUUID()}`,...x,createdAt:x.createdAt??new Date().toISOString()};context.permissions.upsert(rule);send(res,200,{ok:true,revision:Date.now(),rule});return true;}
