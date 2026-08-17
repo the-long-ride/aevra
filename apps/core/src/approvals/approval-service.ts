@@ -68,7 +68,7 @@ export class ApprovalService{
   }
 
   private reusableWorkspaceRequest(input:Omit<FrozenOperationTicket,'id'|'state'|'expiresAt'>){
-    if(input.operation.family!=='workspace:select'||!this.sessionIdentityResolver)return null;
+    if(input.operation.family!=='workspace:select'||!input.actor.startsWith('oauth:')||!this.sessionIdentityResolver)return null;
     const current=this.sessionIdentityResolver(input.sessionId);if(!current)return null;
     return this.list().find(ticket=>{
       if(ticket.operation.family!=='workspace:select'||ticket.workspaceId!==input.workspaceId||ticket.actor!==input.actor||!['PENDING','APPROVED'].includes(ticket.state))return false;
