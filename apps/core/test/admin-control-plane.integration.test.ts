@@ -40,7 +40,7 @@ test('workspace admission approval is always one-time and never creates an opera
   const bootstrap={validateSession:(v:string|undefined)=>v==='test'} as any;
   const scopes:string[]=[];let remembered=0;
   const ticket={id:'req_workspace',state:'APPROVED',risk:'MEDIUM',workspaceId:'ws_1',actor:'oauth:ChatGPT',sessionId:'ses_1',operation:{family:'workspace:select',capability:'files.read'}};
-  const approvals={approve(_id:string,scope:string){scopes.push(scope);return ticket},deny(){throw new Error('unused')}};
+  const approvals={status(){return ticket},approve(_id:string,scope:string){scopes.push(scope);return ticket},deny(){throw new Error('unused')}};
   const permissions={upsert(){remembered++}};
   const server=new AdminServer('127.0.0.1',0,()=>({core:'running'}),{bootstrap,api:{approvals,permissions} as any});
   await server.start();
