@@ -15,6 +15,11 @@ const h = (value) =>
 const json = (value, fallback = {}) => {
   try { return JSON.parse(String(value || '')); } catch { return fallback; }
 };
+function localDateTime(value) {
+  if (value == null || value === '') return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
 const card = (title, body = '') => `<section class="card"><h2>${h(title)}</h2>${body}</section>`;
 const field = (label, control, help = '') => `<label class="field"><span>${h(label)}</span>${control}${help ? `<small>${h(help)}</small>` : ''}</label>`;
 const mcpUrl = (cf) => cf?.hostname ? `https://${cf.hostname}/mcp` : 'Configure a public hostname first';
@@ -43,19 +48,23 @@ async function decideOauth(el, event, reload) {
 
 function remoteAccessMarkup(cf, id='setup') {
   const canonical=mcpUrl(cf);
+  const providerDetail=cf.found?h(cf.version??'Detected'):'Not detected on PATH';
+  const authMessage=h(cf.authenticationMessage??'Aevra checks existing Cloudflare credentials before starting a new login.');
   return `<div class="remote-access">
-    <div class="status-line"><div><b>cloudflared</b><p>${cf.found?h(cf.version??'Detected'):'Not detected on PATH'}</p></div><span class="status ${cf.authenticated?'success':cf.found?'warning':'muted'}">${cf.authenticated?'Authenticated':cf.found?'Login needed':'Unavailable'}</span></div>
-    <p class="helper">${h(cf.authenticationMessage??'Aevra checks existing Cloudflare credentials before starting a new login.')}</p>
-    <div class="actions"><button type="button" id="${id}-authenticate" ${cf.found?'':'disabled'}>${cf.authenticated?'Check authentication':'Authenticate with Cloudflare'}</button></div>
-    <form id="${id}-cloudflare" class="form-grid">
-      ${field('Public MCP hostname', `<input name="hostname" value="${h(cf.hostname??'')}" placeholder="aevra-mcp.example.com" required>`, 'Hostname or hostname-only https URL.')}
-      ${field('Tunnel ID', `<input name="tunnelId" value="${h(cf.tunnelId??'')}" placeholder="Leave blank to create an Aevra tunnel">`, 'Reuse an existing tunnel when you already have one.')}
-      ${field('Tunnel ownership', `<select name="ownership"><option value="managed">Managed by Aevra</option><option value="external" ${cf.ownership==='external'?'selected':''}>External process</option></select>`)}
+    <div class="remote-access-head">
+      <div class="remote-provider"><div><b>cloudflared</b><p>${providerDetail} · ${authMessage}</p></div><span class="status ${cf.authenticated?'success':cf.found?'warning':'muted'}">${cf.authenticated?'Authenticated':cf.found?'Login needed':'Unavailable'}</span></div>
+      <button type="button" id="${id}-authenticate" ${cf.found?'':'disabled'}>${cf.authenticated?'Check authentication':'Authenticate with Cloudflare'}</button>
+    </div>
+    <div class="endpoint remote-endpoint"><span>Canonical MCP endpoint</span><code>${h(canonical)}</code>${cf.hostname?`<button type="button" data-copy="${h(canonical)}">Copy</button>`:''}</div>
+    <form id="${id}-cloudflare" class="remote-config">
+      <div class="remote-config-grid">
+        ${field('Public MCP hostname', `<input name="hostname" value="${h(cf.hostname??'')}" placeholder="aevra-mcp.example.com" required>`, 'Hostname or hostname-only https URL.')}
+        ${field('Tunnel ID', `<input name="tunnelId" value="${h(cf.tunnelId??'')}" placeholder="Leave blank to create an Aevra tunnel">`, 'Reuse an existing tunnel when you already have one.')}
+        ${field('Tunnel ownership', `<select name="ownership"><option value="managed">Managed by Aevra</option><option value="external" ${cf.ownership==='external'?'selected':''}>External process</option></select>`)}
+      </div>
       <input type="hidden" name="authMode" value="connector">
-      <div class="form-actions"><button type="submit" class="primary">Save remote access</button><button type="button" id="${id}-test">Test endpoint</button></div>
+      <div class="remote-actions"><p id="${id}-result" class="inline-result"></p><div class="actions"><button type="button" id="${id}-test">Test endpoint</button><button type="submit" class="primary">Save remote access</button></div></div>
     </form>
-    <p id="${id}-result" class="inline-result"></p>
-    <div class="endpoint"><span>Canonical MCP endpoint</span><code>${h(canonical)}</code>${cf.hostname?`<button type="button" data-copy="${h(canonical)}">Copy</button>`:''}</div>
     <details><summary>Advanced: Cloudflare Access</summary><p>Cloudflare Access is optional. Aevra OAuth is the normal authentication layer. Configure Access verifier values from Settings only when you intentionally add that extra gate.</p></details>
   </div>`;
 }
@@ -71,8 +80,7 @@ async function gettingStarted(el, status) {
   const [onboarding,cf,pairings,workspaces]=await Promise.all([api('/api/onboarding'),api('/api/cloudflare/status'),api('/api/oauth/requests'),api('/api/workspaces')]);
   const endpoint=mcpUrl(cf);
   el.classList.add('setup-sections');
-  el.innerHTML=`<section class="page-intro"><div><h2>Getting Started</h2><p>Set up local execution, remote access, and your first AI connection without leaving the dashboard.</p></div><button type="button" data-page-jump="guide">Open Guide</button></section>
-    <section class="setup-section"><div class="section-heading"><span>Local Gateway</span><strong>${status.core==='running'?'Ready':'Check status'}</strong></div><div class="compact-status"><span>Core ${h(status.core)}</span><span>Worker ${h(status.worker)}</span><span>MCP ${h(status.mcp??'running')}</span></div><p>Your dashboard and local MCP listener use HTTPS on loopback.</p></section>
+  el.innerHTML=`<section class="page-intro"><div><h2>Getting Started</h2><p>Set up remote access and your first AI connection without leaving the dashboard.</p></div><button type="button" data-page-jump="guide">Open Guide</button></section>
     <section class="setup-section wide"><div class="section-heading"><span>Remote Access</span><strong>${cf.hostname?'Configured':'Setup needed'}</strong></div>${remoteAccessMarkup(cf,'onboard')}</section>
     <section class="setup-section wide"><div class="section-heading"><span>Connect an AI</span><strong>${pairings.length?'Approval waiting':'OAuth'}</strong></div><div class="client-grid"><div><h3>ChatGPT</h3><p>Server URL</p><div class="endpoint"><code>${h(endpoint)}</code>${cf.hostname?`<button type="button" data-copy="${h(endpoint)}">Copy</button>`:''}</div><p>Authentication: <b>OAuth</b></p><ol><li>Create the custom MCP app.</li><li>Paste the server URL.</li><li>Choose OAuth and scan tools.</li><li>Approve the pairing request here.</li></ol><button type="button" data-guide-jump="connect-chatgpt">Read ChatGPT guide</button></div><div><h3>Pairing requests</h3>${pairingMarkup(pairings)}</div></div></section>
     <section class="setup-section"><div class="section-heading"><span>Workspace</span><strong>${workspaces.length?`${workspaces.length} registered`:'Register one'}</strong></div><form id="onboard-workspace" class="stack-form">${field('Name','<input name="name" required placeholder="My project">')}${field('Local root','<input name="hostRoot" required placeholder="F:\\my-repos\\project">')}<button class="primary">Register workspace</button></form></section>
@@ -82,7 +90,7 @@ async function gettingStarted(el, status) {
   wireRemoteAccess(el,cf,'onboard',reload);
   el.onclick=async(event)=>{if(await decideOauth(el,event,reload))return;const page=event.target.closest('[data-page-jump]')?.dataset.pageJump;const guideSlug=event.target.closest('[data-guide-jump]')?.dataset.guideJump;if(page){state.page=page;render();return;}if(guideSlug){state.guideSlug=guideSlug;state.page='guide';render();return;}const copy=event.target.closest('[data-copy]')?.dataset.copy;if(copy)await navigator.clipboard.writeText(copy);};
   el.querySelector('#onboard-workspace')?.addEventListener('submit',async(event)=>{event.preventDefault();await api('/api/workspaces',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(event.target)))});await reload();});
-  el.querySelector('#finish-onboarding')?.addEventListener('click',async()=>{await api('/api/onboarding',{method:'PATCH',body:JSON.stringify({completed:true,completedSections:['local-gateway','remote-access','connect-ai','workspace','try-aevra','explore']})});state.page='dashboard';render();});
+  el.querySelector('#finish-onboarding')?.addEventListener('click',async()=>{await api('/api/onboarding',{method:'PATCH',body:JSON.stringify({completed:true,completedSections:['remote-access','connect-ai','workspace','try-aevra','explore']})});state.page='dashboard';render();});
 }
 
 function markdownToHtml(source) {
@@ -171,7 +179,7 @@ async function permissions(el) {
 
 async function sessions(el) {
   const [remote, local, workspaces] = await Promise.all([api('/api/sessions'), api('/api/admin-sessions'), api('/api/workspaces')]);
-  el.innerHTML = card('Remote MCP sessions', remote.map((session) => `<article><b>${h(session.actor)}</b><code>${h(session.id)}</code><p>${h(session.activeLeaseId ? 'workspace active' : 'no workspace')}</p><form data-switch-session="${session.id}"><select name="workspaceId">${workspaces.map((w) => `<option value="${w.id}">${h(w.name)}</option>`).join('')}</select><input type="number" name="timeoutMs" min="0" value="60000" title="Graceful drain timeout in milliseconds"><button>Switch workspace</button></form><button data-revoke-session="${session.id}">Revoke</button></article>`).join('') || '<p>No active remote sessions.</p>') + card('Local admin sessions', local.map((session) => `<article><code>${h(String(session.idHash).slice(0, 16))}…</code><p>Last used ${h(session.lastUsedAt)}</p><button data-revoke-admin="${session.idHash}">Revoke</button></article>`).join(''));
+  el.innerHTML = card('Remote MCP sessions', remote.map((session) => `<article><b>${h(session.actor)}</b><code>${h(session.id)}</code><p>${h(session.activeLeaseId ? 'workspace active' : 'no workspace')}</p><form data-switch-session="${session.id}"><select name="workspaceId">${workspaces.map((w) => `<option value="${w.id}">${h(w.name)}</option>`).join('')}</select><input type="number" name="timeoutMs" min="0" value="60000" title="Graceful drain timeout in milliseconds"><button>Switch workspace</button></form><button data-revoke-session="${session.id}">Revoke</button></article>`).join('') || '<p>No active remote sessions.</p>') + card('Local admin sessions', local.map((session) => `<article><code>${h(String(session.idHash).slice(0, 16))}…</code><p>Last used ${h(localDateTime(session.lastUsedAt))}</p><button data-revoke-admin="${session.idHash}">Revoke</button></article>`).join(''));
   for (const form of el.querySelectorAll('[data-switch-session]')) form.addEventListener('submit', async (event) => {
     event.preventDefault(); const value = Object.fromEntries(new FormData(event.target));
     await api(`/api/sessions/${form.dataset.switchSession}/workspace`, { method: 'POST', body: JSON.stringify({ workspaceId: value.workspaceId, timeoutMs: Number(value.timeoutMs) }) }); sessions(el);
@@ -188,7 +196,7 @@ async function sessions(el) {
 async function connectors(el) {
   const [items,health]=await Promise.all([api('/api/connectors'),api('/api/status')]);
   const failedAttempts=Number(health?.connectorFailedAttempts??0);
-  el.innerHTML=(failedAttempts>0?card('Failed connector attempts',`<p class="banner danger">${failedAttempts} failed Bearer connector admission attempt(s). Rotate credentials if a token may be stale or exposed.</p>`):'')+card('Advanced Bearer connector',`<form id="new-connector">${field('Connector name','<input name="name" placeholder="CLI client" required>')}<button class="primary">Create Bearer token</button></form><p>OAuth is preferred for ChatGPT. Use a connector when a client supports a fixed <code>Authorization: Bearer &lt;token&gt;</code> credential.</p><div id="connector-secret"></div>`)+card('Connectors',items.map(connector=>`<article><b>${h(connector.name)}</b><p>Created ${h(connector.createdAt)}${connector.lastUsedAt?` / last used ${h(connector.lastUsedAt)}`:''}</p><button data-revoke-connector="${h(connector.id)}">Revoke</button></article>`).join('')||'<p>No static Bearer connectors.</p>');
+  el.innerHTML=(failedAttempts>0?card('Failed connector attempts',`<p class="banner danger">${failedAttempts} failed Bearer connector admission attempt(s). Rotate credentials if a token may be stale or exposed.</p>`):'')+card('Advanced Bearer connector',`<form id="new-connector">${field('Connector name','<input name="name" placeholder="CLI client" required>')}<button class="primary">Create Bearer token</button></form><p>OAuth is preferred for ChatGPT. Use a connector when a client supports a fixed <code>Authorization: Bearer &lt;token&gt;</code> credential.</p><div id="connector-secret"></div>`)+card('Connectors',items.map(connector=>`<article><b>${h(connector.name)}</b><p>Created ${h(localDateTime(connector.createdAt))}${connector.lastUsedAt?` / last used ${h(localDateTime(connector.lastUsedAt))}`:''}</p><button data-revoke-connector="${h(connector.id)}">Revoke</button></article>`).join('')||'<p>No static Bearer connectors.</p>');
   el.querySelector('#new-connector')?.addEventListener('submit',async(event)=>{event.preventDefault();const name=String(Object.fromEntries(new FormData(event.target)).name??'').trim();if(!name)return;const created=await api('/api/connectors',{method:'POST',body:JSON.stringify({name})});el.querySelector('#connector-secret').innerHTML=`<div class="secret-result"><b>Copy this token now. It is shown once.</b><code>${h(created.token)}</code><button type="button" id="copy-connector-token">Copy token</button></div>`;el.querySelector('#copy-connector-token')?.addEventListener('click',()=>navigator.clipboard.writeText(created.token));});
   el.onclick=async(event)=>{const id=event.target.closest('[data-revoke-connector]')?.dataset.revokeConnector;if(id&&confirm('Revoke this connector?')){await api(`/api/connectors/${id}`,{method:'DELETE'});connectors(el);}};
 }
@@ -210,7 +218,7 @@ async function audit(el) {
   const verify = await api('/api/audit/verify');
   const events = await api('/api/audit/export?format=json');
   el.innerHTML = card('Audit integrity', `<p>Hash chain: <b>${verify.valid ? 'valid' : `broken at ${h(verify.brokenEventId)}`}</b></p><a href="/api/audit/export?format=json" target="_blank">Export JSON</a> · <a href="/api/audit/export?format=jsonl" target="_blank">Export JSONL</a>`) +
-    card('Recent events', `<input id="audit-filter" placeholder="Filter by actor or operation"><div id="audit-rows">${events.slice(-50).reverse().map((e) => `<article data-audit="${h(e.event.actor ?? '')} ${h(e.event.operation)}"><b>${h(e.event.operation)}</b>${e.event.actor ? ` · ${h(e.event.actor)}` : ''}${e.event.target ? ` · ${h(e.event.target)}` : ''}<p>${h(e.createdAt)}</p></article>`).join('') || '<p>No events.</p>'}</div>`);
+    card('Recent events', `<input id="audit-filter" placeholder="Filter by actor or operation"><div id="audit-rows">${events.slice(-50).reverse().map((e) => `<article data-audit="${h(e.event.actor ?? '')} ${h(e.event.operation)}"><b>${h(e.event.operation)}</b>${e.event.actor ? ` · ${h(e.event.actor)}` : ''}${e.event.target ? ` · ${h(e.event.target)}` : ''}<p>${h(localDateTime(e.createdAt))}</p></article>`).join('') || '<p>No events.</p>'}</div>`);
   el.querySelector('#audit-filter').addEventListener('input', (event) => { const q = String(event.target.value ?? '').toLowerCase(); for (const row of el.querySelectorAll('[data-audit]')) row.style.display = row.dataset.audit.toLowerCase().includes(q) ? '' : 'none'; });
 }
 
