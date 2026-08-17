@@ -59,7 +59,8 @@
     const health=document.querySelector('header .health');if(!health)return;
     let button=health.querySelector('#pending-requests');
     if(!button){button=document.createElement('button');button.type='button';button.id='pending-requests';button.className='request-pill';button.innerHTML='<span>Requests</span><b>0</b>';button.addEventListener('click',()=>document.querySelector('nav [data-page="approvals"]')?.click());health.prepend(button);}
-    button.querySelector('b').textContent=String(pendingCount);button.classList.toggle('has-pending',pendingCount>0);button.setAttribute('aria-label',`${pendingCount} pending requests. Open approvals.`);
+    const count=button.querySelector('b'),next=String(pendingCount);if(count&&count.textContent!==next)count.textContent=next;
+    button.classList.toggle('has-pending',pendingCount>0);const label=`${pendingCount} pending requests. Open approvals.`;if(button.getAttribute('aria-label')!==label)button.setAttribute('aria-label',label);
   }
 
   function browserNotify(title,body){
@@ -82,7 +83,7 @@
   async function refreshCloudflare(){
     const cf=await getJson('/api/cloudflare/status');
     const tunnel=[...document.querySelectorAll('header .health span')].find(x=>/^Tunnel\b/i.test(x.textContent||''));
-    if(tunnel)tunnel.textContent=`Tunnel ${cf.hostname?(cf.reachable===false?'check':'configured'):'unconfigured'}`;
+    if(tunnel)tunnel.textContent=`Tunnel ${cf.hostname?'configured':'unconfigured'}`;
     document.dispatchEvent(new CustomEvent('aevra:cloudflare-status',{detail:cf}));return cf;
   }
   function startPolling(){clearInterval(pollTimer);refreshPending().catch(()=>{});pollTimer=setInterval(()=>refreshPending().catch(()=>{}),2500);}
