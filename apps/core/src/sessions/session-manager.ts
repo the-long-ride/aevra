@@ -21,6 +21,7 @@ export class SessionManager{
 
   setSwitchDrainHandler(handler:(sessionId:string,oldWorkspaceId:string,newWorkspaceId:string,timeoutMs?:number)=>Promise<void>){this.drain=handler;}
   isSwitching(sessionId:string){return this.switching.has(sessionId);}
+  connectionIdentity(sessionId:string){const source=this.sessions.get(sessionId)??this.disconnectedIdentities.get(sessionId);return source?{actor:source.actor,subject:source.subject}:null;}
 
   async switchWorkspace(sessionId:string,workspaceId:string,overrideProfileId?:string,timeoutMs?:number){
     const old=this.activeLease(sessionId);
