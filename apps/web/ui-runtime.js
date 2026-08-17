@@ -1,7 +1,21 @@
 (()=>{
   const rawFetch=window.fetch.bind(window);
   const seen={oauth:new Set(),approvals:new Set()};
-  let seeded=false,pendingCount=0,pollTimer;
+  let seeded=false,pendingCount=0,pollTimer,onboardingCompleted=null,onboardingSyncing=false,currentVersion='';
+
+  function ensureRuntimeStyles(){
+    if(document.querySelector('#aevra-runtime-styles'))return;
+    const style=document.createElement('style');style.id='aevra-runtime-styles';style.textContent=`
+      .brand h1{display:flex;align-items:baseline;gap:7px}.app-version{color:var(--text-muted);font:400 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:0}
+      .onboarding-collapsible{grid-column:1/-1;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:0;overflow:hidden}
+      .onboarding-collapsible>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;list-style:none;cursor:pointer;color:var(--text)}
+      .onboarding-collapsible>summary::-webkit-details-marker{display:none}.onboarding-collapsible>summary:hover{background:var(--surface-soft)}
+      .onboarding-summary-copy{display:grid;gap:2px}.onboarding-summary-copy b{font-size:12px;font-weight:400}.onboarding-summary-copy small{color:var(--text-muted);font-size:11px}
+      .onboarding-summary-action{color:var(--text-muted);font-size:11px}.onboarding-collapsible[open] .onboarding-summary-action::before{content:'Hide setup'}.onboarding-collapsible:not([open]) .onboarding-summary-action::before{content:'Show setup'}
+      .onboarding-collapsible-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:0 9px 9px}.onboarding-collapsible-content>.wide{grid-column:1/-1}
+      @media(max-width:900px){.onboarding-collapsible-content{grid-template-columns:1fr}.onboarding-collapsible-content>.wide{grid-column:auto}}
+    `;document.head.append(style);
+  }
 
   function ensureToastStack(){
     let stack=document.querySelector('#toast-stack');
@@ -39,6 +53,7 @@
     if(path.includes('/oauth/requests/')&&path.endsWith('/deny'))return'Connection request denied';
     if(path.includes('/approvals/')&&path.endsWith('/approve'))return'Operation approved';
     if(path.includes('/approvals/')&&path.endsWith('/deny'))return'Operation denied';
+    if(path==='/api/onboarding'&&method==='PATCH')return'Onboarding completed';
     if(method==='DELETE')return'Removed';
     if(method==='PATCH')return'Changes saved';
     if(method==='POST')return'Action completed';
@@ -56,6 +71,7 @@
         if(response.ok)toast(actionLabel(path,method),'success');else toast(await errorMessage(response.clone()),'error',5200);
         if(path.includes('/cloudflare/'))setTimeout(()=>refreshCloudflare().catch(()=>{}),100);
         if(path.includes('/oauth/requests/')||path.includes('/approvals/'))setTimeout(()=>refreshPending().catch(()=>{}),100);
+        if(path==='/api/onboarding'&&response.ok){onboardingCompleted=true;setTimeout(()=>collapseCompletedOnboarding(),0);}
       }
       return response;
     }catch(error){if(mutation)toast(error instanceof Error?error.message:String(error),'error',5200);throw error;}
@@ -70,6 +86,31 @@
     if(!button){button=document.createElement('button');button.type='button';button.id='pending-requests';button.className='request-pill';button.innerHTML='<span>Requests</span><b>0</b>';button.addEventListener('click',()=>document.querySelector('nav [data-page="approvals"]')?.click());health.prepend(button);}
     const count=button.querySelector('b'),next=String(pendingCount);if(count&&count.textContent!==next)count.textContent=next;
     button.classList.toggle('has-pending',pendingCount>0);const label=`${pendingCount} pending requests. Open approvals.`;if(button.getAttribute('aria-label')!==label)button.setAttribute('aria-label',label);
+  }
+
+  function ensureVersionBadge(version=currentVersion){
+    if(!version)return;currentVersion=String(version);
+    const title=document.querySelector('header .brand h1');if(!title)return;
+    let badge=title.querySelector('.app-version');if(!badge){badge=document.createElement('span');badge.className='app-version';title.append(badge);}
+    const text=currentVersion.startsWith('v')?currentVersion:`v${currentVersion}`;if(badge.textContent!==text)badge.textContent=text;
+  }
+
+  function isGettingStarted(){return document.querySelector('#page .page-intro h2')?.textContent?.trim()==='Getting Started'}
+  function collapseCompletedOnboarding(){
+    if(onboardingCompleted!==true||!isGettingStarted())return;
+    const page=document.querySelector('#page.setup-sections');if(!page||page.querySelector('.onboarding-collapsible'))return;
+    const sections=[...page.querySelectorAll(':scope > .setup-section')];if(!sections.length)return;
+    const finish=page.querySelector('#finish-onboarding');if(finish){finish.textContent='Onboarding completed';finish.disabled=true;}
+    const details=document.createElement('details');details.className='onboarding-collapsible';
+    const summary=document.createElement('summary');summary.innerHTML='<span class="onboarding-summary-copy"><b>Onboarding completed</b><small>Setup stays collapsed by default. Expand it whenever you need these controls again.</small></span><span class="onboarding-summary-action" aria-hidden="true"></span>';
+    const content=document.createElement('div');content.className='onboarding-collapsible-content';for(const section of sections)content.append(section);
+    details.append(summary,content);page.append(details);
+  }
+  async function syncOnboardingCollapse(){
+    if(!isGettingStarted()||onboardingSyncing)return;
+    if(onboardingCompleted===true){collapseCompletedOnboarding();return;}
+    if(onboardingCompleted===false)return;
+    onboardingSyncing=true;try{const value=await getJson('/api/onboarding');onboardingCompleted=value?.completed===true;collapseCompletedOnboarding();}finally{onboardingSyncing=false;}
   }
 
   function browserNotify(title,body){
@@ -95,10 +136,20 @@
     if(tunnel)tunnel.textContent=`Tunnel ${cf.hostname?'configured':'unconfigured'}`;
     document.dispatchEvent(new CustomEvent('aevra:cloudflare-status',{detail:cf}));return cf;
   }
-  function startPolling(){clearInterval(pollTimer);refreshPending().catch(()=>{});pollTimer=setInterval(()=>refreshPending().catch(()=>{}),2500);}
+  async function refreshAppStatus(){const status=await getJson('/api/status');ensureVersionBadge(status?.version);return status;}
+  async function finishOnboarding(){
+    const response=await window.fetch('/api/onboarding',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({completed:true,completedSections:['remote-access','connect-ai','workspace','try-aevra','explore']})});
+    if(!response.ok)return;onboardingCompleted=true;collapseCompletedOnboarding();
+  }
+  function startPolling(){clearInterval(pollTimer);refreshPending().catch(()=>{});refreshAppStatus().catch(()=>{});pollTimer=setInterval(()=>refreshPending().catch(()=>{}),2500);}
 
-  document.addEventListener('click',event=>{const copy=event.target.closest('[data-copy],#copy-connector-token');if(copy)setTimeout(()=>toast('Copied to clipboard','success',1800),0)},true);
-  new MutationObserver(()=>{ensureRequestButton();localizeVisibleDates();}).observe(document.documentElement,{childList:true,subtree:true});
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startPolling,{once:true});else startPolling();
-  window.aevraUi={toast,refreshPending,refreshCloudflare,localDateTimeInText};
+  document.addEventListener('click',event=>{
+    const finish=event.target.closest('#finish-onboarding');
+    if(finish){event.preventDefault();event.stopImmediatePropagation();if(!finish.disabled){finish.disabled=true;finishOnboarding().catch(error=>{finish.disabled=false;toast(error instanceof Error?error.message:String(error),'error',5200);});}return;}
+    const copy=event.target.closest('[data-copy],#copy-connector-token');if(copy)setTimeout(()=>toast('Copied to clipboard','success',1800),0);
+  },true);
+  ensureRuntimeStyles();
+  new MutationObserver(()=>{ensureRequestButton();ensureVersionBadge();localizeVisibleDates();void syncOnboardingCollapse();}).observe(document.documentElement,{childList:true,subtree:true});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{startPolling();void syncOnboardingCollapse();},{once:true});else{startPolling();void syncOnboardingCollapse();}
+  window.aevraUi={toast,refreshPending,refreshCloudflare,refreshAppStatus,localDateTimeInText,collapseCompletedOnboarding};
 })();
