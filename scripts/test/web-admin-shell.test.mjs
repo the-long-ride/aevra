@@ -4,9 +4,39 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 
 test('local admin shell exposes control-plane pages without legacy browser relay',()=>{const app=readFileSync('apps/web/app.js','utf8');for(const page of ['workspaces','approvals','permissions','sessions','connectors','processes','changes','audit','settings'])assert.match(app,new RegExp(page));assert.doesNotMatch(app,/browser relay|extension control websocket/i);assert.match(app,/SAFE MODE/);});
-test('web admin shell JavaScript parses before it is shipped',()=>{const result=spawnSync(process.execPath,['--check','apps/web/app.js'],{encoding:'utf8'});assert.equal(result.status,0,result.stderr||result.stdout);});
+test('web admin shell JavaScript parses before it is shipped',()=>{for(const file of ['apps/web/app.js','apps/web/ui-runtime.js']){const result=spawnSync(process.execPath,['--check',file],{encoding:'utf8'});assert.equal(result.status,0,result.stderr||result.stdout);}});
 test('build validates browser JavaScript before copying static assets',()=>{const pkg=JSON.parse(readFileSync('package.json','utf8'));assert.match(pkg.scripts.build,/node --check apps\/web\/app\.js/);});
-test('Neon console design authority replaces BMW styling and keeps the dense admin shell compact',()=>{const design=readFileSync('.agents/designs/design.md','utf8');const css=readFileSync('apps/web/app.css','utf8');const app=readFileSync('apps/web/app.js','utf8');assert.match(design,/Aevra Neon Console Design System/i);assert.doesNotMatch(design,/BMW M|m-blue|m-red/i);assert.match(design,/DESIGN_VARIANCE:\s*5/);assert.match(design,/VISUAL_DENSITY:\s*7/);assert.match(css,/--canvas:\s*#0b0d0e/i);assert.match(css,/--accent:\s*#73f2a7/i);assert.doesNotMatch(css,/#000000|--m-blue|--m-red/i);assert.match(css,/border-radius:\s*8px/);assert.match(css,/\.card-grid/);assert.match(css,/pre\s*\{[^}]*max-height:/s);assert.match(app,/card-grid/);});
+
+test('xAI design authority keeps the dense admin shell compact without a boxed navigation rail',()=>{
+  const css=readFileSync('apps/web/app.css','utf8');
+  assert.match(css,/--canvas:\s*#0a0a0a/i);
+  assert.match(css,/--surface:\s*#191919/i);
+  assert.match(css,/--border:\s*#212327/i);
+  assert.match(css,/--accent:\s*#ffffff/i);
+  assert.doesNotMatch(css,/#73f2a7|--m-blue|--m-red/i);
+  assert.match(css,/border-radius:\s*9999px/);
+  assert.match(css,/nav\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/s);
+  assert.doesNotMatch(css,/nav button\.active\s*\{[^}]*box-shadow:\s*inset/s);
+  assert.match(css,/\.card-grid/);
+  assert.match(css,/\.card\s*\{[^}]*border-radius:\s*8px/s);
+  assert.doesNotMatch(css,/\.card\s*\{[^}]*box-shadow:/s);
+});
+
+test('UI runtime loads before the app and provides mutation toasts plus live request notifications',()=>{
+  const html=readFileSync('apps/web/index.html','utf8');
+  const runtimeIndex=html.indexOf('ui-runtime.js');
+  const appIndex=html.indexOf('app.js');
+  assert.ok(runtimeIndex>=0&&appIndex>runtimeIndex,'ui-runtime.js must load before app.js');
+  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
+  assert.match(runtime,/window\.fetch\s*=/);
+  assert.match(runtime,/response\.clone\(\)/);
+  assert.match(runtime,/toast-stack/);
+  assert.match(runtime,/\/api\/oauth\/requests/);
+  assert.match(runtime,/\/api\/approvals/);
+  assert.match(runtime,/Notification\.permission/);
+  assert.match(runtime,/data-page=["']approvals["']/);
+  assert.match(runtime,/cloudflare\/status/);
+});
 
 test('Settings and Getting Started use OAuth-first remote access without URL secrets',()=>{
   const app=readFileSync('apps/web/app.js','utf8');
@@ -32,8 +62,6 @@ test('OAuth pairing UI exposes local allow and deny controls with client and red
 test('authenticated Cloudflare setup uses verification copy instead of promising re-authentication',()=>{const app=readFileSync('apps/web/app.js','utf8');assert.match(app,/Check authentication/);assert.doesNotMatch(app,/>Re-authenticate</);});
 
 test('Guide page loads the API manifest and shipped local manual chapters',()=>{const app=readFileSync('apps/web/app.js','utf8');assert.match(app,/async function guide/);assert.match(app,/\/api\/guide/);assert.match(app,/\/manual\/\$\{[^}]+\.file\}/);});
-
-
 
 test('user manual follows the onboarding journey and is copied into the shipped web app',()=>{
   const chapters=[
