@@ -11,6 +11,9 @@ export type ConnectorAdmissionOutcome={kind:'admitted';identity:VerifiedRemoteId
 export interface ConnectorAdmission{verify(token:string,ip:string):Promise<ConnectorAdmissionOutcome>;}
 export interface McpIngressServerOptions{tls?:HttpsServerOptions;advertisedHost?:string;plainMcpEnabled?:boolean;oauth?:AevraOAuthService;}
 
+const LEGACY_PROTOCOL_VERSIONS=['2025-11-25','2025-06-18','2025-03-26'] as const;
+const MODERN_PROTOCOL_VERSION='2026-07-28';
+
 async function readText(req:IncomingMessage){const chunks:Buffer[]=[];let size=0;for await(const c of req){const b=Buffer.from(c);size+=b.length;if(size>1024*1024)throw new Error('MCP request too large');chunks.push(b);}return Buffer.concat(chunks).toString('utf8');}
 async function readJson(req:IncomingMessage){const text=await readText(req);return text?JSON.parse(text):{};}
 function send(res:ServerResponse,status:number,value:unknown){res.statusCode=status;res.setHeader('content-type','application/json');res.end(JSON.stringify(value));}
@@ -19,6 +22,11 @@ function sendOAuthJson(res:ServerResponse,status:number,value:unknown){res.setHe
 function remoteIp(req:IncomingMessage){return typeof req.headers['cf-connecting-ip']==='string'?req.headers['cf-connecting-ip']:req.socket.remoteAddress;}
 function bearer(req:IncomingMessage){const value=req.headers.authorization;if(typeof value!=='string')return undefined;const match=value.match(/^Bearer\s+(.+)$/i);return match?.[1]?.trim();}
 function h(value:unknown){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));}
+function protocolHeader(req:IncomingMessage){const value=req.headers['mcp-protocol-version'];return typeof value==='string'?value.trim():undefined;}
+function protocolMeta(body:any){const value=body?.params?._meta?.['io.modelcontextprotocol/protocolVersion'];return typeof value==='string'?value.trim():undefined;}
+function requestedProtocol(req:IncomingMessage,body:any){return protocolHeader(req)??protocolMeta(body);}
+function legacyProtocol(requested:unknown){const value=typeof requested==='string'?requested:'';return LEGACY_PROTOCOL_VERSIONS.includes(value as any)?value:LEGACY_PROTOCOL_VERSIONS[0];}
+function unsupportedProtocol(res:ServerResponse,id:unknown,requested:string){send(res,400,{jsonrpc:'2.0',id:id??null,error:{code:-32602,message:'Unsupported protocol version',data:{supported:[...LEGACY_PROTOCOL_VERSIONS],requested}}});}
 
 export class McpIngressServer{
   private server?:http.Server|https.Server;
@@ -56,18 +64,25 @@ export class McpIngressServer{
     try{
       const sidHeader=req.headers['mcp-session-id'];const sid=typeof sidHeader==='string'?sidHeader:undefined;
       if(req.method==='DELETE'){
-        if(!sid||!this.sameIdentity(sid,identity)){send(res,401,{error:'unknown MCP session'});return;}
+        if(!sid){send(res,400,{error:'MCP session id required'});return;}
+        if(!this.sameIdentity(sid,identity)){send(res,404,{error:'MCP session not found'});return;}
         this.runtime.sessions.disconnect(sid);res.statusCode=204;res.end();return;
       }
       if(req.method!=='POST'){send(res,405,{error:'method not allowed'});return;}
       const body=await readJson(req);
+      const protocol=requestedProtocol(req,body);
+      if(protocol===MODERN_PROTOCOL_VERSION){unsupportedProtocol(res,body?.id,protocol);return;}
+      if(body?.method==='server/discover'){
+        unsupportedProtocol(res,body?.id,protocol||MODERN_PROTOCOL_VERSION);return;
+      }
       if(body?.method==='initialize'){
         const session=this.runtime.sessions.create(identity,remoteIp(req));
         res.setHeader('mcp-session-id',session.id);
-        send(res,200,{jsonrpc:'2.0',id:body.id??null,result:{protocolVersion:body.params?.protocolVersion??'2025-06-18',capabilities:{tools:{listChanged:false},resources:{listChanged:false},prompts:{listChanged:false}},serverInfo:{name:'Aevra',version:AEVRA_VERSION}}});
+        send(res,200,{jsonrpc:'2.0',id:body.id??null,result:{protocolVersion:legacyProtocol(body.params?.protocolVersion),capabilities:{tools:{listChanged:false},resources:{listChanged:false},prompts:{listChanged:false}},serverInfo:{name:'Aevra',version:AEVRA_VERSION}}});
         return;
       }
-      if(!sid||!this.sameIdentity(sid,identity)){send(res,401,{error:'unknown MCP session'});return;}
+      if(!sid){send(res,400,{error:'MCP session id required'});return;}
+      if(!this.sameIdentity(sid,identity)){send(res,404,{error:'MCP session not found'});return;}
       this.runtime.sessions.touch(sid);
       if(body?.id===undefined&&typeof body?.method==='string'&&body.method.startsWith('notifications/')){res.statusCode=202;res.setHeader('cache-control','no-store');res.end();return;}
       send(res,200,await handleJsonRpc(this.runtime.service,sid,body));
