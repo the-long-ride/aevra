@@ -119,7 +119,7 @@ export class OAuthRepository{
     return{token,record};
   }
   private issueToken(kind:'access',grant:OAuthGrantRecord,ttlMs:number):{token:string;record:OAuthTokenRecord}{
-    const token=secret(32),createdAt=this.now(),expiresAt=new Date(createdAt.getTime()+ttlMs),record={...grant,createdAt:createdAt.toISOString(),expiresAt:new Date(createdAt.getTime()+ttlMs).toISOString()};
+    const token=secret(32),createdAt=this.now(),expiresAt=new Date(createdAt.getTime()+ttlMs),record={...grant,createdAt:createdAt.toISOString(),expiresAt:expiresAt.toISOString()};
     this.db.prepare('INSERT INTO oauth_access_tokens(token_hash,client_id,actor,subject,scope,resource,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)')
       .run(hash(token),grant.clientId,grant.actor,grant.subject,grant.scope,grant.resource,record.createdAt,record.expiresAt);
     return{token,record};
