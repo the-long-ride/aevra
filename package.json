@@ -18,7 +18,7 @@
     "test:contract": "node scripts/test.mjs contract",
     "test:integration": "node scripts/test.mjs integration",
     "test:security": "node scripts/test.mjs security",
-    "test:web": "node --test scripts/test/web-admin-shell.test.mjs"
+    "test:web": "node --test scripts/test/web-admin-shell.test.mjs scripts/test/web-onboarding-runtime.test.mjs"
   },
   "dependencies": {},
   "devDependencies": {
