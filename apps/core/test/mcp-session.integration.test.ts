@@ -16,7 +16,7 @@ test('MCP initialize creates server-owned session and unknown client session is 
   const init=await fetch(`${server.url()}/mcp`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18'}})});
   assert.equal(init.status,200);const sid=init.headers.get('mcp-session-id');assert.match(sid??'',/^ses_/);
   const bad=await fetch(`${server.url()}/mcp`,{method:'POST',headers:{'content-type':'application/json','mcp-session-id':'client-chosen'},body:JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/list'})});
-  assert.equal(bad.status,401);
+  assert.equal(bad.status,404);
   const good=await fetch(`${server.url()}/mcp`,{method:'POST',headers:{'content-type':'application/json','mcp-session-id':sid!},body:JSON.stringify({jsonrpc:'2.0',id:3,method:'tools/list'})});
   assert.equal(good.status,200);
   await server.close();db.close();
