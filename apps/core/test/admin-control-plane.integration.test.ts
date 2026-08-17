@@ -36,6 +36,21 @@ test('approval allow route only arms the ticket and never executes it', async ()
   await server.close();
 });
 
+test('workspace admission approval is always one-time and never creates an operation permission rule', async () => {
+  const bootstrap={validateSession:(v:string|undefined)=>v==='test'} as any;
+  const scopes:string[]=[];let remembered=0;
+  const ticket={id:'req_workspace',state:'APPROVED',risk:'MEDIUM',workspaceId:'ws_1',actor:'oauth:ChatGPT',sessionId:'ses_1',operation:{family:'workspace:select',capability:'files.read'}};
+  const approvals={approve(_id:string,scope:string){scopes.push(scope);return ticket},deny(){throw new Error('unused')}};
+  const permissions={upsert(){remembered++}};
+  const server=new AdminServer('127.0.0.1',0,()=>({core:'running'}),{bootstrap,api:{approvals,permissions} as any});
+  await server.start();
+  const response=await request(`${server.url()}/api/approvals/req_workspace/approve`,{method:'POST',headers:{origin:server.url(),'sec-fetch-site':'same-origin','content-type':'application/json'},body:JSON.stringify({scope:'workspace'})});
+  assert.equal(response.status,200);
+  assert.deepEqual(scopes,['once']);
+  assert.equal(remembered,0);
+  await server.close();
+});
+
 
 test('admin Cloudflare workflow exposes authenticate and reachability actions', async () => {
   const bootstrap={validateSession:(v:string|undefined)=>v==='test'} as any;
