@@ -1,7 +1,7 @@
 (()=>{
   const rawFetch=window.fetch.bind(window);
   const seen={oauth:new Set(),approvals:new Set()};
-  let seeded=false,pendingCount=0,pollTimer,onboardingCompleted=null,onboardingSyncing=false,currentVersion='';
+  let pendingCount=0,pollTimer,onboardingCompleted=null,onboardingSyncing=false,currentVersion='';
 
   function ensureRuntimeStyles(){
     if(document.querySelector('#aevra-runtime-styles'))return;
@@ -26,7 +26,7 @@
   function toast(message,kind='success',timeout=3200){
     const stack=ensureToastStack();
     const item=document.createElement('div');item.className=`toast ${kind}`;item.setAttribute('role',kind==='error'?'alert':'status');
-    const icon=document.createElement('span');icon.className='toast-icon';icon.textContent=kind==='error'?'!':'✓';
+    const icon=document.createElement('span');icon.className='toast-icon';icon.textContent=kind==='error'?'!':kind==='info'?'i':'✓';
     const text=document.createElement('span');text.className='toast-message';text.textContent=String(message||'Done');
     const close=document.createElement('button');close.type='button';close.className='toast-close';close.setAttribute('aria-label','Dismiss notification');close.textContent='×';
     close.addEventListener('click',()=>item.remove());item.append(icon,text,close);stack.append(item);
@@ -51,8 +51,8 @@
     if(path.includes('/cloudflare/test'))return'Remote endpoint checked';
     if(path.includes('/oauth/requests/')&&path.endsWith('/approve'))return'Connection request approved';
     if(path.includes('/oauth/requests/')&&path.endsWith('/deny'))return'Connection request denied';
-    if(path.includes('/approvals/')&&path.endsWith('/approve'))return'Operation approved';
-    if(path.includes('/approvals/')&&path.endsWith('/deny'))return'Operation denied';
+    if(path.includes('/approvals/')&&path.endsWith('/approve'))return'Request approved';
+    if(path.includes('/approvals/')&&path.endsWith('/deny'))return'Request denied';
     if(path==='/api/onboarding'&&method==='PATCH')return'Onboarding completed';
     if(method==='DELETE')return'Removed';
     if(method==='PATCH')return'Changes saved';
@@ -69,7 +69,7 @@
       const response=await rawFetch(input,init);
       if(mutation){
         if(response.ok)toast(actionLabel(path,method),'success');else toast(await errorMessage(response.clone()),'error',5200);
-        if(path.includes('/cloudflare/'))setTimeout(()=>refreshCloudflare().catch(()=>{}),100);
+        if(path.includes('/cloudflare/'))setTimeout(()=>{refreshCloudflare().catch(()=>{});refreshAppStatus().catch(()=>{});},100);
         if(path.includes('/oauth/requests/')||path.includes('/approvals/'))setTimeout(()=>refreshPending().catch(()=>{}),100);
         if(path==='/api/onboarding'&&response.ok){onboardingCompleted=true;setTimeout(()=>collapseCompletedOnboarding(),0);}
       }
@@ -95,16 +95,39 @@
     const text=currentVersion.startsWith('v')?currentVersion:`v${currentVersion}`;if(badge.textContent!==text)badge.textContent=text;
   }
 
+  function statusState(key,status){
+    if(key==='tunnel'){
+      if(status?.tunnel==='unconfigured')return'off';
+      if(status?.tunnelReachable===true)return'ok';
+      if(status?.tunnelReachable===false)return'error';
+      return status?.tunnel==='configured'?'pending':'off';
+    }
+    const value=String(status?.[key]??'').toLowerCase();
+    if(['running','ready','connected'].includes(value))return'ok';
+    if(['starting','checking','reconnecting'].includes(value))return'pending';
+    if(value==='unavailable')return'off';
+    return value?'error':'off';
+  }
+  function updateHealth(status){
+    for(const chip of document.querySelectorAll('[data-health]')){
+      const key=chip.dataset.health,state=statusState(key,status);chip.dataset.state=state;
+      const label=chip.querySelector(':scope > span')?.textContent??key;
+      const detail=key==='tunnel'?(status?.tunnelReachable===true?'reachable':status?.tunnelReachable===false?'unreachable':status?.tunnel??'unconfigured'):status?.[key]??'unavailable';
+      const text=`${label}: ${detail}`;chip.title=text;chip.setAttribute('aria-label',text);
+    }
+  }
+
   function isGettingStarted(){return document.querySelector('#page .page-intro h2')?.textContent?.trim()==='Getting Started'}
   function collapseCompletedOnboarding(){
     if(onboardingCompleted!==true||!isGettingStarted())return;
     const page=document.querySelector('#page.setup-sections');if(!page||page.querySelector('.onboarding-collapsible'))return;
-    const sections=[...page.querySelectorAll(':scope > .setup-section')];if(!sections.length)return;
+    const sections=[...page.querySelectorAll(':scope > .setup-section:not([data-onboarding-persistent])')];if(!sections.length)return;
+    const persistent=page.querySelector(':scope > [data-onboarding-persistent]');
     const finish=page.querySelector('#finish-onboarding');if(finish){finish.textContent='Onboarding completed';finish.disabled=true;}
     const details=document.createElement('details');details.className='onboarding-collapsible';
-    const summary=document.createElement('summary');summary.innerHTML='<span class="onboarding-summary-copy"><b>Onboarding completed</b><small>Setup stays collapsed by default. Expand it whenever you need these controls again.</small></span><span class="onboarding-summary-action" aria-hidden="true"></span>';
+    const summary=document.createElement('summary');summary.innerHTML='<span class="onboarding-summary-copy"><b>Getting Started · Completed</b><small>Remote Access stays visible. Expand these completed setup examples whenever you need them.</small></span><span class="onboarding-summary-action" aria-hidden="true"></span>';
     const content=document.createElement('div');content.className='onboarding-collapsible-content';for(const section of sections)content.append(section);
-    details.append(summary,content);page.append(details);
+    details.append(summary,content);if(persistent)persistent.after(details);else page.append(details);
   }
   async function syncOnboardingCollapse(){
     if(!isGettingStarted()||onboardingSyncing)return;
@@ -118,9 +141,13 @@
     try{new Notification(title,{body,tag:`aevra-${title}-${body}`})}catch{}
   }
   function announceNew(items,set,kind){
-    for(const item of items){const id=String(item.id);if(set.has(id))continue;set.add(id);if(!seeded)continue;
-      if(kind==='oauth'){const client=item.clientName||item.clientId||'ChatGPT';toast(`Incoming connection request from ${client}`,'info',6500);browserNotify('Aevra connection request',`${client} is waiting for local approval.`);}
-      else{const name=item.operation?.family||item.operation?.capability||'operation';toast(`Incoming approval request: ${name}`,'info',6500);browserNotify('Aevra approval request',`${name} is waiting for local approval.`);}
+    for(const item of items){const id=String(item.id);if(set.has(id))continue;set.add(id);
+      if(kind==='oauth'){
+        const client=item.clientName||item.clientId||'AI client';toast(`Incoming connection request from ${client}`,'info',6500);browserNotify('Aevra connection request',`${client} is waiting for local approval.`);continue;
+      }
+      const admission=item.operation?.family==='workspace:select';
+      if(admission){toast(`Incoming workspace access request from ${item.actor||'AI client'}`,'info',6500);browserNotify('Aevra workspace access request',`${item.actor||'An AI client'} is waiting for local approval.`);continue;}
+      const name=item.operation?.family||item.operation?.capability||'operation';toast(`Incoming approval request: ${name}`,'info',6500);browserNotify('Aevra approval request',`${name} is waiting for local approval.`);
     }
   }
   async function getJson(path){const r=await rawFetch(path,{headers:{accept:'application/json'},cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()}
@@ -128,20 +155,16 @@
     const [oauth,approvals]=await Promise.all([getJson('/api/oauth/requests'),getJson('/api/approvals')]);
     const pendingApprovals=approvals.filter(x=>x.state==='PENDING');announceNew(oauth,seen.oauth,'oauth');announceNew(pendingApprovals,seen.approvals,'approval');
     const liveOAuth=new Set(oauth.map(x=>String(x.id))),liveApprovals=new Set(pendingApprovals.map(x=>String(x.id)));for(const id of [...seen.oauth])if(!liveOAuth.has(id))seen.oauth.delete(id);for(const id of [...seen.approvals])if(!liveApprovals.has(id))seen.approvals.delete(id);
-    pendingCount=oauth.length+pendingApprovals.length;seeded=true;ensureRequestButton();return{oauth,pendingApprovals};
+    pendingCount=oauth.length+pendingApprovals.length;ensureRequestButton();return{oauth,pendingApprovals};
   }
-  async function refreshCloudflare(){
-    const cf=await getJson('/api/cloudflare/status');
-    const tunnel=[...document.querySelectorAll('header .health span')].find(x=>/^Tunnel\b/i.test(x.textContent||''));
-    if(tunnel)tunnel.textContent=`Tunnel ${cf.hostname?'configured':'unconfigured'}`;
-    document.dispatchEvent(new CustomEvent('aevra:cloudflare-status',{detail:cf}));return cf;
-  }
-  async function refreshAppStatus(){const status=await getJson('/api/status');ensureVersionBadge(status?.version);return status;}
+  async function refreshCloudflare(){const cf=await getJson('/api/cloudflare/status');document.dispatchEvent(new CustomEvent('aevra:cloudflare-status',{detail:cf}));return cf;}
+  async function refreshAppStatus(){const status=await getJson('/api/status');ensureVersionBadge(status?.version);updateHealth(status);return status;}
   async function finishOnboarding(){
     const response=await window.fetch('/api/onboarding',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({completed:true,completedSections:['remote-access','connect-ai','workspace','try-aevra','explore']})});
     if(!response.ok)return;onboardingCompleted=true;collapseCompletedOnboarding();
   }
-  function startPolling(){clearInterval(pollTimer);refreshPending().catch(()=>{});refreshAppStatus().catch(()=>{});pollTimer=setInterval(()=>refreshPending().catch(()=>{}),2500);}
+  function poll(){refreshPending().catch(()=>{});refreshAppStatus().catch(()=>{});}
+  function startPolling(){clearInterval(pollTimer);poll();pollTimer=setInterval(poll,2500);}
 
   document.addEventListener('click',event=>{
     const finish=event.target.closest('#finish-onboarding');
@@ -151,5 +174,5 @@
   ensureRuntimeStyles();
   new MutationObserver(()=>{ensureRequestButton();ensureVersionBadge();localizeVisibleDates();void syncOnboardingCollapse();}).observe(document.documentElement,{childList:true,subtree:true});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{startPolling();void syncOnboardingCollapse();},{once:true});else{startPolling();void syncOnboardingCollapse();}
-  window.aevraUi={toast,refreshPending,refreshCloudflare,refreshAppStatus,localDateTimeInText,collapseCompletedOnboarding};
+  window.aevraUi={toast,refreshPending,refreshCloudflare,refreshAppStatus,updateHealth,localDateTimeInText,collapseCompletedOnboarding};
 })();
