@@ -21,6 +21,15 @@
     return item;
   }
 
+  function localDateTimeInText(value){
+    return String(value??'').replace(/\(built\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)\s+UTC\)/gi,(original,stamp)=>{
+      const date=new Date(`${stamp}Z`);return Number.isNaN(date.getTime())?original:`(built ${date.toLocaleString()})`;
+    });
+  }
+  function localizeVisibleDates(){
+    for(const node of document.querySelectorAll('.remote-provider p')){const current=node.textContent??'',next=localDateTimeInText(current);if(next!==current)node.textContent=next;}
+  }
+
   function pathOf(input){try{return new URL(typeof input==='string'?input:input?.url,location.href).pathname}catch{return''}}
   function actionLabel(path,method){
     if(path.includes('/cloudflare/setup'))return'Remote access saved';
@@ -89,7 +98,7 @@
   function startPolling(){clearInterval(pollTimer);refreshPending().catch(()=>{});pollTimer=setInterval(()=>refreshPending().catch(()=>{}),2500);}
 
   document.addEventListener('click',event=>{const copy=event.target.closest('[data-copy],#copy-connector-token');if(copy)setTimeout(()=>toast('Copied to clipboard','success',1800),0)},true);
-  new MutationObserver(()=>ensureRequestButton()).observe(document.documentElement,{childList:true,subtree:true});
+  new MutationObserver(()=>{ensureRequestButton();localizeVisibleDates();}).observe(document.documentElement,{childList:true,subtree:true});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startPolling,{once:true});else startPolling();
-  window.aevraUi={toast,refreshPending,refreshCloudflare};
+  window.aevraUi={toast,refreshPending,refreshCloudflare,localDateTimeInText};
 })();
