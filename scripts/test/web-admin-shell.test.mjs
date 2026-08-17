@@ -55,6 +55,28 @@ test('Settings and Getting Started use OAuth-first remote access without URL sec
   assert.match(css,/\.guide-layout/);
 });
 
+test('Getting Started removes the duplicate Local Gateway card and Remote Access uses the compact layout',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  const css=readFileSync('apps/web/app.css','utf8');
+  const start=app.slice(app.indexOf('async function gettingStarted'),app.indexOf('function markdownToHtml'));
+  assert.doesNotMatch(start,/Local Gateway/);
+  assert.doesNotMatch(start,/local-gateway/);
+  for(const className of ['remote-access-head','remote-provider','remote-config-grid','remote-actions']){
+    assert.match(app,new RegExp(className));
+    assert.match(css,new RegExp(`\\.${className}`));
+  }
+});
+
+test('rendered timestamps use the browser device locale and timezone',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  assert.match(app,/function\s+localDateTime\s*\(/);
+  assert.match(app,/toLocaleString\s*\(/);
+  assert.match(app,/localDateTime\(session\.lastUsedAt\)/);
+  assert.match(app,/localDateTime\(connector\.createdAt\)/);
+  assert.match(app,/localDateTime\(connector\.lastUsedAt\)/);
+  assert.match(app,/localDateTime\(e\.createdAt\)/);
+});
+
 test('first render opens Getting Started until onboarding is complete',()=>{const app=readFileSync('apps/web/app.js','utf8');assert.match(app,/state\s*=\s*\{\s*page:\s*null/);assert.match(app,/onboarding\.completed\s*\?\s*'dashboard'\s*:\s*'getting-started'/);});
 
 test('OAuth pairing UI exposes local allow and deny controls with client and redirect context',()=>{const app=readFileSync('apps/web/app.js','utf8');assert.match(app,/data-oauth-approve/);assert.match(app,/data-oauth-deny/);assert.match(app,/pairingCode/);assert.match(app,/clientName/);assert.match(app,/redirectUri/);assert.match(app,/\/api\/oauth\/requests\/\$\{[^}]+\}\/approve/);assert.match(app,/\/api\/oauth\/requests\/\$\{[^}]+\}\/deny/);});
