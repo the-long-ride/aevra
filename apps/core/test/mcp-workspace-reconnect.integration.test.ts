@@ -20,6 +20,7 @@ function fixture(){
   const other=workspaces.create({name:'Other',hostRoot:'/workspace/other'});
   const sessions=new SessionManager(new SessionRepository(db.raw()),new CapabilityProfileService(db.raw()));
   const approvals=new ApprovalService(new ApprovalRepository(db.raw()),new AuditService(new AuditRepository(db.raw())),{fastWaitMs:0,lifetimeMs:60_000,lifetimeByRiskMs:{}});
+  approvals.setSessionIdentityResolver(sessionId=>sessions.connectionIdentity(sessionId));
   approvals.setApprovedHandler(ticket=>{
     if(ticket.operation.family==='workspace:select')sessions.grantConnectionWorkspace(ticket.sessionId,ticket.workspaceId,'read-only');
   });
@@ -66,21 +67,24 @@ test('approved workspace read access survives a fresh MCP security session witho
   f.db.close();
 });
 
-test('local Allow after an MCP reconnect grants the new session without creating another request',async()=>{
+test('pending workspace access request is reused across MCP reconnect before local Allow',async()=>{
   const f=fixture();
   const first=f.sessions.create(identity());
   const pending=await f.tools.call(first.id,'workspace_select',{workspace:'Aevra'}) as any;
   assert.equal(pending.status,'approval_pending');
   f.sessions.disconnect(first.id);
   const second=f.sessions.create(identity());
-  assert.equal(await f.tools.call(second.id,'workspace_current'),null);
+  const retriedBeforeAllow=await f.tools.call(second.id,'workspace_select',{workspace:'Aevra'}) as any;
+  assert.equal(retriedBeforeAllow.status,'approval_pending');
+  assert.equal(retriedBeforeAllow.requestId,pending.requestId);
+  assert.equal(f.approvals.list().filter(ticket=>ticket.operation.family==='workspace:select').length,1);
   f.approvals.approve(pending.requestId,'once');
   const current=await f.tools.call(second.id,'workspace_current') as any;
   assert.equal(current.id,f.aevra.id);
   const listed=await f.tools.call(second.id,'file_list',{path:'/'}) as any;
   assert.equal(listed.entries[0].name,'README.md');
-  const retried=await f.tools.call(second.id,'workspace_select',{workspace:'Aevra'}) as any;
-  assert.equal(retried.status,'selected');
+  const retriedAfterAllow=await f.tools.call(second.id,'workspace_select',{workspace:'Aevra'}) as any;
+  assert.equal(retriedAfterAllow.status,'selected');
   assert.equal(f.approvals.list().filter(ticket=>ticket.operation.family==='workspace:select').length,1);
   f.db.close();
 });
