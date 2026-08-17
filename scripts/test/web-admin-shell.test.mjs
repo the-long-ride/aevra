@@ -67,6 +67,48 @@ test('Getting Started removes the duplicate Local Gateway card and Remote Access
   }
 });
 
+test('workspace admission approvals are visible locally and expose only Allow and Deny',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  const approvalFn=app.slice(app.indexOf('async function approvals'),app.indexOf('async function permissions'));
+  assert.match(approvalFn,/workspace:select/);
+  assert.match(approvalFn,/Workspace access/);
+  assert.match(approvalFn,/data-approve/);
+  assert.match(approvalFn,/data-deny/);
+  assert.match(approvalFn,/admission/);
+});
+
+test('header renders compact Core Worker MCP and Tunnel health chips without repeated running labels',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  const shellFn=app.slice(app.indexOf('function shell'),app.indexOf('function pairingMarkup'));
+  for(const name of ['Core','Worker','MCP','Tunnel'])assert.match(shellFn,new RegExp(name));
+  assert.match(shellFn,/health-chip/);
+  assert.match(shellFn,/health-dot/);
+  assert.match(shellFn,/data-health/);
+  assert.doesNotMatch(shellFn,/>Core \$\{h\(status\.core\)\}</);
+  assert.doesNotMatch(shellFn,/>Worker \$\{h\(status\.worker\)\}</);
+});
+
+test('Connect an AI is example guidance with parallel ChatGPT Claude and Gemini cards and no pairing queue',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  const start=app.slice(app.indexOf('async function gettingStarted'),app.indexOf('function markdownToHtml'));
+  assert.match(start,/example/i);
+  for(const provider of ['ChatGPT','Claude','Gemini'])assert.match(start,new RegExp(provider));
+  assert.match(start,/client-example/);
+  assert.match(start,/connect-chatgpt/);
+  assert.match(start,/connect-claude/);
+  assert.match(start,/connect-gemini/);
+  assert.doesNotMatch(start,/>Pairing requests</i);
+  assert.doesNotMatch(start,/pairingMarkup\(pairings\)/);
+});
+
+test('responsive UI provides three-to-two-to-one provider columns and no forced horizontal card overflow',()=>{
+  const css=readFileSync('apps/web/app.css','utf8');
+  assert.match(css,/\.client-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/s);
+  assert.match(css,/@media\(max-width:1100px\)[\s\S]*\.client-grid\s*\{[^}]*repeat\(2/s);
+  assert.match(css,/@media\(max-width:680px\)[\s\S]*\.client-grid\s*\{[^}]*1fr/s);
+  assert.match(css,/overflow-x:\s*(?:clip|hidden)/);
+});
+
 test('rendered timestamps use the browser device locale and timezone',()=>{
   const app=readFileSync('apps/web/app.js','utf8');
   const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
