@@ -60,10 +60,7 @@ export class SessionManager{
 
   grantConnectionWorkspace(sessionId:string,workspaceId:string,profileId:string):WorkspaceLease{
     const session=this.sessions.get(sessionId);if(!session)throw new Error('session not found');
-    let grants=this.connectionWorkspaceGrants.get(session.subject);
-    if(!grants){grants=new Map<string,string>();this.connectionWorkspaceGrants.set(session.subject,grants);}
-    grants.set(workspaceId,profileId);
-    this.connectionActiveWorkspace.set(session.subject,workspaceId);
+    this.rememberConnectionWorkspace(session.subject,workspaceId,profileId);
     const admitted=this.admitWorkspace(sessionId,workspaceId,profileId);
     if(admitted.status!=='admitted')throw new Error('connection workspace grant could not be admitted');
     return admitted.lease;
@@ -73,7 +70,8 @@ export class SessionManager{
     const s=this.sessions.get(sessionId);if(!s)throw new Error('session not found');
     const mapping=this.profiles.mapping(s.actor,workspaceId);
     const connectionProfileId=this.connectionWorkspaceGrants.get(s.subject)?.get(workspaceId);
-    let profileId=overrideProfileId;
+    const oauthApproval=s.actor.startsWith('oauth:')&&overrideProfileId==='developer'&&!connectionProfileId;
+    let profileId=oauthApproval?'read-only':overrideProfileId;
     if(!profileId&&mapping?.admission==='auto')profileId=mapping.profileId;
     if(!profileId&&connectionProfileId)profileId=connectionProfileId;
     if(!profileId)return{status:'approval-required'};
@@ -84,7 +82,8 @@ export class SessionManager{
     s.activeLeaseId=lease.id;
     this.repo.revokeSessionLeases(s.id);
     this.repo.saveLease(lease);
-    if(connectionProfileId)this.connectionActiveWorkspace.set(s.subject,workspaceId);
+    if(oauthApproval)this.rememberConnectionWorkspace(s.subject,workspaceId,'read-only');
+    else if(connectionProfileId)this.connectionActiveWorkspace.set(s.subject,workspaceId);
     return{status:'admitted',lease};
   }
 
@@ -107,6 +106,13 @@ export class SessionManager{
     this.connectionWorkspaceGrants.clear();
     this.connectionActiveWorkspace.clear();
     this.repo.invalidateAll();
+  }
+
+  private rememberConnectionWorkspace(subject:string,workspaceId:string,profileId:string){
+    let grants=this.connectionWorkspaceGrants.get(subject);
+    if(!grants){grants=new Map<string,string>();this.connectionWorkspaceGrants.set(subject,grants);}
+    grants.set(workspaceId,profileId);
+    this.connectionActiveWorkspace.set(subject,workspaceId);
   }
 
   private restoreConnectionWorkspace(session:SecuritySession){
