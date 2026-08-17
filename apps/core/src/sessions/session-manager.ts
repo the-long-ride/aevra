@@ -14,6 +14,7 @@ export class SessionManager{
   private switching=new Set<string>();
   private connectionWorkspaceGrants=new Map<string,Map<string,string>>();
   private connectionActiveWorkspace=new Map<string,string>();
+  private disconnectedIdentities=new Map<string,{actor:string;subject:string}>();
   private drain?: (sessionId:string,oldWorkspaceId:string,newWorkspaceId:string,timeoutMs?:number)=>Promise<void>;
 
   constructor(private repo:SessionRepository,private profiles:CapabilityProfileService,private idleMs=30*60_000,private clock:Clock=systemClock){}
@@ -41,7 +42,7 @@ export class SessionManager{
 
   get(id:string){const s=this.sessions.get(id);if(!s)return null;return s;}
   list(){return[...this.sessions.values()].map(s=>({...s,lease:s.activeLeaseId?this.activeLease(s.id):null}));}
-  revoke(id:string){this.disconnect(id);this.repo.revoke?.(id);}
+  revoke(id:string){this.disconnect(id);this.disconnectedIdentities.delete(id);this.repo.revoke?.(id);}
 
   touch(id:string){
     const s=this.sessions.get(id);if(!s)throw new Error('session not found');
@@ -58,20 +59,26 @@ export class SessionManager{
     return l;
   }
 
-  grantConnectionWorkspace(sessionId:string,workspaceId:string,profileId:string):WorkspaceLease{
-    const session=this.sessions.get(sessionId);if(!session)throw new Error('session not found');
-    this.rememberConnectionWorkspace(session.subject,workspaceId,profileId);
-    const admitted=this.admitWorkspace(sessionId,workspaceId,profileId);
-    if(admitted.status!=='admitted')throw new Error('connection workspace grant could not be admitted');
-    return admitted.lease;
+  grantConnectionWorkspace(sessionId:string,workspaceId:string,profileId:string):WorkspaceLease|null{
+    const source=this.sessions.get(sessionId)??this.disconnectedIdentities.get(sessionId);
+    if(!source)throw new Error('session identity not found');
+    this.rememberConnectionWorkspace(source.subject,workspaceId,profileId);
+    let granted:WorkspaceLease|null=null;
+    for(const session of this.sessions.values()){
+      if(session.subject!==source.subject||session.actor!==source.actor)continue;
+      const admitted=this.admitWorkspace(session.id,workspaceId,profileId);
+      if(admitted.status!=='admitted')throw new Error('connection workspace grant could not be admitted');
+      if(session.id===sessionId||!granted)granted=admitted.lease;
+    }
+    return granted;
   }
 
   admitWorkspace(sessionId:string,workspaceId:string,overrideProfileId?:string):{status:'admitted';lease:WorkspaceLease}|{status:'approval-required'}{
     const s=this.sessions.get(sessionId);if(!s)throw new Error('session not found');
     const mapping=this.profiles.mapping(s.actor,workspaceId);
     const connectionProfileId=this.connectionWorkspaceGrants.get(s.subject)?.get(workspaceId);
-    const oauthApproval=s.actor.startsWith('oauth:')&&overrideProfileId==='developer'&&!connectionProfileId;
-    let profileId=oauthApproval?'read-only':overrideProfileId;
+    const oauthApproval=s.actor.startsWith('oauth:')&&overrideProfileId==='developer';
+    let profileId=oauthApproval?(connectionProfileId??'read-only'):overrideProfileId;
     if(!profileId&&mapping?.admission==='auto')profileId=mapping.profileId;
     if(!profileId&&connectionProfileId)profileId=connectionProfileId;
     if(!profileId)return{status:'approval-required'};
@@ -82,7 +89,7 @@ export class SessionManager{
     s.activeLeaseId=lease.id;
     this.repo.revokeSessionLeases(s.id);
     this.repo.saveLease(lease);
-    if(oauthApproval)this.rememberConnectionWorkspace(s.subject,workspaceId,'read-only');
+    if(oauthApproval)this.rememberConnectionWorkspace(s.subject,workspaceId,profileId);
     else if(connectionProfileId)this.connectionActiveWorkspace.set(s.subject,workspaceId);
     return{status:'admitted',lease};
   }
@@ -96,6 +103,7 @@ export class SessionManager{
 
   disconnect(sessionId:string){
     const s=this.sessions.get(sessionId);
+    if(s?.actor.startsWith('oauth:'))this.disconnectedIdentities.set(sessionId,{actor:s.actor,subject:s.subject});
     if(s?.activeLeaseId)this.revokeLease(s.activeLeaseId);
     this.sessions.delete(sessionId);
   }
@@ -105,6 +113,7 @@ export class SessionManager{
     this.leases.clear();
     this.connectionWorkspaceGrants.clear();
     this.connectionActiveWorkspace.clear();
+    this.disconnectedIdentities.clear();
     this.repo.invalidateAll();
   }
 
