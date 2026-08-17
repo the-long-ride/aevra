@@ -70,11 +70,13 @@ test('Getting Started removes the duplicate Local Gateway card and Remote Access
 test('rendered timestamps use the browser device locale and timezone',()=>{
   const app=readFileSync('apps/web/app.js','utf8');
   assert.match(app,/function\s+localDateTime\s*\(/);
+  assert.match(app,/function\s+localDateTimeInText\s*\(/);
   assert.match(app,/toLocaleString\s*\(/);
   assert.match(app,/localDateTime\(session\.lastUsedAt\)/);
   assert.match(app,/localDateTime\(connector\.createdAt\)/);
   assert.match(app,/localDateTime\(connector\.lastUsedAt\)/);
   assert.match(app,/localDateTime\(e\.createdAt\)/);
+  assert.match(app,/localDateTimeInText\(cf\.version/);
 });
 
 test('first render opens Getting Started until onboarding is complete',()=>{const app=readFileSync('apps/web/app.js','utf8');assert.match(app,/state\s*=\s*\{\s*page:\s*null/);assert.match(app,/onboarding\.completed\s*\?\s*'dashboard'\s*:\s*'getting-started'/);});
