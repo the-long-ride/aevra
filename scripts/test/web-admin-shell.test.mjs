@@ -38,6 +38,28 @@ test('UI runtime loads before the app and provides mutation toasts plus live req
   assert.match(runtime,/cloudflare\/status/);
 });
 
+test('endpoint test toast uses the concrete reachability result instead of a generic success label',()=>{
+  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
+  assert.match(runtime,/function\s+mutationToast\s*\(/);
+  assert.match(runtime,/\/cloudflare\/test/);
+  assert.match(runtime,/Endpoint reachable/);
+  assert.match(runtime,/Endpoint unreachable/);
+  assert.doesNotMatch(runtime,/Remote endpoint checked/);
+});
+
+test('list-heavy tabs use shared compact responsive runtime treatment',()=>{
+  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
+  for(const page of ['workspaces','approvals','permissions','sessions','connectors','processes','changes','audit'])assert.match(runtime,new RegExp(`['\"]${page}['\"]`));
+  for(const className of ['dense-page','dense-list','dense-row','dense-actions','dense-create','dense-details','dense-history'])assert.match(runtime,new RegExp(className));
+  assert.match(runtime,/min-height:\s*38px/);
+  assert.match(runtime,/@media\(max-width:900px\)/);
+  assert.match(runtime,/@media\(max-width:680px\)/);
+  assert.match(runtime,/compactApprovalHistory/);
+  assert.match(runtime,/wrapForm\(page\.querySelector\('#workspace-form'\),'Add workspace'\)/);
+  assert.match(runtime,/wrapForm\(page\.querySelector\('#permission-form'\),'Create permission rule'\)/);
+  assert.match(runtime,/wrapForm\(page\.querySelector\('#new-connector'\),'Create Bearer connector'\)/);
+});
+
 test('Settings and Getting Started use OAuth-first remote access without URL secrets',()=>{
   const app=readFileSync('apps/web/app.js','utf8');
   for(const text of ['Getting Started','Remote Access','Connect an AI','ChatGPT','OAuth','Authenticate with Cloudflare','Test endpoint','Guide']) assert.match(app,new RegExp(text,'i'));
