@@ -20,6 +20,9 @@ function fixture(){
   const other=workspaces.create({name:'Other',hostRoot:'/workspace/other'});
   const sessions=new SessionManager(new SessionRepository(db.raw()),new CapabilityProfileService(db.raw()));
   const approvals=new ApprovalService(new ApprovalRepository(db.raw()),new AuditService(new AuditRepository(db.raw())),{fastWaitMs:0,lifetimeMs:60_000,lifetimeByRiskMs:{}});
+  approvals.setApprovedHandler(ticket=>{
+    if(ticket.operation.family==='workspace:select')sessions.grantConnectionWorkspace(ticket.sessionId,ticket.workspaceId,'read-only');
+  });
   const worker={
     async execute(input:any){
       if(input.operation.kind==='file.list')return{ok:true,value:{path:input.operation.path,entries:[{name:'README.md',type:'file'}]}} as any;
@@ -60,6 +63,25 @@ test('approved workspace read access survives a fresh MCP security session witho
   assert.equal(secondList.entries[0].name,'README.md');
   const workspaceTickets=f.approvals.list().filter(ticket=>ticket.operation.family==='workspace:select'&&ticket.workspaceId===f.aevra.id);
   assert.equal(workspaceTickets.length,1);
+  f.db.close();
+});
+
+test('local Allow after an MCP reconnect grants the new session without creating another request',async()=>{
+  const f=fixture();
+  const first=f.sessions.create(identity());
+  const pending=await f.tools.call(first.id,'workspace_select',{workspace:'Aevra'}) as any;
+  assert.equal(pending.status,'approval_pending');
+  f.sessions.disconnect(first.id);
+  const second=f.sessions.create(identity());
+  assert.equal(await f.tools.call(second.id,'workspace_current'),null);
+  f.approvals.approve(pending.requestId,'once');
+  const current=await f.tools.call(second.id,'workspace_current') as any;
+  assert.equal(current.id,f.aevra.id);
+  const listed=await f.tools.call(second.id,'file_list',{path:'/'}) as any;
+  assert.equal(listed.entries[0].name,'README.md');
+  const retried=await f.tools.call(second.id,'workspace_select',{workspace:'Aevra'}) as any;
+  assert.equal(retried.status,'selected');
+  assert.equal(f.approvals.list().filter(ticket=>ticket.operation.family==='workspace:select').length,1);
   f.db.close();
 });
 
