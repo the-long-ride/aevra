@@ -63,6 +63,7 @@ export class SessionManager{
   grantConnectionWorkspace(sessionId:string,workspaceId:string,profileId:string):WorkspaceLease|null{
     const source=this.sessions.get(sessionId)??this.disconnectedIdentities.get(sessionId);
     if(!source)throw new Error('session identity not found');
+    if(!source.actor.startsWith('oauth:'))return null;
     this.rememberConnectionWorkspace(source.subject,workspaceId,profileId);
     let granted:WorkspaceLease|null=null;
     for(const session of this.sessions.values()){
