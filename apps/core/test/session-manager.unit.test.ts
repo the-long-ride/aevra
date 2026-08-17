@@ -44,6 +44,7 @@ test('OAuth connection workspace grant restores a fresh lease after MCP reconnec
   const identity={subject:'oauth_grant_one',actor:'oauth:ChatGPT',issuer:'i',audience:'x',expiresAt:'x'};
   const first=manager.create(identity);
   const granted=manager.grantConnectionWorkspace(first.id,'w','read-only');
+  assert.ok(granted);
   assert.equal(granted.workspaceId,'w');
   const firstLease=manager.activeLease(first.id);assert.ok(firstLease);
   manager.disconnect(first.id);
