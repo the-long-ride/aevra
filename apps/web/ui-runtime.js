@@ -62,6 +62,7 @@
   }
 
   function pathOf(input){try{return new URL(typeof input==='string'?input:input?.url,location.href).pathname}catch{return''}}
+  function actorLabel(actor){return String(actor||'connector').replace(/^(?:connector|oauth):/,'')||'connector';}
   function actionLabel(path,method){
     if(path.includes('/cloudflare/setup'))return'Remote access saved';
     if(path.includes('/cloudflare/authenticate'))return'Cloudflare authentication updated';
@@ -79,6 +80,9 @@
     try{const type=response.headers.get('content-type')||'';const value=type.includes('json')?await response.json():await response.text();return value?.error?.message||value?.error||value?.message||`HTTP ${response.status}`}catch{return`HTTP ${response.status}`}
   }
   async function mutationToast(response,path,method){
+    if(response.ok&&method==='DELETE'&&/^\/api\/permissions\/[^/]+$/.test(path)){
+      try{const value=await response.clone().json(),removed=value?.removed,actor=removed?.actor;toast(`Permission removed from ${actorLabel(actor)}`,'success');return;}catch{toast('Permission removed','success');return;}
+    }
     if(path.includes('/cloudflare/test')){
       if(!response.ok){toast(await errorMessage(response.clone()),'error',5200);return;}
       try{
