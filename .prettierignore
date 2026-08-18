@@ -1,4 +1,7 @@
 dist
 node_modules
+coverage
+.test-dist
+.coverage-dist
 *.zip
 *.patch
