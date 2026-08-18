@@ -1,127 +1,133 @@
-import {createHash} from 'node:crypto';
-import type {Capability,CapabilityRoot,NormalizedOperation,RiskTier} from '../../protocol/src/index.js';
-import type {WorkerOperation,WorkerResult} from '../../protocol/src/worker.js';
-import type {SessionManager} from '../../../apps/core/src/sessions/session-manager.js';
-import type {WorkspaceService} from '../../../apps/core/src/workspaces/workspace-service.js';
-import type {ReadVersionCache} from '../../../apps/core/src/operations/read-version-cache.js';
-import type {OperationService,AuthorizedCapabilityContext} from '../../../apps/core/src/operations/operation-service.js';
-import type {ProcessService} from '../../../apps/core/src/processes/process-service.js';
-import type {ChangeSetService} from '../../../apps/core/src/changes/change-service.js';
-import type {PermissionEngine} from '../../../apps/core/src/policy/permissions.js';
-import type {ApprovalService,FrozenOperationTicket} from '../../../apps/core/src/approvals/approval-service.js';
-import {classifyCommand} from '../../../apps/core/src/policy/command-family.js';
-import {commandPermissionMatcher,needsCommandPermissionApproval} from '../../../apps/core/src/policy/command-matcher.js';
-import {classifyOperationRisk} from '../../../apps/core/src/policy/risk.js';
-import {AevraToolError} from './errors.js';
-import {classifySensitivity,maskSecretFile} from '../../security/src/sensitive.js';
-import type {SkillsService} from '../../../apps/core/src/skills/skills-service.js';
-import {buildShellCommand,shellRiskFloor} from './shell-command.js';
+import type { ApprovalService } from '../../../apps/core/src/approvals/approval-service.js';
+import type { ReadVersionCache } from '../../../apps/core/src/operations/read-version-cache.js';
+import type { SessionManager } from '../../../apps/core/src/sessions/session-manager.js';
+import type { WorkspaceService } from '../../../apps/core/src/workspaces/workspace-service.js';
+import {
+  BASIC_TOOL_NAMES,
+  handleBasicTool,
+  promptGet,
+  promptsList,
+  resourceRead,
+  resourcesList,
+} from './basic-tools.js';
+import { commandTool, shellTool } from './command-tools.js';
+import { AevraToolError } from './errors.js';
+import { FILE_TOOL_NAMES, handleFileTool } from './file-tools.js';
+import { GIT_TOOL_NAMES, gitTool } from './git-tools.js';
+import {
+  handleProcessChangeTool,
+  processStart,
+  PROCESS_CHANGE_TOOL_NAMES,
+} from './process-change-tools.js';
+import type {
+  McpRuntimeContext,
+  McpToolDependencies,
+  WorkerGateway,
+} from './service-types.js';
 
-export interface WorkerGateway{execute(input:{sessionId:string;workspaceId:string;roots:CapabilityRoot[];operation:WorkerOperation;expectedState?:Record<string,string>;executionMode?:'sandbox'|'host'}):Promise<WorkerResult>}
-export interface MetricsSink{record(tool:string,durationMs:number):void;}
-export interface SettingsReader{get<T>(key:string,defaultValue:T):T;}
-export interface McpToolDependencies{operations?:OperationService;processes?:ProcessService;changes?:ChangeSetService;permissions?:PermissionEngine;approvals?:ApprovalService;skills?:SkillsService;connectorBindings?:(subject:string)=>{workspaceId:string|null;profileCap:string|null}|null;metrics?:MetricsSink;settings?:SettingsReader;}
-function argsHash(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex');}
-const riskRank:Record<RiskTier,number>={LOW:0,MEDIUM:1,HIGH:2,CRITICAL:3};
-function maxRisk(a:RiskTier,b:RiskTier):RiskTier{return riskRank[a]>=riskRank[b]?a:b;}
+export type {
+  McpToolDependencies,
+  MetricsSink,
+  SettingsReader,
+  WorkerGateway,
+} from './service-types.js';
 
-type CapabilityGate={authorization:AuthorizedCapabilityContext}|{response:any};
+export class McpToolService {
+  private readonly oneTimeCapabilities = new Set<string>();
 
-export class McpToolService{
-  private oneTimeCapabilities=new Set<string>();
-  constructor(private sessions:SessionManager,private workspaces:WorkspaceService,private worker:WorkerGateway,private reads:ReadVersionCache,private approvals?:ApprovalService,private deps:McpToolDependencies={}){
-    this.approvals?.setApprovedHandler(ticket=>{
-      if(ticket.operation.family==='workspace:select'&&ticket.actor.startsWith('oauth:'))this.sessions.grantConnectionWorkspace(ticket.sessionId,ticket.workspaceId,'read-only');
+  constructor(
+    private readonly sessions: SessionManager,
+    private readonly workspaces: WorkspaceService,
+    private readonly worker: WorkerGateway,
+    private readonly reads: ReadVersionCache,
+    private readonly approvals?: ApprovalService,
+    private readonly deps: McpToolDependencies = {},
+  ) {
+    this.approvals?.setApprovedHandler((ticket) => {
+      if (
+        ticket.operation.family === 'workspace:select' &&
+        ticket.actor.startsWith('oauth:')
+      ) {
+        this.sessions.grantConnectionWorkspace(
+          ticket.sessionId,
+          ticket.workspaceId,
+          'read-only',
+        );
+      }
     });
   }
-  async call(sessionId:string,name:string,args:any={}){const t0=Date.now();try{return await this.callInner(sessionId,name,args);}finally{this.deps.metrics?.record(name,Date.now()-t0);}}
-  private async callInner(sessionId:string,name:string,args:any={}){
-    const session=this.sessions.get(sessionId);if(!session)throw new AevraToolError('UNAUTHORIZED','Unknown Aevra session');this.sessions.touch(sessionId);
-    if(name==='aevra_status'){
-      const l=this.sessions.activeLease(sessionId),baselineCapabilities=l?.capabilities??[];const summary=l?this.deps.permissions?.summary({workspaceId:l.workspaceId,actor:session.actor,sessionId,baselineCapabilities})??{effectiveCapabilities:[...baselineCapabilities],commandMatchers:[]}:{effectiveCapabilities:[],commandMatchers:[]};
-      return{sessionId,workspace:l?this.workspaces.listRemote().find(w=>w.id===l.workspaceId)??null:null,baselineCapabilities:[...baselineCapabilities],effectiveCapabilities:summary.effectiveCapabilities,capabilities:summary.effectiveCapabilities,commandMatchers:summary.commandMatchers,execution:{default:'sandbox',hostFallback:true}};
+
+  async call(sessionId: string, name: string, args: any = {}) {
+    const startedAt = Date.now();
+    try {
+      return await this.callInner(sessionId, name, args);
+    } finally {
+      this.deps.metrics?.record(name, Date.now() - startedAt);
     }
-    if(name==='skills_list'){const all=this.deps.skills?.list(this.workspaceRoot(sessionId))??[];const query=typeof args.query==='string'&&args.query?args.query.toLowerCase():null;const filtered=query?all.filter(sk=>sk.name.toLowerCase().includes(query!)||sk.description.toLowerCase().includes(query!)):all;const offset=Math.max(0,Number(args.offset??0)||0);const limit=args.limit===undefined?filtered.length:Math.max(0,Number(args.limit)||0);return{skills:filtered.slice(offset,offset+limit),total:filtered.length,offset,limit};}
-    if(name==='skill_read')return this.deps.skills?.read(args.source==='workspace'?'workspace':'user',String(args.name??''),this.workspaceRoot(sessionId),args.file?String(args.file):undefined)??this.unavailable(name);
-    if(name==='instructions_read')return this.deps.skills?.instructions(this.workspaceRoot(sessionId))??{instructions:[],note:'skills not configured'};
-    if(name==='approval_status')return this.approvals?.status(String(args.requestId))??null;
-    if(name==='approval_cancel')return this.approvals?.cancel(String(args.requestId))??null;
-    if(name==='approval_wait')return this.resumeApproval(sessionId,String(args.requestId));
-    if(name==='workspace_list')return this.workspaces.listRemote();
-    if(name==='workspace_current'){const l=this.sessions.activeLease(sessionId);return l?this.workspaces.listRemote().find(w=>w.id===l.workspaceId)??null:null;}
-    if(name==='workspace_select')return this.workspaceSelect(sessionId,args);
-    if(['file_list','file_read','file_search'].includes(name)){
-      const capability:Capability=name==='file_search'?'files.search':'files.read';const gate=await this.authorizeCapability(sessionId,capability,{tool:name,args},'*','LOW');if('response'in gate)return gate.response;return this.readTool(sessionId,name,args);
+  }
+
+  private context(): McpRuntimeContext {
+    return {
+      sessions: this.sessions,
+      workspaces: this.workspaces,
+      worker: this.worker,
+      reads: this.reads,
+      approvals: this.approvals,
+      deps: this.deps,
+      oneTimeCapabilities: this.oneTimeCapabilities,
+      callInner: (sessionId, name, args) =>
+        this.callInner(sessionId, name, args),
+      processStart: (sessionId, args) =>
+        processStart(this.context(), sessionId, args),
+    };
+  }
+
+  private async callInner(sessionId: string, name: string, args: any = {}) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new AevraToolError('UNAUTHORIZED', 'Unknown Aevra session');
     }
-    if(name==='file_write'){const gate=await this.authorizeCapability(sessionId,'files.write',{tool:name,args},'*','MEDIUM');if('response'in gate)return gate.response;return this.deps.operations?.write(sessionId,{path:String(args.path),content:String(args.content??''),expectedHash:args.expectedHash},gate.authorization)??this.unavailable(name);}
-    if(name==='file_create'){const gate=await this.authorizeCapability(sessionId,'files.write',{tool:name,args},'*','MEDIUM');if('response'in gate)return gate.response;return this.deps.operations?.create(sessionId,{path:String(args.path),content:String(args.content??''),encoding:args.encoding==='base64'?'base64':'utf8'},gate.authorization)??this.unavailable(name);}
-    if(name==='file_move'){const gate=await this.authorizeCapability(sessionId,'files.write',{tool:name,args},'*','MEDIUM');if('response'in gate)return gate.response;return this.deps.operations?.move(sessionId,{from:String(args.from),to:String(args.to)},gate.authorization)??this.unavailable(name);}
-    if(name==='file_patch'){const gate=await this.authorizeCapability(sessionId,'files.write',{tool:name,args},'*','MEDIUM');if('response'in gate)return gate.response;return this.deps.operations?.patch(sessionId,{path:String(args.path),patch:String(args.patch??''),expectedHash:args.expectedHash},gate.authorization)??this.unavailable(name);}
-    if(name==='file_delete'){
-      const risk:RiskTier=Boolean(args.recursive)?'HIGH':'MEDIUM';const gate=await this.authorizeCapability(sessionId,'files.delete',{tool:name,args},'*',risk);if('response'in gate)return gate.response;return this.gated(sessionId,{family:'files:delete',capability:'files.delete',risk,argsHash:argsHash(args)},{tool:name,args},{},()=>this.deps.operations!.delete(sessionId,{path:String(args.path),recursive:Boolean(args.recursive)},gate.authorization));
+    this.sessions.touch(sessionId);
+    const context = this.context();
+
+    if (BASIC_TOOL_NAMES.has(name)) {
+      return handleBasicTool(context, sessionId, name, args);
     }
-    if(name==='command_run')return this.commandTool(sessionId,args);
-    if(name==='shell_run'){const mode=args.executionMode==='host'?'host':'sandbox';const command=buildShellCommand({...args,executionMode:mode});const shell=String(args.shell??'auto')==='auto'?(mode==='sandbox'?'bash':process.platform==='win32'?'powershell':'bash'):String(args.shell);return this.commandTool(sessionId,{command,executionMode:mode,networkDestinations:args.networkDestinations},{tool:'shell_run',shell,script:String(args.script??''),riskFloor:shellRiskFloor(mode)});}
-    if(['git_status','git_diff','git_log','git_branch','git_commit','git_push'].includes(name))return this.gitTool(sessionId,name,args);
-    if(name==='process_start')return this.processStart(sessionId,args);
-    if(name==='process_list')return this.deps.processes?.list(sessionId)??this.unavailable(name);
-    if(name==='process_logs'||name==='process_stop'||name==='process_restart'){const kind=name.replace('_','.') as 'process.logs'|'process.stop'|'process.restart';const r=await this.deps.processes?.command(sessionId,kind,String(args.processId),args.cursor);if(!r)return this.unavailable(name);if(!r.ok)throw new AevraToolError(r.error.code,r.error.message,r.error.details);return r.value;}
-    if(name==='change_begin'){const l=this.requiredLease(sessionId);return this.deps.changes?.begin(sessionId,l.workspaceId,args.name)??this.unavailable(name);}
-    if(name==='change_status')return this.deps.changes?.status(String(args.changeSetId??''),sessionId)??this.unavailable(name);
-    if(name==='change_commit')return this.deps.changes?.commit(String(args.changeSetId))??this.unavailable(name);
-    if(name==='change_rollback'){const gate=await this.authorizeCapability(sessionId,'files.write',{tool:name,args},'*','HIGH');if('response'in gate)return gate.response;return this.gated(sessionId,{family:'change:rollback',capability:'files.write',risk:'HIGH',argsHash:argsHash(args)},{tool:name,args},{},()=>this.deps.changes!.rollback(String(args.changeSetId),{force:false,skipPaths:[]}));}
-    throw new AevraToolError('CAPABILITY_REQUIRED',`Tool ${name} is not enabled`);
+    if (FILE_TOOL_NAMES.has(name)) {
+      return handleFileTool(context, sessionId, name, args);
+    }
+    if (name === 'command_run') {
+      return commandTool(context, sessionId, args);
+    }
+    if (name === 'shell_run') {
+      return shellTool(context, sessionId, args);
+    }
+    if (GIT_TOOL_NAMES.has(name)) {
+      return gitTool(context, sessionId, name, args);
+    }
+    if (PROCESS_CHANGE_TOOL_NAMES.has(name)) {
+      return handleProcessChangeTool(context, sessionId, name, args);
+    }
+
+    throw new AevraToolError(
+      'CAPABILITY_REQUIRED',
+      `Tool ${name} is not enabled`,
+    );
   }
-  resourcesList(sessionId:string){const all=this.deps.skills?.list(this.workspaceRoot(sessionId))??[];return{resources:all.map(sk=>({uri:`aevra://skill/${sk.source}/${encodeURIComponent(sk.name)}`,name:sk.name,description:sk.description||(`Skill from ${sk.source} library`),mimeType:'text/markdown'}))};}
-  async resourceRead(sessionId:string,uri:string){const m=String(uri).match(/^aevra:\/\/skill\/(user|workspace)\/([^/]+)$/);if(!m)throw new AevraToolError('INVALID_REQUEST','Unknown resource URI');const read=this.deps.skills?.read(m[1] as 'user'|'workspace',decodeURIComponent(m[2]!),this.workspaceRoot(sessionId));if(!read)throw new AevraToolError('SKILL_NOT_FOUND','Skills are not configured');return{uri,contents:[{uri,mimeType:'text/markdown',text:read.content}]};}
-  promptsList(){return{prompts:[{name:'aevra-instructions',description:'Merged AGENTS.md instructions (user global then active workspace)'}]};}
-  async promptGet(sessionId:string){const r=this.deps.skills?.instructions(this.workspaceRoot(sessionId));if(!r)throw new AevraToolError('INVALID_REQUEST','Skills are not configured');return{description:'Aevra instructions',messages:[{role:'user',content:{type:'text',text:r.instructions.map(i=>(`# ${i.source} instructions\n\n${i.content}`)).join('\n\n---\n\n')||r.note||'No instruction files found.'}}]};}
-  private unavailable(name:string):never{throw new AevraToolError('CAPABILITY_REQUIRED',`Tool ${name} is not configured`);}
-  private workspaceRoot(sessionId:string):string|null{const l=this.sessions.activeLease(sessionId);if(!l)return null;const w=this.workspaces.getLocal(l.workspaceId);return w?.hostRoot??null;}
-  private requiredLease(sessionId:string,capability?:Capability){if(this.sessions.isSwitching?.(sessionId))throw new AevraToolError('SESSION_WORKSPACE_REQUIRED','Workspace switch is draining in-flight operations');const l=this.sessions.activeLease(sessionId);if(!l)throw new AevraToolError('SESSION_WORKSPACE_REQUIRED','Select a workspace first');if(capability&&!l.capabilities.includes(capability))throw new AevraToolError('CAPABILITY_REQUIRED',capability);return l;}
-  private workspaceResult(workspace:{id:string;name:string;description:string},capabilities:Capability[]){return{status:'selected',workspace:{id:workspace.id,name:workspace.name,description:workspace.description},capabilities};}
-  private oneTimeKey(sessionId:string,capability:Capability,matcher:string){return`${sessionId}\u0000${capability}\u0000${matcher}`;}
-  private oneTimeAllowed(sessionId:string,capability:Capability,matcher:string){return this.oneTimeCapabilities.has(this.oneTimeKey(sessionId,capability,matcher))||this.oneTimeCapabilities.has(this.oneTimeKey(sessionId,capability,'*'));}
-  private authorizationContext(sessionId:string,capability:Capability,matcher:string):AuthorizedCapabilityContext{const session=this.sessions.get(sessionId),lease=this.requiredLease(sessionId);if(!session)throw new AevraToolError('UNAUTHORIZED','Unknown Aevra session');return{sessionId,workspaceId:lease.workspaceId,actor:session.actor,capability,matcher};}
-  private async workspaceSelect(sessionId:string,args:any){
-    const workspace=this.workspaces.getLocal(String(args.workspace??args.name??args.id??''));if(!workspace)throw new AevraToolError('NOT_FOUND','Workspace not found');
-    const session=this.sessions.get(sessionId)!;const active=this.sessions.activeLease(sessionId);if(active?.workspaceId===workspace.id)return this.workspaceResult(workspace,active.capabilities);
-    const bindings=session.actor.startsWith('connector:')?this.deps.connectorBindings?.(session.subject)??null:null;if(bindings?.workspaceId&&bindings.workspaceId!==workspace.id)throw new AevraToolError('CAPABILITY_REQUIRED','Connector is bound to a different workspace');
-    const override=bindings?.profileCap??undefined,drainTimeoutMs=Math.max(0,Number(args.drainTimeoutMs??60_000)||0);const admission=await this.sessions.switchWorkspace(sessionId,workspace.id,override,drainTimeoutMs);if(admission.status==='admitted')return this.workspaceResult(workspace,admission.lease.capabilities);
-    if(!this.approvals)throw new AevraToolError('APPROVAL_PENDING','Local approval service unavailable');
-    const profileId=session.actor.startsWith('oauth:')?'read-only':'developer';
-    const request=await this.approvals.request({actor:session.actor,sessionId,workspaceId:workspace.id,operation:{family:'workspace:select',capability:'files.read',risk:'MEDIUM',argsHash:argsHash({workspaceId:workspace.id,profileId})},payload:{tool:'workspace_select',workspaceId:workspace.id,profileId,drainTimeoutMs},expectedState:{workspaceId:workspace.id},risk:'MEDIUM'});
-    if(request.status==='approved')return this.resumeApproval(sessionId,request.requestId);return{...request,workspace:{id:workspace.id,name:workspace.name,description:workspace.description}};
+
+  resourcesList(sessionId: string) {
+    return resourcesList(this.context(), sessionId);
   }
-  private async authorizeCapability(sessionId:string,capability:Capability,original:{tool:string;args:any},permissionMatcher:string,risk:RiskTier):Promise<CapabilityGate>{
-    const lease=this.requiredLease(sessionId),session=this.sessions.get(sessionId)!;const lowDecision=this.deps.permissions?.decide({capability,matcher:permissionMatcher,workspaceId:lease.workspaceId,actor:session.actor,sessionId,risk:'LOW'});
-    if(lowDecision?.outcome==='deny')throw new AevraToolError('CAPABILITY_REQUIRED',lowDecision.reason);
-    const authorization=this.authorizationContext(sessionId,capability,permissionMatcher);
-    if(lease.capabilities.includes(capability)||this.oneTimeAllowed(sessionId,capability,permissionMatcher)||lowDecision?.outcome==='allow')return{authorization};
-    if(!this.approvals)throw new AevraToolError('APPROVAL_PENDING','Local approval service unavailable');
-    const family=permissionMatcher==='*'?`capability:${capability}`:permissionMatcher;
-    const request=await this.approvals.request({actor:session.actor,sessionId,workspaceId:lease.workspaceId,operation:{family,capability,risk,argsHash:argsHash({workspaceId:lease.workspaceId,capability,permissionMatcher,original})},payload:{tool:'capability_request',requestedCapability:capability,permissionMatcher,original},expectedState:{workspaceId:lease.workspaceId},risk});
-    if(request.status==='approved')return{response:await this.resumeApproval(sessionId,request.requestId)};return{response:{...request,requiredCapability:capability,permissionMatcher}};
+
+  async resourceRead(sessionId: string, uri: string) {
+    return resourceRead(this.context(), sessionId, uri);
   }
-  private async readTool(sessionId:string,name:string,args:any){const l=this.requiredLease(sessionId);const roots=this.workspaces.capabilityRoots(l.workspaceId);const operation:WorkerOperation=name==='file_list'?{kind:'file.list',path:String(args.path??'/')}:name==='file_read'?{kind:'file.read',path:String(args.path)}:{kind:'file.search',path:String(args.path??'/'),query:String(args.query??'')};const r=await this.worker.execute({sessionId,workspaceId:l.workspaceId,roots,operation,executionMode:'host'});if(!r.ok)throw new AevraToolError(r.error.code,r.error.message,r.error.details);if(name==='file_read'){const value=r.value as any;const sensitivity=classifySensitivity({path:value.path});const content=sensitivity==='SECRET'?maskSecretFile(value.path,value.content):value.content;if(args.offset!==undefined||args.length!==undefined){const offset=Math.max(0,Number(args.offset??0)||0);const length=args.length===undefined?Math.max(0,content.length-offset):Math.max(0,Number(args.length)||0);const chunk=content.slice(offset,offset+length);return{path:value.path,hash:createHash('sha256').update(chunk).digest('hex'),offset,length:chunk.length,totalLength:content.length,content:chunk,sensitivity};}this.reads.put({sessionId,workspaceId:l.workspaceId,path:value.path,hash:value.hash,content:value.content,storedAt:Date.now()});return{...value,content,sensitivity};}return r.value;}
-  private async commandTool(sessionId:string,args:any,source?:{tool:'shell_run';shell:string;script:string;riskFloor:RiskTier}){
-    const command={executable:String(args.executable??args.command?.executable??''),args:Array.isArray(args.args)?args.args.map(String):(args.command?.args??[]).map(String),env:args.env??args.command?.env??{},timeoutMs:args.timeoutMs??args.command?.timeoutMs};if(!command.executable)throw new AevraToolError('INVALID_REQUEST','command executable is required');
-    const original={tool:source?.tool??'command_run',args:source?{script:source.script,shell:source.shell,executionMode:args.executionMode,networkDestinations:args.networkDestinations,env:command.env,timeoutMs:command.timeoutMs}:args};const classification=this.deps.operations?.classify?.([command.executable,...command.args])??classifyCommand([command.executable,...command.args]);const mode=args.executionMode==='host'?'host':'sandbox';let risk:RiskTier=mode==='host'&&classification.risk==='LOW'?'MEDIUM':classification.risk;if(source)risk=maxRisk(risk,source.riskFloor);const classificationFamily=source?`shell:${source.shell}`:mode==='host'?`${classification.family}:host-fallback`:classification.family;const permissionMatcher=commandPermissionMatcher([command.executable,...command.args],source?{shell:source.shell,executionMode:mode}:{executionMode:mode});
-    const commandGate=await this.authorizeCapability(sessionId,'commands.run',original,permissionMatcher,risk);if('response'in commandGate)return commandGate.response;let lease=this.requiredLease(sessionId);const session=this.sessions.get(sessionId)!;const normalized={family:permissionMatcher,capability:'commands.run' as const,risk,effect:classification.effect,argsHash:argsHash({command,mode})};
-    const rawDestinations=Array.isArray(args.networkDestinations)?args.networkDestinations.map(String):[];if(rawDestinations.length&&!lease.capabilities.includes('network')){const networkGate=await this.authorizeCapability(sessionId,'network',original,'*','MEDIUM');if('response'in networkGate)return networkGate.response;lease=this.requiredLease(sessionId);}
-    let networkPolicy:any={mode:'deny-all',destinations:[],enforcement:'backend'},networkApproval:any=null;if(rawDestinations.length){const classified=rawDestinations.map((value:string)=>this.deps.operations?.classifyNetwork?.(value)).filter(Boolean);networkPolicy={mode:'allow-rules',destinations:classified.map((x:any)=>x.destination),enforcement:'backend'};for(const item of classified){if(item.known||this.oneTimeAllowed(sessionId,'network',item.family))continue;const decision=this.deps.permissions?.decide({capability:'network',matcher:item.family,workspaceId:lease.workspaceId,actor:session.actor,sessionId,risk:'MEDIUM'});if(decision?.outcome==='deny')throw new AevraToolError('CAPABILITY_REQUIRED',decision.reason);if(decision?.outcome!=='allow'&&!networkApproval)networkApproval={family:item.family,capability:'network' as const,risk:'MEDIUM' as const,argsHash:argsHash(item.destination)};}}
-    const commandDecision=this.deps.permissions?.decide({capability:'commands.run',matcher:permissionMatcher,workspaceId:lease.workspaceId,actor:session.actor,sessionId,risk});if(commandDecision?.outcome==='deny')throw new AevraToolError('CAPABILITY_REQUIRED',commandDecision.reason);const once=this.oneTimeAllowed(sessionId,'commands.run',permissionMatcher);const needsCommandApproval=needsCommandPermissionApproval(commandDecision?.outcome,once);const approvalNormalized=needsCommandApproval?normalized:networkApproval;const payload={tool:'command_run',permissionMatcher,classificationFamily,...(source?{sourceTool:'shell_run',shell:source.shell,script:source.script}:{}),args:{command,executionMode:mode,networkPolicy}};if(approvalNormalized){if(!this.approvals)throw new AevraToolError('APPROVAL_PENDING','Local approval service unavailable');const request=await this.approvals.request({actor:session.actor,sessionId,workspaceId:lease.workspaceId,operation:approvalNormalized,payload,expectedState:{},risk:approvalNormalized.risk});if(request.status==='approval_pending')return request;return this.resumeApproval(sessionId,request.requestId);}return this.deps.operations!.runCommand(sessionId,command,mode,networkPolicy);
+
+  promptsList() {
+    return promptsList();
   }
-  private async gitTool(sessionId:string,name:string,args:any){const cap:Capability=name==='git_commit'?'git.commit':name==='git_push'?'git.push':'git.read';const matcher=cap==='git.read'?'*':name.replace('_',':');const risk=classifyOperationRisk(name.replace('_',':'),args.args??[]);const gate=await this.authorizeCapability(sessionId,cap,{tool:name,args},matcher,risk);if('response'in gate)return gate.response;const l=this.requiredLease(sessionId),roots=this.workspaces.capabilityRoots(l.workspaceId);const operation:WorkerOperation=name==='git_status'?{kind:'git.status'}:name==='git_diff'?{kind:'git.diff',args:args.args??[]}:name==='git_log'?{kind:'git.log',args:args.args??[]}:name==='git_branch'?{kind:'git.branch',args:args.args??[]}:name==='git_commit'?{kind:'git.commit',message:String(args.message),args:args.args??[]}:{kind:'git.push',remote:args.remote,branch:args.branch,args:args.args??[]};const execute=async()=>{const r=await this.worker.execute({sessionId,workspaceId:l.workspaceId,roots,operation,executionMode:'host'});if(!r.ok)throw new AevraToolError(r.error.code,r.error.message,r.error.details);return r.value;};if(risk==='LOW')return execute();const expectedState=await this.repoState(sessionId,l.workspaceId,roots);return this.gated(sessionId,{family:name.replace('_',':'),capability:cap,risk,argsHash:argsHash(args)},{tool:name,args},expectedState,execute);}
-  private async processStart(sessionId:string,args:any){const command={executable:String(args.executable??args.command?.executable??''),args:Array.isArray(args.args)?args.args:(args.command?.args??[]),env:args.env??args.command?.env??{},cwdLogical:'/',timeoutMs:args.timeoutMs};const c=classifyCommand([command.executable,...command.args]),permissionMatcher=`process:${commandPermissionMatcher([command.executable,...command.args],{executionMode:'host'})}`;const gate=await this.authorizeCapability(sessionId,'commands.run',{tool:'process_start',args},permissionMatcher,c.risk);if('response'in gate)return gate.response;return this.gated(sessionId,{family:permissionMatcher,capability:'commands.run',risk:c.risk,effect:c.effect,argsHash:argsHash(args)},{tool:'process_start',permissionMatcher,args},{},()=>this.deps.processes!.start(sessionId,command,args.lifecycle==='keep-running'?'keep-running':'stop-with-aevra'));}
-  private async gated<T>(sessionId:string,normalized:NormalizedOperation,payload:unknown,expectedState:Record<string,string>,execute:()=>Promise<T>){const session=this.sessions.get(sessionId)!;const l=this.requiredLease(sessionId);const forceCriticalApproval=normalized.risk==='CRITICAL'&&this.deps.settings?.get<boolean>('policy.critical.alwaysConfirm',false)===true;const once=this.oneTimeAllowed(sessionId,normalized.capability,normalized.family);const decision=this.deps.permissions?.decide({capability:normalized.capability,matcher:normalized.family,workspaceId:l.workspaceId,actor:session.actor,sessionId,risk:normalized.risk});if(decision?.outcome==='deny')throw new AevraToolError('CAPABILITY_REQUIRED',decision.reason);const newCommandApproval=normalized.capability==='commands.run'&&needsCommandPermissionApproval(decision?.outcome,once);if(once)return execute();if(normalized.risk==='LOW'&&!forceCriticalApproval&&!newCommandApproval)return execute();if(!forceCriticalApproval&&!newCommandApproval&&decision?.outcome==='allow')return execute();if(!this.approvals)throw new AevraToolError('APPROVAL_PENDING','Local approval service unavailable');const request=await this.approvals.request({actor:session.actor,sessionId,workspaceId:l.workspaceId,operation:normalized,payload,expectedState,risk:normalized.risk});if(request.status==='approval_pending')return request;return this.resumeApproval(sessionId,request.requestId);}
-  private sameConnection(currentSessionId:string,ticket:FrozenOperationTicket){const current=this.sessions.connectionIdentity(currentSessionId),original=this.sessions.connectionIdentity(ticket.sessionId);return Boolean(current&&original&&current.actor===ticket.actor&&current.actor===original.actor&&current.subject===original.subject);}
-  private async resumeApproval(sessionId:string,requestId:string){if(!this.approvals)return null;const ticket=this.approvals.status(requestId);if(!ticket)return null;if(ticket.state!=='APPROVED')return ticket;if(ticket.operation.family==='workspace:select')return this.resumeWorkspaceAdmission(sessionId,requestId);if((ticket.payload as any)?.tool==='capability_request')return this.resumeCapabilityRequest(sessionId,requestId);return this.approvals.resume(requestId,async t=>{const s=this.sessions.get(sessionId),l=this.sessions.activeLease(sessionId);if(!s||s.id!==t.sessionId||s.actor!==t.actor)return{ok:false,reason:'session changed'};if(!l||l.workspaceId!==t.workspaceId)return{ok:false,reason:'workspace changed'};const currentPermission=this.deps.permissions?.decide({capability:t.operation.capability,matcher:t.operation.family,workspaceId:l.workspaceId,actor:s.actor,sessionId,risk:'LOW'});if(currentPermission?.outcome==='deny')return{ok:false,reason:'permission policy changed'};if(!l.capabilities.includes(t.operation.capability)&&currentPermission?.outcome!=='allow'&&!this.oneTimeAllowed(sessionId,t.operation.capability,t.operation.family))return{ok:false,reason:'capability changed'};if(t.expectedState?.head){const current=await this.repoState(sessionId,l.workspaceId,this.workspaces.capabilityRoots(l.workspaceId));if(current.head!==t.expectedState.head)return{ok:false,reason:'repository state changed'};}return{ok:true};},async t=>this.executeFrozen(sessionId,t));}
-  private async resumeWorkspaceAdmission(sessionId:string,requestId:string){if(!this.approvals)return null;return this.approvals.resume(requestId,async ticket=>{const session=this.sessions.get(sessionId);if(!session)return{ok:false,reason:'session changed'};if(ticket.actor.startsWith('oauth:')){if(!this.sameConnection(sessionId,ticket))return{ok:false,reason:'OAuth connection changed'};}else if(session.id!==ticket.sessionId||session.actor!==ticket.actor)return{ok:false,reason:'session changed'};const workspace=this.workspaces.getLocal(ticket.workspaceId);if(!workspace)return{ok:false,reason:'workspace no longer exists'};return{ok:true};},async ticket=>this.executeFrozen(sessionId,ticket));}
-  private async resumeCapabilityRequest(sessionId:string,requestId:string){if(!this.approvals)return null;return this.approvals.resume(requestId,async ticket=>{const session=this.sessions.get(sessionId);if(!session)return{ok:false,reason:'session changed'};if(ticket.actor.startsWith('oauth:')){if(!this.sameConnection(sessionId,ticket))return{ok:false,reason:'OAuth connection changed'};}else if(session.id!==ticket.sessionId||session.actor!==ticket.actor)return{ok:false,reason:'session changed'};const workspace=this.workspaces.getLocal(ticket.workspaceId),lease=this.sessions.activeLease(sessionId);if(!workspace)return{ok:false,reason:'workspace no longer exists'};if(!lease||lease.workspaceId!==ticket.workspaceId)return{ok:false,reason:'workspace changed'};return{ok:true};},async ticket=>{const p=ticket.payload as any,original=p?.original;if(!original?.tool)throw new AevraToolError('INVALID_REQUEST','Capability approval has no frozen operation');const key=this.oneTimeKey(sessionId,ticket.operation.capability,String(p.permissionMatcher??'*')),once=ticket.decisionScope==='once';if(once)this.oneTimeCapabilities.add(key);try{return await this.callInner(sessionId,String(original.tool),original.args??{});}finally{if(once)this.oneTimeCapabilities.delete(key);}});}
-  private async executeFrozen(sessionId:string,ticket:FrozenOperationTicket){const p=ticket.payload as any;if(!p?.tool)throw new AevraToolError('INVALID_REQUEST','Frozen approval payload is missing');if(p.tool==='workspace_select'){const workspace=this.workspaces.getLocal(String(p.workspaceId??ticket.workspaceId));if(!workspace)throw new AevraToolError('NOT_FOUND','Workspace not found');const session=this.sessions.get(sessionId)!;if(session.actor.startsWith('oauth:')){const lease=this.sessions.grantConnectionWorkspace(sessionId,workspace.id,'read-only')??this.sessions.activeLease(sessionId);if(!lease)throw new AevraToolError('APPROVAL_CONTEXT_CHANGED','Workspace grant could not be restored');return this.workspaceResult(workspace,lease.capabilities);}const result=await this.sessions.switchWorkspace(sessionId,workspace.id,String(p.profileId??'developer'),Math.max(0,Number(p.drainTimeoutMs??60_000)||0));if(result.status!=='admitted')throw new AevraToolError('APPROVAL_PENDING','Workspace admission still requires local approval');return this.workspaceResult(workspace,result.lease.capabilities);}
-    if(p.tool==='command_run')return this.deps.operations!.runCommand(sessionId,p.args.command,p.args.executionMode,p.args.networkPolicy);
-    if(p.tool==='git_commit'||p.tool==='git_push'){const l=this.requiredLease(sessionId),roots=this.workspaces.capabilityRoots(l.workspaceId);const op:WorkerOperation=p.tool==='git_commit'?{kind:'git.commit',message:String(p.args.message),args:p.args.args??[]}:{kind:'git.push',remote:p.args.remote,branch:p.args.branch,args:p.args.args??[]};const r=await this.worker.execute({sessionId,workspaceId:l.workspaceId,roots,operation,executionMode:'host'});if(!r.ok)throw new AevraToolError(r.error.code,r.error.message,r.error.details);return r.value;}
-    if(p.tool==='file_delete'){const auth=this.authorizationContext(sessionId,'files.delete','files:delete');return this.deps.operations!.delete(sessionId,{path:String(p.args.path),recursive:Boolean(p.args.recursive)},auth);}if(p.tool==='change_rollback')return this.deps.changes!.rollback(String(p.args.changeSetId),{force:false,skipPaths:[]});if(p.tool==='process_start')return this.processStart(sessionId,p.args);throw new AevraToolError('INVALID_REQUEST','Unsupported frozen operation');}
-  private async repoState(sessionId:string,workspaceId:string,roots:CapabilityRoot[]){const r=await this.worker.execute({sessionId,workspaceId,roots,operation:{kind:'git.log',args:['-1','--format=%H']},executionMode:'host'});if(!r.ok)return{};const stdout=String((r.value as any)?.stdout??'').trim();const head=stdout.split(/\s+/)[0];return head?{head}:{};}
+
+  async promptGet(sessionId: string) {
+    return promptGet(this.context(), sessionId);
+  }
 }
