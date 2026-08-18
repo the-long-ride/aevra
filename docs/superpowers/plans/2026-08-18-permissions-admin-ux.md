@@ -14,7 +14,8 @@
 - Keep Remote Access behavior/layout intact.
 - Existing single-record APIs remain compatible.
 - Audit clear preserves hash-chain continuity through the checkpoint.
-- Revoke-others preserves the current admin session and connector-originated MCP sessions.
+- Revoke-others preserves the current admin session plus OAuth and static connector MCP sessions.
+- New bulk mutations obey Safe Mode and existing critical-operation persistence restrictions.
 - Destructive CLI actions require `--yes`.
 
 ---
@@ -26,32 +27,32 @@
 - Modify: `apps/core/src/admin/server.ts`
 - Modify: `apps/core/src/admin/bootstrap.ts`
 - Modify: `apps/core/src/policy/capabilities.ts`
-- Test: `apps/core/test/admin-control-plane.integration.test.ts`
+- Test: `apps/core/test/admin-bulk-actions.integration.test.ts`
 
 **Interfaces:**
 - Produces `handleBulkAdminAction(req,res,url,context,currentAdminSession)`.
 - Produces `AdminBootstrapService.revokeAllExcept(sessionId)`.
 - Produces `CapabilityProfileService.listMappings(workspaceId)`.
 
-- [ ] Add tests for bulk rule creation, workspace admission listing, and revoke-others preservation.
-- [ ] Implement focused bulk endpoints and helper methods.
-- [ ] Verify relevant core tests.
+- [x] Add tests for bulk rule creation, critical-rule rejection, Safe Mode, workspace admission listing, and revoke-others preservation.
+- [x] Implement focused bulk endpoints and helper methods.
+- [ ] Verify relevant core tests in CI.
 
 ### Task 2: Audit clearing
 
 **Files:**
 - Modify: `packages/store/src/audit.ts`
 - Modify: `apps/core/src/audit/audit-service.ts`
-- Test: `apps/core/test/audit.unit.test.ts`
-- Test: `apps/core/test/admin-control-plane.integration.test.ts`
+- Test: `apps/core/test/audit-clear.unit.test.ts`
+- Test: `apps/core/test/admin-bulk-actions.integration.test.ts`
 
 **Interfaces:**
 - Produces `AuditRepository.clearWithCheckpoint()`.
 - Produces `AuditService.clear()` returning removed count.
 
-- [ ] Add tests proving clear removes rows and leaves `verify()` valid.
-- [ ] Implement checkpoint-preserving clear.
-- [ ] Verify audit/core tests.
+- [x] Add tests proving clear removes rows and leaves `verify()` valid.
+- [x] Implement checkpoint-preserving clear.
+- [ ] Verify audit/core tests in CI.
 
 ### Task 3: CLI admin cleanup commands
 
@@ -59,15 +60,15 @@
 - Modify: `apps/cli/src/args.ts`
 - Modify: `apps/cli/src/cli.ts`
 - Modify: `apps/cli/src/cli-support.ts`
-- Test: CLI tests under `apps/cli/test`.
+- Test: `apps/cli/test/admin-maintenance-args.unit.test.ts`
 
 **Interfaces:**
 - `aevra audit clear --yes`
 - `aevra sessions revoke-others --yes`
 
-- [ ] Add parser/help tests for both commands and `--yes` requirement.
-- [ ] Implement parser, help text, and admin API calls.
-- [ ] Verify CLI tests.
+- [x] Add parser/help tests for both commands and `--yes` requirement.
+- [x] Implement parser, help text, and admin API calls.
+- [ ] Verify CLI tests in CI.
 
 ### Task 4: Web UX enhancements
 
@@ -75,6 +76,8 @@
 - Create: `apps/web/admin-enhancements.js`
 - Create: `apps/web/admin-enhancements.css`
 - Modify: `apps/web/index.html`
+- Modify: `package.json`
+- Test: `scripts/test/web-admin-enhancements.test.mjs`
 
 **Interfaces:**
 - Permissions page calls `/api/permissions/bulk` and existing permission delete API.
@@ -83,16 +86,19 @@
 - Audit page calls `DELETE /api/audit`.
 - Settings keeps the existing `.remote-card` DOM node and re-renders only other sections.
 
-- [ ] Implement active-page enhancement observer.
-- [ ] Implement Permissions Add rules modal + rules data table.
-- [ ] Implement Workspaces data table + always-visible detail modal sections + multiple external mount table.
-- [ ] Implement Sessions and Audit bulk actions with confirmation.
-- [ ] Re-layout non-Remote-Access Settings into compact panels/tables.
-- [ ] Add responsive modal/table styles.
+- [x] Implement active-page enhancement observer.
+- [x] Implement Permissions Add rules modal + rules data table.
+- [x] Implement Workspaces data table + always-visible detail modal sections + multiple external mount table.
+- [x] Implement Sessions and Audit bulk actions with confirmation.
+- [x] Re-layout non-Remote-Access Settings into compact panels/tables.
+- [x] Add responsive modal/table styles.
+- [x] Add web syntax/asset coverage.
 
 ### Task 5: Verification
 
-- [ ] Run `npm test` when a runnable checkout is available.
-- [ ] Run `npm run lint` when available.
-- [ ] Run `npm run build`.
+- [ ] Run `npm run format:check` in PR CI.
+- [ ] Run `npm run lint` in PR CI.
+- [ ] Run `npm test` in PR CI.
+- [ ] Run `npm run typecheck` in PR CI.
+- [ ] Run `npm run build` in PR CI.
 - [ ] Review diff for Remote Access regressions and destructive-action confirmation paths.
