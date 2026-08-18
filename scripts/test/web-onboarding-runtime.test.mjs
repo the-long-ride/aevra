@@ -1,49 +1,59 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-test('completed onboarding collapses by default but stays expandable while Remote Access remains visible',()=>{
-  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
-  const app=readFileSync('apps/web/app.js','utf8');
-  assert.match(runtime,/\/api\/onboarding/);
-  assert.match(runtime,/#finish-onboarding/);
-  assert.match(runtime,/stopImmediatePropagation\(\)/);
-  assert.match(runtime,/onboardingCompleted/);
-  assert.match(runtime,/onboarding-collapsible/);
-  assert.match(runtime,/Onboarding completed/);
-  assert.match(runtime,/Show setup/);
-  assert.match(runtime,/Hide setup/);
-  assert.match(app,/data-onboarding-persistent/);
-  assert.match(runtime,/:scope > \.setup-section:not\(\[data-onboarding-persistent\]\)/);
-  assert.match(runtime,/data-onboarding-persistent/);
+const runtimeStatus = readFileSync(
+  'apps/web/components/runtime-status.js',
+  'utf8',
+);
+const main = readFileSync('apps/web/main.js', 'utf8');
+const dashboard = readFileSync('apps/web/pages/dashboard.js', 'utf8');
+
+test('completed onboarding remains expandable and is ordered by durable backend state', () => {
+  const route = readFileSync(
+    'apps/core/src/admin/routes/settings-routes.ts',
+    'utf8',
+  );
+  assert.match(route, /\/api\/onboarding/);
+  assert.match(route, /onboarding\.state/);
+  assert.match(dashboard, /dashboardOrder\(onboarding\.completed\)/);
+  assert.match(dashboard, /data-dashboard-section/);
+  assert.match(dashboard, /openState/);
+  assert.doesNotMatch(
+    dashboard,
+    /Remote Access remains visible above this section/,
+  );
 });
 
-test('web header shows the running Aevra version from status rather than a hard-coded UI version',()=>{
-  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
-  const core=readFileSync('apps/core/src/runtime.ts','utf8');
-  assert.match(runtime,/\/api\/status/);
-  assert.match(runtime,/status\?\.version/);
-  assert.match(runtime,/app-version/);
-  assert.match(core,/version:AEVRA_VERSION/);
-  assert.doesNotMatch(runtime,/v0\.\d+\.\d+/);
+test('web header shows the running Aevra version from status rather than a hard-coded UI version', () => {
+  const core = readFileSync('apps/core/src/runtime.ts', 'utf8');
+  assert.match(runtimeStatus, /\/api\/status/);
+  assert.match(runtimeStatus, /status\?\.version/);
+  assert.match(main, /app-version/);
+  assert.match(core, /version:AEVRA_VERSION/);
+  assert.doesNotMatch(runtimeStatus, /v0\.\d+\.\d+/);
 });
 
-test('runtime continuously maps Core Worker MCP and Tunnel status into compact health chips',()=>{
-  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
-  const css=readFileSync('apps/web/app.css','utf8');
-  assert.match(runtime,/function\s+updateHealth/);
-  assert.match(runtime,/tunnelReachable/);
-  assert.match(runtime,/data-health/);
-  assert.match(runtime,/refreshAppStatus\(\)/);
-  assert.match(css,/header\s*\{[^}]*position:\s*sticky/s);
-  assert.match(css,/\.health-dot/);
-  assert.match(css,/\[data-state=["']?ok/);
-  assert.match(css,/\[data-state=["']?error/);
-  assert.match(css,/@keyframes\s+status-pulse/);
+test('runtime continuously maps Core Worker MCP and Tunnel status into compact health chips', () => {
+  const css = readFileSync('apps/web/styles/shell.css', 'utf8');
+  assert.match(runtimeStatus, /tunnelReachable/);
+  assert.match(runtimeStatus, /data-health/);
+  for (const key of ['core', 'worker', 'mcp', 'tunnel']) {
+    assert.match(main, new RegExp(`data-health=.{0,3}${key}`));
+  }
+  assert.match(css, /\.topbar\s*\{[^}]*position:\s*sticky/s);
+  assert.match(css, /\.health-chip/);
+  assert.match(css, /\[data-state="ok"\]/);
+  assert.match(css, /\[data-state="error"\]/);
+  assert.match(css, /@keyframes\s+status-pulse/);
 });
 
-test('first polling cycle surfaces existing pending requests instead of silently seeding them',()=>{
-  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
-  assert.doesNotMatch(runtime,/if\s*\(!seeded\)\s*continue/);
-  assert.match(runtime,/Incoming workspace access request|Incoming approval request/);
+test('first polling cycle surfaces existing pending requests instead of silently seeding them', () => {
+  const notifications = readFileSync(
+    'apps/web/components/request-notifications.js',
+    'utf8',
+  );
+  assert.doesNotMatch(notifications, /if\s*\(!seeded\)\s*continue/);
+  assert.match(notifications, /Aevra approval request/);
+  assert.match(notifications, /OAuth connection request/);
 });
