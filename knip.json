@@ -1,0 +1,12 @@
+{
+  "entry": [
+    "apps/cli/src/cli.ts",
+    "apps/core/src/main.ts",
+    "apps/worker/src/main.ts",
+    "packages/mcp-tools/src/register.ts",
+    "scripts/*.mjs",
+    "scripts/test/*.test.mjs"
+  ],
+  "project": ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.mjs"],
+  "ignore": ["dist/**", ".test-dist/**", ".coverage-dist/**", "coverage/**"]
+}
