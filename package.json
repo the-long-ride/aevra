@@ -10,7 +10,7 @@
     "lint": "node scripts/lint.mjs",
     "test": "node scripts/test.mjs",
     "typecheck": "tsc --noEmit --noCheck",
-    "build": "tsc -p tsconfig.build.json --noCheck && node --check apps/web/app.js && node scripts/copy-static.mjs",
+    "build": "tsc -p tsconfig.build.json --noCheck && node --check apps/web/app.js && node --check apps/web/admin-enhancements.js && node scripts/copy-static.mjs",
     "start": "node dist/apps/cli/src/cli.js start",
     "prepublishOnly": "npm run format:check && npm run lint && npm test && npm run typecheck && npm run build",
     "prepare": "npm run build",
@@ -18,7 +18,7 @@
     "test:contract": "node scripts/test.mjs contract",
     "test:integration": "node scripts/test.mjs integration",
     "test:security": "node scripts/test.mjs security",
-    "test:web": "node --test scripts/test/web-admin-shell.test.mjs"
+    "test:web": "node --test scripts/test/web-admin-shell.test.mjs scripts/test/web-admin-enhancements.test.mjs"
   },
   "dependencies": {},
   "devDependencies": {

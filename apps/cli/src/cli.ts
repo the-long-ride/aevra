@@ -184,6 +184,38 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       return 1;
     }
   }
+  if (cmd.command === 'audit') {
+    if (!cmd.yes) {
+      console.error('[aevra] audit clear permanently removes audit event rows. Re-run with --yes to confirm.');
+      return 1;
+    }
+    try {
+      const response=await adminApi(config,'/api/audit',{method:'DELETE'});
+      if(!response.ok)throw new Error(`Core returned ${response.status}`);
+      const value=await response.json() as any;
+      console.log(`[aevra] Cleared ${value.removed??0} audit event(s).`);
+      return 0;
+    }catch(error){
+      console.error(`[aevra] audit clear failed: ${formatCliError(error)}. Is aevra start/service running?`);
+      return 1;
+    }
+  }
+  if (cmd.command === 'sessions') {
+    if (!cmd.yes) {
+      console.error('[aevra] revoke-others removes non-connector MCP sessions and other admin sessions. Re-run with --yes to confirm.');
+      return 1;
+    }
+    try {
+      const response=await adminApi(config,'/api/sessions/revoke-others',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
+      if(!response.ok)throw new Error(`Core returned ${response.status}`);
+      const value=await response.json() as any;
+      console.log(`[aevra] Revoked ${value.revokedRemote??0} remote and ${value.revokedAdmin??0} admin session(s); preserved ${value.preservedConnectors??0} connector and ${value.preservedAdmin??0} current admin session(s).`);
+      return 0;
+    }catch(error){
+      console.error(`[aevra] sessions revoke-others failed: ${formatCliError(error)}. Is aevra start/service running?`);
+      return 1;
+    }
+  }
   if (cmd.command === 'connectors') {
     try {
       if (cmd.action === 'list') {

@@ -7,6 +7,8 @@ export type AevraCommand =
   | { command: 'connectors'; action: 'list' | 'create' | 'revoke'; name?: string; id?: string }
   | { command: 'status'; json: boolean }
   | { command: 'backup'; action: 'verify' | 'restore'; file: string; yes: boolean }
+  | { command: 'audit'; action: 'clear'; yes: boolean }
+  | { command: 'sessions'; action: 'revoke-others'; yes: boolean }
   | { command: 'completion'; shell: 'bash' | 'zsh' | 'powershell' };
 
 export function parseAevraArgs(argv: string[]): AevraCommand {
@@ -42,6 +44,18 @@ export function parseAevraArgs(argv: string[]): AevraCommand {
     const yes=rest.includes('--yes');
     if(rest.length>3||(rest.length===3&&!yes)) throw new Error('Unknown backup option');
     return {command:'backup',action,file,yes};
+  }
+  if(command==='audit') {
+    if(rest[0]!=='clear') throw new Error('audit requires clear [--yes]');
+    const yes=rest.includes('--yes');
+    if(rest.length>2||(rest.length===2&&!yes)) throw new Error('Unknown audit option');
+    return {command:'audit',action:'clear',yes};
+  }
+  if(command==='sessions') {
+    if(rest[0]!=='revoke-others') throw new Error('sessions requires revoke-others [--yes]');
+    const yes=rest.includes('--yes');
+    if(rest.length>2||(rest.length===2&&!yes)) throw new Error('Unknown sessions option');
+    return {command:'sessions',action:'revoke-others',yes};
   }
   if(command==='connectors') {
     const action=rest[0];

@@ -4,6 +4,7 @@ import {readFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
 import type {AdminBootstrapService} from './bootstrap.js';
 import {secretEquals} from './bootstrap.js';
+import {handleBulkAdminAction} from './bulk-actions.js';
 import {handleAdminApi,type AdminApiContext} from './routes/api.js';
 
 function json(res:ServerResponse,status:number,value:unknown){res.statusCode=status;res.setHeader('content-type','application/json');res.end(JSON.stringify(value));}
@@ -25,7 +26,8 @@ export class AdminServer{
   address(){return this.server?.address()}
   url(){return `${this.options.tls?'https':'http'}://${this.options.advertisedHost??this.host}:${this.port}`}
   async close(){if(!this.server)return;await new Promise<void>(r=>this.server!.close(()=>r()));this.server=undefined;}
-  private isAdmin(req:IncomingMessage){return this.options.bootstrap?.validateSession(cookie(req,'aevra_admin'))??false;}
+  private adminSession(req:IncomingMessage){return cookie(req,'aevra_admin');}
+  private isAdmin(req:IncomingMessage){return this.options.bootstrap?.validateSession(this.adminSession(req))??false;}
   private async handle(req:IncomingMessage,res:ServerResponse){
     const u=new URL(req.url??'/',this.url());
     if(u.pathname==='/api/health'){json(res,200,this.health());return;}
@@ -35,6 +37,7 @@ export class AdminServer{
     if(u.pathname.startsWith('/api/')&&!this.isAdmin(req)){json(res,401,{error:'admin session required'});return;}
     if(u.pathname.startsWith('/api/')&&!sameOrigin(req,u)){json(res,403,{error:{code:'CSRF_REJECTED',message:'State-changing admin requests must be same-origin'}});return;}
     if(u.pathname==='/api/status'){json(res,200,this.health());return;}
+    if(u.pathname.startsWith('/api/')&&this.options.api&&await handleBulkAdminAction(req,res,u,this.options.api,this.adminSession(req)))return;
     if(u.pathname.startsWith('/api/')&&this.options.api&&await handleAdminApi(req,res,u,this.options.api))return;
     const dir=this.options.staticDir;
     if(dir){const relative=u.pathname==='/'?'index.html':u.pathname.replace(/^\//,'');const root=path.resolve(dir),file=path.resolve(root,relative);if((file===root||file.startsWith(root+path.sep))&&existsSync(file)){res.setHeader('content-type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(readFileSync(file));return;}}
