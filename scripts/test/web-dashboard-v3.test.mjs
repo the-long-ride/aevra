@@ -11,3 +11,4 @@ test('dashboard runtime refresh is scoped to active Dashboard and uses one snaps
 test('completed onboarding moves to bottom and absorbs Remote Access',()=>{assert.match(js,/remote-in-onboarding/);assert.match(js,/append\(onboarding\)/);assert.match(js,/onboarding\.open=false/);});
 test('active connections table and provider guide actions are present',()=>{assert.match(js,/Active connections/);for(const slug of ['connect-chatgpt','connect-claude','connect-gemini'])assert.match(js,new RegExp(slug));});
 test('request details consume sanitized server presentation and expose explicit browser notification opt-in',()=>{assert.match(js,/item\.presentation/);assert.match(js,/Enable browser notifications/);assert.match(js,/requestPermission/);assert.match(css,/request-detail/);});
+test('request drawer no longer contains the obsolete workspace capability-upgrade branch',()=>{assert.doesNotMatch(js,/workspace:capability-upgrade/);assert.doesNotMatch(js,/v3Upgrade/);});
