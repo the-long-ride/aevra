@@ -48,6 +48,13 @@
   font-size: 14px;
 }
 
+.app-version {
+  color: var(--muted);
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 10px;
+  font-weight: 400;
+}
+
 .brand small,
 .sidebar small {
   color: var(--muted);
@@ -119,6 +126,71 @@
   gap: 2px;
 }
 
+.topbar-actions,
+.health-cluster,
+.health-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.health-cluster {
+  gap: 4px;
+}
+
+.health-chip {
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 6px;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.health-chip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #66666d;
+}
+
+.health-chip[data-state="ok"] i {
+  background: var(--success);
+}
+
+.health-chip[data-state="pending"] i {
+  background: var(--warning);
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+.health-chip[data-state="error"] i {
+  background: var(--danger);
+}
+
+.health-chip[data-state="off"] {
+  opacity: 0.55;
+}
+
+#open-requests {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#requests-count {
+  min-width: 18px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+  padding: 1px 5px;
+  font-size: 9px;
+  text-align: center;
+}
+
+#open-requests.has-pending {
+  border-color: rgb(232 187 99 / 38%);
+}
+
 .eyebrow {
   color: var(--muted);
   font-size: 10px;
@@ -176,6 +248,18 @@
 
 .error-panel h2 {
   color: var(--text);
+}
+
+@keyframes status-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (max-width: 1020px) {
+  .health-cluster {
+    display: none;
+  }
 }
 
 @media (max-width: 860px) {
