@@ -40,7 +40,7 @@
 
 - [ ] **Step 1: Add failing source-contract tests for containment and ordering**
 
-Add assertions equivalent to:
+Add these assertions to the Dashboard source contracts:
 
 ```js
 import assert from 'node:assert/strict';
@@ -58,49 +58,49 @@ test('Remote Access is rendered inside Onboarding before Connect an AI', () => {
   assert.ok(connect > remote);
 });
 
-test('completed onboarding is rendered after runtime/activity content', () => {
-  assert.match(v2, /onboarding\.completed\s*\?[^;]*dashboard-bottom/);
+test('completed onboarding uses bottom placement and stale copy is absent', () => {
+  assert.match(v2, /dashboard-bottom/);
+  assert.match(v2, /onboarding\.completed/);
   assert.doesNotMatch(v2, /Remote Access remains visible above this section/);
 });
 ```
 
-In the v3 regression, assert there is no code that reparents Remote Access outside Onboarding and no refresh path that unconditionally reopens an already initialized Onboarding panel.
+In `web-dashboard-v3.test.mjs`, add:
+
+```js
+assert.doesNotMatch(js, /body\.prepend\(remote\)/);
+assert.doesNotMatch(js, /onboarding\.open\s*=\s*true[^}]*setInterval/s);
+```
 
 - [ ] **Step 2: Run focused tests and verify RED**
-
-Run:
 
 ```bash
 node --test scripts/test/web-dashboard-v2.test.mjs scripts/test/web-dashboard-v3.test.mjs
 ```
 
-Expected: at least the containment/order assertion fails because `app-v2.js` currently emits Remote Access before the `<details class="onboarding-panel">` block.
+Expected: the containment/order assertion fails because the current renderer emits Remote Access before Onboarding.
 
-- [ ] **Step 3: Implement the minimum vanilla behavior change**
+- [ ] **Step 3: Move Remote Access inside the current Onboarding body and make completed placement explicit**
 
-In `renderDashboard()`:
+Keep the existing Remote Access section literal unchanged except for its location. Add a small ordering helper in `app-v2.js`:
 
 ```js
-const onboardingMarkup = `<details class="onboarding-panel" data-dashboard-section="onboarding">
-  <summary>...</summary>
-  <div class="onboarding-body">
-    <section class="onboarding-block wide" data-onboarding-section="remote-access">
-      <div class="section-heading"><span>Remote Access</span><strong>${cf.hostname ? 'Configured' : 'Setup needed'}</strong></div>
-      ${remoteAccessMarkup(cf, 'dashboard')}
-    </section>
-    ...existing Connect an AI / Workspace / Try Aevra / Finish blocks...
-  </div>
-</details>`;
-
-const primaryMarkup = `${runtimeOverview}${toolActivity}${connections}${recentActivity}`;
-el.innerHTML = onboarding.completed
-  ? `${primaryMarkup}<div class="dashboard-bottom">${onboardingMarkup}</div>`
-  : `${onboardingMarkup}${primaryMarkup}`;
+function dashboardMarkup(onboardingMarkup, primaryMarkup, completed) {
+  return completed
+    ? `${primaryMarkup}<div class="dashboard-bottom">${onboardingMarkup}</div>`
+    : `${onboardingMarkup}${primaryMarkup}`;
+}
 ```
 
-Remove the stale sentence that says Remote Access remains above Onboarding. Keep `wireRemoteAccess()` bound against the whole Dashboard element so the moved form retains all existing actions.
+Build `onboardingMarkup` from the current `<details class="onboarding-panel">` string after moving the current Remote Access `<section class="setup-section wide dashboard-remote">` into the start of `<div class="onboarding-body">`. Build `primaryMarkup` from Runtime overview, Tool activity, Connections, and Recent activity, then assign:
 
-In `app-v3.js`, preserve user collapse state by only setting `onboarding.open = true` when the element has not yet been initialized:
+```js
+el.innerHTML = dashboardMarkup(onboardingMarkup, primaryMarkup, onboarding.completed);
+```
+
+Delete the sentence `Remote Access remains visible above this section after completion.`
+
+In `app-v3.js`, initialize the open state only once:
 
 ```js
 if (!onboarding.dataset.dashboardInitialized) {
@@ -109,9 +109,15 @@ if (!onboarding.dataset.dashboardInitialized) {
 }
 ```
 
+Do not move Remote Access out of Onboarding in v3.
+
 - [ ] **Step 4: Run focused tests and verify GREEN**
 
-Run the same command. Expected: 0 failures.
+```bash
+node --test scripts/test/web-dashboard-v2.test.mjs scripts/test/web-dashboard-v3.test.mjs
+```
+
+Expected: 0 failures.
 
 - [ ] **Step 5: Commit**
 
@@ -147,8 +153,6 @@ git commit -m "fix: keep remote access inside onboarding"
 
 - [ ] **Step 1: Add failing tests for source policy and package scripts**
 
-`source-policy.test.mjs` must assert:
-
 ```js
 assert.equal(sourceLimit('apps/core/src/runtime.ts'), 350);
 assert.equal(sourceLimit('apps/web-react/src/App.tsx'), 400);
@@ -157,10 +161,13 @@ assert.equal(sourceLimit('apps/web/styles/base.css'), 500);
 assert.equal(sourceLimit('dist/apps/web/app.js'), null);
 assert.equal(sourceLimit('node_modules/x/index.js'), null);
 assert.equal(countPhysicalLines('a\nb\n'), 2);
-assert.equal(looksArtificiallyCompressed('const a=1;const b=2;const c=3;'.repeat(30)), true);
+assert.equal(
+  looksArtificiallyCompressed('const a=1;const b=2;const c=3;'.repeat(30)),
+  true,
+);
 ```
 
-`package-quality-scripts.test.mjs` must parse `package.json` and require every script name above, and require `format:check` to contain `prettier --check`.
+`package-quality-scripts.test.mjs` parses `package.json`, requires every script named in **Interfaces**, and requires `format:check` to contain `prettier --check`.
 
 - [ ] **Step 2: Run tests and verify RED**
 
@@ -168,7 +175,7 @@ assert.equal(looksArtificiallyCompressed('const a=1;const b=2;const c=3;'.repeat
 node --test scripts/test/source-policy.test.mjs scripts/test/package-quality-scripts.test.mjs
 ```
 
-Expected: module/scripts are missing.
+Expected: the source-policy module and new package scripts are missing.
 
 - [ ] **Step 3: Install dev dependencies and update the lockfile**
 
@@ -176,13 +183,15 @@ Expected: module/scripts are missing.
 npm install --save-dev prettier knip c8 vitest jsdom @vitest/coverage-v8 @types/node
 ```
 
-Do not hand-edit `package-lock.json`; let npm generate it.
+Do not hand-edit `package-lock.json`.
 
 - [ ] **Step 4: Implement source-policy helpers**
 
-Use this API:
+`scripts/lib/source-policy.mjs`:
 
 ```js
+import path from 'node:path';
+
 const LIMITS = new Map([
   ['.ts', 350],
   ['.tsx', 400],
@@ -200,7 +209,9 @@ const EXCLUDED_SEGMENTS = new Set([
 
 export function sourceLimit(file) {
   const normalized = file.replaceAll('\\', '/');
-  if (normalized.split('/').some((part) => EXCLUDED_SEGMENTS.has(part))) return null;
+  if (normalized.split('/').some((part) => EXCLUDED_SEGMENTS.has(part))) {
+    return null;
+  }
   return LIMITS.get(path.extname(normalized)) ?? null;
 }
 
@@ -211,21 +222,23 @@ export function countPhysicalLines(text) {
 
 export function looksArtificiallyCompressed(text) {
   const lines = text.split(/\r?\n/).filter(Boolean);
-  return lines.some((line) => line.length > 500 && (line.match(/[;{}]/g) ?? []).length >= 20);
+  return lines.some(
+    (line) => line.length > 500 && (line.match(/[;{}]/g) ?? []).length >= 20,
+  );
 }
 ```
 
-`loc-lint.mjs` must obtain tracked files with:
+`loc-lint.mjs` gets tracked files with:
 
 ```js
-spawnSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+const tracked = spawnSync('git', ['ls-files', '-z'], { encoding: 'utf8' });
 ```
 
-For every tracked maintained source file: fail if `looksArtificiallyCompressed()` is true or line count exceeds the extension limit. Print `path: N lines (limit M)` for each failure.
+Fail for a maintained tracked source file when it is artificially compressed or exceeds its extension limit. Print `path: N lines (limit M)` for every LOC failure.
 
 - [ ] **Step 5: Replace newline-only formatting with real Prettier**
 
-Set scripts:
+Set package scripts:
 
 ```json
 {
@@ -241,8 +254,6 @@ Set scripts:
 }
 ```
 
-Keep `scripts/format-check.mjs` as the CRLF/final-newline supplemental check; Prettier becomes the canonical formatter.
-
 Extend `.prettierignore` with:
 
 ```text
@@ -250,6 +261,8 @@ coverage
 .test-dist
 .coverage-dist
 ```
+
+Keep `scripts/format-check.mjs` as a CRLF/final-newline supplemental check.
 
 - [ ] **Step 6: Add semantic TypeScript configs**
 
@@ -284,9 +297,24 @@ coverage
 }
 ```
 
-- [ ] **Step 7: Add Node coverage runner**
+- [ ] **Step 7: Add initial vanilla Vitest config**
 
-`test-coverage-node.mjs` must compile with `tsc -p tsconfig.test.json`, collect compiled production/test JS under `.coverage-dist/apps`, `.coverage-dist/packages`, and `.coverage-dist/tests`, then spawn c8 with:
+`vitest.web.config.ts` must use jsdom, match `apps/web/test/**/*.test.js`, include `apps/web/**/*.js` for coverage, exclude test files and generated output, and enforce:
+
+```ts
+thresholds: {
+  lines: 85,
+  statements: 85,
+  functions: 85,
+  branches: 85,
+}
+```
+
+Plan 2 extends the same config to React tests/source.
+
+- [ ] **Step 8: Add Node coverage runner**
+
+`test-coverage-node.mjs` compiles with `tsc -p tsconfig.test.json`, collects compiled test JS under `.coverage-dist/apps`, `.coverage-dist/packages`, and `.coverage-dist/tests`, then launches c8 with:
 
 ```text
 --check-coverage --lines 85 --statements 85 --functions 85 --branches 85
@@ -295,11 +323,11 @@ coverage
 --exclude **/test/**
 ```
 
-and run `node --test` over compiled test files. Exit with the child status.
+The child command is `node --test` with the compiled test paths. Exit with the child status.
 
-- [ ] **Step 8: Add Knip entry configuration**
+- [ ] **Step 9: Add Knip entry configuration**
 
-`knip.json` must identify dynamic application entry points so valid runtime code is not reported dead:
+`knip.json` starts with:
 
 ```json
 {
@@ -316,16 +344,18 @@ and run `node --test` over compiled test files. Exit with the child status.
 }
 ```
 
-- [ ] **Step 9: Run focused tests and tooling contracts**
+Vanilla ES-module entries are added in Task 6 after they exist.
+
+- [ ] **Step 10: Run focused tests**
 
 ```bash
 node --test scripts/test/source-policy.test.mjs scripts/test/package-quality-scripts.test.mjs
 npm run format:check
 ```
 
-Expected: helper/script tests pass. `lint:loc` is expected to fail until Tasks 3-6 split current monoliths.
+Expected: helper/script tests pass. `lint:loc` is expected to remain red until structural splitting is complete.
 
-- [ ] **Step 10: Commit tooling**
+- [ ] **Step 11: Commit tooling**
 
 ```bash
 git add package.json package-lock.json .prettierrc.json .prettierignore scripts knip.json tsconfig.typecheck.json tsconfig.test.json vitest.web.config.ts
@@ -337,7 +367,7 @@ git commit -m "build: add repository quality gates"
 ### Task 3: Prettier-format maintained source and freeze the real LOC inventory
 
 **Files:**
-- Modify: all tracked maintained source matched by Prettier, especially `apps/**/*.ts`, `packages/**/*.ts`, `apps/web/**/*.js`, `apps/web/**/*.css`, and tests.
+- Modify: all tracked maintained source matched by Prettier.
 - Create: `docs/superpowers/plans/2026-08-19-loc-inventory.txt`
 
 **Interfaces:**
@@ -350,7 +380,7 @@ git commit -m "build: add repository quality gates"
 npm run format
 ```
 
-Do not manually collapse output after Prettier.
+Do not manually collapse formatted output.
 
 - [ ] **Step 2: Capture LOC failures**
 
@@ -358,11 +388,11 @@ Do not manually collapse output after Prettier.
 npm run lint:loc > docs/superpowers/plans/2026-08-19-loc-inventory.txt 2>&1
 ```
 
-Expected at this point: non-zero status because known monoliths exceed their limits.
+Expected: non-zero status because current monoliths exceed limits after formatting.
 
-- [ ] **Step 3: Assert known hotspots appear in the inventory**
+- [ ] **Step 3: Confirm the known monolith inventory**
 
-The inventory must include any still-oversized members of this known set after formatting:
+The report must be checked specifically for:
 
 ```text
 apps/web/app.js
@@ -375,18 +405,18 @@ apps/cli/src/cli.ts
 packages/mcp-tools/src/service.ts
 ```
 
-If one is below its limit after formatting, leave it intact unless another responsibility-based refactor task explicitly replaces it.
+If a listed file is already within its configured limit, record its measured line count in the inventory and do not split it solely for LOC.
 
-- [ ] **Step 4: Run current regression suite before structural moves**
+- [ ] **Step 4: Run the pre-refactor regression suite**
 
 ```bash
 npm test
 npm run test:web
 ```
 
-Expected: 0 failures. If formatting changes behavior, fix that before any extraction.
+Expected: 0 failures. Formatting-only regressions are fixed before extraction work.
 
-- [ ] **Step 5: Commit the formatting-only baseline separately**
+- [ ] **Step 5: Commit the formatting baseline**
 
 ```bash
 git add -A
@@ -408,73 +438,72 @@ git commit -m "style: format maintained source with prettier"
 - Create: `apps/cli/src/commands/maintenance-command.ts`
 - Create: `apps/cli/src/commands/connectors-command.ts`
 - Create: `apps/cli/src/commands/service-command.ts`
-- Modify/add focused tests under: `apps/cli/test/`
+- Modify: `apps/cli/test/args.unit.test.ts`
+- Modify: `apps/cli/test/backup-cli.unit.test.ts`
+- Modify: `apps/cli/test/admin-maintenance-args.unit.test.ts`
+- Create: `apps/cli/test/dispatch.unit.test.ts`
 
 **Interfaces:**
-- `adminSession(config): Promise<{ adminApi(path, init?): Promise<Response>; openUi(destination?: '/'): Promise<void> }>`
-- Each command module exports `runXCommand(command, context): Promise<number>`.
-- `cli.ts` owns only argument parsing, common config creation, dispatch, and process exit behavior.
+- `createAdminSessionClient(config)` returns `{ adminApi(path, init?), openUi(): Promise<void> }`.
+- Each command module exports one `runXCommand(command, context): Promise<number>`.
+- `cli.ts` owns argument parsing, config creation, dispatch, and executable entry behavior only.
 
-- [ ] **Step 1: Add dispatch regression tests**
+- [ ] **Step 1: Add failing dispatch tests**
 
-Extend/create tests to verify each parsed command delegates once and returns its handler exit code. Example:
+`dispatch.unit.test.ts` uses dependency-injected handlers:
 
 ```ts
-test('start dispatch delegates to runStartCommand', async () => {
-  const calls: string[] = [];
-  const code = await dispatchCommand(
-    { command: 'start', ui: true },
-    fakeContext({ runStartCommand: async () => (calls.push('start'), 0) }),
-  );
-  assert.deepEqual(calls, ['start']);
-  assert.equal(code, 0);
-});
+const calls: string[] = [];
+const code = await dispatchCommand(
+  { command: 'start', ui: true },
+  createFakeCliContext({
+    runStart: async () => {
+      calls.push('start');
+      return 0;
+    },
+  }),
+);
+assert.deepEqual(calls, ['start']);
+assert.equal(code, 0);
 ```
 
-- [ ] **Step 2: Run CLI tests and verify RED**
+Add one case for each command discriminant so no branch is untested.
 
-```bash
-npm run test:unit -- --test-name-pattern=dispatch
-```
-
-If the custom test script does not forward test-name arguments, run the compiled/full CLI unit suite instead:
+- [ ] **Step 2: Run CLI unit tests and verify RED**
 
 ```bash
 npm run test:unit
 ```
 
-Expected: missing `dispatchCommand`/handler seams.
+Expected: `dispatchCommand` and the handler context are missing.
 
-- [ ] **Step 3: Extract admin-session helpers**
+- [ ] **Step 3: Extract authenticated admin-session helpers**
 
-Move `localControl`, authenticated bootstrap cookie creation, `adminApi`, `openBrowser`, and `openAuthenticatedUi` from `cli.ts` into `admin-session.ts`. Keep the UI destination fixed to `/` in this plan; React destination is added in Plan 2.
+Move `openBrowser`, `localControl`, bootstrap-cookie creation, `adminApi`, and `openAuthenticatedUi` into `admin-session.ts`. In this plan `openUi()` always targets `/`; Plan 2 expands it to accept `/react/`.
 
 - [ ] **Step 4: Extract command handlers**
 
-Each handler accepts explicit dependencies rather than importing mutable globals. Example shape:
+Use this shared context:
 
 ```ts
 export interface CliCommandContext {
   config: ReturnType<typeof loadCoreConfig>;
-  console: Pick<Console, 'log' | 'error'>;
-}
-
-export async function runStatusCommand(
-  command: Extract<AevraCommand, { command: 'status' }>,
-  context: CliCommandContext,
-): Promise<number> {
-  // existing status logic
+  log(message: string): void;
+  error(message: string): void;
 }
 ```
 
-Keep setup-specific readline/Cloudflare dependencies in `setup-command.ts`; backup DB logic in `backup-command.ts`; audit/session maintenance together in `maintenance-command.ts`; service adapter logic in `service-command.ts`.
+`status-command.ts` implements the complete current status flow: call `/api/health`; JSON mode prints pretty JSON; text mode prints key/value rows; failure returns 1 with the existing unreachable message.
+
+`setup-command.ts` owns interactive Cloudflare setup/readline. `backup-command.ts` owns verify/restore. `maintenance-command.ts` owns audit clear and session revoke-others. `connectors-command.ts` owns list/create/revoke. `service-command.ts` owns install/start/stop/restart/status. `start-command.ts` owns `runStart`; `ui-command.ts` owns authenticated UI opening.
 
 - [ ] **Step 5: Make `cli.ts` a thin dispatcher**
 
-Target shape:
-
 ```ts
-export async function dispatchCommand(command: AevraCommand, context: CliContext): Promise<number> {
+export async function dispatchCommand(
+  command: AevraCommand,
+  context: CliDispatchContext,
+): Promise<number> {
   switch (command.command) {
     case 'help': return context.runHelp(command);
     case 'start': return context.runStart(command);
@@ -491,7 +520,7 @@ export async function dispatchCommand(command: AevraCommand, context: CliContext
 }
 ```
 
-`main()` parses args, constructs the real context, then calls `dispatchCommand()`.
+`main()` parses args, creates the real dispatch context, and returns `dispatchCommand()`.
 
 - [ ] **Step 6: Verify behavior and LOC**
 
@@ -500,7 +529,7 @@ npm run test:unit
 npm run lint:loc
 ```
 
-Expected: all CLI tests pass and every new/modified `.ts` file is <=350 lines.
+Expected: all CLI tests pass and all CLI TS files are <=350 lines.
 
 - [ ] **Step 7: Commit**
 
@@ -531,20 +560,23 @@ git commit -m "refactor: split cli command handlers"
 - Create: `packages/mcp-tools/src/command-tools.ts`
 - Create: `packages/mcp-tools/src/git-tools.ts`
 - Create: `packages/mcp-tools/src/process-tools.ts`
-- Create/modify tests under: `apps/core/test/`, `packages/mcp-tools/test/`
+- Modify: `packages/mcp-tools/test/exact-capability.integration.test.ts`
+- Modify: `packages/mcp-tools/test/service.integration.test.ts`
+- Modify: `packages/mcp-tools/test/shell-run.integration.test.ts`
+- Create: `apps/core/test/admin-route-dispatch.integration.test.ts`
 
 **Interfaces:**
-- `AdminRouteHandler = (req, res, url, context) => Promise<boolean>`; returning `true` means the route handled the request.
+- `AdminRouteHandler = (req, res, url, context) => Promise<boolean>`; `true` means handled.
 - `handleAdminApi()` becomes an ordered dispatcher over route handlers.
-- `ToolExecutionContext` holds the dependencies currently captured by `McpToolService` helper methods; extracted tool functions receive it explicitly and preserve existing return/error contracts.
+- `ToolExecutionContext` contains dependencies currently captured by `McpToolService`; extracted tool functions receive it explicitly.
 
-- [ ] **Step 1: Add route-dispatch tests before extraction**
+- [ ] **Step 1: Add route-dispatch regression coverage**
 
-Test that a known workspace route, permission route, approval route, settings route, and unknown route preserve status/body behavior. Use the existing Admin API integration harness; do not mock away authorization/session checks.
+`admin-route-dispatch.integration.test.ts` must exercise one workspace request, one permission request, one approval request, one settings request, and one unknown API route, comparing HTTP status/body to the pre-extraction behavior.
 
-- [ ] **Step 2: Add MCP orchestration regression tests before extraction**
+- [ ] **Step 2: Strengthen MCP regression coverage before moving methods**
 
-Cover at least:
+The named MCP tests must cover these exact paths:
 
 ```text
 file_read
@@ -553,23 +585,23 @@ command_run matcher-specific approval
 shell_run risk floor
 process_start host matcher
 approval resume once
-critical command persistence rejection
+critical command persistent-scope rejection
 ```
 
-Use existing `packages/mcp-tools/test/exact-capability.integration.test.ts`, `service.integration.test.ts`, and shell tests as the base; split test files if Prettier pushes any test over 350 lines.
+Split a test file into additional focused files if its formatted line count exceeds 350.
 
-- [ ] **Step 3: Run focused tests and verify GREEN baseline**
+- [ ] **Step 3: Run baseline integration/security tests**
 
 ```bash
 npm run test:integration
 npm run test:security
 ```
 
-Expected: baseline passes before moving code.
+Expected: 0 failures before extraction.
 
-- [ ] **Step 4: Extract route helpers without changing endpoint paths**
+- [ ] **Step 4: Extract route handlers**
 
-`api.ts` target shape:
+`api.ts` becomes:
 
 ```ts
 const handlers: AdminRouteHandler[] = [
@@ -591,13 +623,13 @@ export async function handleAdminApi(req, res, url, context) {
 }
 ```
 
-Put JSON-body parsing/response helpers in `request-body.ts` and shared route types only in `types.ts`. Do not create a generic mega-utility file.
+Keep JSON body parsing/response helpers in `request-body.ts` and shared route types in `types.ts`. Endpoint paths, methods, status codes, and response shapes remain unchanged.
 
 - [ ] **Step 5: Extract MCP tool groups behind explicit context**
 
-`service-types.ts` exports the dependency contract used by tool modules. `service.ts` retains session-level entry points, approval resume orchestration, and `call()` dispatch; file/command/git/process implementation moves into the named modules.
+`service.ts` keeps session entry, tool dispatch, approval resume, and shared authorization orchestration. File implementations move to `file-tools.ts`; command/shell to `command-tools.ts`; git to `git-tools.ts`; process operations to `process-tools.ts`.
 
-Example command interface:
+Use this command interface:
 
 ```ts
 export async function runCommandTool(
@@ -608,24 +640,16 @@ export async function runCommandTool(
 ): Promise<unknown>;
 ```
 
-Keep the normalized command matcher, host-fallback suffix, one-time grants, and approval ticket payload unchanged.
+Preserve normalized matcher strings, `:host-fallback`, one-time grants, frozen approval payloads, and CRITICAL persistence behavior byte-for-byte where values are externally visible.
 
 - [ ] **Step 6: Run focused tests after each extraction group**
 
-After admin routes:
-
 ```bash
 npm run test:integration
+npm run test:security
 ```
 
-After MCP tool modules:
-
-```bash
-node scripts/test.mjs integration
-node scripts/test.mjs security
-```
-
-Expected: 0 failures.
+Expected: 0 failures after admin extraction and again after MCP extraction.
 
 - [ ] **Step 7: Verify LOC/typecheck**
 
@@ -634,7 +658,7 @@ npm run lint:loc
 npm run typecheck
 ```
 
-Every extracted TS file must be <=350 lines. Fix type errors rather than re-enabling `noCheck`.
+Every extracted TS file must be <=350 lines; fix semantic errors instead of re-enabling `noCheck`.
 
 - [ ] **Step 8: Commit**
 
@@ -675,27 +699,32 @@ git commit -m "refactor: split admin and mcp tool modules"
 - Create: `apps/web/styles/dashboard.css`
 - Create: `apps/web/styles/admin.css`
 - Create: `apps/web/styles/requests.css`
-- Delete after parity tests pass: `apps/web/app.js`, `apps/web/app-v2.js`, `apps/web/app-v3.js`, `apps/web/ui-runtime.js`, `apps/web/admin-enhancements.js`, old superseded CSS files, old `data-table.js`, old `safe-command-matchers.js`.
 - Create: `apps/web/test/dashboard.test.js`
 - Create: `apps/web/test/requests.test.js`
 - Create: `apps/web/test/admin-pages.test.js`
 - Create: `apps/web/test/guide.test.js`
 - Create: `apps/web/test/data-table.test.js`
-- Modify static contract tests under `scripts/test/` only where they still protect packaging/entry contracts.
+- Create: `scripts/check-web-syntax.mjs`
+- Modify: `scripts/test/web-admin-shell.test.mjs`
+- Modify: `scripts/test/web-dashboard-v2.test.mjs`
+- Modify: `scripts/test/web-dashboard-v3.test.mjs`
+- Modify: `scripts/test/web-admin-enhancements.test.mjs`
+- Modify: `scripts/test/safe-command-guide.test.mjs`
+- Modify: `knip.json`
+- Modify: `package.json`
+- Delete after modular behavior tests pass: `apps/web/app.js`, `apps/web/app-v2.js`, `apps/web/app-v3.js`, `apps/web/ui-runtime.js`, `apps/web/admin-enhancements.js`, `apps/web/app.css`, `apps/web/app-v2.css`, `apps/web/app-v3.css`, `apps/web/admin-enhancements.css`, top-level `apps/web/data-table.js`, top-level `apps/web/safe-command-matchers.js`.
 
 **Interfaces:**
-- `requestJson(path, init?): Promise<T>` centralized same-origin client.
-- `mountDataTable(element, options)` module export replacing `window.AevraDataTable`.
-- Every page exports `renderXPage(container, context): Promise<Cleanup | void>`.
-- `main.js` owns navigation and calls page cleanup before mounting the next page.
+- `requestJson(path, init?)` is the single low-level same-origin browser API client.
+- `mountDataTable(element, options)` replaces `window.AevraDataTable`.
+- Every page exports `renderXPage(container, context): Promise<(() => void) | void>`.
+- `main.js` owns navigation, Requests drawer ownership, and page cleanup only.
 
-- [ ] **Step 1: Create behavior tests for reusable modules first**
-
-Vitest/jsdom tests must cover:
+- [ ] **Step 1: Add failing reusable behavior tests**
 
 ```js
 expect(await requestJson('/api/status')).toEqual(fakeStatus);
-expect(renderDashboardOrder({ completed: false })).toEqual([
+expect(dashboardOrder(false)).toEqual([
   'onboarding',
   'runtime-overview',
   'active-connections',
@@ -703,10 +732,10 @@ expect(renderDashboardOrder({ completed: false })).toEqual([
   'connections',
   'recent-activity',
 ]);
-expect(renderDashboardOrder({ completed: true }).at(-1)).toBe('onboarding');
+expect(dashboardOrder(true).at(-1)).toBe('onboarding');
 ```
 
-Request drawer tests must assert non-critical command actions expose once/session/workspace/global and critical cards expose only once/deny.
+Request drawer tests assert non-critical command actions expose once/session/workspace/global and CRITICAL command cards expose deny + once only.
 
 - [ ] **Step 2: Run web unit tests and verify RED**
 
@@ -714,39 +743,44 @@ Request drawer tests must assert non-critical command actions expose once/sessio
 vitest run --config vitest.web.config.ts
 ```
 
-Expected: new modules do not exist.
+Expected: modular browser imports are missing.
 
 - [ ] **Step 3: Build core/component modules**
 
-Move API, escaping, time, toast, modal, data table, request drawer, Remote Access, Onboarding, and safe matcher logic first. Keep functions dependency-injected where browser globals would make tests difficult.
+Move API, escaping, time, toast, modal, data table, Requests, Remote Access, Onboarding, and safe matcher logic first. Browser globals are passed through explicit arguments when a test needs to substitute `fetch`, `navigator.clipboard`, `Notification`, timers, or confirmation dialogs.
 
-Example page contract:
+The Dashboard page contract is:
 
 ```js
 export async function renderDashboardPage(container, context) {
   const controller = new AbortController();
-  // fetch/render/wire using context.api and context.tables
-  return () => controller.abort();
+  const data = await context.dashboardService.load({ signal: controller.signal });
+  context.dashboardView.render(container, data);
+  const stopPolling = context.dashboardService.startPolling(container, context);
+  return () => {
+    controller.abort();
+    stopPolling();
+  };
 }
 ```
 
 - [ ] **Step 4: Build page modules and thin entry point**
 
-`main.js` owns only shell install, current page selection, Requests drawer ownership, and page lifecycle. It must not contain page-specific HTML.
+`main.js` creates the page registry, handles nav clicks/hash state, calls the previous page cleanup, and mounts the next page. Page-specific HTML stays in page/component modules.
 
-`index.html` must load exactly one application entry:
+`index.html` loads one application entry:
 
 ```html
 <script type="module" src="/main.js"></script>
 ```
 
-and the new focused stylesheets.
+It links only the focused stylesheets listed in **Files**.
 
-- [ ] **Step 5: Preserve Dashboard + admin behavior while removing compatibility layers**
+- [ ] **Step 5: Port the complete supported vanilla surface before deleting compatibility files**
 
-Port all user-visible behavior from the old scripts before deleting them: Dashboard/runtime tables, completed-onboarding bottom placement, Cloudflare Remote Access, Permissions/Workspaces/Sessions tables, Processes/Changes, Audit, Settings, Guide/Copy All, toasts, browser request notifications, and request approval scopes.
+The modular implementation must include Dashboard/runtime tables, completed-onboarding bottom placement, Cloudflare Remote Access, Permissions/Workspaces/Sessions table behavior, Processes/Changes, Audit, Settings, Guide/Copy All, toasts, browser request notifications, connector actions, and request approval scopes.
 
-- [ ] **Step 6: Delete superseded scripts only after tests prove parity**
+- [ ] **Step 6: Replace static source tests with modular entry/behavior contracts**
 
 Run:
 
@@ -755,13 +789,28 @@ npm run test:web
 vitest run --config vitest.web.config.ts
 ```
 
-Then remove the old v1/v2/v3/enhancement/runtime files and update static tests to assert they are absent and `main.js` is the sole entry.
+When green, delete the old v1/v2/v3/enhancement/runtime files and update source-contract tests to assert `main.js` is the sole application script entry and the deleted script names do not appear in `index.html`.
 
 - [ ] **Step 7: Split CSS by responsibility**
 
-Each stylesheet must remain <=500 lines. Keep shared CSS variables in `tokens.css`; shell/nav/layout in `shell.css`; reusable controls/modal/table/toast in `components.css`; Dashboard/Onboarding in `dashboard.css`; admin forms/pages in `admin.css`; Requests in `requests.css`.
+Keep shared variables in `tokens.css`; shell/navigation/layout in `shell.css`; table/modal/form/toast controls in `components.css`; Dashboard/Onboarding in `dashboard.css`; admin pages in `admin.css`; Requests in `requests.css`. Every CSS file must remain <=500 lines.
 
-- [ ] **Step 8: Verify LOC, dead code, tests, and web coverage**
+- [ ] **Step 8: Update Knip and build syntax checking for the modular browser entry**
+
+Add:
+
+```json
+{
+  "entry": ["apps/web/main.js"],
+  "project": ["apps/web/**/*.js"]
+}
+```
+
+to the existing Knip arrays rather than replacing Node entries.
+
+`scripts/check-web-syntax.mjs` walks `apps/web`, runs `node --check` for every `.js` file, and exits non-zero on the first syntax failure. Replace the old long list of `node --check apps/web/<file>` commands in `package.json` with `node scripts/check-web-syntax.mjs`.
+
+- [ ] **Step 9: Verify LOC, dead code, tests, and web coverage**
 
 ```bash
 npm run lint:loc
@@ -770,12 +819,12 @@ npm run test:web
 npm run test:coverage:web
 ```
 
-Expected: all pass and web coverage reports >=85 for lines/statements/functions/branches.
+Expected: all pass and vanilla web coverage reports >=85 lines/statements/functions/branches.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add apps/web scripts/test vitest.web.config.ts
+git add apps/web scripts knip.json package.json
 git commit -m "refactor: modularize vanilla admin ui"
 ```
 
@@ -784,53 +833,56 @@ git commit -m "refactor: modularize vanilla admin ui"
 ### Task 7: Remove verified dead code and close Node coverage gaps to 85%
 
 **Files:**
-- Modify/delete: only files reported by Knip/TypeScript after Tasks 4-6, with dynamic-entry verification before deletion.
-- Modify/add focused tests next to the uncovered production modules reported by c8.
-- Delete: `eslint.config.js` only if no package script or dependency uses ESLint after the tooling migration.
+- Modify: `knip.json`
+- Delete: `eslint.config.js` if `package.json` contains no ESLint dependency/script after Task 6.
+- Extend: `apps/cli/test/dispatch.unit.test.ts`
+- Extend: `apps/core/test/admin-route-dispatch.integration.test.ts`
+- Extend: `packages/mcp-tools/test/exact-capability.integration.test.ts`
+- Extend: `packages/mcp-tools/test/service.integration.test.ts`
+- Extend: existing worker IPC/envelope tests under `packages/ipc/test/`.
+- Extend: backup/audit/session tests in their existing `apps/core/test/` or `apps/cli/test/` suites.
 
 **Interfaces:**
-- Consumes: `npm run lint:deadcode`, semantic TypeScript, c8 coverage report.
+- Consumes: `npm run lint:deadcode`, semantic TypeScript, and c8 text coverage.
 - Produces: zero dead-code findings and >=85 Node coverage in all four metrics.
 
-- [ ] **Step 1: Run dead-code and typecheck reports**
+- [ ] **Step 1: Run dead-code and semantic-type reports**
 
 ```bash
 npm run lint:deadcode
 npm run typecheck
 ```
 
-For each Knip result, first classify it as one of: runtime entry/dynamic reference, public API, genuinely unused internal code. Add the real runtime entry to `knip.json` when valid; do not suppress whole directories.
+For a Knip finding, classify it as a real dynamic entry, public API, or unused internal. Add exact valid entries to `knip.json`; do not suppress whole source directories.
 
-- [ ] **Step 2: Remove only genuinely unused internals**
+- [ ] **Step 2: Remove genuinely unused internals**
 
-Before deletion of any integration-facing symbol, search for CLI/MCP/browser string-based references and run the closest regression suite. Delete a symbol only when the search is empty or the behavior is already covered through an entry-point test.
+For every deletion, search tracked source for the export name and any string-based CLI/MCP/browser registration name, then run the closest test suite. Do not delete a dynamic entry while it is only referenced by a string/registry.
 
-- [ ] **Step 3: Run Node coverage and inspect uncovered modules**
+- [ ] **Step 3: Run Node coverage**
 
 ```bash
 npm run test:coverage:node
 ```
 
-Expected initially: the command may fail below 85. Use the c8 text report to identify exact uncovered branches/functions.
+Use the c8 report to map uncovered paths into the exact test suites listed in **Files**.
 
-- [ ] **Step 4: Add behavior tests for uncovered production paths**
-
-Prioritize error/security/state transitions rather than trivial getters. Required categories before accepting the gate:
+- [ ] **Step 4: Cover these production categories until each is represented by success and failure behavior**
 
 ```text
-CLI command success + failure exits
+CLI dispatch + command failure exits
 admin route success + invalid body + missing entity
 approval once/session/workspace/global persistence
-critical approval rejection
-workspace admission/session switching
-MCP command/file/git/process happy + denial paths
-worker envelope/IPC failure paths
-backup/audit/session maintenance paths
+CRITICAL persistent-scope rejection
+workspace admission + session switching
+MCP command/file/git/process success + denial
+worker envelope/IPC tamper + transport failure
+backup/audit/session-maintenance success + failure
 ```
 
-Do not add `/* c8 ignore */` to ordinary reachable production code just to raise the score.
+Do not use blanket `c8 ignore` comments on reachable production paths.
 
-- [ ] **Step 5: Repeat until Node coverage passes**
+- [ ] **Step 5: Repeat Node coverage until green**
 
 ```bash
 npm run test:coverage:node
@@ -863,18 +915,18 @@ git commit -m "test: enforce maintainability and coverage gates"
 ### Task 8: Final Plan 1 verification checkpoint
 
 **Files:**
-- No production changes unless verification exposes a defect.
+- No planned production changes. Any verification failure returns to the task that owns the failing behavior.
 
 **Interfaces:**
 - Produces the stable vanilla/maintainability baseline required by the React plan.
 
-- [ ] **Step 1: Verify no tracked source exceeds LOC policy**
+- [ ] **Step 1: Verify LOC**
 
 ```bash
 npm run lint:loc
 ```
 
-Expected: `lint:loc ok` and exit 0.
+Expected: exit 0 with no tracked maintained TS/TSX/JS/CSS over its configured limit.
 
 - [ ] **Step 2: Verify formatting and dead code**
 
@@ -900,7 +952,7 @@ npm test
 npm run test:coverage
 ```
 
-Expected: all tests pass; both Node and vanilla-web coverage gates meet >=85 lines/statements/functions/branches.
+Expected: all tests pass; Node and vanilla-web coverage each meet >=85 lines/statements/functions/branches.
 
 - [ ] **Step 5: Verify package build**
 
@@ -917,12 +969,12 @@ npm link
 aevra start --ui
 ```
 
-Verify: Dashboard loads; Remote Access is inside Onboarding; incomplete Onboarding appears near the top; after marking it complete it moves to the Dashboard bottom; collapsing it remains collapsed across periodic refresh; Requests, Permissions, Workspaces, Sessions, Processes, Changes, Audit, Settings, and Guide remain functional.
+Verify Dashboard loads; Remote Access is inside Onboarding; incomplete Onboarding is near the top; completed Onboarding is at the Dashboard bottom; collapsing it remains collapsed through polling; Requests, Permissions, Workspaces, Sessions, Processes, Changes, Audit, Settings, and Guide remain functional.
 
-- [ ] **Step 7: Record the passing baseline commit SHA**
+- [ ] **Step 7: Record the passing baseline SHA**
 
 ```bash
 git rev-parse HEAD
 ```
 
-Use this SHA as the starting point for `2026-08-19-react-ui-parity-plan.md`.
+Use the printed SHA as the prerequisite baseline for `docs/superpowers/plans/2026-08-19-react-ui-parity-plan.md`.
