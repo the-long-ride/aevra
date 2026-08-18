@@ -43,6 +43,8 @@ export function updateRuntimeStatus(status, pendingCount = 0) {
   document
     .querySelector('#open-requests')
     ?.classList.toggle('has-pending', pendingCount > 0);
+  const safeMode = document.querySelector('#safe-mode-banner');
+  if (safeMode) safeMode.hidden = status?.safeMode !== true;
 }
 
 export function startRuntimeStatus() {
