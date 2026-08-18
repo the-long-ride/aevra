@@ -1,5 +1,16 @@
 const TARGET_PAGES=new Set(['permissions','workspaces','sessions','audit','settings']);
 const CAPABILITIES=['files.read','files.search','git.read','files.write','files.delete','commands.run','git.commit','git.push','network'];
+const CAPABILITY_HELP={
+  'files.read':'Read file contents',
+  'files.search':'Search workspace files',
+  'git.read':'Inspect Git state and history',
+  'files.write':'Create or modify files',
+  'files.delete':'Delete files',
+  'commands.run':'Run commands',
+  'git.commit':'Create Git commits',
+  'git.push':'Push commits to remotes',
+  network:'Access allowed network targets',
+};
 
 async function api(path,init={}){
   const headers={'content-type':'application/json',...(init.headers||{})};
@@ -47,22 +58,59 @@ async function renderPermissions(page){
 function openPermissionModal(page,{workspaces,sessions,connectors}){
   const configuredActors=connectorActors(connectors),connected=sessions.filter(item=>String(item.actor||'').trim()),connectedActors=uniq(connected.map(item=>String(item.actor)));
   const availableAll=uniq([...configuredActors,...connectedActors]);
-  const body=`<section class="enh-section"><h3>Connectors</h3><div class="enh-radio-row"><label><input type="radio" name="targetMode" value="all" checked> All connectors</label><label><input type="radio" name="targetMode" value="selected"> Selected connected connectors</label></div><div data-enh-selected-connectors hidden class="enh-check-grid">${connectedActors.map(actor=>`<label class="enh-check"><input type="checkbox" name="actor" value="${h(actor)}"> ${h(actorLabel(actor))}</label>`).join('')||'<p class="enh-inline-note">No connected connector sessions.</p>'}<\/div><p class="enh-inline-note">All connectors includes configured Bearer connectors plus actors visible in active OAuth or other MCP sessions. Selected mode only shows currently connected actors.</p></section><section class="enh-section"><h3>Scope</h3><label class="field"><span>Rule scope</span><select name="scope"><option value="global">Global</option><option value="workspace" selected>Workspace</option><option value="session">Session</option></select></label><div data-enh-workspace-targets class="enh-scope-targets"><p class="enh-inline-note">Select one or more workspaces.</p><div class="enh-check-grid">${workspaces.map(item=>`<label class="enh-check"><input type="checkbox" name="workspaceId" value="${h(item.id)}"> ${h(item.name)}</label>`).join('')||'<p class="enh-inline-note">No workspaces registered.</p>'}</div></div><div data-enh-session-targets class="enh-scope-targets" hidden><p class="enh-inline-note">Select connector sessions.</p><div class="enh-check-grid">${connected.map(item=>`<label class="enh-check"><input type="checkbox" name="sessionId" value="${h(item.id)}"> ${h(actorLabel(item.actor))} · ${h(String(item.id).slice(0,10))}…</label>`).join('')||'<p class="enh-inline-note">No connected connector sessions.</p>'}</div></div></section><section class="enh-section"><h3>Capabilities</h3><div class="enh-check-grid">${CAPABILITIES.map(cap=>`<label class="enh-check"><input type="checkbox" name="capability" value="${cap}" ${['files.read','files.search'].includes(cap)?'checked':''}> <code>${cap}</code></label>`).join('')}</div></section><section class="enh-section"><h3>Rule</h3><div class="enh-form-row"><label class="field"><span>Effect</span><select name="effect"><option value="allow">Allow</option><option value="deny">Deny</option></select></label><label class="field"><span>Operation matcher</span><input name="matcher" value="*" required><small><code>*</code> applies to every operation family within each selected capability.</small></label></div><p class="enh-count" data-enh-rule-count></p></section>`;
-  const modal=dialog('Add permission rules',`<form id="enh-permission-bulk">${body}</form>`,`<button type="button" data-enh-close>Cancel</button><button class="primary" type="submit" form="enh-permission-bulk">Create rules</button>`);
-  const form=modal.querySelector('#enh-permission-bulk'),scope=form.querySelector('[name=scope]'),selectedBox=form.querySelector('[data-enh-selected-connectors]'),workspaceBox=form.querySelector('[data-enh-workspace-targets]'),sessionBox=form.querySelector('[data-enh-session-targets]'),count=form.querySelector('[data-enh-rule-count]');
+  const body=`<div class="enh-permission-layout">
+    <section class="enh-permission-step">
+      <div class="enh-step-head"><span>1</span><div><h3>1. Who gets access?</h3><p>Choose every known connector, or only selected connectors that are currently connected.</p></div></div>
+      <div class="enh-choice-cards enh-target-cards">
+        <label class="enh-choice-card" data-enh-target-card><input type="radio" name="targetMode" value="all" checked><span><strong>All connectors</strong><small>${availableAll.length} connector actor(s) currently available</small></span></label>
+        <label class="enh-choice-card" data-enh-target-card><input type="radio" name="targetMode" value="selected"><span><strong>Selected connected connectors</strong><small>${connectedActors.length} active connector actor(s)</small></span></label>
+      </div>
+      <div data-enh-selected-connectors hidden class="enh-selection-panel"><div class="enh-selection-head"><strong>Connected connectors</strong><span>Select one or more</span></div><div class="enh-check-grid">${connectedActors.map(actor=>`<label class="enh-check"><input type="checkbox" name="actor" value="${h(actor)}"><span>${h(actorLabel(actor))}</span></label>`).join('')||'<p class="enh-inline-note">No connected connector sessions. Use All connectors or connect an MCP client first.</p>'}</div></div>
+      <p class="enh-inline-note">All connectors combines configured Bearer connectors with connector actors visible in active MCP/OAuth sessions.</p>
+    </section>
+    <section class="enh-permission-step">
+      <div class="enh-step-head"><span>2</span><div><h3>2. Where does it apply?</h3><p>Choose the lifetime and target boundary for the generated rules.</p></div></div>
+      <div class="enh-choice-cards enh-scope-cards">
+        <label class="enh-choice-card" data-enh-scope-card><input type="radio" name="scope" value="global"><span><strong>Global</strong><small>Apply across registered workspaces</small></span></label>
+        <label class="enh-choice-card" data-enh-scope-card><input type="radio" name="scope" value="workspace" checked><span><strong>Workspace</strong><small>Choose one or more workspaces</small></span></label>
+        <label class="enh-choice-card" data-enh-scope-card><input type="radio" name="scope" value="session"><span><strong>Session</strong><small>Only chosen live connector sessions</small></span></label>
+      </div>
+      <div data-enh-workspace-targets class="enh-selection-panel"><div class="enh-selection-head"><strong>Workspaces</strong><span>Select one or more</span></div><div class="enh-check-grid">${workspaces.map(item=>`<label class="enh-check"><input type="checkbox" name="workspaceId" value="${h(item.id)}" ${workspaces.length===1?'checked':''}><span>${h(item.name)}</span></label>`).join('')||'<p class="enh-inline-note">No workspaces registered.</p>'}</div></div>
+      <div data-enh-session-targets class="enh-selection-panel" hidden><div class="enh-selection-head"><strong>Connector sessions</strong><span>Select one or more</span></div><div class="enh-check-grid">${connected.map(item=>`<label class="enh-check"><input type="checkbox" name="sessionId" value="${h(item.id)}"><span>${h(actorLabel(item.actor))}<small>${h(String(item.id).slice(0,10))}…</small></span></label>`).join('')||'<p class="enh-inline-note">No connected connector sessions.</p>'}</div></div>
+    </section>
+    <section class="enh-permission-step span-2">
+      <div class="enh-step-head enh-step-head-actions"><span>3</span><div><h3>3. What can they do?</h3><p>Select every capability that should become an ordinary permission-rule record.</p></div><div class="enh-actions"><button type="button" data-enh-select-all-capabilities>Select all</button><button type="button" data-enh-clear-capabilities>Clear</button></div></div>
+      <div class="enh-capability-grid">${CAPABILITIES.map(cap=>`<label class="enh-capability-card"><input type="checkbox" name="capability" value="${cap}" ${['files.read','files.search'].includes(cap)?'checked':''}><span><code>${cap}</code><small>${h(CAPABILITY_HELP[cap]||cap)}</small></span></label>`).join('')}</div>
+    </section>
+    <section class="enh-permission-step span-2">
+      <div class="enh-step-head"><span>4</span><div><h3>4. Rule details</h3><p>Set the rule effect and operation matcher shared by every generated record.</p></div></div>
+      <div class="enh-rule-fields"><label class="field"><span>Effect</span><select name="effect"><option value="allow">Allow</option><option value="deny">Deny</option></select><small>Allow grants the selected capabilities; Deny explicitly blocks them.</small></label><label class="field"><span>Operation matcher</span><input name="matcher" value="*" required><small><code>*</code> matches every operation family within each selected capability.</small></label></div>
+    </section>
+  </div>`;
+  const modal=dialog('Add permission rules',`<form id="enh-permission-bulk">${body}</form>`,`<div class="enh-rule-summary"><div><strong data-enh-rule-count>Create 0 rules</strong><span data-enh-rule-detail>Choose connectors, targets, and capabilities.</span></div></div><div class="enh-actions"><button type="button" data-enh-close>Cancel</button><button class="primary" type="submit" form="enh-permission-bulk" data-enh-create-rules disabled>Create 0 rules</button></div>`);
+  modal.classList.add('permission-bulk');
+  const form=modal.querySelector('#enh-permission-bulk'),selectedBox=form.querySelector('[data-enh-selected-connectors]'),workspaceBox=form.querySelector('[data-enh-workspace-targets]'),sessionBox=form.querySelector('[data-enh-session-targets]'),count=modal.querySelector('[data-enh-rule-count]'),detail=modal.querySelector('[data-enh-rule-detail]'),createButton=modal.querySelector('[data-enh-create-rules]');
+  const scopeValue=()=>form.querySelector('[name=scope]:checked')?.value||'workspace';
   const refresh=()=>{
-    const mode=form.querySelector('[name=targetMode]:checked')?.value||'all';selectedBox.hidden=mode!=='selected';
-    workspaceBox.hidden=scope.value!=='workspace';sessionBox.hidden=scope.value!=='session';
+    const mode=form.querySelector('[name=targetMode]:checked')?.value||'all',scope=scopeValue();selectedBox.hidden=mode!=='selected';
+    workspaceBox.hidden=scope!=='workspace';sessionBox.hidden=scope!=='session';
     const actors=mode==='all'?availableAll:[...form.querySelectorAll('[name=actor]:checked')].map(x=>x.value);
     const caps=[...form.querySelectorAll('[name=capability]:checked')].map(x=>x.value);
-    const targets=scope.value==='global'?1:scope.value==='workspace'?form.querySelectorAll('[name=workspaceId]:checked').length:form.querySelectorAll('[name=sessionId]:checked').length;
-    count.textContent=`Will create ${actors.length*caps.length*targets} rule record(s).`;
+    const targets=scope==='global'?1:scope==='workspace'?form.querySelectorAll('[name=workspaceId]:checked').length:form.querySelectorAll('[name=sessionId]:checked').length;
+    const total=actors.length*caps.length*targets,scopeLabel=scope==='global'?'global scope':scope==='workspace'?'workspace target(s)':'session target(s)';
+    const label=`Create ${total} rule${total===1?'':'s'}`;count.textContent=label;createButton.textContent=label;createButton.disabled=total===0;
+    detail.textContent=`${actors.length} connector${actors.length===1?'':'s'} × ${targets} ${scopeLabel} × ${caps.length} capabilities`;
   };
-  form.addEventListener('change',refresh);refresh();
+  form.addEventListener('change',refresh);
+  modal.addEventListener('click',event=>{
+    if(event.target.closest('[data-enh-select-all-capabilities]')){for(const input of form.querySelectorAll('[name=capability]'))input.checked=true;refresh();return;}
+    if(event.target.closest('[data-enh-clear-capabilities]')){for(const input of form.querySelectorAll('[name=capability]'))input.checked=false;refresh();}
+  });
+  refresh();
   form.addEventListener('submit',async event=>{
-    event.preventDefault();const mode=form.querySelector('[name=targetMode]:checked')?.value||'all';
-    const actors=mode==='all'?availableAll:[...form.querySelectorAll('[name=actor]:checked')].map(x=>x.value);const capabilities=[...form.querySelectorAll('[name=capability]:checked')].map(x=>x.value);
-    const payload={effect:form.querySelector('[name=effect]').value,scope:scope.value,matcher:form.querySelector('[name=matcher]').value,actors,capabilities,workspaceIds:[...form.querySelectorAll('[name=workspaceId]:checked')].map(x=>x.value),sessionIds:[...form.querySelectorAll('[name=sessionId]:checked')].map(x=>x.value)};
+    event.preventDefault();const mode=form.querySelector('[name=targetMode]:checked')?.value||'all',scope=scopeValue();
+    const actors=mode==='all'?availableAll:[...form.querySelectorAll('[name=actor]:checked')].map(x=>x.value),capabilities=[...form.querySelectorAll('[name=capability]:checked')].map(x=>x.value);
+    const payload={effect:form.querySelector('[name=effect]').value,scope,matcher:form.querySelector('[name=matcher]').value,actors,capabilities,workspaceIds:[...form.querySelectorAll('[name=workspaceId]:checked')].map(x=>x.value),sessionIds:[...form.querySelectorAll('[name=sessionId]:checked')].map(x=>x.value)};
     try{const result=await api('/api/permissions/bulk',{method:'POST',body:JSON.stringify(payload)});modal.close();toast(`Created ${result.count} permission rule(s)`);await renderPermissions(page);}catch(error){toast(error.message,true);}
   });
 }
