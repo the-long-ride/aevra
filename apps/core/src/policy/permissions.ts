@@ -51,8 +51,7 @@ export class PermissionEngine{
         if(commandMatchers.length)effective.add('commands.run');
         continue;
       }
-      const hasAllowedOperation=allows.some(allow=>!denies.some(deny=>matches(deny.matcher,allow.matcher)));
-      if(hasAllowedOperation)effective.add(capability);
+      if(!wildcardDenied&&allows.some(r=>r.matcher==='*'))effective.add(capability);
     }
     return{effectiveCapabilities:capabilityOrder.filter(capability=>effective.has(capability)),commandMatchers};
   }
