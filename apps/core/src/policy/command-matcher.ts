@@ -20,3 +20,4 @@ export function commandPermissionMatcher(command:string[]|{executable:string;arg
   }
   return parts.join(':');
 }
+export function needsCommandPermissionApproval(outcome:'allow'|'deny'|'approval'|undefined,oneTimeAllowed:boolean){return !oneTimeAllowed&&outcome!=='allow';}
