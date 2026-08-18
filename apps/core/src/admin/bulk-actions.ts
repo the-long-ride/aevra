@@ -10,6 +10,7 @@ async function body(req:IncomingMessage){const chunks:Buffer[]=[];let size=0;for
 function strings(value:unknown){return Array.isArray(value)?[...new Set(value.map(String).map(x=>x.trim()).filter(Boolean))]:[];}
 function bad(res:ServerResponse,message:string){send(res,400,{error:{code:'INVALID_BULK_REQUEST',message}});}
 function isConnectorActor(actor:unknown){const value=String(actor??'');return value.startsWith('connector:')||value.startsWith('oauth:');}
+function criticalPersistentRule(effect:string,scope:string,matcher:string){if(effect!=='allow'||!['workspace','global'].includes(scope))return false;const value=matcher.toLowerCase();return /workspace[_:-]?escape|privilege|elevat|security:disable|git:(?:reset|clean|force-push)|git:push.*force/.test(value);}
 
 export async function handleBulkAdminAction(req:IncomingMessage,res:ServerResponse,url:URL,context:AdminApiContext,currentAdminSession?:string):Promise<boolean>{
   const path=url.pathname,method=req.method??'GET';
@@ -23,6 +24,7 @@ export async function handleBulkAdminAction(req:IncomingMessage,res:ServerRespon
       if(!capabilities.length){bad(res,'Select at least one capability');return true;}
       if(!actors.length){bad(res,'Select at least one connector');return true;}
       if(!['global','workspace','session'].includes(scope)){bad(res,'Scope must be global, workspace, or session');return true;}
+      if(criticalPersistentRule(effect,scope,matcher)){send(res,400,{error:{code:'CRITICAL_RULE_FORBIDDEN',message:'Critical operations cannot receive persistent always-allow rules'}});return true;}
       const created:any[]=[],createdAt=new Date().toISOString();
       if(scope==='global'){
         for(const actor of actors)for(const capability of capabilities){const rule={id:`perm_${randomUUID()}`,effect,capability,scope:'global',actor,matcher,createdAt};context.permissions?.upsert?.(rule);created.push(rule);}
