@@ -12,6 +12,11 @@ test('summary overlays wildcard non-command capability without broadening baseli
   assert.deepEqual(value.commandMatchers,[]);
 });
 
+test('summary reports a non-command capability when at least one exact matcher is allowed',()=>{
+  const value=engine([row({capability:'git.commit',matcher:'git:commit'})]).summary(context);
+  assert.deepEqual(value.effectiveCapabilities,['files.read','git.commit']);
+});
+
 test('summary exposes matcher-restricted commands',()=>{
   const value=engine([row({capability:'commands.run',matcher:'git:status'})]).summary(context);
   assert.deepEqual(value.effectiveCapabilities,['files.read','commands.run']);
