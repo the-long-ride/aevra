@@ -24,7 +24,7 @@ function detailFor(key, status) {
   return status?.[key] ?? 'unavailable';
 }
 
-export function updateRuntimeStatus(status) {
+export function updateRuntimeStatus(status, pendingCount = 0) {
   const version = document.querySelector('#app-version');
   if (version && status?.version) {
     const value = String(status.version);
@@ -38,14 +38,29 @@ export function updateRuntimeStatus(status) {
     chip.title = `${key}: ${detail}`;
     chip.setAttribute('aria-label', `${key}: ${detail}`);
   }
+  const requests = document.querySelector('#requests-count');
+  if (requests) requests.textContent = String(pendingCount);
+  document
+    .querySelector('#open-requests')
+    ?.classList.toggle('has-pending', pendingCount > 0);
 }
 
 export function startRuntimeStatus() {
   let stopped = false;
   const refresh = async () => {
     try {
-      const status = await requestJson('/api/status');
-      if (!stopped) updateRuntimeStatus(status);
+      const [status, approvals, oauth] = await Promise.all([
+        requestJson('/api/status'),
+        requestJson('/api/approvals'),
+        requestJson('/api/oauth/requests'),
+      ]);
+      if (!stopped) {
+        updateRuntimeStatus(
+          status,
+          approvals.filter((item) => item.state === 'PENDING').length +
+            oauth.length,
+        );
+      }
     } catch {
       if (!stopped) {
         updateRuntimeStatus({
