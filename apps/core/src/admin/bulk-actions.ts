@@ -9,6 +9,7 @@ function send(res:ServerResponse,status:number,value:unknown){res.statusCode=sta
 async function body(req:IncomingMessage){const chunks:Buffer[]=[];let size=0;for await(const chunk of req){const value=Buffer.from(chunk);size+=value.length;if(size>1024*1024)throw Object.assign(new Error('request body too large'),{status:413});chunks.push(value);}if(!size)return{};try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw Object.assign(new Error('invalid JSON'),{status:400});}}
 function strings(value:unknown){return Array.isArray(value)?[...new Set(value.map(String).map(x=>x.trim()).filter(Boolean))]:[];}
 function bad(res:ServerResponse,message:string){send(res,400,{error:{code:'INVALID_BULK_REQUEST',message}});}
+function isConnectorActor(actor:unknown){const value=String(actor??'');return value.startsWith('connector:')||value.startsWith('oauth:');}
 
 export async function handleBulkAdminAction(req:IncomingMessage,res:ServerResponse,url:URL,context:AdminApiContext,currentAdminSession?:string):Promise<boolean>{
   const path=url.pathname,method=req.method??'GET';
@@ -42,7 +43,7 @@ export async function handleBulkAdminAction(req:IncomingMessage,res:ServerRespon
     if(path==='/api/audit'&&method==='DELETE'){const removed=context.audit?.clear?.()??0;send(res,200,{ok:true,removed});return true;}
     if(path==='/api/sessions/revoke-others'&&method==='POST'){
       const remote=(context.sessions?.list?.()??[]) as any[];let revokedRemote=0,preservedConnectors=0;
-      for(const session of remote){if(String(session.actor??'').startsWith('connector:')){preservedConnectors++;continue;}context.sessions?.revoke?.(session.id);revokedRemote++;}
+      for(const session of remote){if(isConnectorActor(session.actor)){preservedConnectors++;continue;}context.sessions?.revoke?.(session.id);revokedRemote++;}
       const adminResult=context.bootstrap?.revokeAllExcept?.(currentAdminSession)??{revoked:0,preserved:0};
       send(res,200,{ok:true,revokedRemote,preservedConnectors,revokedAdmin:adminResult.revoked,preservedAdmin:adminResult.preserved});return true;
     }
