@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {mkdtempSync} from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {AevraDatabase} from '../../store/src/database.js';
+import {WorkspaceRepository} from '../../store/src/workspaces.js';
+import {SessionRepository} from '../../store/src/sessions.js';
+import {ApprovalRepository} from '../../store/src/approvals.js';
+import {AuditRepository} from '../../store/src/audit.js';
+import {WorkspaceService} from '../../../apps/core/src/workspaces/workspace-service.js';
+import {CapabilityProfileService} from '../../../apps/core/src/policy/capabilities.js';
+import {SessionManager} from '../../../apps/core/src/sessions/session-manager.js';
+import {ReadVersionCache} from '../../../apps/core/src/operations/read-version-cache.js';
+import {ApprovalService} from '../../../apps/core/src/approvals/approval-service.js';
+import {AuditService} from '../../../apps/core/src/audit/audit-service.js';
+import {McpToolService} from '../src/service.js';
+import {handleJsonRpc} from '../src/register.js';
+
+test('shell_run requires high-risk local approval and resumes through command_run',async()=>{
+  const db=AevraDatabase.open(':memory:');
+  const workspaceRoot=mkdtempSync(path.join(os.tmpdir(),'aevra-shell-'));
+  const workspaces=new WorkspaceService(new WorkspaceRepository(db.raw()));
+  const workspace=workspaces.create({name:'Shell test',hostRoot:workspaceRoot});
+  const profiles=new CapabilityProfileService(db.raw());
+  profiles.mapActor('oauth:ChatGPT',workspace.id,'developer','auto');
+  const sessions=new SessionManager(new SessionRepository(db.raw()),profiles);
+  const session=sessions.create({actor:'oauth:ChatGPT',subject:'grant',issuer:'https://example.test',audience:'https://example.test/mcp',expiresAt:new Date(Date.now()+60_000).toISOString()});
+  const approvals=new ApprovalService(new ApprovalRepository(db.raw()),new AuditService(new AuditRepository(db.raw())),{fastWaitMs:0,lifetimeMs:60_000,lifetimeByRiskMs:{}});
+  const executions:any[]=[];
+  const operations={runCommand:async(...args:any[])=>{executions.push(args);return{ok:true,value:{exitCode:0,signal:null,stdout:'ok',stderr:'',durationMs:1}};}} as any;
+  const service=new McpToolService(sessions,workspaces,{execute:async()=>({ok:true,value:{}})} as any,new ReadVersionCache(),approvals,{approvals,operations});
+  await service.call(session.id,'workspace_select',{workspace:workspace.id});
+
+  const pending:any=await handleJsonRpc(service,session.id,{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'shell_run',arguments:{script:'pwd'}}});
+  assert.equal(pending.result.structuredContent.status,'approval_pending');
+  const ticket=approvals.status(pending.result.structuredContent.requestId)!;
+  assert.equal(ticket.risk,'HIGH');
+  assert.equal(ticket.operation.family,'shell:bash');
+  assert.equal(executions.length,0,'shell must not execute before local approval');
+
+  approvals.approve(ticket.id,'once');
+  const resumed:any=await handleJsonRpc(service,session.id,{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'approval_wait',arguments:{requestId:ticket.id}}});
+  assert.equal(executions.length,1);
+  assert.equal(executions[0][1].executable,'bash');
+  assert.deepEqual(executions[0][1].args,['-lc','pwd']);
+  assert.equal(executions[0][2],'sandbox');
+  assert.equal(resumed.result.structuredContent.ok,true);
+  db.close();
+});
