@@ -21,7 +21,10 @@ export function formatCliError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function readyLines(info: { adminUrl: string; mcpUrl: string }): string[] {
+export function readyLines(info: {
+  adminUrl: string;
+  mcpUrl: string;
+}): string[] {
   return [
     '[aevra] Core: ready',
     `[aevra] MCP: ${info.mcpUrl}/mcp`,
@@ -30,8 +33,23 @@ export function readyLines(info: { adminUrl: string; mcpUrl: string }): string[]
   ];
 }
 
-export function completionText(shell: 'bash' | 'zsh' | 'powershell'): string {
-  const commands = ['start', 'ui', 'setup', 'service', 'connectors', 'sessions', 'audit', 'status', 'backup', 'completion', '--help'];
+export function completionText(
+  shell: 'bash' | 'zsh' | 'powershell',
+): string {
+  const commands = [
+    'start',
+    'ui',
+    'setup',
+    'service',
+    'connectors',
+    'sessions',
+    'audit',
+    'status',
+    'backup',
+    'completion',
+    '--help',
+  ];
+
   if (shell === 'bash') {
     return `_aevra() {
   local cur
@@ -45,6 +63,7 @@ export function completionText(shell: 'bash' | 'zsh' | 'powershell'): string {
 complete -F _aevra aevra
 `;
   }
+
   if (shell === 'zsh') {
     return `#compdef aevra
 _aevra() {
@@ -57,6 +76,7 @@ _aevra() {
 _aevra "$@"
 `;
   }
+
   return `Register-ArgumentCompleter -CommandName aevra -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
   $elements = $commandAst.CommandElements
@@ -69,4 +89,6 @@ _aevra "$@"
 `;
 }
 
-export function cloudflareSetupNeedsAccess(value:string):boolean { return value.trim().toLowerCase()==='access'; }
+export function cloudflareSetupNeedsAccess(value: string): boolean {
+  return value.trim().toLowerCase() === 'access';
+}
