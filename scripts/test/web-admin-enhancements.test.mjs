@@ -48,6 +48,14 @@ test('permission bulk modal uses a wide guided layout with readable selection co
   assert.match(css,/\.enh-rule-summary/);
 });
 
+test('permissions workspaces and sessions use shared searchable filterable paginated tables',()=>{
+  const app=readFileSync('apps/web/admin-enhancements.js','utf8');
+  for(const id of ['permissions-admin','workspaces-admin','remote-sessions-admin','local-sessions-admin'])assert.match(app,new RegExp(id));
+  assert.match(app,/window\.AevraDataTable\.mount/);
+  for(const label of ['Effect','Capability','Scope','Connector / actor','External mounts','Workspace state'])assert.match(app,new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  for(const placeholder of ['Search permissions','Search workspaces','Search remote sessions','Search admin sessions'])assert.match(app,new RegExp(placeholder));
+});
+
 test('v2 shell does not shadow enhanced admin pages or keep duplicate renderers',()=>{
   const v2=readFileSync('apps/web/app-v2.js','utf8');
   assert.match(v2,/managedPages=new Set\(\['dashboard','processes','changes'\]\)/);
