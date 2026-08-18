@@ -100,7 +100,6 @@ export class AevraOAuthService{
     this.refreshTtlMs=options.refreshTokenTtlMs??30*24*60*60_000;
   }
 
-
   setPublicBaseUrl(baseUrl:string){
     const base=baseUrl.replace(/\/$/,'');
     const url=new URL(base);
@@ -142,6 +141,8 @@ export class AevraOAuthService{
     const record=this.repo.registerClient({clientName:String(input.client_name??'MCP client').trim()||'MCP client',redirectUris:unique});
     return publicClient(record,applicationType);
   }
+
+  listClients(){return this.repo.listClients().map(record=>({clientId:record.clientId,clientName:record.clientName,actor:`oauth:${record.clientName}`,redirectUris:[...record.redirectUris],createdAt:record.createdAt}));}
 
   beginAuthorization(input:AuthorizationRequestInput,remoteIp?:string):OAuthAuthorizationRequestRecord{
     const client=this.repo.getClient(String(input.client_id??''));
