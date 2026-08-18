@@ -8,9 +8,10 @@
   "scripts": {
     "format:check": "node scripts/format-check.mjs",
     "lint": "node scripts/lint.mjs",
+    "lint:loc": "node scripts/loc-lint.mjs",
     "test": "node scripts/test.mjs",
     "typecheck": "tsc --noEmit --noCheck",
-    "build": "tsc -p tsconfig.build.json --noCheck && node --check apps/web/app.js && node --check apps/web/ui-runtime.js && node --check apps/web/data-table.js && node --check apps/web/safe-command-matchers.js && node --check apps/web/app-v2.js && node --check apps/web/app-v3.js && node --check apps/web/admin-enhancements.js && node scripts/copy-static.mjs",
+    "build": "tsc -p tsconfig.build.json --noCheck && node --check apps/web/app.js && node --check apps/web/ui-runtime.js && node --check apps/web/data-table.js && node --check apps/web/safe-command-matchers.js && node --check apps/web/app-v2.js && node --check apps/web/app-v3.js && node --check apps/web/dashboard-onboarding-layout.js && node --check apps/web/admin-enhancements.js && node scripts/copy-static.mjs",
     "start": "node dist/apps/cli/src/cli.js start",
     "prepublishOnly": "npm run format:check && npm run lint && npm test && npm run typecheck && npm run build",
     "prepare": "npm run build",
@@ -18,7 +19,7 @@
     "test:contract": "node scripts/test.mjs contract",
     "test:integration": "node scripts/test.mjs integration",
     "test:security": "node scripts/test.mjs security",
-    "test:web": "node --test scripts/test/web-admin-shell.test.mjs scripts/test/web-onboarding-runtime.test.mjs scripts/test/web-dashboard-v2.test.mjs scripts/test/web-dashboard-v3.test.mjs scripts/test/web-admin-enhancements.test.mjs scripts/test/web-permission-exact.test.mjs scripts/test/safe-command-guide.test.mjs scripts/test/web-toast-single.test.mjs"
+    "test:web": "node --test scripts/test/web-admin-shell.test.mjs scripts/test/web-onboarding-runtime.test.mjs scripts/test/web-dashboard-v2.test.mjs scripts/test/web-dashboard-v3.test.mjs scripts/test/dashboard-onboarding-layout.test.mjs scripts/test/web-admin-enhancements.test.mjs scripts/test/web-permission-exact.test.mjs scripts/test/safe-command-guide.test.mjs scripts/test/web-toast-single.test.mjs"
   },
   "dependencies": {},
   "devDependencies": {
