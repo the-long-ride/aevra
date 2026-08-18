@@ -12,11 +12,14 @@ function clean(value:unknown,max=180){
 }
 function commandPreview(command:any){const executable=clean(command?.executable??'',64),args=Array.isArray(command?.args)?command.args.map((v:unknown)=>clean(v,100)):[];return clean([executable,...args].filter(Boolean).join(' '));}
 function executionTarget(mode:unknown){return mode==='host'?'Host workspace':'Strict sandbox';}
+function actorLabel(actor:unknown){return clean(String(actor??'AI client').replace(/^(?:connector|oauth):/,''),80)||'AI client';}
 function originalIntent(original:any){
   if(!original?.tool)return'';const args=original.args??{};
   if(['file_write','file_create','file_patch'].includes(original.tool))return`${original.tool.replace('file_','')} ${clean(args.path??'workspace file',100)}`;
   if(original.tool==='file_move')return`move ${clean(`${args.from??''} → ${args.to??''}`,120)}`;
   if(original.tool==='file_delete')return`delete ${clean(args.path??'workspace path',100)}`;
+  if(original.tool==='file_read')return`read ${clean(args.path??'workspace file',100)}`;
+  if(original.tool==='file_search')return`search ${clean(args.path??'workspace',100)}`;
   if(original.tool==='command_run'){const command=args.command??{executable:args.executable,args:args.args};return`run ${commandPreview(command)}`;}
   if(original.tool==='shell_run')return`run shell: ${clean(args.script??'',120)}`;
   if(original.tool==='git_commit')return`git commit: ${clean(args.message??'',100)}`;
@@ -29,9 +32,9 @@ export function presentApproval(ticket:FrozenOperationTicket):ApprovalPresentati
   const family=String(ticket.operation?.family??''),payload:any=ticket.payload??{},args:any=payload.args??{};
   if(family==='workspace:select'||payload.tool==='workspace_select')return{title:'Workspace access',action:'Read workspace',target:String(payload.workspaceId??ticket.workspaceId)};
   if(family==='skills:read'||payload.tool==='skills_access')return{title:'Local skills access',action:'Read local skills and instructions',target:'User + active workspace'};
-  if(family==='workspace:capability-upgrade'||payload.tool==='workspace_capability_upgrade'){
-    const added=Array.isArray(payload.addedCapabilities)?payload.addedCapabilities.map(String):[],requested=originalIntent(payload.original),parts=[added.length?`Adds: ${clean(added.join(', '),180)}`:'',requested?`Requested by: ${requested}`:''].filter(Boolean);
-    return{title:payload.profileId==='coding-session'?'Enable coding access':'Expand workspace capabilities',action:`Grant ${String(payload.profileId??'workspace')} profile`,target:String(payload.workspaceId??ticket.workspaceId),...(parts.length?{preview:clean(parts.join(' · '),260)}:{})};
+  if(payload.tool==='capability_request'){
+    const capability=String(payload.requestedCapability??ticket.operation.capability),matcher=String(payload.permissionMatcher??'*'),intent=originalIntent(payload.original),parts=[matcher!=='*'?`Matcher: ${clean(matcher,120)}`:'',intent?`Requested by: ${intent}`:''].filter(Boolean);
+    return{title:`${actorLabel(ticket.actor)} requests ${capability}`,action:`Grant ${capability}`,target:`Workspace ${clean(ticket.workspaceId,120)}`,...(parts.length?{preview:clean(parts.join(' · '),260)}:{})};
   }
   if(payload.tool==='file_delete'||family==='files:delete')return{title:'Delete workspace content',action:args.recursive?'Delete recursively':'Delete file',target:clean(args.path??payload.path??'workspace path',220)};
   if(payload.tool==='file_write'||family==='files:write')return{title:'Edit workspace file',action:'Write file',target:clean(args.path??payload.path??'workspace path',220)};
