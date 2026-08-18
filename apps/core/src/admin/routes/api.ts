@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Capability, RiskTier } from '../../../../../packages/protocol/src/index.js';
+import {permissionRuleFromApproval} from '../approval-permissions.js';
 
 export interface AdminApiContext {
   workspaces?: any;
@@ -90,7 +91,7 @@ export async function handleAdminApi(req:IncomingMessage,res:ServerResponse,url:
       const admission=before?.operation?.family==='workspace:select';
       const scope=admission?'once':(x.scope??'once');
       const ticket=m[2]==='approve'?context.approvals.approve(m[1],scope):context.approvals.deny(m[1]);
-      if(m[2]==='approve'&&!admission&&scope!=='once'&&ticket.risk!=='CRITICAL'&&context.permissions){const ruleScope=scope==='session'?'session':scope==='workspace'?'workspace':'global';context.permissions.upsert({id:`perm_${randomUUID()}`,effect:'allow',capability:ticket.operation.capability,scope:ruleScope,workspaceId:ruleScope==='workspace'?ticket.workspaceId:undefined,actor:ticket.actor,sessionId:ruleScope==='session'?ticket.sessionId:undefined,matcher:ticket.operation.family,createdAt:new Date().toISOString()});}
+      if(m[2]==='approve'&&!admission&&context.permissions){const rule=permissionRuleFromApproval(ticket,scope,`perm_${randomUUID()}`,new Date().toISOString());if(rule)context.permissions.upsert(rule);}
       send(res,200,{ok:true,revision:Date.now(),ticket});return true;
     }
 
