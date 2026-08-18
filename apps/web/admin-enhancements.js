@@ -35,6 +35,7 @@ function dialog(title,body,footer=''){
 }
 function actorLabel(actor){return String(actor||'').replace(/^(?:connector|oauth):/,'');}
 function connectorActors(connectors){return uniq((connectors||[]).map(item=>item?.name?`connector:${item.name}`:''));}
+function isConnectorActor(actor){return /^(?:connector|oauth):/.test(String(actor||''));}
 
 async function renderPermissions(page){
   const [rules,workspaces,sessions,connectors]=await Promise.all([api('/api/permissions'),api('/api/workspaces'),api('/api/sessions'),api('/api/connectors')]);
@@ -56,11 +57,11 @@ async function renderPermissions(page){
 }
 
 function openPermissionModal(page,{workspaces,sessions,connectors}){
-  const configuredActors=connectorActors(connectors),connected=sessions.filter(item=>String(item.actor||'').trim()),connectedActors=uniq(connected.map(item=>String(item.actor)));
+  const configuredActors=connectorActors(connectors),connected=sessions.filter(item=>isConnectorActor(item.actor)),connectedActors=uniq(connected.map(item=>String(item.actor)));
   const availableAll=uniq([...configuredActors,...connectedActors]);
   const body=`<div class="enh-permission-layout">
     <section class="enh-permission-step">
-      <div class="enh-step-head"><span>1</span><div><h3>1. Who gets access?</h3><p>Choose every known connector, or only selected connectors that are currently connected.</p></div></div>
+      <div class="enh-step-head"><span>1</span><div><h3>Who gets access?</h3><p>Choose every known connector, or only selected connectors that are currently connected.</p></div></div>
       <div class="enh-choice-cards enh-target-cards">
         <label class="enh-choice-card" data-enh-target-card><input type="radio" name="targetMode" value="all" checked><span><strong>All connectors</strong><small>${availableAll.length} connector actor(s) currently available</small></span></label>
         <label class="enh-choice-card" data-enh-target-card><input type="radio" name="targetMode" value="selected"><span><strong>Selected connected connectors</strong><small>${connectedActors.length} active connector actor(s)</small></span></label>
@@ -69,7 +70,7 @@ function openPermissionModal(page,{workspaces,sessions,connectors}){
       <p class="enh-inline-note">All connectors combines configured Bearer connectors with connector actors visible in active MCP/OAuth sessions.</p>
     </section>
     <section class="enh-permission-step">
-      <div class="enh-step-head"><span>2</span><div><h3>2. Where does it apply?</h3><p>Choose the lifetime and target boundary for the generated rules.</p></div></div>
+      <div class="enh-step-head"><span>2</span><div><h3>Where does it apply?</h3><p>Choose the lifetime and target boundary for the generated rules.</p></div></div>
       <div class="enh-choice-cards enh-scope-cards">
         <label class="enh-choice-card" data-enh-scope-card><input type="radio" name="scope" value="global"><span><strong>Global</strong><small>Apply across registered workspaces</small></span></label>
         <label class="enh-choice-card" data-enh-scope-card><input type="radio" name="scope" value="workspace" checked><span><strong>Workspace</strong><small>Choose one or more workspaces</small></span></label>
@@ -79,11 +80,11 @@ function openPermissionModal(page,{workspaces,sessions,connectors}){
       <div data-enh-session-targets class="enh-selection-panel" hidden><div class="enh-selection-head"><strong>Connector sessions</strong><span>Select one or more</span></div><div class="enh-check-grid">${connected.map(item=>`<label class="enh-check"><input type="checkbox" name="sessionId" value="${h(item.id)}"><span>${h(actorLabel(item.actor))}<small>${h(String(item.id).slice(0,10))}…</small></span></label>`).join('')||'<p class="enh-inline-note">No connected connector sessions.</p>'}</div></div>
     </section>
     <section class="enh-permission-step span-2">
-      <div class="enh-step-head enh-step-head-actions"><span>3</span><div><h3>3. What can they do?</h3><p>Select every capability that should become an ordinary permission-rule record.</p></div><div class="enh-actions"><button type="button" data-enh-select-all-capabilities>Select all</button><button type="button" data-enh-clear-capabilities>Clear</button></div></div>
+      <div class="enh-step-head enh-step-head-actions"><span>3</span><div><h3>What can they do?</h3><p>Select every capability that should become an ordinary permission-rule record.</p></div><div class="enh-actions"><button type="button" data-enh-select-all-capabilities>Select all</button><button type="button" data-enh-clear-capabilities>Clear</button></div></div>
       <div class="enh-capability-grid">${CAPABILITIES.map(cap=>`<label class="enh-capability-card"><input type="checkbox" name="capability" value="${cap}" ${['files.read','files.search'].includes(cap)?'checked':''}><span><code>${cap}</code><small>${h(CAPABILITY_HELP[cap]||cap)}</small></span></label>`).join('')}</div>
     </section>
     <section class="enh-permission-step span-2">
-      <div class="enh-step-head"><span>4</span><div><h3>4. Rule details</h3><p>Set the rule effect and operation matcher shared by every generated record.</p></div></div>
+      <div class="enh-step-head"><span>4</span><div><h3>Rule details</h3><p>Set the rule effect and operation matcher shared by every generated record.</p></div></div>
       <div class="enh-rule-fields"><label class="field"><span>Effect</span><select name="effect"><option value="allow">Allow</option><option value="deny">Deny</option></select><small>Allow grants the selected capabilities; Deny explicitly blocks them.</small></label><label class="field"><span>Operation matcher</span><input name="matcher" value="*" required><small><code>*</code> matches every operation family within each selected capability.</small></label></div>
     </section>
   </div>`;
