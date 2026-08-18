@@ -1,3 +1,145 @@
+export const SAFE_COMMAND_MATCHERS = Object.freeze([
+  {
+    matcher: 'git:status',
+    example: 'git status',
+    purpose: 'Inspect repository status',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'Read-only repository inspection.',
+  },
+  {
+    matcher: 'git:diff',
+    example: 'git diff',
+    purpose: 'Inspect working-tree or staged differences',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'Read-only when used for inspection.',
+  },
+  {
+    matcher: 'git:log',
+    example: 'git log -10',
+    purpose: 'Inspect commit history',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'Read-only history inspection.',
+  },
+  {
+    matcher: 'git:show',
+    example: 'git show HEAD',
+    purpose: 'Inspect a Git object or commit',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'Read-only object inspection.',
+  },
+  {
+    matcher: 'npm:test',
+    example: 'npm test',
+    purpose: 'Run project tests',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote:
+      'May execute project-defined test scripts; review repository scripts first.',
+  },
+  {
+    matcher: 'pnpm:test',
+    example: 'pnpm test',
+    purpose: 'Run pnpm project tests',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'May execute project-defined scripts.',
+  },
+  {
+    matcher: 'pnpm:lint',
+    example: 'pnpm lint',
+    purpose: 'Run pnpm lint checks',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'May execute project-defined scripts.',
+  },
+  {
+    matcher: 'yarn:test',
+    example: 'yarn test',
+    purpose: 'Run Yarn project tests',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'May execute project-defined scripts.',
+  },
+  {
+    matcher: 'yarn:lint',
+    example: 'yarn lint',
+    purpose: 'Run Yarn lint checks',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'May execute project-defined scripts.',
+  },
+  {
+    matcher: 'cargo:check',
+    example: 'cargo check',
+    purpose: 'Type-check a Rust workspace',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'Build scripts and proc macros are executable project code.',
+  },
+  {
+    matcher: 'cargo:test',
+    example: 'cargo test',
+    purpose: 'Run Rust tests',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'Tests and build scripts execute project code.',
+  },
+  {
+    matcher: 'cargo:build',
+    example: 'cargo build',
+    purpose: 'Build a Rust workspace',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'Build scripts and proc macros may execute.',
+  },
+  {
+    matcher: 'dotnet:restore',
+    example: 'dotnet restore',
+    purpose: 'Restore .NET dependencies',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote:
+      'May contact configured package sources and run restore-related project logic.',
+  },
+  {
+    matcher: 'dotnet:build',
+    example: 'dotnet build',
+    purpose: 'Build a .NET solution or project',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'MSBuild targets can execute project-defined tasks.',
+  },
+  {
+    matcher: 'dotnet:test',
+    example: 'dotnet test',
+    purpose: 'Run .NET tests',
+    platforms: ['windows', 'linux', 'macos'],
+    riskNote: 'Tests and MSBuild targets execute project code.',
+  },
+  {
+    matcher: 'rg:*',
+    example: 'rg "TODO" .',
+    purpose: 'Search text with ripgrep',
+    platforms: ['linux', 'macos'],
+    riskNote:
+      'Read-only text search. The wildcard covers the classifier family suffix derived from the first argument.',
+  },
+  {
+    matcher: 'grep:*',
+    example: 'grep -R "TODO" .',
+    purpose: 'Search text with grep',
+    platforms: ['linux', 'macos'],
+    riskNote:
+      'Read-only when invoked directly. The wildcard covers the classifier family suffix derived from the first argument.',
+  },
+  {
+    matcher: 'cat:*',
+    example: 'cat README.md',
+    purpose: 'Read a text file',
+    platforms: ['linux', 'macos'],
+    riskNote:
+      'Read-only when invoked directly. Shell redirection is not part of this direct command matcher.',
+  },
+  {
+    matcher: 'ls:*',
+    example: 'ls -la',
+    purpose: 'List directory contents',
+    platforms: ['linux', 'macos'],
+    riskNote:
+      'Read-only directory inspection. The wildcard covers listing arguments.',
+  },
+]);
+
 export function selectedPlatformMatchers(catalog, platform) {
   return catalog
     .filter(
