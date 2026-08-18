@@ -40,6 +40,7 @@ function parseJsonArray(value:unknown):string[]{try{const v=JSON.parse(String(va
 function hash(value:string){return createHash('sha256').update(value).digest('hex');}
 function secret(bytes=32){return randomBytes(bytes).toString('base64url');}
 function eqHash(left:string,right:string){return left.length===right.length&&timingSafeEqual(Buffer.from(left,'hex'),Buffer.from(right,'hex'));}
+function clientFromRow(row:any):OAuthClientRecord{return{clientId:String(row.clientId),clientName:String(row.clientName),redirectUris:parseJsonArray(row.redirectUrisJson),tokenEndpointAuthMethod:'none',grantTypes:parseJsonArray(row.grantTypesJson),responseTypes:parseJsonArray(row.responseTypesJson),createdAt:String(row.createdAt)};}
 
 export class OAuthRepository{
   constructor(private db:DatabaseSync,private now:()=>Date=()=>new Date()){}
@@ -54,7 +55,11 @@ export class OAuthRepository{
 
   getClient(clientId:string):OAuthClientRecord|null{
     const row=this.db.prepare('SELECT client_id clientId,client_name clientName,redirect_uris_json redirectUrisJson,token_endpoint_auth_method tokenEndpointAuthMethod,grant_types_json grantTypesJson,response_types_json responseTypesJson,created_at createdAt FROM oauth_clients WHERE client_id=?').get(clientId) as any|undefined;
-    return row?{clientId:String(row.clientId),clientName:String(row.clientName),redirectUris:parseJsonArray(row.redirectUrisJson),tokenEndpointAuthMethod:'none',grantTypes:parseJsonArray(row.grantTypesJson),responseTypes:parseJsonArray(row.responseTypesJson),createdAt:String(row.createdAt)}:null;
+    return row?clientFromRow(row):null;
+  }
+
+  listClients():OAuthClientRecord[]{
+    return (this.db.prepare('SELECT client_id clientId,client_name clientName,redirect_uris_json redirectUrisJson,token_endpoint_auth_method tokenEndpointAuthMethod,grant_types_json grantTypesJson,response_types_json responseTypesJson,created_at createdAt FROM oauth_clients ORDER BY created_at,client_name').all() as any[]).map(clientFromRow);
   }
 
   createAuthorizationRequest(input:{clientId:string;redirectUri:string;scope:string;resource:string;codeChallenge:string;codeChallengeMethod:'S256';state?:string;remoteIp?:string},ttlMs:number):OAuthAuthorizationRequestRecord{
@@ -119,7 +124,7 @@ export class OAuthRepository{
     return{token,record};
   }
   private issueToken(kind:'access',grant:OAuthGrantRecord,ttlMs:number):{token:string;record:OAuthTokenRecord}{
-    const token=secret(32),createdAt=this.now(),expiresAt=new Date(createdAt.getTime()+ttlMs),record={...grant,createdAt:createdAt.toISOString(),expiresAt:expiresAt.toISOString()};
+    const token=secret(32),createdAt=this.now(),expiresAt=new Date(createdAt.getTime()+ttlMs),record={...grant,createdAt:createdAt.toISOString(),expiresAt:new Date(createdAt.getTime()+ttlMs).toISOString()};
     this.db.prepare('INSERT INTO oauth_access_tokens(token_hash,client_id,actor,subject,scope,resource,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)')
       .run(hash(token),grant.clientId,grant.actor,grant.subject,grant.scope,grant.resource,record.createdAt,record.expiresAt);
     return{token,record};
