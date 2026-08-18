@@ -23,3 +23,10 @@ test('enhanced admin UX covers batch permissions workspace mounts and cleanup',(
   assert.match(app,/\/admissions/);
   assert.match(app,/\.remote-card/);
 });
+
+test('v2 shell does not shadow enhanced admin pages or keep duplicate renderers',()=>{
+  const v2=readFileSync('apps/web/app-v2.js','utf8');
+  assert.match(v2,/managedPages=new Set\(\['dashboard','processes','changes'\]\)/);
+  for(const page of ['workspaces','permissions','sessions','audit'])assert.doesNotMatch(v2,new RegExp(`page==='${page}'`));
+  for(const fn of ['renderWorkspaces','openWorkspaceModal','renderPermissions','openPermissionModal','renderSessions','openSessionWorkspaceModal','renderAudit'])assert.doesNotMatch(v2,new RegExp(`function ${fn}\\b|async function ${fn}\\b`));
+});
