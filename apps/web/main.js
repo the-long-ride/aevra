@@ -18,8 +18,8 @@ import { renderWorkspacesPage } from './pages/workspaces.js';
 
 const NAVIGATION = [
   ['dashboard', 'Dashboard'],
-  ['permissions', 'Permissions'],
   ['workspaces', 'Workspaces'],
+  ['permissions', 'Permissions'],
   ['sessions', 'Sessions'],
   ['processes', 'Processes'],
   ['changes', 'Changes'],
@@ -30,8 +30,8 @@ const NAVIGATION = [
 
 const renderers = {
   dashboard: renderDashboardPage,
-  permissions: renderPermissionsPage,
   workspaces: renderWorkspacesPage,
+  permissions: renderPermissionsPage,
   sessions: renderSessionsPage,
   processes: renderProcessesPage,
   changes: renderChangesPage,
@@ -55,27 +55,21 @@ function healthChip(key, label) {
 
 function shellMarkup() {
   return `<div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand"><span class="brand-mark">A</span><div><strong>Aevra <span id="app-version" class="app-version"></span></strong><small>Local agent gateway</small></div></div>
-      <nav aria-label="Aevra admin">
-        ${NAVIGATION.map(
-          ([id, label]) =>
-            `<button type="button" data-nav-page="${id}">${label}</button>`,
-        ).join('')}
-      </nav>
-      <div class="sidebar-foot"><span class="local-state"><i></i> Local gateway</span></div>
-    </aside>
-    <main class="main-shell">
-      <header class="topbar">
-        <div><span class="eyebrow">Local control plane</span><strong id="page-title">Dashboard</strong></div>
-        <div class="topbar-actions">
-          <span id="safe-mode-banner" class="safe-mode-banner" hidden>SAFE MODE</span>
-          <div class="health-cluster">${healthChip('core', 'Core')}${healthChip('worker', 'Worker')}${healthChip('mcp', 'MCP')}${healthChip('tunnel', 'Tunnel')}</div>
-          <button type="button" id="open-requests">Requests <b id="requests-count">0</b></button>
-        </div>
-      </header>
-      <div id="page" class="page"></div>
-    </main>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">A</span><div><strong>Aevra <span id="app-version" class="app-version"></span></strong><small>Local MCP control plane</small></div></div>
+      <div class="topbar-actions">
+        <div class="health-cluster">${healthChip('core', 'Core')}${healthChip('worker', 'Worker')}${healthChip('mcp', 'MCP')}${healthChip('tunnel', 'Tunnel')}</div>
+        <button type="button" id="open-requests">Requests <b id="requests-count">0</b></button>
+      </div>
+    </header>
+    <div id="safe-mode-banner" class="safe-mode-banner" hidden>SAFE MODE: remote execution and administrative mutations are disabled.</div>
+    <nav class="top-nav" aria-label="Aevra admin">
+      ${NAVIGATION.map(
+        ([id, label]) =>
+          `<button type="button" data-nav-page="${id}">${label}</button>`,
+      ).join('')}
+    </nav>
+    <main id="page" class="page"></main>
   </div>`;
 }
 
@@ -83,8 +77,6 @@ function syncNavigation(page) {
   for (const button of document.querySelectorAll('[data-nav-page]')) {
     button.classList.toggle('active', button.dataset.navPage === page);
   }
-  const label = NAVIGATION.find(([id]) => id === page)?.[1] ?? page;
-  document.querySelector('#page-title').textContent = label;
 }
 
 async function activate(page, { updateHash = true } = {}) {
