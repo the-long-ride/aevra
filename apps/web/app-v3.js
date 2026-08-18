@@ -2,7 +2,7 @@
   const h=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
   const nativeNotification=window.Notification;
   const seenApprovals=new Set(),seenOauth=new Set();
-  let dashboardBusy=false,requestBusy=false;
+  let dashboardBusy=false,requestBusy=false,latestApprovals=[];
   const getJson=async path=>{const response=await fetch(path,{headers:{accept:'application/json'},cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();};
   const localTime=value=>{if(!value)return'—';const d=new Date(value);return Number.isNaN(d.getTime())?String(value):d.toLocaleString();};
   const duration=seconds=>{seconds=Math.max(0,Number(seconds)||0);const d=Math.floor(seconds/86400),h=Math.floor(seconds%86400/3600),m=Math.floor(seconds%3600/60),s=Math.floor(seconds%60);if(d)return`${d}d ${h}h`;if(h)return`${h}h ${m}m`;if(m)return`${m}m ${s}s`;return`${s}s`;};
@@ -25,7 +25,7 @@
   async function refreshDetailedRequests(){
     if(requestBusy)return;requestBusy=true;
     try{
-      const [approvals,oauth]=await Promise.all([getJson('/api/approvals'),getJson('/api/oauth/requests')]);const pending=approvals.filter(item=>item.state==='PENDING');
+      const [approvals,oauth]=await Promise.all([getJson('/api/approvals'),getJson('/api/oauth/requests')]);latestApprovals=approvals;const pending=approvals.filter(item=>item.state==='PENDING');
       for(const item of pending){const id=String(item.id);if(seenApprovals.has(id))continue;seenApprovals.add(id);const title=item.presentation?.title||'Aevra approval request',body=`${String(item.actor||'Remote AI')}: ${presentationText(item)}`;toast(`${title}: ${body}`,'info',7600);browserNotify(`Aevra: ${title}`,body);}
       for(const item of oauth){const id=String(item.id);if(seenOauth.has(id))continue;seenOauth.add(id);const client=item.clientName??item.clientId??'Remote AI',scopes=(item.requestedScopes??item.scopes??[]).join(', ')||'mcp';const body=`${client} wants to connect · scopes: ${scopes}`;toast(`OAuth connection request: ${body}`,'info',7600);browserNotify('Aevra: OAuth connection request',body);}
       const liveApprovals=new Set(pending.map(item=>String(item.id))),liveOauth=new Set(oauth.map(item=>String(item.id)));for(const id of [...seenApprovals])if(!liveApprovals.has(id))seenApprovals.delete(id);for(const id of [...seenOauth])if(!liveOauth.has(id))seenOauth.delete(id);decorateRequestDrawer(approvals);
@@ -80,6 +80,6 @@
   async function refreshDashboard(){if(!activeDashboard()||dashboardBusy)return;dashboardBusy=true;try{await arrangeOnboarding();ensureActiveConnections();makeDashboardCollapsible();guideButtons();ensureSafeMatcherCopyAll();const snapshot=await getJson('/api/dashboard/runtime');patchRuntimeStats(snapshot);mountRuntimeTables(snapshot);}catch{}finally{dashboardBusy=false;}}
 
   document.addEventListener('click',event=>{const copyAll=event.target.closest('[data-copy-all-matchers]');if(copyAll){const matchers=[...document.querySelectorAll('#page .safe-matcher-guide [data-copy-matcher]')].map(node=>node.dataset.copyMatcher).filter(Boolean);if(matchers.length)navigator.clipboard.writeText(matchers.join('\n')).then(()=>toast(`Copied ${matchers.length} matchers`,'success',3200)).catch(()=>{});return;}const guide=event.target.closest('[data-v3-guide]')?.dataset.v3Guide;if(guide){event.preventDefault();event.stopImmediatePropagation();openGuide(guide);}},true);
-  new MutationObserver(()=>{if(activeDashboard()){arrangeOnboarding().catch(()=>{});ensureActiveConnections();makeDashboardCollapsible();guideButtons();}ensureSafeMatcherCopyAll();ensureNotificationButton();}).observe(document.documentElement,{childList:true,subtree:true});
+  new MutationObserver(()=>{if(activeDashboard()){arrangeOnboarding().catch(()=>{});ensureActiveConnections();makeDashboardCollapsible();guideButtons();}ensureSafeMatcherCopyAll();ensureNotificationButton();decorateRequestDrawer(latestApprovals);}).observe(document.documentElement,{childList:true,subtree:true});
   suppressLegacyRequestNotifications();setInterval(()=>refreshDashboard().catch(()=>{}),2000);setInterval(()=>refreshDetailedRequests().catch(()=>{}),2200);refreshDashboard().catch(()=>{});refreshDetailedRequests().catch(()=>{});
 })();
