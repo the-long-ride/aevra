@@ -69,6 +69,7 @@ function shellMarkup() {
       <header class="topbar">
         <div><span class="eyebrow">Local control plane</span><strong id="page-title">Dashboard</strong></div>
         <div class="topbar-actions">
+          <span id="safe-mode-banner" class="safe-mode-banner" hidden>SAFE MODE</span>
           <div class="health-cluster">${healthChip('core', 'Core')}${healthChip('worker', 'Worker')}${healthChip('mcp', 'MCP')}${healthChip('tunnel', 'Tunnel')}</div>
           <button type="button" id="open-requests">Requests <b id="requests-count">0</b></button>
         </div>
