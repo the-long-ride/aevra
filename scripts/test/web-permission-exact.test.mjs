@@ -1,27 +1,28 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const app=()=>readFileSync('apps/web/admin-enhancements.js','utf8');
+const source = () =>
+  readFileSync('apps/web/components/permission-bulk.js', 'utf8');
 
-test('permission modal targets configured connectors without requiring active sessions',()=>{
-  const source=app();
-  assert.match(source,/\/api\/oauth\/clients/);
-  assert.match(source,/Selected connectors/);
-  assert.doesNotMatch(source,/Selected connected connectors/);
-  assert.match(source,/Connected/);
-  assert.match(source,/Configured/);
-  assert.match(source,/Never used/);
-  assert.match(source,/oauthClients/);
+test('permission editor targets configured connectors without requiring active sessions', () => {
+  const value = source();
+  assert.match(value, /connectors, oauthClients, sessions/);
+  assert.match(value, /Selected connectors/);
+  assert.doesNotMatch(value, /Selected connected connectors/);
+  assert.match(value, /Connected/);
+  assert.match(value, /Configured/);
+  assert.match(value, /Never used/);
+  assert.match(value, /oauthClients/);
 });
 
-test('commands.run has a multiline matcher editor and command-only payload',()=>{
-  const source=app();
-  assert.match(source,/name="commandMatchers"/);
-  assert.match(source,/Command matchers/);
-  assert.match(source,/one matcher per line/i);
-  assert.match(source,/commandMatchers/);
-  assert.match(source,/includes\('commands\.run'\)/);
-  assert.match(source,/matcherCount/);
-  assert.match(source,/Broad command access/);
+test('commands.run has a multiline matcher editor and command-only payload', () => {
+  const value = source();
+  assert.match(value, /name="commandMatchers"/);
+  assert.match(value, /Command matchers/);
+  assert.match(value, /One normalized matcher per line/);
+  assert.match(value, /commandMatchers/);
+  assert.match(value, /includes\('commands\.run'\)/);
+  assert.match(value, /Broad command access/);
+  assert.match(value, /\/api\/permissions\/bulk/);
 });
