@@ -59,3 +59,15 @@ test('audit history can be cleared through the admin API',async()=>{
   assert.deepEqual(await response.json(),{ok:true,removed:7});
   await server.close();
 });
+
+test('bulk mutations remain disabled while Aevra is in safe mode',async()=>{
+  const rules:any[]=[];
+  const server=new AdminServer('127.0.0.1',0,()=>({core:'running'}),{bootstrap,api:{safeMode:()=>true,permissions:{upsert:(rule:any)=>rules.push(rule)}} as any});
+  await server.start();
+  const response=await request(server,'/api/permissions/bulk',{method:'POST',body:JSON.stringify({effect:'allow',scope:'global',actors:['connector:ChatGPT'],capabilities:['files.write']})});
+  assert.equal(response.status,503);
+  assert.deepEqual(rules,[]);
+  const value=await response.json() as any;
+  assert.equal(value.error.code,'SAFE_MODE');
+  await server.close();
+});
