@@ -4,6 +4,7 @@ import {
   openRequestDrawer,
   startRequestWatch,
 } from './components/request-drawer.js';
+import { startRuntimeStatus } from './components/runtime-status.js';
 import { toast } from './components/toast.js';
 import { renderAuditPage } from './pages/audit.js';
 import { renderChangesPage } from './pages/changes.js';
@@ -39,9 +40,7 @@ const renderers = {
   guide: renderGuidePage,
 };
 
-const context = {
-  guideSlug: null,
-};
+const context = { guideSlug: null };
 let cleanup;
 let activePage = 'dashboard';
 
@@ -50,10 +49,14 @@ function pageFromHash() {
   return Object.hasOwn(renderers, value) ? value : 'dashboard';
 }
 
+function healthChip(key, label) {
+  return `<span class="health-chip" data-health="${key}" data-state="pending"><i></i><span>${label}</span></span>`;
+}
+
 function shellMarkup() {
   return `<div class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><span class="brand-mark">A</span><div><strong>Aevra</strong><small>Local agent gateway</small></div></div>
+      <div class="brand"><span class="brand-mark">A</span><div><strong>Aevra <span id="app-version" class="app-version"></span></strong><small>Local agent gateway</small></div></div>
       <nav aria-label="Aevra admin">
         ${NAVIGATION.map(
           ([id, label]) =>
@@ -65,7 +68,10 @@ function shellMarkup() {
     <main class="main-shell">
       <header class="topbar">
         <div><span class="eyebrow">Local control plane</span><strong id="page-title">Dashboard</strong></div>
-        <div class="topbar-actions"><button type="button" id="open-requests">Requests</button></div>
+        <div class="topbar-actions">
+          <div class="health-cluster">${healthChip('core', 'Core')}${healthChip('worker', 'Worker')}${healthChip('mcp', 'MCP')}${healthChip('tunnel', 'Tunnel')}</div>
+          <button type="button" id="open-requests">Requests <b id="requests-count">0</b></button>
+        </div>
       </header>
       <div id="page" class="page"></div>
     </main>
@@ -142,6 +148,7 @@ function boot() {
   const root = document.querySelector('#app');
   root.innerHTML = shellMarkup();
   installGlobalActions();
+  startRuntimeStatus();
   startRequestWatch();
   void activate(pageFromHash(), { updateHash: false });
 }
