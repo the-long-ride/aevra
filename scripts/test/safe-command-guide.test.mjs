@@ -9,12 +9,13 @@ test('safe command matcher catalog covers Windows Linux and macOS conservatively
   for(const broad of ['shell:powershell','shell:bash','shell:sh'])assert.doesNotMatch(catalog,new RegExp(broad.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
 });
 
-test('guide renders platform tabs and copy controls from the shared catalog',()=>{
-  const app=readFileSync('apps/web/app.js','utf8');const html=readFileSync('apps/web/index.html','utf8');const manual=readFileSync('docs/user-manual/16-safe-command-matchers.md','utf8');const copy=readFileSync('scripts/copy-static.mjs','utf8');
+test('guide renders platform tabs individual copy controls and copy all',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');const v3=readFileSync('apps/web/app-v3.js','utf8');const html=readFileSync('apps/web/index.html','utf8');const manual=readFileSync('docs/user-manual/16-safe-command-matchers.md','utf8');const copy=readFileSync('scripts/copy-static.mjs','utf8');
   assert.match(html,/safe-command-matchers\.js[\s\S]*app\.js/);
   assert.match(app,/AevraSafeCommandMatchers/);
   assert.match(app,/data-safe-platform/);assert.match(app,/data-copy-matcher/);
   assert.match(app,/Windows/);assert.match(app,/Linux/);assert.match(app,/macOS/);
+  assert.match(v3,/data-copy-all-matchers/);assert.match(v3,/Copy all/);assert.match(v3,/matchers\.join\(['"]\\n['"]\)/);
   assert.match(manual,/not a security guarantee/i);
   assert.match(copy,/docs\/user-manual[\s\S]*dist\/apps\/web\/manual/);
 });
