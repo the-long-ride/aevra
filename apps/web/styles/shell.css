@@ -1,109 +1,9 @@
-#app {
+#app,
+.app-shell {
   min-height: 100vh;
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  min-height: 100vh;
-}
-
-.sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 16px 12px;
-  border-right: 1px solid var(--line);
-  background: #0b0b0c;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding: 2px 8px 12px;
-  border-bottom: 1px solid var(--line);
-}
-
-.brand-mark {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  font-weight: 800;
-}
-
-.brand div {
-  display: grid;
-  gap: 1px;
-}
-
-.brand strong {
-  font-size: 14px;
-}
-
-.app-version {
-  color: var(--muted);
-  font-family: "JetBrains Mono", Consolas, monospace;
-  font-size: 10px;
-  font-weight: 400;
-}
-
-.brand small,
-.sidebar small {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.sidebar nav {
-  display: grid;
-  gap: 3px;
-}
-
-.sidebar nav button {
-  width: 100%;
-  border-color: transparent;
-  background: transparent;
-  text-align: left;
-  color: #c8c8cc;
-}
-
-.sidebar nav button:hover,
-.sidebar nav button.active {
-  border-color: var(--line);
-  background: #171719;
-  color: var(--text);
-}
-
-.sidebar-foot {
-  margin-top: auto;
-  padding: 10px 8px 2px;
-  border-top: 1px solid var(--line);
-}
-
-.local-state {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.local-state i {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--success);
-  box-shadow: 0 0 0 3px rgb(114 212 154 / 10%);
-}
-
-.main-shell {
   min-width: 0;
 }
 
@@ -114,16 +14,55 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 60px;
-  padding: 10px 22px;
+  gap: 14px;
+  min-height: 58px;
+  padding: 9px 18px;
   border-bottom: 1px solid var(--line);
-  background: rgb(9 9 9 / 92%);
+  background: rgb(9 9 9 / 94%);
   backdrop-filter: blur(16px);
 }
 
-.topbar > div:first-child {
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.brand-mark {
   display: grid;
-  gap: 2px;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  font-weight: 800;
+}
+
+.brand > div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.brand strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.app-version {
+  color: var(--muted);
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 10px;
+  font-weight: 400;
 }
 
 .topbar-actions,
@@ -131,7 +70,11 @@
 .health-chip {
   display: flex;
   align-items: center;
-  gap: 7px;
+}
+
+.topbar-actions {
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .health-cluster {
@@ -191,15 +134,43 @@
   border-color: rgb(232 187 99 / 38%);
 }
 
-.eyebrow {
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.safe-mode-banner {
+  padding: 7px 18px;
+  border-bottom: 1px solid rgb(255 100 100 / 30%);
+  background: rgb(95 20 20 / 24%);
+  color: #ffb0b0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
 }
 
-#page-title {
-  font-size: 14px;
+.top-nav {
+  position: sticky;
+  z-index: 19;
+  top: 58px;
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  padding: 6px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgb(11 11 12 / 94%);
+  backdrop-filter: blur(14px);
+}
+
+.top-nav button {
+  flex: 0 0 auto;
+  border-color: transparent;
+  background: transparent;
+  padding: 6px 9px;
+  color: #b9b9bf;
+  white-space: nowrap;
+}
+
+.top-nav button:hover,
+.top-nav button.active {
+  border-color: var(--line);
+  background: #171719;
+  color: var(--text);
 }
 
 .page {
@@ -262,33 +233,17 @@
   }
 }
 
-@media (max-width: 860px) {
-  .app-shell {
-    grid-template-columns: 1fr;
+@media (max-width: 640px) {
+  .topbar {
+    padding-inline: 12px;
   }
 
-  .sidebar {
-    position: static;
-    height: auto;
-    padding-bottom: 8px;
-  }
-
-  .sidebar nav {
-    display: flex;
-    overflow-x: auto;
-  }
-
-  .sidebar nav button {
-    width: auto;
-    white-space: nowrap;
-  }
-
-  .sidebar-foot {
+  .brand small {
     display: none;
   }
 
-  .topbar {
-    top: 0;
+  .top-nav {
+    padding-inline: 10px;
   }
 
   .page {
