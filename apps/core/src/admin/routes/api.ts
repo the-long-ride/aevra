@@ -62,6 +62,7 @@ const GUIDE_CHAPTERS=[
   {slug:'security-authentication',title:'Security and authentication',file:'13-security-authentication.md'},
   {slug:'troubleshooting',title:'Troubleshooting',file:'14-troubleshooting.md'},
   {slug:'explore',title:'Explore Aevra',file:'15-explore.md'},
+  {slug:'safe-command-matchers',title:'Safe command matchers',file:'16-safe-command-matchers.md'},
 ] as const;
 const DEFAULT_ONBOARDING={completed:false,completedSections:[] as string[]};
 function onboardingState(value:any){
@@ -97,7 +98,7 @@ export async function handleAdminApi(req:IncomingMessage,res:ServerResponse,url:
 
     if(p==='/api/permissions'&&method==='GET'){send(res,200,context.permissions?.list?.()??[]);return true;}
     if(p==='/api/permissions'&&method==='POST'){const x=await body(req);if(criticalPersistentRule(x)){send(res,400,{error:{code:'CRITICAL_RULE_FORBIDDEN',message:'Critical operations cannot receive persistent always-allow rules'}});return true;}const rule={id:x.id??`perm_${randomUUID()}`,...x,createdAt:x.createdAt??new Date().toISOString()};context.permissions.upsert(rule);send(res,200,{ok:true,revision:Date.now(),rule});return true;}
-    m=p.match(/^\/api\/permissions\/([^/]+)$/);if(m&&method==='DELETE'){context.permissions?.delete(m[1]);send(res,200,{ok:true,revision:Date.now()});return true;}
+    m=p.match(/^\/api\/permissions\/([^/]+)$/);if(m&&method==='DELETE'){const removed=context.permissions?.get?.(m[1])??null;context.permissions?.delete(m[1]);send(res,200,{ok:true,removed});return true;}
 
     if(p==='/api/sessions'&&method==='GET'){send(res,200,context.sessions?.list?.()??[]);return true;}
     m=p.match(/^\/api\/sessions\/([^/]+)\/revoke$/);if(m&&method==='POST'){context.sessions?.revoke?.(m[1]);send(res,200,{ok:true,revision:Date.now()});return true;}
@@ -134,6 +135,7 @@ export async function handleAdminApi(req:IncomingMessage,res:ServerResponse,url:
     if(p==='/api/onboarding'&&method==='GET'){send(res,200,onboardingState(context.settings?.get?.('onboarding.state',DEFAULT_ONBOARDING)??DEFAULT_ONBOARDING));return true;}
     if(p==='/api/onboarding'&&method==='PATCH'){const x=await body(req);const state=onboardingState(x);context.settings?.set?.('onboarding.state',state);send(res,200,{ok:true,revision:revision(context,'onboarding.state'),state});return true;}
     if(p==='/api/guide'&&method==='GET'){send(res,200,GUIDE_CHAPTERS);return true;}
+    if(p==='/api/oauth/clients'&&method==='GET'){send(res,200,context.oauth?.listClients?.()??[]);return true;}
     if(p==='/api/oauth/requests'&&method==='GET'){send(res,200,context.oauth?.listPendingAuthorizations?.()??[]);return true;}
     m=p.match(/^\/api\/oauth\/requests\/([^/]+)\/(approve|deny)$/);
     if(m&&method==='POST'){const id=decodeURIComponent(m[1]);const decision=m[2];const value=decision==='approve'?context.oauth?.approveAuthorization?.(id):context.oauth?.denyAuthorization?.(id);if(!value){send(res,404,{error:{code:'OAUTH_REQUEST_NOT_FOUND',message:'OAuth authorization request not found'}});return true;}context.audit?.append?.({actor:'admin',operation:`oauth.authorize.${decision}`,target:id,result:'ok',redactionCount:0,class:'security'});send(res,200,{ok:true,request:value});return true;}
