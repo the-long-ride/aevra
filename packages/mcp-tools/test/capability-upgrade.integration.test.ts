@@ -8,8 +8,10 @@ import {WorkspaceRepository} from '../../store/src/workspaces.js';
 import {SessionRepository} from '../../store/src/sessions.js';
 import {ApprovalRepository} from '../../store/src/approvals.js';
 import {AuditRepository} from '../../store/src/audit.js';
+import {PermissionRepository} from '../../store/src/permissions.js';
 import {WorkspaceService} from '../../../apps/core/src/workspaces/workspace-service.js';
 import {CapabilityProfileService} from '../../../apps/core/src/policy/capabilities.js';
+import {PermissionEngine} from '../../../apps/core/src/policy/permissions.js';
 import {SessionManager} from '../../../apps/core/src/sessions/session-manager.js';
 import {ReadVersionCache} from '../../../apps/core/src/operations/read-version-cache.js';
 import {ApprovalService} from '../../../apps/core/src/approvals/approval-service.js';
@@ -17,18 +19,48 @@ import {AuditService} from '../../../apps/core/src/audit/audit-service.js';
 import {McpToolService} from '../src/service.js';
 
 function make(){
-  const db=AevraDatabase.open(':memory:');const workspaces=new WorkspaceService(new WorkspaceRepository(db.raw()));const workspace=workspaces.create({name:'Aevra',hostRoot:mkdtempSync(path.join(os.tmpdir(),'aevra-cap-'))});const profiles=new CapabilityProfileService(db.raw());const sessions=new SessionManager(new SessionRepository(db.raw()),profiles);const approvals=new ApprovalService(new ApprovalRepository(db.raw()),new AuditService(new AuditRepository(db.raw())),{fastWaitMs:0,lifetimeMs:60_000,lifetimeByRiskMs:{}});approvals.setSessionIdentityResolver(id=>sessions.connectionIdentity(id));const writes:any[]=[];const operations:any={write:async(sessionId:string,input:any)=>{writes.push({sessionId,input});return{path:input.path,hash:'sha256:test'};},runCommand:async()=>({ok:true,value:{exitCode:0,signal:null,stdout:'ok',stderr:'',durationMs:1}}),classify:()=>({family:'npm:test',effect:'BUILD_OUTPUT',risk:'LOW',outputKeys:[]})};const service=new McpToolService(sessions,workspaces,{execute:async()=>({ok:true,value:{}})} as any,new ReadVersionCache(),approvals,{approvals,operations});return{db,workspace,profiles,sessions,approvals,service,writes};
+  const db=AevraDatabase.open(':memory:');
+  const workspaces=new WorkspaceService(new WorkspaceRepository(db.raw()));
+  const workspace=workspaces.create({name:'Aevra',hostRoot:mkdtempSync(path.join(os.tmpdir(),'aevra-cap-'))});
+  const profiles=new CapabilityProfileService(db.raw());
+  const sessions=new SessionManager(new SessionRepository(db.raw()),profiles);
+  const approvals=new ApprovalService(new ApprovalRepository(db.raw()),new AuditService(new AuditRepository(db.raw())),{fastWaitMs:0,lifetimeMs:60_000,lifetimeByRiskMs:{}});
+  approvals.setSessionIdentityResolver(id=>sessions.connectionIdentity(id));
+  const permissionRepo=new PermissionRepository(db.raw()),permissions=new PermissionEngine(permissionRepo);
+  const writes:any[]=[];
+  const operations:any={
+    write:async(sessionId:string,input:any,authorization:any)=>{writes.push({sessionId,input,authorization});return{path:input.path,hash:'sha256:test'};},
+    runCommand:async()=>({ok:true,value:{exitCode:0,signal:null,stdout:'ok',stderr:'',durationMs:1}}),
+    classify:(tokens:string[])=>({family:tokens[0]==='git'?'git:status':'npm:test',effect:'BUILD_OUTPUT',risk:'LOW',outputKeys:[]}),
+  };
+  const service=new McpToolService(sessions,workspaces,{execute:async()=>({ok:true,value:{}})} as any,new ReadVersionCache(),approvals,{approvals,operations,permissions});
+  return{db,workspace,profiles,sessions,approvals,service,writes,permissionRepo};
 }
+function identity(actor:string,subject:string){return{actor,subject,issuer:'https://example.test',audience:'https://example.test/mcp',expiresAt:new Date(Date.now()+60_000).toISOString()};}
+async function readOnlySession(x:ReturnType<typeof make>,actor:string,subject:string){x.profiles.mapActor(actor,x.workspace.id,'read-only','auto');const s=x.sessions.create(identity(actor,subject));const admission=await x.sessions.switchWorkspace(s.id,x.workspace.id);assert.equal(admission.status,'admitted');return s;}
 
-test('read-only OAuth write requests one coding-session upgrade, reconnect reuses it, and approval resumes write',async()=>{
-  const x=make();const identity={actor:'oauth:ChatGPT',subject:'grant-a',issuer:'https://example.test',audience:'https://example.test/mcp',expiresAt:new Date(Date.now()+60_000).toISOString()};const first=x.sessions.create(identity);x.sessions.grantConnectionWorkspace(first.id,x.workspace.id,'read-only');const blocked:any=await x.service.call(first.id,'file_write',{path:'/a.txt',content:'hello'});assert.equal(blocked.status,'approval_pending');const ticket=x.approvals.status(blocked.requestId)!;const payload=ticket.payload as any;assert.equal(ticket.operation.family,'workspace:capability-upgrade');assert.equal(payload.profileId,'coding-session');assert.deepEqual(payload.addedCapabilities.sort(),['commands.run','files.write']);assert.equal(x.writes.length,0);
-  x.sessions.disconnect(first.id);const second=x.sessions.create(identity);assert.equal(x.sessions.activeLease(second.id)?.workspaceId,x.workspace.id,'workspace should restore before upgrade approval');const duplicate:any=await x.service.call(second.id,'file_write',{path:'/a.txt',content:'hello'});assert.equal(duplicate.requestId,blocked.requestId,'same OAuth grant and workspace must reuse one upgrade ticket');x.approvals.approve(ticket.id,'once');assert.ok(x.sessions.activeLease(second.id)?.capabilities.includes('files.write'));assert.ok(x.sessions.activeLease(second.id)?.capabilities.includes('commands.run'));const resumed:any=await x.service.call(second.id,'approval_wait',{requestId:ticket.id});assert.equal(resumed.path,'/a.txt');assert.equal(x.writes.length,1);x.db.close();
+test('remembered files.write rule is effective without broadening the baseline profile',async()=>{
+  const x=make();const s=await readOnlySession(x,'connector:ChatGPT','conn-a');
+  x.permissionRepo.upsert({id:'write',effect:'allow',capability:'files.write',scope:'workspace',workspaceId:x.workspace.id,actor:'connector:ChatGPT',matcher:'*',createdAt:new Date().toISOString()});
+  const status:any=await x.service.call(s.id,'aevra_status');
+  assert.deepEqual(status.baselineCapabilities.sort(),['files.read','files.search','git.read']);
+  assert.ok(status.effectiveCapabilities.includes('files.write'));
+  assert.deepEqual(status.capabilities,status.effectiveCapabilities);
+  await x.service.call(s.id,'file_write',{path:'/a.txt',content:'hello'});
+  assert.equal(x.writes.length,1);assert.equal(x.writes[0].authorization.capability,'files.write');
+  assert.ok(!x.sessions.activeLease(s.id)?.capabilities.includes('files.write'),'baseline lease must stay read-only');x.db.close();
 });
 
-test('minimum profile ladder is coding-session, developer, then full-workspace',async()=>{
-  const x=make();const s=x.sessions.create({actor:'oauth:ChatGPT',subject:'grant-b',issuer:'i',audience:'a',expiresAt:'x'});x.sessions.grantConnectionWorkspace(s.id,x.workspace.id,'read-only');const command:any=await x.service.call(s.id,'command_run',{executable:'npm',args:['test']});assert.equal((x.approvals.status(command.requestId)!.payload as any).profileId,'coding-session');x.approvals.deny(command.requestId);const commit:any=await x.service.call(s.id,'git_commit',{message:'x'});assert.equal((x.approvals.status(commit.requestId)!.payload as any).profileId,'developer');x.approvals.deny(commit.requestId);const del:any=await x.service.call(s.id,'file_delete',{path:'/a',recursive:false});assert.equal((x.approvals.status(del.requestId)!.payload as any).profileId,'full-workspace');x.db.close();
+test('static connector and OAuth connector request the exact missing capability',async()=>{
+  for(const [actor,subject] of [['connector:ChatGPT','conn-b'],['oauth:Claude','grant-b']] as const){
+    const x=make();const s=await readOnlySession(x,actor,subject);const blocked:any=await x.service.call(s.id,'file_write',{path:'/a.txt',content:'hello'});assert.equal(blocked.status,'approval_pending');const ticket=x.approvals.status(blocked.requestId)!;const payload=ticket.payload as any;assert.equal(ticket.operation.capability,'files.write');assert.equal(ticket.operation.family,'capability:files.write');assert.equal(payload.permissionMatcher,'*');assert.equal(payload.requestedCapability,'files.write');assert.equal(payload.profileId,undefined);assert.equal(x.writes.length,0);x.db.close();
+  }
 });
 
-test('static connectors remain fixed-profile and do not auto-escalate',async()=>{
-  const x=make();x.profiles.mapActor('connector:CLI',x.workspace.id,'read-only','auto');const s=x.sessions.create({actor:'connector:CLI',subject:'conn',issuer:'aevra:connector',audience:'aevra',expiresAt:'x'});const admission=await x.sessions.switchWorkspace(s.id,x.workspace.id);assert.equal(admission.status,'admitted');await assert.rejects(()=>x.service.call(s.id,'file_write',{path:'/a.txt',content:'x'}),/files\.write|CAPABILITY_REQUIRED/);assert.equal(x.approvals.list().filter(t=>t.operation.family==='workspace:capability-upgrade').length,0);x.db.close();
+test('allow once resumes exactly one write without granting commands.run',async()=>{
+  const x=make();const s=await readOnlySession(x,'oauth:ChatGPT','grant-c');const blocked:any=await x.service.call(s.id,'file_write',{path:'/a.txt',content:'hello'});x.approvals.approve(blocked.requestId,'once');const resumed:any=await x.service.call(s.id,'approval_wait',{requestId:blocked.requestId});assert.equal(resumed.path,'/a.txt');assert.equal(x.writes.length,1);assert.ok(!x.sessions.activeLease(s.id)?.capabilities.includes('files.write'));assert.ok(!x.sessions.activeLease(s.id)?.capabilities.includes('commands.run'));x.db.close();
+});
+
+test('command permission is matcher-specific',async()=>{
+  const x=make();const s=await readOnlySession(x,'connector:ChatGPT','conn-d');x.permissionRepo.upsert({id:'git-status',effect:'allow',capability:'commands.run',scope:'workspace',workspaceId:x.workspace.id,actor:'connector:ChatGPT',matcher:'git:status',createdAt:new Date().toISOString()});const status:any=await x.service.call(s.id,'aevra_status');assert.ok(status.effectiveCapabilities.includes('commands.run'));assert.deepEqual(status.commandMatchers,['git:status']);await x.service.call(s.id,'command_run',{executable:'git',args:['status']});const blocked:any=await x.service.call(s.id,'command_run',{executable:'npm',args:['test']});assert.equal(blocked.status,'approval_pending');assert.equal(x.approvals.status(blocked.requestId)!.operation.family,'npm:test');x.db.close();
 });
