@@ -1,5 +1,5 @@
 (()=>{
-  const h=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]??c));
+  const h=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
   const nativeNotification=window.Notification;
   const seenApprovals=new Set(),seenOauth=new Set();
   let dashboardBusy=false,requestBusy=false;
