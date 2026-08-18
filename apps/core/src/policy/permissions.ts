@@ -40,19 +40,19 @@ export class PermissionEngine{
     const commandMatchers:string[]=[];
 
     for(const capability of capabilityOrder){
-      const capabilityRules=rules.filter(r=>r.capability===capability);
-      const wildcardDenied=capabilityRules.some(r=>r.effect==='deny'&&r.matcher==='*');
+      const capabilityRules=rules.filter(r=>r.capability===capability),denies=capabilityRules.filter(r=>r.effect==='deny'),allows=capabilityRules.filter(r=>r.effect==='allow');
+      const wildcardDenied=denies.some(r=>r.matcher==='*');
       if(baseline.has(capability)&&!wildcardDenied)effective.add(capability);
       if(capability==='commands.run'){
-        const allows=capabilityRules.filter(r=>r.effect==='allow').map(r=>r.matcher);
-        for(const matcher of [...new Set(allows)]){
-          if(capabilityRules.some(r=>r.effect==='deny'&&matches(r.matcher,matcher)))continue;
+        for(const matcher of [...new Set(allows.map(r=>r.matcher))]){
+          if(denies.some(r=>matches(r.matcher,matcher)))continue;
           commandMatchers.push(matcher);
         }
         if(commandMatchers.length)effective.add('commands.run');
         continue;
       }
-      if(!wildcardDenied&&capabilityRules.some(r=>r.effect==='allow'&&r.matcher==='*'))effective.add(capability);
+      const hasAllowedOperation=allows.some(allow=>!denies.some(deny=>matches(deny.matcher,allow.matcher)));
+      if(hasAllowedOperation)effective.add(capability);
     }
     return{effectiveCapabilities:capabilityOrder.filter(capability=>effective.has(capability)),commandMatchers};
   }
