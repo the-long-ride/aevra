@@ -13,6 +13,8 @@ function bad(res:ServerResponse,message:string){send(res,400,{error:{code:'INVAL
 export async function handleBulkAdminAction(req:IncomingMessage,res:ServerResponse,url:URL,context:AdminApiContext,currentAdminSession?:string):Promise<boolean>{
   const path=url.pathname,method=req.method??'GET';
   try{
+    const isKnownMutation=(path==='/api/permissions/bulk'&&method==='POST')||(path==='/api/audit'&&method==='DELETE')||(path==='/api/sessions/revoke-others'&&method==='POST');
+    if(isKnownMutation&&context.safeMode?.()){send(res,503,{error:{code:'SAFE_MODE',message:'Administrative mutations are disabled while Aevra is in safe mode'}});return true;}
     if(path==='/api/permissions/bulk'&&method==='POST'){
       const input=await body(req),effect=input.effect==='deny'?'deny':'allow',scope=String(input.scope??'workspace'),matcher=String(input.matcher??'*').trim()||'*';
       const capabilities=strings(input.capabilities).filter((value):value is Capability=>CAPABILITIES.has(value as Capability));
