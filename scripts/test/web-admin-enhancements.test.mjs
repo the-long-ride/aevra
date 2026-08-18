@@ -16,7 +16,8 @@ test('admin shell loads enhancement assets after the base app',()=>{
 
 test('enhanced admin UX covers batch permissions workspace mounts and cleanup',()=>{
   const app=readFileSync('apps/web/admin-enhancements.js','utf8');
-  for(const text of ['All connectors','Selected connected connectors','External mounts','Revoke all others','Clear history'])assert.match(app,new RegExp(text,'i'));
+  for(const text of ['All connectors','Selected connectors','External mounts','Revoke all others','Clear history'])assert.match(app,new RegExp(text,'i'));
+  assert.doesNotMatch(app,/Selected connected connectors/i);
   assert.match(app,/\/api\/permissions\/bulk/);
   assert.match(app,/\/api\/sessions\/revoke-others/);
   assert.match(app,/\/api\/audit/);
