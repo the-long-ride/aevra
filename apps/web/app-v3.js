@@ -63,7 +63,7 @@
     const page=document.querySelector('#page'),onboarding=page?.querySelector('.onboarding-panel');if(!page||!onboarding)return;guideButtons();if(onboarding.dataset.v3Layout)return;onboarding.dataset.v3Layout='true';onboarding.open=true;
   }
   function makeDashboardCollapsible(){
-    const page=document.querySelector('#page');if(!activeDashboard()||!page)return;const onboarding=page.querySelector(':scope > .onboarding-panel');if(onboarding){onboarding.classList.add('dashboard-section');onboarding.open=true;}
+    const page=document.querySelector('#page');if(!activeDashboard()||!page)return;const onboarding=page.querySelector(':scope > .onboarding-panel');if(onboarding&&!onboarding.classList.contains('dashboard-section')){onboarding.classList.add('dashboard-section');onboarding.open=true;}
     const candidates=[...page.querySelectorAll(':scope > .dashboard-remote, :scope > .v2-card')];for(const node of candidates){if(node.parentElement?.matches('details.dashboard-section'))continue;const title=node.querySelector('.section-heading>span,.v2-card-head h2')?.textContent?.trim()||'Section',details=document.createElement('details'),summary=document.createElement('summary');details.className='dashboard-section';details.open=true;summary.className='dashboard-section-summary';summary.innerHTML=`<span>${h(title)}</span><span class="dashboard-section-chevron" aria-hidden="true">⌄</span>`;node.before(details);details.append(summary,node);node.classList.add('dashboard-section-body');}
   }
 
