@@ -3,6 +3,7 @@ import type {RiskTier,NormalizedOperation} from '../../../../packages/protocol/s
 import type {ApprovalRepository} from '../../../../packages/store/src/approvals.js';
 import type {AuditService} from '../audit/audit-service.js';
 import {notifySystem} from '../../../../packages/notifications/src/notify.js';
+import {presentApproval} from './request-presentation.js';
 
 export type ApprovalState='PENDING'|'APPROVED'|'DENIED'|'EXPIRED'|'CANCELLED'|'EXECUTING'|'CONTEXT_CHANGED'|'SUCCEEDED'|'FAILED'|'INTERRUPTED';
 export interface FrozenOperationTicket{id:string;actor:string;sessionId:string;workspaceId:string;operation:NormalizedOperation;payload?:unknown;expectedState:Record<string,string>;risk:RiskTier;state:ApprovalState;expiresAt:string;createdAt?:string;cancellationReason?:string;decisionScope?:string;}
@@ -20,7 +21,7 @@ export class ApprovalService{
   setSessionIdentityResolver(resolver:SessionIdentityResolver){this.sessionIdentityResolver=resolver;}
 
   async request(input:Omit<FrozenOperationTicket,'id'|'state'|'expiresAt'>){
-    const reusable=this.reusableWorkspaceRequest(input);
+    const reusable=this.reusableConnectionRequest(input);
     if(reusable){
       const latest=this.status(reusable.id);
       if(latest?.state==='APPROVED')return{status:'approved' as const,requestId:latest.id};
@@ -30,14 +31,15 @@ export class ApprovalService{
     const t:FrozenOperationTicket={...input,id:`req_${randomUUID()}`,state:'PENDING',expiresAt:new Date(Date.now()+lifetime).toISOString(),createdAt:new Date().toISOString()};
     this.repo.put(t);
     this.audit.append({actor:t.actor,sessionId:t.sessionId,workspaceId:t.workspaceId,operation:t.operation.family,risk:t.risk,decision:'approval_requested',result:'pending',redactionCount:0});
-    notifySystem('Aevra approval required',`${t.operation.family} in workspace ${t.workspaceId}`);
+    const view=presentApproval(t),parts=[view.action,view.target,view.preview].filter(Boolean);
+    notifySystem(`Aevra: ${view.title}`,parts.join(' · '));
     if(this.config.fastWaitMs>0)await new Promise(r=>setTimeout(r,this.config.fastWaitMs));
     const latest=this.status(t.id)!;
     if(latest.state==='APPROVED')return{status:'approved' as const,requestId:t.id};
     return{status:'approval_pending' as const,requestId:t.id,expiresInSeconds:Math.max(0,Math.ceil((Date.parse(t.expiresAt)-Date.now())/1000))};
   }
 
-  list(){return this.repo.list().filter(Boolean) as FrozenOperationTicket[];}
+  list(){return (this.repo.list().filter(Boolean) as FrozenOperationTicket[]).map(ticket=>({...ticket,presentation:presentApproval(ticket)}));}
   status(id:string):FrozenOperationTicket|null{
     const t=this.repo.get(id) as FrozenOperationTicket|null;
     if(t&&['PENDING','APPROVED'].includes(t.state)&&Date.parse(t.expiresAt)<=Date.now()){
@@ -48,6 +50,7 @@ export class ApprovalService{
   }
   approve(id:string,scope='once'){
     const t=this.required(id);if(t.state!=='PENDING')throw new Error(`Cannot approve ${t.state}`);
+    if(['workspace:capability-upgrade','skills:read'].includes(t.operation.family)&&scope!=='once')throw new Error('This request is connection/session scoped and only supports one-time local approval');
     t.state='APPROVED';t.decisionScope=scope;this.repo.put(t);
     this.audit.append({actor:t.actor,sessionId:t.sessionId,workspaceId:t.workspaceId,operation:t.operation.family,risk:t.risk,decision:`approved:${scope}`,result:'armed',redactionCount:0});
     this.approvedHandler?.(t);return t;
@@ -67,11 +70,13 @@ export class ApprovalService{
     catch(e){t.state='FAILED';this.repo.put(t);this.audit.append({actor:t.actor,sessionId:t.sessionId,workspaceId:t.workspaceId,operation:t.operation.family,risk:t.risk,decision:'resume',result:'FAILED',redactionCount:0});throw e;}
   }
 
-  private reusableWorkspaceRequest(input:Omit<FrozenOperationTicket,'id'|'state'|'expiresAt'>){
-    if(input.operation.family!=='workspace:select'||!input.actor.startsWith('oauth:')||!this.sessionIdentityResolver)return null;
+  private reusableConnectionRequest(input:Omit<FrozenOperationTicket,'id'|'state'|'expiresAt'>){
+    if(!['workspace:select','workspace:capability-upgrade'].includes(input.operation.family)||!input.actor.startsWith('oauth:')||!this.sessionIdentityResolver)return null;
     const current=this.sessionIdentityResolver(input.sessionId);if(!current)return null;
-    return this.list().find(ticket=>{
-      if(ticket.operation.family!=='workspace:select'||ticket.workspaceId!==input.workspaceId||ticket.actor!==input.actor||!['PENDING','APPROVED'].includes(ticket.state))return false;
+    const requestedProfile=(input.payload as any)?.profileId;
+    return (this.repo.list().filter(Boolean) as FrozenOperationTicket[]).find(ticket=>{
+      if(ticket.operation.family!==input.operation.family||ticket.workspaceId!==input.workspaceId||ticket.actor!==input.actor||!['PENDING','APPROVED'].includes(ticket.state))return false;
+      if(input.operation.family==='workspace:capability-upgrade'&&(ticket.payload as any)?.profileId!==requestedProfile)return false;
       const existing=this.sessionIdentityResolver!(ticket.sessionId);
       return Boolean(existing&&existing.actor===current.actor&&existing.subject===current.subject);
     })??null;
