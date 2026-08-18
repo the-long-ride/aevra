@@ -43,7 +43,6 @@
     for(const card of document.querySelectorAll('#request-drawer .request-card')){
       const button=card.querySelector('[data-request-approve],[data-request-deny]');const id=button?.dataset.requestApprove??button?.dataset.requestDeny;if(!id)continue;const item=byId.get(String(id));if(!item)continue;const p=item.presentation??{};const heading=card.querySelector('.request-card-head b');if(heading&&p.title)heading.textContent=p.title;
       let detail=card.querySelector('.request-detail');if(!detail){detail=document.createElement('div');detail.className='request-detail';card.querySelector('.request-actions')?.before(detail);}detail.innerHTML=`<b>${h(p.action??item.operation?.family??'Operation')}</b><span>${h(p.target??'')}</span>${p.preview?`<code>${h(p.preview)}</code>`:''}`;
-      if(item.operation?.family==='workspace:capability-upgrade'){const actions=card.querySelector('.request-actions');if(actions&&!actions.dataset.v3Upgrade){actions.dataset.v3Upgrade='true';actions.innerHTML=`<button type="button" data-request-deny="${h(id)}">Deny</button><button type="button" class="primary" data-request-approve="${h(id)}" data-scope="once">Allow</button>`;}}
     }
   }
 
