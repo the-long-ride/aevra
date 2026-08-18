@@ -1,71 +1,104 @@
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
-import {readFileSync} from 'node:fs';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-test('admin enhancement JavaScript parses before shipping',()=>{
-  const result=spawnSync(process.execPath,['--check','apps/web/admin-enhancements.js'],{encoding:'utf8'});
-  assert.equal(result.status,0,result.stderr||result.stdout);
+const permissions = readFileSync('apps/web/pages/permissions.js', 'utf8');
+const permissionBulk = readFileSync(
+  'apps/web/components/permission-bulk.js',
+  'utf8',
+);
+const workspaces = readFileSync('apps/web/pages/workspaces.js', 'utf8');
+const workspaceDetail = readFileSync(
+  'apps/web/components/workspace-detail.js',
+  'utf8',
+);
+const sessions = readFileSync('apps/web/pages/sessions.js', 'utf8');
+const audit = readFileSync('apps/web/pages/audit.js', 'utf8');
+const settings = readFileSync('apps/web/pages/settings.js', 'utf8');
+const table = readFileSync('apps/web/components/data-table.js', 'utf8');
+
+test('shared admin DataTable keeps search filters pagination and row actions', () => {
+  for (const marker of [
+    'data-dt-search',
+    'data-dt-filter',
+    'data-dt-size',
+    'data-dt-page',
+    'data-table-action',
+  ]) {
+    assert.match(table, new RegExp(marker));
+  }
+  assert.match(table, /pageSizes\s*\?\?/);
+  assert.match(table, /\[10, 25, 50, 100\]/);
 });
 
-test('admin shell loads enhancement assets after the base app',()=>{
-  const html=readFileSync('apps/web/index.html','utf8');
-  assert.match(html,/admin-enhancements\.css/);
-  assert.match(html,/app\.js[\s\S]*admin-enhancements\.js/);
+test('permission bulk editor retains guided targeting and command matcher controls', () => {
+  for (const text of [
+    'Who gets access?',
+    'Where does it apply?',
+    'What can they do?',
+    'Rule details',
+    'Select all',
+    'Clear',
+    'Create 0 rules',
+    'All connectors',
+    'Selected connectors',
+  ]) {
+    assert.match(permissionBulk, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+  }
+  assert.doesNotMatch(permissionBulk, /Selected connected connectors/i);
+  assert.match(permissionBulk, /\/api\/permissions\/bulk/);
+  assert.match(permissionBulk, /Command matchers/);
+  assert.match(permissionBulk, /Broad command access/);
 });
 
-test('enhanced admin UX covers batch permissions workspace mounts and cleanup',()=>{
-  const app=readFileSync('apps/web/admin-enhancements.js','utf8');
-  for(const text of ['All connectors','Selected connectors','External mounts','Revoke all others','Clear history'])assert.match(app,new RegExp(text,'i'));
-  assert.doesNotMatch(app,/Selected connected connectors/i);
-  assert.match(app,/\/api\/permissions\/bulk/);
-  assert.match(app,/\/api\/sessions\/revoke-others/);
-  assert.match(app,/\/api\/audit/);
-  assert.match(app,/\/admissions/);
-  assert.match(app,/\.remote-card/);
+test('Permissions uses the shared table and retains all requested filters', () => {
+  assert.match(permissions, /mountDataTable/);
+  assert.match(permissions, /id:\s*'permissions-admin'/);
+  assert.match(permissions, /Search permissions/);
+  for (const label of ['Effect', 'Capability', 'Scope', 'Connector / actor']) {
+    assert.match(permissions, new RegExp(label.replace('/', '\\/')));
+  }
+  assert.match(permissions, /Permission revoked/);
 });
 
-test('permission bulk modal uses a wide guided layout with readable selection controls',()=>{
-  const app=readFileSync('apps/web/admin-enhancements.js','utf8');
-  const css=readFileSync('apps/web/admin-enhancements.css','utf8');
-  for(const text of ['Who gets access?','Where does it apply?','What can they do?','Rule details','Select all','Clear','Create 0 rules'])assert.match(app,new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'));
-  assert.match(app,/<span>1<\/span><div><h3>Who gets access\?<\/h3>/);
-  assert.match(app,/<span>2<\/span><div><h3>Where does it apply\?<\/h3>/);
-  assert.match(app,/<span>3<\/span><div><h3>What can they do\?<\/h3>/);
-  assert.match(app,/<span>4<\/span><div><h3>Rule details<\/h3>/);
-  assert.doesNotMatch(app,/<span>[1-4]<\/span><div><h3>[1-4]\./);
-  assert.match(app,/function isConnectorActor\(actor\)/);
-  assert.match(app,/connected=sessions\.filter\(item=>isConnectorActor\(item\.actor\)\)/);
-  assert.match(app,/data-enh-target-card/);
-  assert.match(app,/data-enh-scope-card/);
-  assert.match(app,/data-enh-select-all-capabilities/);
-  assert.match(app,/data-enh-clear-capabilities/);
-  assert.match(app,/data-enh-create-rules/);
-  assert.match(css,/\.enh-modal\.permission-bulk\{[^}]*width:min\(1240px,calc\(100vw - 32px\)\)/);
-  assert.match(css,/\.enh-permission-layout/);
-  assert.match(css,/\.enh-choice-cards/);
-  assert.match(css,/\.enh-capability-grid/);
-  assert.match(css,/\.enh-rule-summary/);
+test('Workspaces uses shared pagination search and external mount management', () => {
+  assert.match(workspaces, /mountDataTable/);
+  assert.match(workspaces, /id:\s*'workspaces-admin'/);
+  assert.match(workspaces, /Search workspaces/);
+  assert.match(workspaces, /External mounts/);
+  assert.match(workspaces, /Details/);
+  assert.match(workspaces, /Remove/);
+  assert.match(workspaceDetail, /\/mounts/);
+  assert.match(workspaceDetail, /\/admission/);
+  assert.match(workspaceDetail, /Danger zone/);
 });
 
-test('permissions workspaces and sessions use shared searchable filterable paginated tables',()=>{
-  const app=readFileSync('apps/web/admin-enhancements.js','utf8');
-  for(const id of ['permissions-admin','workspaces-admin','remote-sessions-admin','local-sessions-admin'])assert.match(app,new RegExp(id));
-  assert.match(app,/window\.AevraDataTable\.mount/);
-  for(const label of ['Effect','Capability','Scope','Connector / actor','External mounts','Workspace state'])assert.match(app,new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
-  for(const placeholder of ['Search permissions','Search workspaces','Search remote sessions','Search admin sessions'])assert.match(app,new RegExp(placeholder));
+test('Sessions keeps remote Actor and Workspace state filters plus local-session search', () => {
+  assert.match(sessions, /id:\s*'remote-sessions-admin'/);
+  assert.match(sessions, /Search remote sessions/);
+  assert.match(sessions, /Actor/);
+  assert.match(sessions, /Workspace state/);
+  assert.match(sessions, /id:\s*'local-sessions-admin'/);
+  assert.match(sessions, /Search admin sessions/);
+  assert.match(sessions, /Revoke all others/);
 });
 
-test('v2 shell does not shadow enhanced admin pages or keep duplicate renderers',()=>{
-  const v2=readFileSync('apps/web/app-v2.js','utf8');
-  assert.match(v2,/managedPages=new Set\(\['dashboard','processes','changes'\]\)/);
-  for(const page of ['workspaces','permissions','sessions','audit'])assert.doesNotMatch(v2,new RegExp(`page==='${page}'`));
-  for(const fn of ['renderWorkspaces','openWorkspaceModal','renderPermissions','openPermissionModal','renderSessions','openSessionWorkspaceModal','renderAudit'])assert.doesNotMatch(v2,new RegExp(`function ${fn}\\b|async function ${fn}\\b`));
-  assert.doesNotMatch(v2,/if\(jump\)activate\(jump\)/);
-  assert.match(v2,/CSS\.escape\(jump\)/);
+test('Audit keeps integrity export search and destructive clear confirmation', () => {
+  assert.match(audit, /\/api\/audit\/verify/);
+  assert.match(audit, /format=jsonl/);
+  assert.match(audit, /Filter actor, operation, or target/);
+  assert.match(audit, /Clear history/);
+  assert.match(audit, /Permanently clear all audit event history/);
 });
 
-test('v2 stylesheet drops styles used only by removed duplicate admin pages',()=>{
-  const css=readFileSync('apps/web/app-v2.css','utf8');
-  for(const selector of ['workspace-summary','modal-section','modal-form','modal-details','audit-integrity','button-link','cell-primary'])assert.doesNotMatch(css,new RegExp(`\\.${selector}\\b`));
+test('Settings keeps execution policy network environment secrets and Cloudflare controls', () => {
+  for (const endpoint of [
+    '/api/execution-settings',
+    '/api/policy/command-families',
+    '/api/policy/network-rules',
+    '/api/environment-profiles',
+    '/api/secret-references',
+  ]) {
+    assert.match(settings, new RegExp(endpoint.replaceAll('/', '\\/')));
+  }
 });
