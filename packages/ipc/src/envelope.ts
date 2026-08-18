@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 import type { OperationEnvelope, VerifiedEnvelope } from '../../protocol/src/worker.js';
-function canonical(value:unknown):string{if(value===null||typeof value!=='object')return JSON.stringify(value);if(Array.isArray(value))return `[${value.map(canonical).join(',')}]`;const r=value as Record<string,unknown>;return `{${Object.keys(r).sort().map(k=>`${JSON.stringify(k)}:${canonical(r[k])}`).join(',')}}`;}
+function canonical(value:unknown):string{if(value===undefined)return'null';if(value===null||typeof value!=='object')return JSON.stringify(value);if(Array.isArray(value))return `[${value.map(item=>item===undefined?'null':canonical(item)).join(',')}]`;const r=value as Record<string,unknown>;return `{${Object.keys(r).filter(k=>r[k]!==undefined).sort().map(k=>`${JSON.stringify(k)}:${canonical(r[k])}`).join(',')}}`;}
 function mac(secret:Buffer,value:unknown){return createHmac('sha256',secret).update(canonical(value)).digest('base64url');}
 export function randomIpcSecret(){return randomBytes(32);}
 export interface EnvelopeSigner { sign(input:Omit<OperationEnvelope,'mac'>):OperationEnvelope; verify(envelope:OperationEnvelope,now?:Date):VerifiedEnvelope; }
