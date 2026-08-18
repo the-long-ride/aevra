@@ -1,5 +1,77 @@
-import assert from 'node:assert/strict'; import test from 'node:test'; import {runStart} from '../src/run.js'; import {loadCoreConfig} from '../../core/src/config.js';
-test('readiness callback is awaited once before signal wait',async()=>{let handler=()=>{};let release=()=>{};let signalRegistrations=0;const signals={once(_e:string,h:()=>void){signalRegistrations++;handler=h},removeListener(){}};const readyGate=new Promise<void>(resolve=>{release=resolve});const p=runStart(loadCoreConfig({AEVRA_STATE_DIR:'/tmp/x'}),{signals:create(signals),async createRuntime(){return {adminUrl:'https://localhost:1',mcpUrl:'https://localhost:2',async start(){},async close(){}}},async onReady(){await readyGate;}});await Promise.resolve();assert.equal(signalRegistrations,0);release();await new Promise(r=>setTimeout(r,0));assert.equal(signalRegistrations,2);handler();assert.equal(await p,0);});
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { loadCoreConfig } from '../../core/src/config.js';
+import { runStart } from '../src/run.js';
 
-test('SIGINT closes runtime once',async()=>{let handler=()=>{};let closes=0;const signals={once(_e:string,h:()=>void){handler=h},removeListener(){}};const p=runStart(loadCoreConfig({AEVRA_STATE_DIR:'/tmp/x'}),{signals:create(signals),async createRuntime(){return {adminUrl:'a',mcpUrl:'m',async start(){},async close(){closes++}}}});await new Promise(r=>setTimeout(r,0));handler();assert.equal(await p,0);assert.equal(closes,1);});
-function create(x:any){return x;}
+test('readiness callback is awaited once before signal wait', async () => {
+  let handler = () => {};
+  let release = () => {};
+  let signalRegistrations = 0;
+  const signals = {
+    once(_event: string, next: () => void) {
+      signalRegistrations += 1;
+      handler = next;
+    },
+    removeListener() {},
+  };
+  const readyGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  const pending = runStart(loadCoreConfig({ AEVRA_STATE_DIR: '/tmp/x' }), {
+    signals: create(signals),
+    async createRuntime() {
+      return {
+        adminUrl: 'https://localhost:1',
+        mcpUrl: 'https://localhost:2',
+        async start() {},
+        async close() {},
+      };
+    },
+    async onReady() {
+      await readyGate;
+    },
+  });
+
+  await Promise.resolve();
+  assert.equal(signalRegistrations, 0);
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(signalRegistrations, 2);
+  handler();
+  assert.equal(await pending, 0);
+});
+
+test('SIGINT closes runtime once', async () => {
+  let handler = () => {};
+  let closes = 0;
+  const signals = {
+    once(_event: string, next: () => void) {
+      handler = next;
+    },
+    removeListener() {},
+  };
+
+  const pending = runStart(loadCoreConfig({ AEVRA_STATE_DIR: '/tmp/x' }), {
+    signals: create(signals),
+    async createRuntime() {
+      return {
+        adminUrl: 'a',
+        mcpUrl: 'm',
+        async start() {},
+        async close() {
+          closes += 1;
+        },
+      };
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  handler();
+  assert.equal(await pending, 0);
+  assert.equal(closes, 1);
+});
+
+function create<T>(value: T): T {
+  return value;
+}
