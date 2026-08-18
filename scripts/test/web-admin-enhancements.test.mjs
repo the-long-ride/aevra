@@ -27,7 +27,14 @@ test('enhanced admin UX covers batch permissions workspace mounts and cleanup',(
 test('permission bulk modal uses a wide guided layout with readable selection controls',()=>{
   const app=readFileSync('apps/web/admin-enhancements.js','utf8');
   const css=readFileSync('apps/web/admin-enhancements.css','utf8');
-  for(const text of ['1. Who gets access?','2. Where does it apply?','3. What can they do?','4. Rule details','Select all','Clear','Create 0 rules'])assert.match(app,new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'));
+  for(const text of ['Who gets access?','Where does it apply?','What can they do?','Rule details','Select all','Clear','Create 0 rules'])assert.match(app,new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'));
+  assert.match(app,/<span>1<\/span><div><h3>Who gets access\?<\/h3>/);
+  assert.match(app,/<span>2<\/span><div><h3>Where does it apply\?<\/h3>/);
+  assert.match(app,/<span>3<\/span><div><h3>What can they do\?<\/h3>/);
+  assert.match(app,/<span>4<\/span><div><h3>Rule details<\/h3>/);
+  assert.doesNotMatch(app,/<span>[1-4]<\/span><div><h3>[1-4]\./);
+  assert.match(app,/function isConnectorActor\(actor\)/);
+  assert.match(app,/connected=sessions\.filter\(item=>isConnectorActor\(item\.actor\)\)/);
   assert.match(app,/data-enh-target-card/);
   assert.match(app,/data-enh-scope-card/);
   assert.match(app,/data-enh-select-all-capabilities/);
