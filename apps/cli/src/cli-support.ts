@@ -8,6 +8,8 @@ export function usageText(): string {
     '  aevra setup',
     '  aevra service install|start|stop|restart|status',
     '  aevra connectors list|create <name>|revoke <id>',
+    '  aevra sessions revoke-others --yes',
+    '  aevra audit clear --yes',
     '  aevra status [--json]',
     '  aevra backup verify <file>|restore <file> [--yes]',
     '  aevra completion bash|zsh|powershell',
@@ -29,7 +31,7 @@ export function readyLines(info: { adminUrl: string; mcpUrl: string }): string[]
 }
 
 export function completionText(shell: 'bash' | 'zsh' | 'powershell'): string {
-  const commands = ['start', 'ui', 'setup', 'service', 'connectors', 'status', 'backup', 'completion', '--help'];
+  const commands = ['start', 'ui', 'setup', 'service', 'connectors', 'sessions', 'audit', 'status', 'backup', 'completion', '--help'];
   if (shell === 'bash') {
     return `_aevra() {
   local cur
@@ -62,7 +64,7 @@ _aevra "$@"
     @('--ui') | Where-Object { $_ -like "$wordToComplete*" }
     return
   }
-  @('start','ui','setup','service','connectors','status','backup','completion') | Where-Object { $_ -like "$wordToComplete*" }
+  @('start','ui','setup','service','connectors','sessions','audit','status','backup','completion') | Where-Object { $_ -like "$wordToComplete*" }
 }
 `;
 }
