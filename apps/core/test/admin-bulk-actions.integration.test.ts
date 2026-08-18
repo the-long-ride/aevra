@@ -34,17 +34,17 @@ test('workspace admissions route exposes mappings for the detail modal',async()=
   await server.close();
 });
 
-test('revoke-others keeps connector MCP sessions and the current admin session',async()=>{
+test('revoke-others keeps OAuth and static connector MCP sessions plus the current admin session',async()=>{
   const revoked:string[]=[];let keptAdmin:string|undefined;
-  const sessions={list:()=>[{id:'oauth_1',actor:'oauth:user'},{id:'connector_1',actor:'connector:ChatGPT'}],revoke:(id:string)=>revoked.push(id)};
+  const sessions={list:()=>[{id:'access_1',actor:'access:user@example.com'},{id:'oauth_1',actor:'oauth:ChatGPT'},{id:'connector_1',actor:'connector:Claude'}],revoke:(id:string)=>revoked.push(id)};
   const localBootstrap={validateSession:(value:string|undefined)=>value==='keep-me',revokeAllExcept:(value:string|undefined)=>{keptAdmin=value;return{revoked:2,preserved:1}}};
   const server=new AdminServer('127.0.0.1',0,()=>({core:'running'}),{bootstrap:localBootstrap as any,api:{sessions,bootstrap:localBootstrap} as any});
   await server.start();
   const response=await request(server,'/api/sessions/revoke-others',{method:'POST',body:'{}'});
   assert.equal(response.status,200);
-  assert.deepEqual(revoked,['oauth_1']);
+  assert.deepEqual(revoked,['access_1']);
   assert.equal(keptAdmin,'keep-me');
-  assert.deepEqual(await response.json(),{ok:true,revokedRemote:1,preservedConnectors:1,revokedAdmin:2,preservedAdmin:1});
+  assert.deepEqual(await response.json(),{ok:true,revokedRemote:1,preservedConnectors:2,revokedAdmin:2,preservedAdmin:1});
   await server.close();
 });
 
