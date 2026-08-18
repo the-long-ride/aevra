@@ -3,7 +3,6 @@ window.AevraSafeCommandMatchers=Object.freeze([
   {matcher:'git:diff',example:'git diff',purpose:'Inspect working-tree or staged differences',platforms:['windows','linux','macos'],riskNote:'Read-only when used for inspection.'},
   {matcher:'git:log',example:'git log -10',purpose:'Inspect commit history',platforms:['windows','linux','macos'],riskNote:'Read-only history inspection.'},
   {matcher:'git:show',example:'git show HEAD',purpose:'Inspect a Git object or commit',platforms:['windows','linux','macos'],riskNote:'Read-only object inspection.'},
-  {matcher:'git:branch',example:'git branch',purpose:'Inspect local branches',platforms:['windows','linux','macos'],riskNote:'Use the no-argument inspection form; branch mutation variants should be separately reviewed.'},
   {matcher:'npm:test',example:'npm test',purpose:'Run project tests',platforms:['windows','linux','macos'],riskNote:'May execute project-defined test scripts; review repository scripts first.'},
   {matcher:'pnpm:test',example:'pnpm test',purpose:'Run pnpm project tests',platforms:['windows','linux','macos'],riskNote:'May execute project-defined scripts.'},
   {matcher:'pnpm:lint',example:'pnpm lint',purpose:'Run pnpm lint checks',platforms:['windows','linux','macos'],riskNote:'May execute project-defined scripts.'},
