@@ -1,0 +1,71 @@
+name: Feature verification
+
+on:
+  push:
+    branches:
+      - feat/permissions-workspace-settings-admin-tools
+    paths-ignore:
+      - '.verification/**'
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Run verification
+        shell: bash
+        run: |
+          set +e
+          mkdir -p .verification
+          : > .verification/result.txt
+          overall=0
+
+          npm ci --ignore-scripts
+          install=$?
+          echo "install=$install" >> .verification/result.txt
+          if [ "$install" -ne 0 ]; then overall=1; fi
+
+          if [ "$install" -eq 0 ]; then
+            npm run format:check
+            format=$?
+            echo "format=$format" >> .verification/result.txt
+            if [ "$format" -ne 0 ]; then overall=1; fi
+
+            npm run lint
+            lint=$?
+            echo "lint=$lint" >> .verification/result.txt
+            if [ "$lint" -ne 0 ]; then overall=1; fi
+
+            npm test
+            tests=$?
+            echo "test=$tests" >> .verification/result.txt
+            if [ "$tests" -ne 0 ]; then overall=1; fi
+
+            npm run typecheck
+            typecheck=$?
+            echo "typecheck=$typecheck" >> .verification/result.txt
+            if [ "$typecheck" -ne 0 ]; then overall=1; fi
+
+            npm run build
+            build=$?
+            echo "build=$build" >> .verification/result.txt
+            if [ "$build" -ne 0 ]; then overall=1; fi
+          fi
+
+          echo "overall=$overall" >> .verification/result.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .verification/result.txt
+          git commit -m "ci: record feature verification result" || true
+          git push origin HEAD:${GITHUB_REF_NAME}
+          exit "$overall"
