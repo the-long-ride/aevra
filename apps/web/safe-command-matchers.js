@@ -3,8 +3,8 @@ window.AevraSafeCommandMatchers=Object.freeze([
   {matcher:'git:diff',example:'git diff',purpose:'Inspect working-tree or staged differences',platforms:['windows','linux','macos'],riskNote:'Read-only when used for inspection.'},
   {matcher:'git:log',example:'git log -10',purpose:'Inspect commit history',platforms:['windows','linux','macos'],riskNote:'Read-only history inspection.'},
   {matcher:'git:show',example:'git show HEAD',purpose:'Inspect a Git object or commit',platforms:['windows','linux','macos'],riskNote:'Read-only object inspection.'},
+  {matcher:'git:branch',example:'git branch',purpose:'Inspect local branches',platforms:['windows','linux','macos'],riskNote:'Use the no-argument inspection form; branch mutation variants should be separately reviewed.'},
   {matcher:'npm:test',example:'npm test',purpose:'Run project tests',platforms:['windows','linux','macos'],riskNote:'May execute project-defined test scripts; review repository scripts first.'},
-  {matcher:'npm:lint',example:'npm run lint',purpose:'Run the project lint command family',platforms:['windows','linux','macos'],riskNote:'Project scripts are executable code; use only in trusted workspaces.'},
   {matcher:'pnpm:test',example:'pnpm test',purpose:'Run pnpm project tests',platforms:['windows','linux','macos'],riskNote:'May execute project-defined scripts.'},
   {matcher:'pnpm:lint',example:'pnpm lint',purpose:'Run pnpm lint checks',platforms:['windows','linux','macos'],riskNote:'May execute project-defined scripts.'},
   {matcher:'yarn:test',example:'yarn test',purpose:'Run Yarn project tests',platforms:['windows','linux','macos'],riskNote:'May execute project-defined scripts.'},
@@ -18,6 +18,5 @@ window.AevraSafeCommandMatchers=Object.freeze([
   {matcher:'rg:run',example:'rg "TODO" .',purpose:'Search text with ripgrep',platforms:['linux','macos'],riskNote:'Read-only text search.'},
   {matcher:'grep:run',example:'grep -R "TODO" .',purpose:'Search text with grep',platforms:['linux','macos'],riskNote:'Read-only when used as shown.'},
   {matcher:'cat:run',example:'cat README.md',purpose:'Read a text file',platforms:['linux','macos'],riskNote:'Read-only when used as shown.'},
-  {matcher:'ls:run',example:'ls -la',purpose:'List directory contents',platforms:['linux','macos'],riskNote:'Read-only directory inspection.'},
-  {matcher:'type:run',example:'type README.md',purpose:'Read a text file with the Windows command family',platforms:['windows'],riskNote:'Read-only when invoked directly as classified by Aevra.'}
+  {matcher:'ls:run',example:'ls -la',purpose:'List directory contents',platforms:['linux','macos'],riskNote:'Read-only directory inspection.'}
 ]);
