@@ -1,5 +1,5 @@
 const root = document.querySelector('#app');
-const state = { page: null, guideSlug: 'quick-start' };
+const state = { page: null, guideSlug: 'quick-start', safePlatform: 'windows' };
 
 async function api(path, init = {}) {
   const headers = { 'content-type': 'application/json', ...init.headers };
@@ -122,11 +122,18 @@ function markdownToHtml(source) {
   for(const raw of lines){if(raw.startsWith('```')){closeList();inCode=!inCode;html+=inCode?'<pre><code>':'</code></pre>';continue;}if(inCode){html+=`${h(raw)}\n`;continue;}if(!raw.trim()){closeList();continue;}const heading=raw.match(/^(#{1,3})\s+(.+)$/);if(heading){closeList();const level=heading[1].length+1;html+=`<h${level}>${h(heading[2])}</h${level}>`;continue;}const item=raw.match(/^[-*]\s+(.+)$/);if(item){if(!inList){html+='<ul>';inList=true;}html+=`<li>${h(item[1])}</li>`;continue;}closeList();html+=`<p>${h(raw)}</p>`;}closeList();return html;
 }
 
+function safeMatcherGuide(text){
+  const catalog=Array.isArray(window.AevraSafeCommandMatchers)?window.AevraSafeCommandMatchers:[],platforms=[['windows','Windows'],['linux','Linux'],['macos','macOS']],current=platforms.some(([id])=>id===state.safePlatform)?state.safePlatform:'windows',entries=catalog.filter(item=>(item.platforms||[]).includes(current));
+  const tabs=platforms.map(([id,label])=>`<button type="button" data-safe-platform="${id}" class="${id===current?'active':''}">${label}</button>`).join('');
+  const rows=entries.map(item=>`<tr><td><code>${h(item.matcher)}</code></td><td><code>${h(item.example)}</code></td><td>${h(item.purpose)}</td><td>${h(item.riskNote)}</td><td><button type="button" data-copy-matcher="${h(item.matcher)}">Copy</button></td></tr>`).join('');
+  return `${markdownToHtml(text)}<section class="safe-matcher-guide"><div class="safe-platform-tabs" role="tablist" aria-label="Command matcher platform">${tabs}</div><div class="safe-matcher-table"><table><thead><tr><th>Matcher</th><th>Example</th><th>Purpose</th><th>Risk note</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5">No recommendations for this platform.</td></tr>'}</tbody></table></div></section>`;
+}
+
 async function guide(el) {
   const chapters=await api('/api/guide');const chapter=chapters.find(x=>x.slug===state.guideSlug)??chapters[0];state.guideSlug=chapter.slug;
-  const response=await fetch(`/manual/${chapter.file}`);if(!response.ok)throw new Error(`Guide chapter unavailable: HTTP ${response.status}`);const text=await response.text();
-  el.innerHTML=`<section class="guide-layout"><aside>${chapters.map(x=>`<button type="button" data-guide="${h(x.slug)}" class="${x.slug===chapter.slug?'active':''}">${h(x.title)}</button>`).join('')}</aside><article class="manual-content">${markdownToHtml(text)}</article></section>`;
-  el.onclick=(event)=>{const slug=event.target.closest('[data-guide]')?.dataset.guide;if(slug){state.guideSlug=slug;guide(el);}};
+  const response=await fetch(`/manual/${chapter.file}`);if(!response.ok)throw new Error(`Guide chapter unavailable: HTTP ${response.status}`);const text=await response.text(),content=chapter.slug==='safe-command-matchers'?safeMatcherGuide(text):markdownToHtml(text);
+  el.innerHTML=`<section class="guide-layout"><aside>${chapters.map(x=>`<button type="button" data-guide="${h(x.slug)}" class="${x.slug===chapter.slug?'active':''}">${h(x.title)}</button>`).join('')}</aside><article class="manual-content">${content}</article></section>`;
+  el.onclick=async(event)=>{const slug=event.target.closest('[data-guide]')?.dataset.guide;if(slug){state.guideSlug=slug;guide(el);return;}const platform=event.target.closest('[data-safe-platform]')?.dataset.safePlatform;if(platform){state.safePlatform=platform;guide(el);return;}const matcher=event.target.closest('[data-copy-matcher]')?.dataset.copyMatcher;if(matcher)await navigator.clipboard.writeText(matcher);};
 }
 
 async function dashboard(el, status) {
