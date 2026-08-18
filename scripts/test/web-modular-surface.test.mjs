@@ -5,15 +5,31 @@ import test from 'node:test';
 const main = readFileSync('apps/web/main.js', 'utf8');
 const dashboard = readFileSync('apps/web/pages/dashboard.js', 'utf8');
 const permissions = readFileSync('apps/web/pages/permissions.js', 'utf8');
-const permissionBulk = readFileSync('apps/web/components/permission-bulk.js', 'utf8');
+const permissionBulk = readFileSync(
+  'apps/web/components/permission-bulk.js',
+  'utf8',
+);
 const sessions = readFileSync('apps/web/pages/sessions.js', 'utf8');
-const requests = readFileSync('apps/web/components/request-drawer.js', 'utf8');
-const requestActions = readFileSync('apps/web/components/request-actions.js', 'utf8');
-const runtimeStatus = readFileSync('apps/web/components/runtime-status.js', 'utf8');
+const requests = readFileSync(
+  'apps/web/components/request-drawer.js',
+  'utf8',
+);
+const requestActions = readFileSync(
+  'apps/web/components/request-actions.js',
+  'utf8',
+);
+const runtimeStatus = readFileSync(
+  'apps/web/components/runtime-status.js',
+  'utf8',
+);
 const table = readFileSync('apps/web/components/data-table.js', 'utf8');
 const guide = readFileSync('apps/web/pages/guide.js', 'utf8');
-const matcherCatalog = readFileSync('apps/web/data/safe-command-matchers.js', 'utf8');
+const matcherCatalog = readFileSync(
+  'apps/web/data/safe-command-matchers.js',
+  'utf8',
+);
 const tokens = readFileSync('apps/web/styles/tokens.css', 'utf8');
+const shell = readFileSync('apps/web/styles/shell.css', 'utf8');
 
 test('modular shell exposes every supported admin destination and requests drawer', () => {
   for (const page of [
@@ -32,9 +48,20 @@ test('modular shell exposes every supported admin destination and requests drawe
   assert.match(main, /openRequestDrawer/);
 });
 
+test('modular shell uses compact top navigation without dead sidebar rail styles', () => {
+  assert.match(main, /class="top-nav"/);
+  assert.match(shell, /\.top-nav\s*\{/);
+  assert.match(shell, /\.safe-mode-banner\s*\{/);
+  assert.doesNotMatch(main, /class="sidebar"/);
+  assert.doesNotMatch(shell, /\.sidebar(?:\s|\{|\.)/);
+  assert.doesNotMatch(shell, /grid-template-columns:\s*220px/);
+});
+
 test('dashboard keeps Remote Access first inside Onboarding and completion ordering is state-driven', () => {
   const onboardingStart = dashboard.indexOf('class="onboarding-body"');
-  const remote = dashboard.indexOf('data-onboarding-section="remote-access"');
+  const remote = dashboard.indexOf(
+    'data-onboarding-section="remote-access"',
+  );
   const connect = dashboard.indexOf('data-onboarding-section="connect-ai"');
   assert.ok(onboardingStart >= 0);
   assert.ok(remote > onboardingStart);
