@@ -50,6 +50,7 @@ export class ApprovalService{
   }
   approve(id:string,scope='once'){
     const t=this.required(id);if(t.state!=='PENDING')throw new Error(`Cannot approve ${t.state}`);
+    if(t.risk==='CRITICAL'&&scope!=='once')throw new Error('Critical operations only support one-time local approval');
     if(t.operation.family==='skills:read'&&scope!=='once')throw new Error('This request is connection/session scoped and only supports one-time local approval');
     t.state='APPROVED';t.decisionScope=scope;this.repo.put(t);
     this.audit.append({actor:t.actor,sessionId:t.sessionId,workspaceId:t.workspaceId,operation:t.operation.family,risk:t.risk,decision:`approved:${scope}`,result:'armed',redactionCount:0});
