@@ -24,6 +24,22 @@ test('enhanced admin UX covers batch permissions workspace mounts and cleanup',(
   assert.match(app,/\.remote-card/);
 });
 
+test('permission bulk modal uses a wide guided layout with readable selection controls',()=>{
+  const app=readFileSync('apps/web/admin-enhancements.js','utf8');
+  const css=readFileSync('apps/web/admin-enhancements.css','utf8');
+  for(const text of ['1. Who gets access?','2. Where does it apply?','3. What can they do?','4. Rule details','Select all','Clear','Create 0 rules'])assert.match(app,new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'));
+  assert.match(app,/data-enh-target-card/);
+  assert.match(app,/data-enh-scope-card/);
+  assert.match(app,/data-enh-select-all-capabilities/);
+  assert.match(app,/data-enh-clear-capabilities/);
+  assert.match(app,/data-enh-create-rules/);
+  assert.match(css,/\.enh-modal\.permission-bulk\{[^}]*width:min\(1240px,calc\(100vw - 32px\)\)/);
+  assert.match(css,/\.enh-permission-layout/);
+  assert.match(css,/\.enh-choice-cards/);
+  assert.match(css,/\.enh-capability-grid/);
+  assert.match(css,/\.enh-rule-summary/);
+});
+
 test('v2 shell does not shadow enhanced admin pages or keep duplicate renderers',()=>{
   const v2=readFileSync('apps/web/app-v2.js','utf8');
   assert.match(v2,/managedPages=new Set\(\['dashboard','processes','changes'\]\)/);
