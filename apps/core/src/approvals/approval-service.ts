@@ -50,7 +50,7 @@ export class ApprovalService{
   }
   approve(id:string,scope='once'){
     const t=this.required(id);if(t.state!=='PENDING')throw new Error(`Cannot approve ${t.state}`);
-    if(['workspace:capability-upgrade','skills:read'].includes(t.operation.family)&&scope!=='once')throw new Error('This request is connection/session scoped and only supports one-time local approval');
+    if(t.operation.family==='skills:read'&&scope!=='once')throw new Error('This request is connection/session scoped and only supports one-time local approval');
     t.state='APPROVED';t.decisionScope=scope;this.repo.put(t);
     this.audit.append({actor:t.actor,sessionId:t.sessionId,workspaceId:t.workspaceId,operation:t.operation.family,risk:t.risk,decision:`approved:${scope}`,result:'armed',redactionCount:0});
     this.approvedHandler?.(t);return t;
@@ -71,12 +71,10 @@ export class ApprovalService{
   }
 
   private reusableConnectionRequest(input:Omit<FrozenOperationTicket,'id'|'state'|'expiresAt'>){
-    if(!['workspace:select','workspace:capability-upgrade'].includes(input.operation.family)||!input.actor.startsWith('oauth:')||!this.sessionIdentityResolver)return null;
+    if(input.operation.family!=='workspace:select'||!input.actor.startsWith('oauth:')||!this.sessionIdentityResolver)return null;
     const current=this.sessionIdentityResolver(input.sessionId);if(!current)return null;
-    const requestedProfile=(input.payload as any)?.profileId;
     return (this.repo.list().filter(Boolean) as FrozenOperationTicket[]).find(ticket=>{
       if(ticket.operation.family!==input.operation.family||ticket.workspaceId!==input.workspaceId||ticket.actor!==input.actor||!['PENDING','APPROVED'].includes(ticket.state))return false;
-      if(input.operation.family==='workspace:capability-upgrade'&&(ticket.payload as any)?.profileId!==requestedProfile)return false;
       const existing=this.sessionIdentityResolver!(ticket.sessionId);
       return Boolean(existing&&existing.actor===current.actor&&existing.subject===current.subject);
     })??null;
