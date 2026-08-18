@@ -14,3 +14,14 @@ test('tools/call preserves object structuredContent without double wrapping',asy
   const response:any=await handleJsonRpc(service,'session',{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'file_read',arguments:{path:'/a.txt'}}});
   assert.deepEqual(response.result.structuredContent,{path:'/a.txt',content:'hello'});
 });
+
+test('shell_run is translated to argv command_run with sandbox default',async()=>{
+  let called:any;
+  const service={call:async(sessionId:string,name:string,args:any)=>{called={sessionId,name,args};return{status:'approval_pending',requestId:'req_1'};}} as any;
+  const response:any=await handleJsonRpc(service,'session',{jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'shell_run',arguments:{script:'pwd'}}});
+  assert.equal(called.name,'command_run');
+  assert.equal(called.args.executionMode,'sandbox');
+  assert.equal(called.args.command.executable,'bash');
+  assert.deepEqual(called.args.command.args,['-lc','pwd']);
+  assert.deepEqual(response.result.structuredContent,{status:'approval_pending',requestId:'req_1'});
+});
