@@ -34,6 +34,7 @@ import {OperationService} from './operations/operation-service.js';
 import {ChangeSetService} from './changes/change-service.js';
 import {ProcessService} from './processes/process-service.js';
 import {McpToolService,type WorkerGateway} from '../../../packages/mcp-tools/src/service.js';
+import {SessionSkillAccessGate} from '../../../packages/mcp-tools/src/skill-access-gate.js';
 import {CloudflareAccessVerifier,RejectingIdentityVerifier} from './auth/cloudflare.js';
 import {AevraOAuthService} from './auth/oauth.js';
 import {CloudflareManagerImpl,resolveCloudflareAuthMode,type CloudflareManager} from './cloudflare/manager.js';
@@ -77,8 +78,11 @@ export async function createCoreRuntime(config:CoreConfig,deps:RuntimeDependenci
       const changes=new ChangeSetService(changeRepo,operationRepo,workspaces,workerGateway,config.recoveryDir),operations=new OperationService(sessions,workspaces,workerGateway,operationRepo,audit,reads),processes=new ProcessService(sessions,workspaces,workerGateway,processRepo);
       operations.attachChangeService(changes);operations.setCommandEffectResolver((family,defaultEffect)=>{const overrides=settings.get<Record<string,string>>('command.family.overrides',{});const value=overrides[family];return ['READ_ONLY','BUILD_OUTPUT','SOURCE_MUTATION','REPOSITORY_STATE','UNKNOWN'].includes(value)?value as any:defaultEffect});operations.setExecutionSettingsResolver(()=>settings.get('execution.settings',{sandboxBackend:'auto',cachePolicy:'workspace'}));sessions.setSwitchDrainHandler((sessionId,_old,_next,timeoutMs)=>operations.drainSession(sessionId,timeoutMs??settings.get<number>('workspace.drain.defaultMs',60_000)));if(!safeMode)await changes.reconcileIncompleteOperations();
       const approvals=new ApprovalService(approvalRepo,audit,{fastWaitMs:config.approvalFastWaitMs,lifetimeMs:config.approvalLifetimeMs,lifetimeByRiskMs:config.approvalLifetimeByRiskMs});if(!safeMode)approvals.cancelForRestart();
+      approvals.setSessionIdentityResolver(sessionId=>sessions.connectionIdentity(sessionId));
+      approvals.setApprovedHandler(ticket=>{if(ticket.operation.family==='workspace:select')sessions.grantConnectionWorkspace(ticket.sessionId,ticket.workspaceId,'read-only');});
       const metrics=new MetricsService();
       const tools=new McpToolService(sessions,workspaces,workerGateway,reads,approvals,{operations,processes,changes,permissions,approvals,skills:new SkillsService(),connectorBindings,metrics,settings});
+      const remoteTools=new SessionSkillAccessGate(tools,sessions,approvals);
       const bootstrap=new AdminBootstrapService(raw),controlSecret=ensureLocalControlSecret(config.stateDir);cloudflare=deps.cloudflare??new CloudflareManagerImpl(settings,undefined,`https://localhost:${config.mcpPort}`);const vault=new EncryptedVault(path.join(config.stateDir,'secrets.vault')),platformSecrets=new CommandSecretStore(process.platform),secretStore=await platformSecrets.probe()?platformSecrets:vault,environment=new EnvironmentService(raw,secretStore),configExport=new ConfigExportService(raw),backup=new BackupService(db,path.join(config.stateDir,'backups'));
       const staticDir=path.resolve('dist/apps/web');
       const databaseAdmin={configExport:(portable:boolean)=>configExport.export(portable),configPreview:(v:any)=>configExport.previewImport(v),backup:()=>backup.create('daily')};
@@ -92,7 +96,7 @@ export async function createCoreRuntime(config:CoreConfig,deps:RuntimeDependenci
       const verifier=accessReady?new CloudflareAccessVerifier(issuer,audience):new RejectingIdentityVerifier();
       const connectorLimiter=new IpRateLimiter(30,1);
       const connectorsAdmission={verify:async(token:string,ip:string)=>{if(!connectorLimiter.allow(ip))return{kind:'rate-limited'} as const;const row=connectorRepo.findByToken(token);if(!row){connectorLimiter.recordFailure(ip);return{kind:'denied'} as const;}connectorRepo.recordUse(row.id);return{kind:'admitted',identity:{actor:`connector:${row.name}`,subject:row.id,issuer:'aevra:connector',audience:'aevra',expiresAt:new Date(Date.now()+24*3_600_000).toISOString()}} as const;}};
-      mcp=new McpIngressServer(config.mcpHost,config.mcpPort,verifier,undefined,()=>safeMode,{sessions,service:tools},connectorsAdmission,{tls:tls.serverOptions,advertisedHost:'localhost',plainMcpEnabled:accessReady,oauth});
+      mcp=new McpIngressServer(config.mcpHost,config.mcpPort,verifier,undefined,()=>safeMode,{sessions,service:remoteTools},connectorsAdmission,{tls:tls.serverOptions,advertisedHost:'localhost',plainMcpEnabled:accessReady,oauth});
       watchdog=(!safeMode&&settings.get('cloudflare.config',null))?new TunnelWatchdog(()=>cloudflare!.checkReachability(),60_000).start():undefined;
       await admin.start();await mcp.start();if(!cloudflareConfig?.hostname)oauth.setPublicBaseUrl(mcp.url());if(settings.get('cloudflare.config',null)&&cloudflare.ownership()==='managed')await cloudflare.startManagedTunnel();started=true;
       }catch(error){await cleanup();throw error;}

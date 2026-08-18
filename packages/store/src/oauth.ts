@@ -91,7 +91,7 @@ export class OAuthRepository{
     if(!request||request.status!=='APPROVED'||Date.parse(request.expiresAt)<=this.now().getTime())throw new Error('OAuth authorization request is not approved');
     const client=this.getClient(request.clientId);if(!client)throw new Error('OAuth client no longer exists');
     const code=secret(32),createdAt=this.now(),expiresAt=new Date(createdAt.getTime()+ttlMs);
-    const actor=`oauth:${client.clientName}`,subject=client.clientId;
+    const actor=`oauth:${client.clientName}`,subject=`oauth_grant_${randomUUID()}`;
     this.db.prepare('INSERT INTO oauth_authorization_codes(code_hash,client_id,redirect_uri,scope,resource,code_challenge,actor,subject,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
       .run(hash(code),request.clientId,request.redirectUri,request.scope,request.resource,request.codeChallenge,actor,subject,createdAt.toISOString(),expiresAt.toISOString());
     this.db.prepare('DELETE FROM oauth_authorization_requests WHERE id=?').run(requestId);

@@ -67,5 +67,19 @@ export class CloudflareManagerImpl implements CloudflareManager{
   ownership(){return this.settings.get<TunnelOwnership>('cloudflare.ownership','managed')}
   async startManagedTunnel(){if(this.ownership()==='external')return;if(this.child&&!this.child.killed)return;const c=this.settings.get<any>('cloudflare.config',null);if(!c?.tunnelId)throw new Error('Cloudflare tunnel is not configured');this.stopping=false;this.child=this.cli.spawnTunnel(c.tunnelId,this.origin);clearTimeout(this.stableTimer);this.stableTimer=setTimeout(()=>{this.restartAttempt=0},60_000);this.child.once('exit',()=>{this.child=undefined;clearTimeout(this.stableTimer);if(!this.stopping&&this.ownership()==='managed'){const delay=Math.min(60_000,1000*2**Math.min(this.restartAttempt++,6));this.restartTimer=setTimeout(()=>void this.startManagedTunnel().catch(()=>{}),delay)}});}
   async stopManagedTunnel(){if(this.ownership()==='external')return;this.stopping=true;clearTimeout(this.restartTimer);clearTimeout(this.stableTimer);this.restartAttempt=0;if(this.child&&!this.child.killed)this.child.kill('SIGTERM');this.child=undefined;}
-  async checkReachability():Promise<ReachabilityResult>{const c=this.settings.get<any>('cloudflare.config',null);if(!c?.hostname)return{reachable:false,message:'Cloudflare hostname is not configured'};try{const r=await fetch(`https://${c.hostname}/health`,{signal:AbortSignal.timeout(5000)});return{reachable:r.ok,status:r.status,message:r.ok?'reachable':`HTTP ${r.status}`}}catch(e){return{reachable:false,message:e instanceof Error?e.message:String(e)}}}
+  async checkReachability():Promise<ReachabilityResult>{
+    const c=this.settings.get<any>('cloudflare.config',null);if(!c?.hostname)return{reachable:false,message:'Cloudflare hostname is not configured'};
+    const base=`https://${c.hostname}`;
+    try{
+      const health=await fetch(`${base}/health`,{signal:AbortSignal.timeout(5000),headers:{accept:'application/json'},cache:'no-store'});
+      if(!health.ok)return{reachable:false,status:health.status,message:`Health check failed: HTTP ${health.status}`};
+      const metadata=await fetch(`${base}/.well-known/oauth-protected-resource/mcp`,{signal:AbortSignal.timeout(5000),headers:{accept:'application/json'},cache:'no-store'});
+      if(!metadata.ok)return{reachable:false,status:metadata.status,message:`OAuth discovery failed: HTTP ${metadata.status}`};
+      let value:any;try{value=await metadata.json()}catch{return{reachable:false,status:metadata.status,message:'OAuth discovery failed: invalid JSON'}}
+      const expected=`${base}/mcp`;
+      if(value?.resource!==expected)return{reachable:false,status:metadata.status,message:`OAuth discovery resource mismatch: expected ${expected}`};
+      if(!Array.isArray(value?.authorization_servers)||!value.authorization_servers.includes(base))return{reachable:false,status:metadata.status,message:`OAuth discovery authorization server mismatch: expected ${base}`};
+      return{reachable:true,status:metadata.status,message:'reachable; OAuth discovery ready'};
+    }catch(e){return{reachable:false,message:e instanceof Error?e.message:String(e)}}
+  }
 }

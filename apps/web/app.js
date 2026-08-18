@@ -15,15 +15,38 @@ const h = (value) =>
 const json = (value, fallback = {}) => {
   try { return JSON.parse(String(value || '')); } catch { return fallback; }
 };
+function localDateTime(value) {
+  if (value == null || value === '') return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
 const card = (title, body = '') => `<section class="card"><h2>${h(title)}</h2>${body}</section>`;
 const field = (label, control, help = '') => `<label class="field"><span>${h(label)}</span>${control}${help ? `<small>${h(help)}</small>` : ''}</label>`;
 const mcpUrl = (cf) => cf?.hostname ? `https://${cf.hostname}/mcp` : 'Configure a public hostname first';
+
+function healthState(key,status){
+  if(key==='tunnel'){
+    if(status?.tunnel==='unconfigured')return'off';
+    if(status?.tunnelReachable===true)return'ok';
+    if(status?.tunnelReachable===false)return'error';
+    return status?.tunnel==='configured'?'pending':'off';
+  }
+  const value=String(status?.[key]??'').toLowerCase();
+  if(value==='running'||value==='ready'||value==='connected')return'ok';
+  if(value==='starting'||value==='checking'||value==='reconnecting')return'pending';
+  if(value==='unavailable')return'off';
+  return value?'error':'off';
+}
+function healthChip(label,key,status){
+  const chipState=healthState(key,status),raw=key==='tunnel'?(status?.tunnelReachable===true?'reachable':status?.tunnelReachable===false?'unreachable':status?.tunnel??'unconfigured'):status?.[key]??'unavailable';
+  return `<span class="health-chip" data-health="${key}" data-state="${chipState}" title="${h(`${label}: ${raw}`)}" aria-label="${h(`${label}: ${raw}`)}"><i class="health-dot" aria-hidden="true"></i><span>${label}</span></span>`;
+}
 
 function shell(status) {
   const nav = [
     ['getting-started','Getting Started'],['dashboard','Dashboard'],['workspaces','Workspaces'],['approvals','Approvals'],['permissions','Permissions'],['sessions','Sessions'],['connectors','Connectors'],['processes','Processes'],['changes','Changes'],['audit','Audit'],['settings','Settings'],['guide','Guide'],
   ];
-  return `<header><div class="brand"><h1>Aevra</h1><p>Local MCP control plane</p></div><div class="health"><span>Core ${h(status.core)}</span><span>Worker ${h(status.worker)}</span><span>MCP ${h(status.mcp ?? 'running')}</span></div></header>${status.safeMode ? '<div class="banner danger">SAFE MODE: remote execution and administrative mutations are disabled.</div>' : ''}<div class="layout"><nav>${nav.map(([page,label]) => `<button data-page="${page}" class="${state.page === page ? 'active' : ''}">${label}</button>`).join('')}</nav><main id="page" class="card-grid"></main></div>`;
+  return `<header><div class="brand"><h1>Aevra</h1><p>Local MCP control plane</p></div><div class="health">${healthChip('Core','core',status)}${healthChip('Worker','worker',status)}${healthChip('MCP','mcp',status)}${healthChip('Tunnel','tunnel',status)}</div></header>${status.safeMode ? '<div class="banner danger">SAFE MODE: remote execution and administrative mutations are disabled.</div>' : ''}<div class="layout"><nav>${nav.map(([page,label]) => `<button data-page="${page}" class="${state.page === page ? 'active' : ''}">${label}</button>`).join('')}</nav><main id="page" class="card-grid"></main></div>`;
 }
 
 function pairingMarkup(items) {
@@ -43,19 +66,23 @@ async function decideOauth(el, event, reload) {
 
 function remoteAccessMarkup(cf, id='setup') {
   const canonical=mcpUrl(cf);
+  const providerDetail=cf.found?h(cf.version??'Detected'):'Not detected on PATH';
+  const authMessage=h(cf.authenticationMessage??'Aevra checks existing Cloudflare credentials before starting a new login.');
   return `<div class="remote-access">
-    <div class="status-line"><div><b>cloudflared</b><p>${cf.found?h(cf.version??'Detected'):'Not detected on PATH'}</p></div><span class="status ${cf.authenticated?'success':cf.found?'warning':'muted'}">${cf.authenticated?'Authenticated':cf.found?'Login needed':'Unavailable'}</span></div>
-    <p class="helper">${h(cf.authenticationMessage??'Aevra checks existing Cloudflare credentials before starting a new login.')}</p>
-    <div class="actions"><button type="button" id="${id}-authenticate" ${cf.found?'':'disabled'}>${cf.authenticated?'Check authentication':'Authenticate with Cloudflare'}</button></div>
-    <form id="${id}-cloudflare" class="form-grid">
-      ${field('Public MCP hostname', `<input name="hostname" value="${h(cf.hostname??'')}" placeholder="aevra-mcp.example.com" required>`, 'Hostname or hostname-only https URL.')}
-      ${field('Tunnel ID', `<input name="tunnelId" value="${h(cf.tunnelId??'')}" placeholder="Leave blank to create an Aevra tunnel">`, 'Reuse an existing tunnel when you already have one.')}
-      ${field('Tunnel ownership', `<select name="ownership"><option value="managed">Managed by Aevra</option><option value="external" ${cf.ownership==='external'?'selected':''}>External process</option></select>`)}
+    <div class="remote-access-head">
+      <div class="remote-provider"><div><b>cloudflared</b><p>${providerDetail} · ${authMessage}</p></div><span class="status ${cf.authenticated?'success':cf.found?'warning':'muted'}">${cf.authenticated?'Authenticated':cf.found?'Login needed':'Unavailable'}</span></div>
+      <button type="button" id="${id}-authenticate" ${cf.found?'':'disabled'}>${cf.authenticated?'Check authentication':'Authenticate with Cloudflare'}</button>
+    </div>
+    <div class="endpoint remote-endpoint"><span>Canonical MCP endpoint</span><code>${h(canonical)}</code>${cf.hostname?`<button type="button" data-copy="${h(canonical)}">Copy</button>`:''}</div>
+    <form id="${id}-cloudflare" class="remote-config">
+      <div class="remote-config-grid">
+        ${field('Public MCP hostname', `<input name="hostname" value="${h(cf.hostname??'')}" placeholder="aevra-mcp.example.com" required>`, 'Hostname or hostname-only https URL.')}
+        ${field('Tunnel ID', `<input name="tunnelId" value="${h(cf.tunnelId??'')}" placeholder="Leave blank to create an Aevra tunnel">`, 'Reuse an existing tunnel when you already have one.')}
+        ${field('Tunnel ownership', `<select name="ownership"><option value="managed">Managed by Aevra</option><option value="external" ${cf.ownership==='external'?'selected':''}>External process</option></select>`)}
+      </div>
       <input type="hidden" name="authMode" value="connector">
-      <div class="form-actions"><button type="submit" class="primary">Save remote access</button><button type="button" id="${id}-test">Test endpoint</button></div>
+      <div class="remote-actions"><p id="${id}-result" class="inline-result"></p><div class="actions"><button type="button" id="${id}-test">Test endpoint</button><button type="submit" class="primary">Save remote access</button></div></div>
     </form>
-    <p id="${id}-result" class="inline-result"></p>
-    <div class="endpoint"><span>Canonical MCP endpoint</span><code>${h(canonical)}</code>${cf.hostname?`<button type="button" data-copy="${h(canonical)}">Copy</button>`:''}</div>
     <details><summary>Advanced: Cloudflare Access</summary><p>Cloudflare Access is optional. Aevra OAuth is the normal authentication layer. Configure Access verifier values from Settings only when you intentionally add that extra gate.</p></details>
   </div>`;
 }
@@ -68,21 +95,25 @@ function wireRemoteAccess(el, cf, id, reload) {
 }
 
 async function gettingStarted(el, status) {
-  const [onboarding,cf,pairings,workspaces]=await Promise.all([api('/api/onboarding'),api('/api/cloudflare/status'),api('/api/oauth/requests'),api('/api/workspaces')]);
+  const [onboarding,cf,workspaces]=await Promise.all([api('/api/onboarding'),api('/api/cloudflare/status'),api('/api/workspaces')]);
   const endpoint=mcpUrl(cf);
+  const providerExamples=[
+    ['ChatGPT','connect-chatgpt','Create a custom MCP app, paste the endpoint, choose OAuth, then approve the request in Approvals.'],
+    ['Claude','connect-claude','Add a remote MCP server, use the endpoint with OAuth, then approve the local request in Approvals.'],
+    ['Gemini','connect-gemini','Add the MCP server endpoint, authenticate with OAuth, then approve the local request in Approvals.'],
+  ];
   el.classList.add('setup-sections');
-  el.innerHTML=`<section class="page-intro"><div><h2>Getting Started</h2><p>Set up local execution, remote access, and your first AI connection without leaving the dashboard.</p></div><button type="button" data-page-jump="guide">Open Guide</button></section>
-    <section class="setup-section"><div class="section-heading"><span>Local Gateway</span><strong>${status.core==='running'?'Ready':'Check status'}</strong></div><div class="compact-status"><span>Core ${h(status.core)}</span><span>Worker ${h(status.worker)}</span><span>MCP ${h(status.mcp??'running')}</span></div><p>Your dashboard and local MCP listener use HTTPS on loopback.</p></section>
-    <section class="setup-section wide"><div class="section-heading"><span>Remote Access</span><strong>${cf.hostname?'Configured':'Setup needed'}</strong></div>${remoteAccessMarkup(cf,'onboard')}</section>
-    <section class="setup-section wide"><div class="section-heading"><span>Connect an AI</span><strong>${pairings.length?'Approval waiting':'OAuth'}</strong></div><div class="client-grid"><div><h3>ChatGPT</h3><p>Server URL</p><div class="endpoint"><code>${h(endpoint)}</code>${cf.hostname?`<button type="button" data-copy="${h(endpoint)}">Copy</button>`:''}</div><p>Authentication: <b>OAuth</b></p><ol><li>Create the custom MCP app.</li><li>Paste the server URL.</li><li>Choose OAuth and scan tools.</li><li>Approve the pairing request here.</li></ol><button type="button" data-guide-jump="connect-chatgpt">Read ChatGPT guide</button></div><div><h3>Pairing requests</h3>${pairingMarkup(pairings)}</div></div></section>
-    <section class="setup-section"><div class="section-heading"><span>Workspace</span><strong>${workspaces.length?`${workspaces.length} registered`:'Register one'}</strong></div><form id="onboard-workspace" class="stack-form">${field('Name','<input name="name" required placeholder="My project">')}${field('Local root','<input name="hostRoot" required placeholder="F:\\my-repos\\project">')}<button class="primary">Register workspace</button></form></section>
+  el.innerHTML=`<section class="page-intro"><div><h2>Getting Started</h2><p>Set up remote access and your first AI connection without leaving the dashboard.</p></div><button type="button" data-page-jump="guide">Open Guide</button></section>
+    <section class="setup-section wide" data-onboarding-persistent><div class="section-heading"><span>Remote Access</span><strong>${cf.hostname?'Configured':'Setup needed'}</strong></div>${remoteAccessMarkup(cf,'onboard')}</section>
+    <section class="setup-section wide"><div class="section-heading"><span>Connect an AI</span><strong>Example guides</strong></div><p class="section-note">These are example setup guides. Provider labels and screens can change; use the full local guide if your client UI differs.</p><div class="endpoint shared-endpoint"><span>Canonical MCP endpoint</span><code>${h(endpoint)}</code>${cf.hostname?`<button type="button" data-copy="${h(endpoint)}">Copy</button>`:''}</div><div class="client-grid">${providerExamples.map(([name,slug,description])=>`<article class="client-example"><div><h3>${name}</h3><p>${description}</p></div><p>Authentication: <b>OAuth</b></p><button type="button" data-guide-jump="${slug}">Read ${name} guide</button></article>`).join('')}</div></section>
+    <section class="setup-section"><div class="section-heading"><span>Workspace</span><strong>${workspaces.length?`${workspaces.length} registered`:'Register one'}</strong></div><form id="onboard-workspace" class="stack-form">${field('Name','<input name="name" required placeholder="My project">')}${field('Local root','<input name="hostRoot" required placeholder="Absolute path to your project">')}<button class="primary">Register workspace</button></form></section>
     <section class="setup-section"><div class="section-heading"><span>Try Aevra</span><strong>Start safe</strong></div><p>Connect the AI, select a workspace, then begin with status and read-only file operations. Increase permissions only when needed.</p><div class="actions"><button type="button" data-page-jump="workspaces">Workspaces</button><button type="button" data-page-jump="approvals">Approvals</button></div></section>
     <section class="setup-section wide"><div class="section-heading"><span>Explore</span><strong>${onboarding.completed?'Completed':'Finish when ready'}</strong></div><div class="explore-grid">${[['Dashboard','gateway health'],['Changes','recovery history'],['Processes','managed commands'],['Audit','security events'],['Settings','advanced controls'],['Guide','offline manual']].map(([name,desc])=>`<button type="button" data-page-jump="${name.toLowerCase()}"><b>${name}</b><span>${desc}</span></button>`).join('')}</div><div class="actions"><button type="button" class="primary" id="finish-onboarding">${onboarding.completed?'Onboarding completed':'Finish onboarding'}</button></div></section>`;
   const reload=()=>gettingStarted(el,status);
   wireRemoteAccess(el,cf,'onboard',reload);
-  el.onclick=async(event)=>{if(await decideOauth(el,event,reload))return;const page=event.target.closest('[data-page-jump]')?.dataset.pageJump;const guideSlug=event.target.closest('[data-guide-jump]')?.dataset.guideJump;if(page){state.page=page;render();return;}if(guideSlug){state.guideSlug=guideSlug;state.page='guide';render();return;}const copy=event.target.closest('[data-copy]')?.dataset.copy;if(copy)await navigator.clipboard.writeText(copy);};
+  el.onclick=async(event)=>{const page=event.target.closest('[data-page-jump]')?.dataset.pageJump;const guideSlug=event.target.closest('[data-guide-jump]')?.dataset.guideJump;if(page){state.page=page;render();return;}if(guideSlug){state.guideSlug=guideSlug;state.page='guide';render();return;}const copy=event.target.closest('[data-copy]')?.dataset.copy;if(copy)await navigator.clipboard.writeText(copy);};
   el.querySelector('#onboard-workspace')?.addEventListener('submit',async(event)=>{event.preventDefault();await api('/api/workspaces',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(event.target)))});await reload();});
-  el.querySelector('#finish-onboarding')?.addEventListener('click',async()=>{await api('/api/onboarding',{method:'PATCH',body:JSON.stringify({completed:true,completedSections:['local-gateway','remote-access','connect-ai','workspace','try-aevra','explore']})});state.page='dashboard';render();});
+  el.querySelector('#finish-onboarding')?.addEventListener('click',async()=>{await api('/api/onboarding',{method:'PATCH',body:JSON.stringify({completed:true,completedSections:['remote-access','connect-ai','workspace','try-aevra','explore']})});await reload();});
 }
 
 function markdownToHtml(source) {
@@ -100,10 +131,7 @@ async function guide(el) {
 
 async function dashboard(el, status) {
   const metrics = await api('/api/metrics');
-
-  const [approvals, sessions, processes, changes] = await Promise.all([
-    api('/api/approvals'), api('/api/sessions'), api('/api/processes'), api('/api/changes'),
-  ]);
+  const [approvals, sessions, processes, changes] = await Promise.all([api('/api/approvals'), api('/api/sessions'), api('/api/processes'), api('/api/changes')]);
   el.innerHTML = card('Tool usage', metrics.map((entry) => `<article><b>${h(entry.tool)}</b> ${entry.calls} calls · ${entry.avgMs}ms avg</article>`).join('') || '<p>No tool calls recorded yet.</p>') + card('Gateway status', `<div class="grid"><div><b>Core</b><strong>${h(status.core)}</strong></div><div><b>Worker</b><strong>${h(status.worker)}</strong></div><div><b>Tunnel</b><strong>${h(status.tunnel)}</strong></div><div><b>Pending</b><strong>${approvals.filter((x) => x.state === 'PENDING').length}</strong></div></div>`) + card('Activity', `<p>${sessions.length} remote sessions · ${processes.length} managed processes · ${changes.length} change sets</p>`);
 }
 
@@ -111,84 +139,45 @@ async function workspaces(el) {
   const items = await api('/api/workspaces');
   const expanded = await Promise.all(items.map(async (workspace) => ({ ...workspace, mounts: await api(`/api/workspaces/${workspace.id}/mounts`) })));
   el.innerHTML = card('Register workspace', `<form id="workspace-form"><input name="name" placeholder="Name" required><input name="description" placeholder="Description"><input name="hostRoot" placeholder="Local host path" required><button>Add workspace</button></form>`) + card('Workspaces', expanded.map((workspace) => `<article><div class="row"><div><b>${h(workspace.name)}</b><code>${h(workspace.hostRoot ?? '')}</code></div><button data-delete-workspace="${workspace.id}">Remove</button></div><p>${h(workspace.description)}</p><h3>External mounts</h3>${workspace.mounts.map((mount) => `<div class="subrow"><code>${h(mount.logicalPath)}</code><span>${h((mount.capabilities ?? []).join(', '))}</span><button data-delete-mount="${mount.id}">Remove</button></div>`).join('') || '<p>No external mounts.</p>'}<form data-mount-form="${workspace.id}"><input name="logicalPath" placeholder="/external/shared-sdk" required><input name="hostRoot" placeholder="Local mount root" required><label><input type="checkbox" name="read" checked> Read/search</label><label><input type="checkbox" name="write"> Write</label><label><input type="checkbox" name="command"> Commands</label><input name="sensitivityPolicyId" placeholder="Sensitivity policy (optional)"><button>Add mount</button></form><h3>Actor admission</h3><form data-admission-form="${workspace.id}"><input name="actor" placeholder="actor@example.com" required><select name="profileId"><option value="read-only">Read Only</option><option value="developer" selected>Developer</option><option value="full-workspace">Full Workspace</option></select><select name="admission"><option value="auto">Auto-admit</option><option value="ask">Ask every time</option></select><button>Save admission</button></form></article>`).join('') || '<p>No workspaces registered.</p>');
-  el.querySelector('#workspace-form')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    await api('/api/workspaces', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });
-    workspaces(el);
-  });
-  for (const form of el.querySelectorAll('[data-mount-form]')) form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const data = Object.fromEntries(new FormData(event.target));
-    const capabilities = ['files.read', 'files.search'];
-    if (data.write) capabilities.push('files.write');
-    if (data.command) capabilities.push('commands.run');
-    await api(`/api/workspaces/${form.dataset.mountForm}/mounts`, { method: 'POST', body: JSON.stringify({ logicalPath: data.logicalPath, hostRoot: data.hostRoot, sensitivityPolicyId: data.sensitivityPolicyId || undefined, capabilities }) });
-    workspaces(el);
-  });
-  for (const form of el.querySelectorAll('[data-admission-form]')) form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    await api(`/api/workspaces/${form.dataset.admissionForm}/admission`, { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });
-    alert('Admission mapping saved.');
-  });
-  el.onclick = async (event) => {
-    const workspaceId = event.target.closest('[data-delete-workspace]')?.dataset.deleteWorkspace;
-    const mountId = event.target.closest('[data-delete-mount]')?.dataset.deleteMount;
-    if (workspaceId) await api(`/api/workspaces/${workspaceId}`, { method: 'DELETE' });
-    if (mountId) await api(`/api/mounts/${mountId}`, { method: 'DELETE' });
-    if (workspaceId || mountId) workspaces(el);
-  };
+  el.querySelector('#workspace-form')?.addEventListener('submit', async (event) => {event.preventDefault();await api('/api/workspaces', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });workspaces(el);});
+  for (const form of el.querySelectorAll('[data-mount-form]')) form.addEventListener('submit', async (event) => {event.preventDefault();const data = Object.fromEntries(new FormData(event.target));const capabilities = ['files.read', 'files.search'];if (data.write) capabilities.push('files.write');if (data.command) capabilities.push('commands.run');await api(`/api/workspaces/${form.dataset.mountForm}/mounts`, { method: 'POST', body: JSON.stringify({ logicalPath: data.logicalPath, hostRoot: data.hostRoot, sensitivityPolicyId: data.sensitivityPolicyId || undefined, capabilities }) });workspaces(el);});
+  for (const form of el.querySelectorAll('[data-admission-form]')) form.addEventListener('submit', async (event) => {event.preventDefault();await api(`/api/workspaces/${form.dataset.admissionForm}/admission`, { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });alert('Admission mapping saved.');});
+  el.onclick = async (event) => {const workspaceId = event.target.closest('[data-delete-workspace]')?.dataset.deleteWorkspace;const mountId = event.target.closest('[data-delete-mount]')?.dataset.deleteMount;if (workspaceId) await api(`/api/workspaces/${workspaceId}`, { method: 'DELETE' });if (mountId) await api(`/api/mounts/${mountId}`, { method: 'DELETE' });if (workspaceId || mountId) workspaces(el);};
 }
 
 async function approvals(el) {
-  const [items,pairings]=await Promise.all([api('/api/approvals'),api('/api/oauth/requests')]);
-  el.innerHTML=card('OAuth pairing',pairingMarkup(pairings))+card('Operation approvals', items.map((item) => `<article><div class="row"><b>${h(item.operation?.family ?? item.id)}</b><span class="risk ${String(item.risk).toLowerCase()}">${h(item.risk)}</span></div><p>${h(item.workspaceId)} / ${h(item.state)}</p>${item.state === 'PENDING' ? `<div class="actions"><button data-deny="${item.id}">Deny</button><button class="primary" data-approve="${item.id}" data-scope="once">Run once</button><button data-approve="${item.id}" data-scope="session">Allow session</button>${item.risk === 'CRITICAL' ? '' : `<button data-approve="${item.id}" data-scope="workspace">Always workspace</button><button data-approve="${item.id}" data-scope="global">Always all</button>`}</div>` : ''}</article>`).join('') || '<p>No operation approvals waiting.</p>');
-  el.onclick = async (event) => {
-    if(await decideOauth(el,event,()=>approvals(el)))return;
-    const approve = event.target.closest('[data-approve]');const deny = event.target.closest('[data-deny]');
-    if (approve) await api(`/api/approvals/${approve.dataset.approve}/approve`, { method: 'POST', body: JSON.stringify({ scope: approve.dataset.scope }) });
-    if (deny) await api(`/api/approvals/${deny.dataset.deny}/deny`, { method: 'POST', body: '{}' });
-    if (approve || deny) approvals(el);
-  };
+  const [items,pairings,workspaces]=await Promise.all([api('/api/approvals'),api('/api/oauth/requests'),api('/api/workspaces')]);
+  const names=new Map(workspaces.map(workspace=>[workspace.id,workspace.name]));
+  const operationMarkup=items.map((item)=>{
+    const admission=item.operation?.family==='workspace:select';
+    const title=admission?'Workspace access':item.operation?.family ?? item.id;
+    const context=admission?`${h(item.actor)} requests access to ${h(names.get(item.workspaceId)??item.workspaceId)}`:`${h(item.workspaceId)} / ${h(item.state)}`;
+    const actions=item.state!=='PENDING'?'':admission?`<div class="actions admission-actions"><button data-deny="${item.id}">Deny</button><button class="primary" data-approve="${item.id}" data-scope="once">Allow</button></div>`:`<div class="actions"><button data-deny="${item.id}">Deny</button><button class="primary" data-approve="${item.id}" data-scope="once">Run once</button><button data-approve="${item.id}" data-scope="session">Allow session</button>${item.risk === 'CRITICAL' ? '' : `<button data-approve="${item.id}" data-scope="workspace">Always workspace</button><button data-approve="${item.id}" data-scope="global">Always all</button>`}</div>`;
+    return `<article class="${admission?'admission-request':''}"><div class="row"><b>${h(title)}</b><span class="risk ${String(item.risk).toLowerCase()}">${h(item.risk)}</span></div><p>${context}</p><p class="muted">${h(item.state)}</p>${actions}</article>`;
+  }).join('');
+  el.innerHTML=card('OAuth pairing',pairingMarkup(pairings))+card('Operation approvals',operationMarkup || '<p>No operation approvals waiting.</p>');
+  el.onclick = async (event) => {if(await decideOauth(el,event,()=>approvals(el)))return;const approve = event.target.closest('[data-approve]');const deny = event.target.closest('[data-deny]');if (approve) await api(`/api/approvals/${approve.dataset.approve}/approve`, { method: 'POST', body: JSON.stringify({ scope: approve.dataset.scope }) });if (deny) await api(`/api/approvals/${deny.dataset.deny}/deny`, { method: 'POST', body: '{}' });if (approve || deny) approvals(el);};
 }
 
 async function permissions(el) {
   const [items, workspaces] = await Promise.all([api('/api/permissions'), api('/api/workspaces')]);
   const capabilities = ['files.read', 'files.search', 'git.read', 'files.write', 'files.delete', 'commands.run', 'git.commit', 'git.push', 'network'];
   el.innerHTML = card('Create permission rule', `<form id="permission-form"><select name="effect"><option value="allow">Allow</option><option value="deny">Deny</option></select><select name="capability">${capabilities.map((x) => `<option>${x}</option>`).join('')}</select><select name="scope"><option value="session">Session</option><option value="workspace" selected>Workspace</option><option value="global">Global</option></select><select name="workspaceId"><option value="">No workspace / global</option>${workspaces.map((w) => `<option value="${w.id}">${h(w.name)}</option>`).join('')}</select><input name="actor" placeholder="Actor (optional)"><input name="matcher" placeholder="Matcher, e.g. npm:test" required><button>Create rule</button></form><p>Critical operations cannot receive persistent always-allow rules.</p>`) + card('Permission rules', items.map((item) => `<article><div class="row"><b>${h(item.effect)} ${h(item.capability)}</b><code>${h(item.matcher)}</code></div><p>${h(item.scope)} ${item.workspace_id ? `· ${h(item.workspace_id)}` : ''}</p><button data-remove="${item.id}">Revoke</button></article>`).join('') || '<p>No remembered rules.</p>');
-  el.querySelector('#permission-form')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const value = Object.fromEntries(new FormData(event.target));
-    if (!value.workspaceId) delete value.workspaceId;
-    if (!value.actor) delete value.actor;
-    await api('/api/permissions', { method: 'POST', body: JSON.stringify(value) });
-    permissions(el);
-  });
-  el.onclick = async (event) => {
-    const id = event.target.closest('[data-remove]')?.dataset.remove;
-    if (id) { await api(`/api/permissions/${id}`, { method: 'DELETE' }); permissions(el); }
-  };
+  el.querySelector('#permission-form')?.addEventListener('submit', async (event) => {event.preventDefault();const value = Object.fromEntries(new FormData(event.target));if (!value.workspaceId) delete value.workspaceId;if (!value.actor) delete value.actor;await api('/api/permissions', { method: 'POST', body: JSON.stringify(value) });permissions(el);});
+  el.onclick = async (event) => {const id = event.target.closest('[data-remove]')?.dataset.remove;if (id) { await api(`/api/permissions/${id}`, { method: 'DELETE' }); permissions(el); }};
 }
 
 async function sessions(el) {
   const [remote, local, workspaces] = await Promise.all([api('/api/sessions'), api('/api/admin-sessions'), api('/api/workspaces')]);
-  el.innerHTML = card('Remote MCP sessions', remote.map((session) => `<article><b>${h(session.actor)}</b><code>${h(session.id)}</code><p>${h(session.activeLeaseId ? 'workspace active' : 'no workspace')}</p><form data-switch-session="${session.id}"><select name="workspaceId">${workspaces.map((w) => `<option value="${w.id}">${h(w.name)}</option>`).join('')}</select><input type="number" name="timeoutMs" min="0" value="60000" title="Graceful drain timeout in milliseconds"><button>Switch workspace</button></form><button data-revoke-session="${session.id}">Revoke</button></article>`).join('') || '<p>No active remote sessions.</p>') + card('Local admin sessions', local.map((session) => `<article><code>${h(String(session.idHash).slice(0, 16))}…</code><p>Last used ${h(session.lastUsedAt)}</p><button data-revoke-admin="${session.idHash}">Revoke</button></article>`).join(''));
-  for (const form of el.querySelectorAll('[data-switch-session]')) form.addEventListener('submit', async (event) => {
-    event.preventDefault(); const value = Object.fromEntries(new FormData(event.target));
-    await api(`/api/sessions/${form.dataset.switchSession}/workspace`, { method: 'POST', body: JSON.stringify({ workspaceId: value.workspaceId, timeoutMs: Number(value.timeoutMs) }) }); sessions(el);
-  });
-  el.onclick = async (event) => {
-    const sessionId = event.target.closest('[data-revoke-session]')?.dataset.revokeSession;
-    const adminId = event.target.closest('[data-revoke-admin]')?.dataset.revokeAdmin;
-    if (sessionId) await api(`/api/sessions/${sessionId}/revoke`, { method: 'POST', body: '{}' });
-    if (adminId) await api(`/api/admin-sessions/${adminId}/revoke`, { method: 'POST', body: '{}' });
-    if (sessionId || adminId) sessions(el);
-  };
+  el.innerHTML = card('Remote MCP sessions', remote.map((session) => `<article><b>${h(session.actor)}</b><code>${h(session.id)}</code><p>${h(session.activeLeaseId ? 'workspace active' : 'no workspace')}</p><form data-switch-session="${session.id}"><select name="workspaceId">${workspaces.map((w) => `<option value="${w.id}">${h(w.name)}</option>`).join('')}</select><input type="number" name="timeoutMs" min="0" value="60000" title="Graceful drain timeout in milliseconds"><button>Switch workspace</button></form><button data-revoke-session="${session.id}">Revoke</button></article>`).join('') || '<p>No active remote sessions.</p>') + card('Local admin sessions', local.map((session) => `<article><code>${h(String(session.idHash).slice(0, 16))}…</code><p>Last used ${h(localDateTime(session.lastUsedAt))}</p><button data-revoke-admin="${session.idHash}">Revoke</button></article>`).join(''));
+  for (const form of el.querySelectorAll('[data-switch-session]')) form.addEventListener('submit', async (event) => {event.preventDefault(); const value = Object.fromEntries(new FormData(event.target));await api(`/api/sessions/${form.dataset.switchSession}/workspace`, { method: 'POST', body: JSON.stringify({ workspaceId: value.workspaceId, timeoutMs: Number(value.timeoutMs) }) }); sessions(el);});
+  el.onclick = async (event) => {const sessionId = event.target.closest('[data-revoke-session]')?.dataset.revokeSession;const adminId = event.target.closest('[data-revoke-admin]')?.dataset.revokeAdmin;if (sessionId) await api(`/api/sessions/${sessionId}/revoke`, { method: 'POST', body: '{}' });if (adminId) await api(`/api/admin-sessions/${adminId}/revoke`, { method: 'POST', body: '{}' });if (sessionId || adminId) sessions(el);};
 }
 
 async function connectors(el) {
   const [items,health]=await Promise.all([api('/api/connectors'),api('/api/status')]);
   const failedAttempts=Number(health?.connectorFailedAttempts??0);
-  el.innerHTML=(failedAttempts>0?card('Failed connector attempts',`<p class="banner danger">${failedAttempts} failed Bearer connector admission attempt(s). Rotate credentials if a token may be stale or exposed.</p>`):'')+card('Advanced Bearer connector',`<form id="new-connector">${field('Connector name','<input name="name" placeholder="CLI client" required>')}<button class="primary">Create Bearer token</button></form><p>OAuth is preferred for ChatGPT. Use a connector when a client supports a fixed <code>Authorization: Bearer &lt;token&gt;</code> credential.</p><div id="connector-secret"></div>`)+card('Connectors',items.map(connector=>`<article><b>${h(connector.name)}</b><p>Created ${h(connector.createdAt)}${connector.lastUsedAt?` / last used ${h(connector.lastUsedAt)}`:''}</p><button data-revoke-connector="${h(connector.id)}">Revoke</button></article>`).join('')||'<p>No static Bearer connectors.</p>');
+  el.innerHTML=(failedAttempts>0?card('Failed connector attempts',`<p class="banner danger">${failedAttempts} failed Bearer connector admission attempt(s). Rotate credentials if a token may be stale or exposed.</p>`):'')+card('Advanced Bearer connector',`<form id="new-connector">${field('Connector name','<input name="name" placeholder="CLI client" required>')}<button class="primary">Create Bearer token</button></form><p>OAuth is preferred for ChatGPT. Use a connector when a client supports a fixed <code>Authorization: Bearer &lt;token&gt;</code> credential.</p><div id="connector-secret"></div>`)+card('Connectors',items.map(connector=>`<article><b>${h(connector.name)}</b><p>Created ${h(localDateTime(connector.createdAt))}${connector.lastUsedAt?` / last used ${h(localDateTime(connector.lastUsedAt))}`:''}</p><button data-revoke-connector="${h(connector.id)}">Revoke</button></article>`).join('')||'<p>No static Bearer connectors.</p>');
   el.querySelector('#new-connector')?.addEventListener('submit',async(event)=>{event.preventDefault();const name=String(Object.fromEntries(new FormData(event.target)).name??'').trim();if(!name)return;const created=await api('/api/connectors',{method:'POST',body:JSON.stringify({name})});el.querySelector('#connector-secret').innerHTML=`<div class="secret-result"><b>Copy this token now. It is shown once.</b><code>${h(created.token)}</code><button type="button" id="copy-connector-token">Copy token</button></div>`;el.querySelector('#copy-connector-token')?.addEventListener('click',()=>navigator.clipboard.writeText(created.token));});
   el.onclick=async(event)=>{const id=event.target.closest('[data-revoke-connector]')?.dataset.revokeConnector;if(id&&confirm('Revoke this connector?')){await api(`/api/connectors/${id}`,{method:'DELETE'});connectors(el);}};
 }
@@ -209,8 +198,7 @@ async function changes(el) {
 async function audit(el) {
   const verify = await api('/api/audit/verify');
   const events = await api('/api/audit/export?format=json');
-  el.innerHTML = card('Audit integrity', `<p>Hash chain: <b>${verify.valid ? 'valid' : `broken at ${h(verify.brokenEventId)}`}</b></p><a href="/api/audit/export?format=json" target="_blank">Export JSON</a> · <a href="/api/audit/export?format=jsonl" target="_blank">Export JSONL</a>`) +
-    card('Recent events', `<input id="audit-filter" placeholder="Filter by actor or operation"><div id="audit-rows">${events.slice(-50).reverse().map((e) => `<article data-audit="${h(e.event.actor ?? '')} ${h(e.event.operation)}"><b>${h(e.event.operation)}</b>${e.event.actor ? ` · ${h(e.event.actor)}` : ''}${e.event.target ? ` · ${h(e.event.target)}` : ''}<p>${h(e.createdAt)}</p></article>`).join('') || '<p>No events.</p>'}</div>`);
+  el.innerHTML = card('Audit integrity', `<p>Hash chain: <b>${verify.valid ? 'valid' : `broken at ${h(verify.brokenEventId)}`}</b></p><a href="/api/audit/export?format=json" target="_blank">Export JSON</a> · <a href="/api/audit/export?format=jsonl" target="_blank">Export JSONL</a>`) + card('Recent events', `<input id="audit-filter" placeholder="Filter by actor or operation"><div id="audit-rows">${events.slice(-50).reverse().map((e) => `<article data-audit="${h(e.event.actor ?? '')} ${h(e.event.operation)}"><b>${h(e.event.operation)}</b>${e.event.actor ? ` · ${h(e.event.actor)}` : ''}${e.event.target ? ` · ${h(e.event.target)}` : ''}<p>${h(localDateTime(e.createdAt))}</p></article>`).join('') || '<p>No events.</p>'}</div>`);
   el.querySelector('#audit-filter').addEventListener('input', (event) => { const q = String(event.target.value ?? '').toLowerCase(); for (const row of el.querySelectorAll('[data-audit]')) row.style.display = row.dataset.audit.toLowerCase().includes(q) ? '' : 'none'; });
 }
 

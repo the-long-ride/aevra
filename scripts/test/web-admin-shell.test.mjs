@@ -4,9 +4,61 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 
 test('local admin shell exposes control-plane pages without legacy browser relay',()=>{const app=readFileSync('apps/web/app.js','utf8');for(const page of ['workspaces','approvals','permissions','sessions','connectors','processes','changes','audit','settings'])assert.match(app,new RegExp(page));assert.doesNotMatch(app,/browser relay|extension control websocket/i);assert.match(app,/SAFE MODE/);});
-test('web admin shell JavaScript parses before it is shipped',()=>{const result=spawnSync(process.execPath,['--check','apps/web/app.js'],{encoding:'utf8'});assert.equal(result.status,0,result.stderr||result.stdout);});
+test('web admin shell JavaScript parses before it is shipped',()=>{for(const file of ['apps/web/app.js','apps/web/ui-runtime.js']){const result=spawnSync(process.execPath,['--check',file],{encoding:'utf8'});assert.equal(result.status,0,result.stderr||result.stdout);}});
 test('build validates browser JavaScript before copying static assets',()=>{const pkg=JSON.parse(readFileSync('package.json','utf8'));assert.match(pkg.scripts.build,/node --check apps\/web\/app\.js/);});
-test('Neon console design authority replaces BMW styling and keeps the dense admin shell compact',()=>{const design=readFileSync('.agents/designs/design.md','utf8');const css=readFileSync('apps/web/app.css','utf8');const app=readFileSync('apps/web/app.js','utf8');assert.match(design,/Aevra Neon Console Design System/i);assert.doesNotMatch(design,/BMW M|m-blue|m-red/i);assert.match(design,/DESIGN_VARIANCE:\s*5/);assert.match(design,/VISUAL_DENSITY:\s*7/);assert.match(css,/--canvas:\s*#0b0d0e/i);assert.match(css,/--accent:\s*#73f2a7/i);assert.doesNotMatch(css,/#000000|--m-blue|--m-red/i);assert.match(css,/border-radius:\s*8px/);assert.match(css,/\.card-grid/);assert.match(css,/pre\s*\{[^}]*max-height:/s);assert.match(app,/card-grid/);});
+
+test('xAI design authority keeps the dense admin shell compact without a boxed navigation rail',()=>{
+  const css=readFileSync('apps/web/app.css','utf8');
+  assert.match(css,/--canvas:\s*#0a0a0a/i);
+  assert.match(css,/--surface:\s*#191919/i);
+  assert.match(css,/--border:\s*#212327/i);
+  assert.match(css,/--accent:\s*#ffffff/i);
+  assert.doesNotMatch(css,/#73f2a7|--m-blue|--m-red/i);
+  assert.match(css,/border-radius:\s*9999px/);
+  assert.match(css,/nav\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/s);
+  assert.doesNotMatch(css,/nav button\.active\s*\{[^}]*box-shadow:\s*inset/s);
+  assert.match(css,/\.card-grid/);
+  assert.match(css,/\.card\s*\{[^}]*border-radius:\s*8px/s);
+  assert.doesNotMatch(css,/\.card\s*\{[^}]*box-shadow:/s);
+});
+
+test('UI runtime loads before the app and provides mutation toasts plus live request notifications',()=>{
+  const html=readFileSync('apps/web/index.html','utf8');
+  const runtimeIndex=html.indexOf('ui-runtime.js');
+  const appIndex=html.indexOf('app.js');
+  assert.ok(runtimeIndex>=0&&appIndex>runtimeIndex,'ui-runtime.js must load before app.js');
+  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
+  assert.match(runtime,/window\.fetch\s*=/);
+  assert.match(runtime,/response\.clone\(\)/);
+  assert.match(runtime,/toast-stack/);
+  assert.match(runtime,/\/api\/oauth\/requests/);
+  assert.match(runtime,/\/api\/approvals/);
+  assert.match(runtime,/Notification\.permission/);
+  assert.match(runtime,/data-page=["']approvals["']/);
+  assert.match(runtime,/cloudflare\/status/);
+});
+
+test('endpoint test toast uses the concrete reachability result instead of a generic success label',()=>{
+  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
+  assert.match(runtime,/function\s+mutationToast\s*\(/);
+  assert.match(runtime,/\/cloudflare\/test/);
+  assert.match(runtime,/Endpoint reachable/);
+  assert.match(runtime,/Endpoint unreachable/);
+  assert.doesNotMatch(runtime,/Remote endpoint checked/);
+});
+
+test('list-heavy tabs use shared compact responsive runtime treatment',()=>{
+  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
+  for(const page of ['workspaces','approvals','permissions','sessions','connectors','processes','changes','audit'])assert.match(runtime,new RegExp(`['\"]${page}['\"]`));
+  for(const className of ['dense-page','dense-list','dense-row','dense-actions','dense-create','dense-details','dense-history'])assert.match(runtime,new RegExp(className));
+  assert.match(runtime,/min-height:\s*38px/);
+  assert.match(runtime,/@media\(max-width:900px\)/);
+  assert.match(runtime,/@media\(max-width:680px\)/);
+  assert.match(runtime,/compactApprovalHistory/);
+  assert.match(runtime,/wrapForm\(page\.querySelector\('#workspace-form'\),'Add workspace'\)/);
+  assert.match(runtime,/wrapForm\(page\.querySelector\('#permission-form'\),'Create permission rule'\)/);
+  assert.match(runtime,/wrapForm\(page\.querySelector\('#new-connector'\),'Create Bearer connector'\)/);
+});
 
 test('Settings and Getting Started use OAuth-first remote access without URL secrets',()=>{
   const app=readFileSync('apps/web/app.js','utf8');
@@ -25,6 +77,73 @@ test('Settings and Getting Started use OAuth-first remote access without URL sec
   assert.match(css,/\.guide-layout/);
 });
 
+test('Getting Started removes the duplicate Local Gateway card and Remote Access uses the compact layout',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  const css=readFileSync('apps/web/app.css','utf8');
+  const start=app.slice(app.indexOf('async function gettingStarted'),app.indexOf('function markdownToHtml'));
+  assert.doesNotMatch(start,/Local Gateway/);
+  assert.doesNotMatch(start,/local-gateway/);
+  for(const className of ['remote-access-head','remote-provider','remote-config-grid','remote-actions']){
+    assert.match(app,new RegExp(className));
+    assert.match(css,new RegExp(`\\.${className}`));
+  }
+});
+
+test('workspace admission approvals are visible locally and expose only Allow and Deny',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  const approvalFn=app.slice(app.indexOf('async function approvals'),app.indexOf('async function permissions'));
+  assert.match(approvalFn,/workspace:select/);
+  assert.match(approvalFn,/Workspace access/);
+  assert.match(approvalFn,/data-approve/);
+  assert.match(approvalFn,/data-deny/);
+  assert.match(approvalFn,/admission/);
+});
+
+test('header renders compact Core Worker MCP and Tunnel health chips without repeated running labels',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  const shellFn=app.slice(app.indexOf('function shell'),app.indexOf('function pairingMarkup'));
+  for(const name of ['Core','Worker','MCP','Tunnel'])assert.match(shellFn,new RegExp(name));
+  assert.match(shellFn,/health-chip/);
+  assert.match(shellFn,/health-dot/);
+  assert.match(shellFn,/data-health/);
+  assert.doesNotMatch(shellFn,/>Core \$\{h\(status\.core\)\}</);
+  assert.doesNotMatch(shellFn,/>Worker \$\{h\(status\.worker\)\}</);
+});
+
+test('Connect an AI is example guidance with parallel ChatGPT Claude and Gemini cards and no pairing queue',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  const start=app.slice(app.indexOf('async function gettingStarted'),app.indexOf('function markdownToHtml'));
+  assert.match(start,/example/i);
+  for(const provider of ['ChatGPT','Claude','Gemini'])assert.match(start,new RegExp(provider));
+  assert.match(start,/client-example/);
+  assert.match(start,/connect-chatgpt/);
+  assert.match(start,/connect-claude/);
+  assert.match(start,/connect-gemini/);
+  assert.doesNotMatch(start,/>Pairing requests</i);
+  assert.doesNotMatch(start,/pairingMarkup\(pairings\)/);
+});
+
+test('responsive UI provides three-to-two-to-one provider columns and no forced horizontal card overflow',()=>{
+  const css=readFileSync('apps/web/app.css','utf8');
+  assert.match(css,/\.client-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3/s);
+  assert.match(css,/@media\(max-width:1100px\)[\s\S]*\.client-grid\s*\{[^}]*repeat\(2/s);
+  assert.match(css,/@media\(max-width:680px\)[\s\S]*\.client-grid\s*\{[^}]*1fr/s);
+  assert.match(css,/overflow-x:\s*(?:clip|hidden)/);
+});
+
+test('rendered timestamps use the browser device locale and timezone',()=>{
+  const app=readFileSync('apps/web/app.js','utf8');
+  const runtime=readFileSync('apps/web/ui-runtime.js','utf8');
+  assert.match(app,/function\s+localDateTime\s*\(/);
+  assert.match(app,/toLocaleString\s*\(/);
+  assert.match(app,/localDateTime\(session\.lastUsedAt\)/);
+  assert.match(app,/localDateTime\(connector\.createdAt\)/);
+  assert.match(app,/localDateTime\(connector\.lastUsedAt\)/);
+  assert.match(app,/localDateTime\(e\.createdAt\)/);
+  assert.match(runtime,/function\s+localDateTimeInText\s*\(/);
+  assert.match(runtime,/localizeVisibleDates\s*\(/);
+});
+
 test('first render opens Getting Started until onboarding is complete',()=>{const app=readFileSync('apps/web/app.js','utf8');assert.match(app,/state\s*=\s*\{\s*page:\s*null/);assert.match(app,/onboarding\.completed\s*\?\s*'dashboard'\s*:\s*'getting-started'/);});
 
 test('OAuth pairing UI exposes local allow and deny controls with client and redirect context',()=>{const app=readFileSync('apps/web/app.js','utf8');assert.match(app,/data-oauth-approve/);assert.match(app,/data-oauth-deny/);assert.match(app,/pairingCode/);assert.match(app,/clientName/);assert.match(app,/redirectUri/);assert.match(app,/\/api\/oauth\/requests\/\$\{[^}]+\}\/approve/);assert.match(app,/\/api\/oauth\/requests\/\$\{[^}]+\}\/deny/);});
@@ -32,8 +151,6 @@ test('OAuth pairing UI exposes local allow and deny controls with client and red
 test('authenticated Cloudflare setup uses verification copy instead of promising re-authentication',()=>{const app=readFileSync('apps/web/app.js','utf8');assert.match(app,/Check authentication/);assert.doesNotMatch(app,/>Re-authenticate</);});
 
 test('Guide page loads the API manifest and shipped local manual chapters',()=>{const app=readFileSync('apps/web/app.js','utf8');assert.match(app,/async function guide/);assert.match(app,/\/api\/guide/);assert.match(app,/\/manual\/\$\{[^}]+\.file\}/);});
-
-
 
 test('user manual follows the onboarding journey and is copied into the shipped web app',()=>{
   const chapters=[
