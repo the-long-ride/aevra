@@ -9,7 +9,7 @@ async function api(path,init={}){
   if(!response.ok)throw new Error(value?.error?.message||value?.error||`HTTP ${response.status}`);
   return value;
 }
-const h=(value)=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+const h=(value)=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const localTime=(value)=>{if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString();};
 const uniq=(items)=>[...new Set(items.filter(Boolean))];
 const jsonValue=(value,fallback={})=>{try{return JSON.parse(String(value||''));}catch{return fallback;}};
