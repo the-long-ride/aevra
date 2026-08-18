@@ -30,3 +30,8 @@ test('v2 shell does not shadow enhanced admin pages or keep duplicate renderers'
   for(const page of ['workspaces','permissions','sessions','audit'])assert.doesNotMatch(v2,new RegExp(`page==='${page}'`));
   for(const fn of ['renderWorkspaces','openWorkspaceModal','renderPermissions','openPermissionModal','renderSessions','openSessionWorkspaceModal','renderAudit'])assert.doesNotMatch(v2,new RegExp(`function ${fn}\\b|async function ${fn}\\b`));
 });
+
+test('v2 stylesheet drops styles used only by removed duplicate admin pages',()=>{
+  const css=readFileSync('apps/web/app-v2.css','utf8');
+  for(const selector of ['workspace-summary','modal-section','modal-form','modal-details','audit-integrity','button-link','cell-primary'])assert.doesNotMatch(css,new RegExp(`\\.${selector}\\b`));
+});
