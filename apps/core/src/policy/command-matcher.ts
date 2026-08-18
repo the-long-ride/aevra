@@ -1,0 +1,22 @@
+const SUBCOMMAND_EXECUTABLES=new Set(['git','npm','pnpm','yarn','cargo','dotnet','go','rustup','npx']);
+const SHELLS=new Set(['bash','sh','powershell','powershell.exe','pwsh','pwsh.exe']);
+function executableName(value:string){return String(value||'unknown').split(/[\\/]/).pop()!.toLowerCase().replace(/\.exe$/,'');}
+function push(parts:string[],value:string){if(value==='*'&&parts.at(-1)==='*')return;parts.push(value);}
+export function commandPermissionMatcher(command:string[]|{executable:string;args:string[]},options:{shell?:string}={}):string{
+  const argv=Array.isArray(command)?command:[command.executable,...(command.args??[])],rawExe=String(argv[0]??'unknown'),exe=executableName(rawExe),requestedShell=String(options.shell??'').toLowerCase();
+  if(requestedShell||SHELLS.has(rawExe.toLowerCase())||SHELLS.has(exe)){const shell=requestedShell||(/power|pwsh/.test(exe)?'powershell':exe);return `shell:${shell}:*`;}
+  const args=argv.slice(1).map(value=>String(value)),parts=[exe];let index=0,afterSeparator=false;
+  if(SUBCOMMAND_EXECUTABLES.has(exe)&&args[0]&&!args[0]!.startsWith('-')){parts.push(args[0]!.toLowerCase());index=1;}
+  for(;index<args.length;index++){
+    const token=args[index]!;
+    if(afterSeparator){push(parts,'*');continue;}
+    if(token==='--'){parts.push('--');afterSeparator=true;continue;}
+    if(token.startsWith('-')){
+      const eq=token.indexOf('=');
+      if(eq>0){parts.push(token.slice(0,eq));push(parts,'*');}else parts.push(token);
+      continue;
+    }
+    push(parts,'*');
+  }
+  return parts.join(':');
+}
