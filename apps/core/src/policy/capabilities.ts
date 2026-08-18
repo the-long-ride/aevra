@@ -3,6 +3,7 @@ export interface CapabilityProfile{id:string;name:string;capabilities:Capability
 export type AdmissionPolicy='ask'|'auto';
 const BUILTINS:CapabilityProfile[]=[
  {id:'read-only',name:'Read Only',capabilities:['files.read','files.search','git.read'],builtin:true},
+ {id:'coding-session',name:'Coding Session',capabilities:['files.read','files.search','git.read','files.write','commands.run'],builtin:true},
  {id:'developer',name:'Developer',capabilities:['files.read','files.search','git.read','files.write','commands.run','git.commit','network'],builtin:true},
  {id:'full-workspace',name:'Full Workspace',capabilities:['files.read','files.search','git.read','files.write','files.delete','commands.run','git.commit','git.push','network'],builtin:true},
 ];
