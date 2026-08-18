@@ -13,12 +13,12 @@ export function permissionRuleFromApproval(ticket:ApprovalPermissionTicket,scope
   if(scope==='once'||ticket.risk==='CRITICAL')return null;
   const ruleScope=scope==='session'?'session':scope==='workspace'?'workspace':scope==='global'?'global':null;
   if(!ruleScope)return null;
-  const payload=ticket.payload as any;
-  const matcher=payload?.tool==='capability_request'?String(payload.permissionMatcher??ticket.operation.family):ticket.operation.family;
+  const payload=ticket.payload as any,capability=ticket.operation.capability;
+  const matcher=payload?.tool==='capability_request'?(capability==='commands.run'?String(payload.permissionMatcher??ticket.operation.family):'*'):ticket.operation.family;
   return{
     id,
     effect:'allow' as const,
-    capability:ticket.operation.capability,
+    capability,
     scope:ruleScope,
     ...(ruleScope==='workspace'?{workspaceId:ticket.workspaceId}:{}),
     ...(ruleScope==='session'?{sessionId:ticket.sessionId}:{}),
