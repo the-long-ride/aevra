@@ -14,6 +14,8 @@ test('command matcher keeps option names and never stores shell script text',asy
   assert.equal(commandPermissionMatcher(['bash','-lc','cat ./secret.txt'],{shell:'bash'}),'shell:bash:*');
 });
 
+test('host fallback commands use a distinct remembered matcher',async()=>{const {commandPermissionMatcher}=await policy();assert.equal(commandPermissionMatcher(['npm','test'],{executionMode:'sandbox'}),'npm:test');assert.equal(commandPermissionMatcher(['npm','test'],{executionMode:'host'}),'npm:test:host-fallback');assert.equal(commandPermissionMatcher(['powershell.exe','-Command','Get-Content secret.txt'],{shell:'powershell',executionMode:'host'}),'shell:powershell:*:host-fallback');});
+
 test('every unremembered command matcher requires approval regardless of risk',async()=>{const {needsCommandPermissionApproval}=await policy();assert.equal(typeof needsCommandPermissionApproval,'function','needsCommandPermissionApproval must exist');
   assert.equal(needsCommandPermissionApproval(undefined,false),true);
   assert.equal(needsCommandPermissionApproval('approval',false),true);
