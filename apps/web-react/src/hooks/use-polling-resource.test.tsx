@@ -12,9 +12,9 @@ test('polls on the requested interval without immediately looping after data cha
   );
 
   await act(async () => {
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
   });
-  await waitFor(() => expect(result.current.data).not.toBeNull());
+  expect(result.current.data).not.toBeNull();
   expect(load).toHaveBeenCalledTimes(1);
 
   await act(async () => {
