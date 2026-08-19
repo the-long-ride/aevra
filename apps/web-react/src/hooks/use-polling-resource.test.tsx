@@ -52,3 +52,22 @@ test('manual refresh aborts the previous request and keeps the newest result', a
   });
   expect(result.current.data).toBe('newest');
 });
+
+test('unmount aborts the active request and invalidates late completion', async () => {
+  let signal: AbortSignal | undefined;
+  let resolve: ((value: string) => void) | undefined;
+  const load = vi.fn(
+    (nextSignal: AbortSignal) =>
+      new Promise<string>((nextResolve) => {
+        signal = nextSignal;
+        resolve = nextResolve;
+      }),
+  );
+  const { unmount } = renderHook(() => usePollingResource({ load }));
+
+  await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+  unmount();
+  expect(signal?.aborted).toBe(true);
+  resolve?.('late');
+  await Promise.resolve();
+});
