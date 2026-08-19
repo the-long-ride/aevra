@@ -8,6 +8,7 @@ import {
 } from '../auth/cloudflare.js';
 import type { AevraOAuthService } from '../auth/oauth.js';
 import { handleJsonRpc } from '../../../../packages/mcp-tools/src/register.js';
+import { McpActivityLog } from './activity-log.js';
 import { McpDiagnostics } from './diagnostics.js';
 import { bearerToken, readJson, remoteIp, sendJson } from './http-response.js';
 import { handleOAuthRoute } from './oauth-routes.js';
@@ -37,6 +38,7 @@ export interface McpIngressServerOptions {
   advertisedHost?: string;
   plainMcpEnabled?: boolean;
   oauth?: AevraOAuthService;
+  activity?: McpActivityLog;
 }
 
 const LEGACY_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] as const;
@@ -126,6 +128,10 @@ export class McpIngressServer {
     this.diagnostics.stopped();
   }
 
+  private activeWorkspaceId(sessionId: string) {
+    return this.runtime?.sessions.activeLease?.(sessionId)?.workspaceId as string | undefined;
+  }
+
   private async handle(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', this.url());
     const path = url.pathname;
@@ -207,7 +213,15 @@ export class McpIngressServer {
         return;
       }
       this.diagnostics.recordIdentity(identity.actor, sessionId);
+      const workspaceId = this.activeWorkspaceId(sessionId);
       this.runtime!.sessions.disconnect(sessionId);
+      this.options.activity?.instant({
+        actor: identity.actor,
+        sessionId,
+        workspaceId,
+        kind: 'session',
+        action: 'disconnect',
+      });
       res.statusCode = 204;
       res.end();
       return;
@@ -233,6 +247,13 @@ export class McpIngressServer {
     if (body?.method === 'initialize') {
       const session = this.runtime!.sessions.create(identity, remoteIp(req));
       this.diagnostics.recordIdentity(identity.actor, session.id);
+      this.options.activity?.instant({
+        actor: identity.actor,
+        sessionId: session.id,
+        workspaceId: this.activeWorkspaceId(session.id),
+        kind: 'session',
+        action: 'initialize',
+      });
       res.setHeader('mcp-session-id', session.id);
       sendJson(res, 200, {
         jsonrpc: '2.0',
@@ -274,8 +295,40 @@ export class McpIngressServer {
     if (body?.method === 'tools/call') {
       this.diagnostics.recordToolCall(body?.params?.name, sessionId);
     }
-    const result = await handleJsonRpc(this.runtime!.service, sessionId, body);
-    sendJson(res, 200, result);
+
+    const method = typeof body?.method === 'string' && body.method ? body.method : 'unknown';
+    const toolName = typeof body?.params?.name === 'string' && body.params.name ? body.params.name : 'unknown-tool';
+    const activity = this.options.activity?.begin({
+      actor: identity.actor,
+      sessionId,
+      workspaceId: this.activeWorkspaceId(sessionId),
+      kind: method === 'tools/call' ? 'tool' : 'rpc',
+      action: method === 'tools/call' ? toolName : method,
+    });
+    const startedAt = Date.now();
+    try {
+      const result = await handleJsonRpc(this.runtime!.service, sessionId, body);
+      const failed = Boolean((result as any)?.error || (result as any)?.result?.isError);
+      if (activity) {
+        this.options.activity?.finish(
+          activity.id,
+          failed ? 'error' : 'success',
+          Date.now() - startedAt,
+          this.activeWorkspaceId(sessionId),
+        );
+      }
+      sendJson(res, 200, result);
+    } catch (error) {
+      if (activity) {
+        this.options.activity?.finish(
+          activity.id,
+          'error',
+          Date.now() - startedAt,
+          this.activeWorkspaceId(sessionId),
+        );
+      }
+      throw error;
+    }
   }
 
   private async resolvePlainIdentity(req: IncomingMessage) {
