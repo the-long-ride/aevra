@@ -12,6 +12,7 @@ import { SessionsPage } from '../features/sessions/SessionsPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { WorkspacesPage } from '../features/workspaces/WorkspacesPage';
 import { useRuntimeStatus } from '../hooks/use-runtime-status';
+import { useTheme } from '../hooks/use-theme';
 import { useHashPage } from './use-hash-page';
 
 const pageRegistry: Record<AdminPageId, ComponentType> = {
@@ -29,6 +30,7 @@ const pageRegistry: Record<AdminPageId, ComponentType> = {
 export function App() {
   const { page, navigate } = useHashPage();
   const status = useRuntimeStatus();
+  const { theme, toggleTheme } = useTheme();
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const Page = pageRegistry[page];
@@ -42,9 +44,11 @@ export function App() {
       <AppShell
         page={page}
         status={status}
+        theme={theme}
         pendingCount={pendingCount}
         requestsOpen={requestsOpen}
         onNavigate={navigate}
+        onToggleTheme={toggleTheme}
         onOpenRequests={() => setRequestsOpen(true)}
       >
         <Page />
