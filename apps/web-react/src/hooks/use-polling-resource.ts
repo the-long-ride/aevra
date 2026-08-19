@@ -25,6 +25,12 @@ export function usePollingResource<T>({
   const controller = useRef<AbortController | null>(null);
   const hasData = useRef(false);
 
+  const invalidate = useCallback(() => {
+    generation.current += 1;
+    controller.current?.abort();
+    controller.current = null;
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!enabled) return;
     const currentGeneration = ++generation.current;
@@ -57,22 +63,22 @@ export function usePollingResource<T>({
 
   useEffect(() => {
     if (!enabled) {
-      controller.current?.abort();
+      invalidate();
       setLoading(false);
       return undefined;
     }
 
     void refresh();
     if (intervalMs <= 0) {
-      return () => controller.current?.abort();
+      return invalidate;
     }
 
     const timer = window.setInterval(() => void refresh(), intervalMs);
     return () => {
       window.clearInterval(timer);
-      controller.current?.abort();
+      invalidate();
     };
-  }, [enabled, intervalMs, refresh]);
+  }, [enabled, intervalMs, invalidate, refresh]);
 
   return { data, error, loading, refresh };
 }
