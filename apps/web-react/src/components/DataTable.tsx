@@ -143,9 +143,10 @@ export function DataTable<T>({
               <select
                 value={selectedFilters[filter.key] ?? ''}
                 onChange={(event) => {
+                  const value = event.currentTarget.value;
                   setSelectedFilters((current) => ({
                     ...current,
-                    [filter.key]: event.currentTarget.value,
+                    [filter.key]: value,
                   }));
                   setPage(1);
                 }}
@@ -165,7 +166,8 @@ export function DataTable<T>({
           <select
             value={size}
             onChange={(event) => {
-              setSize(Number(event.currentTarget.value) as 10 | 25 | 50 | 100);
+              const value = Number(event.currentTarget.value) as 10 | 25 | 50 | 100;
+              setSize(value);
               setPage(1);
             }}
           >
