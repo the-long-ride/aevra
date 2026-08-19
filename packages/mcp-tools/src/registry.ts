@@ -35,7 +35,9 @@ export const STABLE_TOOL_NAMES = [
   'approval_cancel',
   'skills_list',
   'skill_read',
+  'skill_write',
   'instructions_read',
+  'instructions_write',
 ] as const;
 export type AevraToolName = (typeof STABLE_TOOL_NAMES)[number];
 
@@ -55,6 +57,7 @@ type ToolDescriptor = {
 };
 
 const emptySchema: JsonSchema = { type: 'object', properties: {}, additionalProperties: false };
+const anyObjectSchema: JsonSchema = { type: 'object' };
 const stringProp = (description: string) => ({ type: 'string', description });
 const nonNegativeInteger = (description: string) => ({ type: 'integer', minimum: 0, description });
 const stringArray = (description: string) => ({
@@ -67,6 +70,7 @@ const stringMap = (description: string) => ({
   additionalProperties: { type: 'string' },
   description,
 });
+const skillSource = { type: 'string', enum: ['user', 'workspace'], description: 'Skill source.' };
 
 const processState = {
   type: 'string',
@@ -256,24 +260,50 @@ const schemas: Partial<Record<AevraToolName, JsonSchema>> = {
   skill_read: {
     type: 'object',
     properties: {
-      source: { type: 'string', enum: ['user', 'workspace'], description: 'Skill source.' },
+      source: skillSource,
       name: stringProp('Skill name.'),
-      file: stringProp('Optional file within the skill package.'),
+      file: stringProp('Optional relative file within the skill package.'),
     },
     required: ['name'],
     additionalProperties: false,
   },
+  skill_write: {
+    type: 'object',
+    properties: {
+      source: skillSource,
+      name: stringProp('Existing skill name.'),
+      file: stringProp('Optional relative file within the skill package. Defaults to SKILL.md.'),
+      content: stringProp('UTF-8 file content to write.'),
+    },
+    required: ['name', 'content'],
+    additionalProperties: false,
+  },
   instructions_read: emptySchema,
+  instructions_write: {
+    type: 'object',
+    properties: {
+      source: skillSource,
+      content: stringProp('UTF-8 AGENTS.md content to write.'),
+    },
+    required: ['source', 'content'],
+    additionalProperties: false,
+  },
 };
 
 const outputSchemas: Partial<Record<AevraToolName, JsonSchema>> = {
-  process_start: processStatusSchema,
-  process_list: { type: 'array', items: processStatusSchema },
+  process_start: anyObjectSchema,
+  process_list: {
+    type: 'object',
+    properties: { result: { type: 'array', items: processStatusSchema } },
+    required: ['result'],
+    additionalProperties: false,
+  },
   process_status: processStatusSchema,
   process_wait: processStatusSchema,
   process_logs: {
     type: 'object',
     properties: {
+      processId: { type: 'string' },
       cursor: { type: 'integer' },
       lines: { type: 'array', items: { type: 'string' } },
       state: processState,
@@ -282,7 +312,16 @@ const outputSchemas: Partial<Record<AevraToolName, JsonSchema>> = {
       finishedAt: { type: ['string', 'null'] },
       eof: { type: 'boolean' },
     },
-    required: ['cursor', 'lines', 'state', 'exitCode', 'signal', 'finishedAt', 'eof'],
+    required: [
+      'processId',
+      'cursor',
+      'lines',
+      'state',
+      'exitCode',
+      'signal',
+      'finishedAt',
+      'eof',
+    ],
     additionalProperties: false,
   },
   process_stop: {
@@ -292,6 +331,8 @@ const outputSchemas: Partial<Record<AevraToolName, JsonSchema>> = {
     additionalProperties: false,
   },
   process_restart: processStatusSchema,
+  skill_write: anyObjectSchema,
+  instructions_write: anyObjectSchema,
 };
 
 const readOnly = new Set<AevraToolName>([
@@ -315,7 +356,13 @@ const readOnly = new Set<AevraToolName>([
   'skill_read',
   'instructions_read',
 ]);
-const destructive = new Set<AevraToolName>(['file_delete', 'git_push', 'change_rollback']);
+const destructive = new Set<AevraToolName>([
+  'file_delete',
+  'git_push',
+  'change_rollback',
+  'skill_write',
+  'instructions_write',
+]);
 const openWorld = new Set<AevraToolName>(['git_push', 'command_run', 'shell_run', 'process_start']);
 
 const descriptions: Partial<Record<AevraToolName, string>> = {
@@ -345,7 +392,9 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
   approval_status: 'Inspect one pending or completed local approval request.',
   skills_list: 'List Aevra skills available from the user and active workspace libraries.',
   skill_read: 'Read one Aevra skill or one file within a skill package.',
+  skill_write: 'Write one bounded UTF-8 file inside an existing Aevra skill package.',
   instructions_read: 'Read merged Aevra/AGENTS.md instructions for the active workspace.',
+  instructions_write: 'Write the user or active-workspace Aevra AGENTS.md instruction file.',
 };
 
 export function toolDefinitions(): ToolDescriptor[] {
@@ -355,7 +404,7 @@ export function toolDefinitions(): ToolDescriptor[] {
       descriptions[name] ??
       `Aevra ${name.startsWith('aevra_') ? name.slice('aevra_'.length) : name.replaceAll('_', ' ')}`,
     inputSchema: schemas[name] ?? { type: 'object', additionalProperties: true },
-    outputSchema: outputSchemas[name] ?? {},
+    outputSchema: outputSchemas[name] ?? anyObjectSchema,
     annotations: {
       readOnlyHint: readOnly.has(name),
       destructiveHint: destructive.has(name),
