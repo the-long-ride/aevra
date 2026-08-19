@@ -42,13 +42,11 @@ function sameOrigin(req: IncomingMessage, url: URL) {
 }
 
 function staticContentType(file: string) {
-  if (file.endsWith('.js') || file.endsWith('.mjs')) {
-    return 'text/javascript; charset=utf-8';
-  }
-  if (file.endsWith('.css')) return 'text/css; charset=utf-8';
-  if (file.endsWith('.json')) return 'application/json; charset=utf-8';
+  if (file.endsWith('.js') || file.endsWith('.mjs')) return 'text/javascript';
+  if (file.endsWith('.css')) return 'text/css';
+  if (file.endsWith('.json')) return 'application/json';
   if (file.endsWith('.svg')) return 'image/svg+xml';
-  return 'text/html; charset=utf-8';
+  return 'text/html';
 }
 
 export interface AdminServerOptions {
