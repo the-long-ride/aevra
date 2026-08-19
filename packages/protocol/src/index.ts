@@ -30,9 +30,14 @@ export type Capability =
   | 'network';
 export type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type CommandEffect =
-  'READ_ONLY' | 'BUILD_OUTPUT' | 'SOURCE_MUTATION' | 'REPOSITORY_STATE' | 'UNKNOWN';
+  | 'READ_ONLY'
+  | 'BUILD_OUTPUT'
+  | 'SOURCE_MUTATION'
+  | 'REPOSITORY_STATE'
+  | 'UNKNOWN';
 export type ExecutionMode = 'sandbox' | 'host';
 export type ProcessLifecycle = 'stop-with-aevra' | 'keep-running';
+export type ManagedProcessState = 'running' | 'completed' | 'failed' | 'stopped' | 'unknown';
 export interface CapabilityRoot {
   id: string;
   kind: 'workspace' | 'external';
@@ -77,6 +82,17 @@ export interface ManagedChild {
   processId: string;
   pid: number;
   startedAt: string;
+}
+export interface ManagedProcessStatus extends ManagedChild {
+  lifecycle: ProcessLifecycle;
+  state: ManagedProcessState;
+  exitCode: number | null;
+  signal: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  marker?: string;
+  logPath?: string;
+  resultPath?: string;
 }
 export interface NetworkPolicy {
   mode: 'deny-all' | 'allow-rules';
