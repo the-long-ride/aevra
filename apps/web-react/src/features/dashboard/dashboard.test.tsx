@@ -39,3 +39,17 @@ test('collapsed Dashboard section remains collapsed after data refresh', async (
   await new Promise((resolve) => window.setTimeout(resolve, 2100));
   expect(details?.open).toBe(false);
 });
+
+test('connector creation presents the one-time token inside the React modal', async () => {
+  const user = userEvent.setup();
+  render(<DashboardPage />);
+  await screen.findByRole('heading', { name: 'Dashboard' });
+
+  await user.click(screen.getByRole('button', { name: 'New connector' }));
+  const dialog = screen.getByRole('dialog', { name: 'Create Bearer connector' });
+  await user.type(within(dialog).getByLabelText('Connector name'), 'Parity client');
+  await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+
+  expect(await within(dialog).findByText('Copy this token now. It is shown once.')).toBeInTheDocument();
+  expect(within(dialog).getByText('secret-once')).toBeInTheDocument();
+});
