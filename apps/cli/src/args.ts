@@ -1,6 +1,8 @@
+export type AdminUiDestination = '/' | '/react/';
+
 export type AevraCommand =
   | { command: 'help' }
-  | { command: 'start'; ui: boolean }
+  | { command: 'start'; uiDestination: AdminUiDestination | null }
   | { command: 'ui'; logoutAll: boolean }
   | { command: 'setup' }
   | {
@@ -35,12 +37,17 @@ export function parseAevraArgs(argv: string[]): AevraCommand {
   const [command, ...rest] = argv;
 
   if (command === 'start') {
-    let ui = false;
+    let uiDestination: AdminUiDestination | null = null;
     for (const arg of rest) {
-      if (arg === '--ui') ui = true;
-      else throw new Error(`Unknown option: ${arg}`);
+      const next =
+        arg === '--ui' ? '/' : arg === '--ui-react' ? '/react/' : null;
+      if (!next) throw new Error(`Unknown option: ${arg}`);
+      if (uiDestination && uiDestination !== next) {
+        throw new Error('--ui and --ui-react are mutually exclusive');
+      }
+      uiDestination = next;
     }
-    return { command: 'start', ui };
+    return { command: 'start', uiDestination };
   }
 
   if (command === 'setup') {
