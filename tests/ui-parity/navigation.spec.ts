@@ -21,5 +21,12 @@ for (const surface of ADMIN_SURFACES) {
       await page.getByRole('button', { name: destination, exact: true }).click();
       await expect(page.getByRole('heading', { name: destination })).toBeVisible();
     }
+
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await page.getByRole('button', { name: 'Guide', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Guide' })).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   });
 }
