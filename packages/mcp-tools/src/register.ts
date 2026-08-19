@@ -1,6 +1,5 @@
 import { toolDefinitions } from './registry.js';
 import { asToolError } from './errors.js';
-import { buildShellCommand } from './shell-command.js';
 import type { McpToolService } from './service.js';
 function structuredContent(value: any) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -79,16 +78,9 @@ export async function handleJsonRpc(service: McpToolService, sessionId: string, 
       }
     }
     if (body?.method === 'tools/call') {
-      const requested = String(body.params?.name ?? ''),
-        input = body.params?.arguments ?? {};
-      const mode = input.executionMode === 'host' ? 'host' : 'sandbox';
-      const command =
-        requested === 'shell_run' ? buildShellCommand({ ...input, executionMode: mode }) : null;
-      const name = requested === 'shell_run' ? 'command_run' : requested;
-      const args = command
-        ? { command, executionMode: mode, networkDestinations: input.networkDestinations }
-        : input;
-      const data = await service.call(sessionId, name, args);
+      const name = String(body.params?.name ?? ''),
+        args = body.params?.arguments ?? {},
+        data = await service.call(sessionId, name, args);
       return {
         jsonrpc: '2.0',
         id,
