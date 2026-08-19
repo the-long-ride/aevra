@@ -1,78 +1,22 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
+import { eqHash, hash, secret } from './oauth-crypto.js';
+import { clientFromRow } from './oauth-records.js';
+import type {
+  OAuthAuthorizationCodeRecord,
+  OAuthAuthorizationRequestRecord,
+  OAuthClientRecord,
+  OAuthGrantRecord,
+  OAuthTokenRecord,
+} from './oauth-records.js';
 
-export interface OAuthClientRecord {
-  clientId: string;
-  clientName: string;
-  redirectUris: string[];
-  tokenEndpointAuthMethod: 'none';
-  grantTypes: string[];
-  responseTypes: string[];
-  createdAt: string;
-}
-export interface OAuthAuthorizationRequestRecord {
-  id: string;
-  clientId: string;
-  redirectUri: string;
-  scope: string;
-  resource: string;
-  codeChallenge: string;
-  codeChallengeMethod: 'S256';
-  state?: string;
-  remoteIp?: string;
-  pairingCode: string;
-  status: 'PENDING' | 'APPROVED' | 'DENIED';
-  createdAt: string;
-  expiresAt: string;
-  decidedAt?: string;
-}
-export interface OAuthGrantRecord {
-  clientId: string;
-  actor: string;
-  subject: string;
-  scope: string;
-  resource: string;
-}
-export interface OAuthTokenRecord extends OAuthGrantRecord {
-  createdAt: string;
-  expiresAt: string;
-}
-export interface OAuthAuthorizationCodeRecord extends OAuthTokenRecord {
-  redirectUri: string;
-  codeChallenge: string;
-}
-
-function parseJsonArray(value: unknown): string[] {
-  try {
-    const v = JSON.parse(String(value ?? '[]'));
-    return Array.isArray(v) ? v.map(String) : [];
-  } catch {
-    return [];
-  }
-}
-function hash(value: string) {
-  return createHash('sha256').update(value).digest('hex');
-}
-function secret(bytes = 32) {
-  return randomBytes(bytes).toString('base64url');
-}
-function eqHash(left: string, right: string) {
-  return (
-    left.length === right.length &&
-    timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'))
-  );
-}
-function clientFromRow(row: any): OAuthClientRecord {
-  return {
-    clientId: String(row.clientId),
-    clientName: String(row.clientName),
-    redirectUris: parseJsonArray(row.redirectUrisJson),
-    tokenEndpointAuthMethod: 'none',
-    grantTypes: parseJsonArray(row.grantTypesJson),
-    responseTypes: parseJsonArray(row.responseTypesJson),
-    createdAt: String(row.createdAt),
-  };
-}
+export type {
+  OAuthAuthorizationCodeRecord,
+  OAuthAuthorizationRequestRecord,
+  OAuthClientRecord,
+  OAuthGrantRecord,
+  OAuthTokenRecord,
+} from './oauth-records.js';
 
 export class OAuthRepository {
   constructor(
@@ -208,9 +152,11 @@ export class OAuthRepository {
   approveAuthorizationRequest(id: string) {
     return this.decideAuthorizationRequest(id, 'APPROVED');
   }
+
   denyAuthorizationRequest(id: string) {
     return this.decideAuthorizationRequest(id, 'DENIED');
   }
+
   private decideAuthorizationRequest(id: string, status: 'APPROVED' | 'DENIED') {
     const current = this.getAuthorizationRequest(id);
     if (!current) return null;
@@ -269,9 +215,7 @@ export class OAuthRepository {
       )
       .get(codeHash) as any | undefined;
     if (!row) return null;
-    if (!eqHash(codeHash, String(row.codeHash))) {
-      return null;
-    }
+    if (!eqHash(codeHash, String(row.codeHash))) return null;
     this.db.prepare('DELETE FROM oauth_authorization_codes WHERE code_hash=?').run(codeHash);
     if (Date.parse(row.expiresAt) <= this.now().getTime()) return null;
     delete row.codeHash;
@@ -282,8 +226,9 @@ export class OAuthRepository {
     grant: OAuthGrantRecord,
     ttlMs: number,
   ): { token: string; record: OAuthTokenRecord } {
-    return this.issueToken('access', grant, ttlMs);
+    return this.issueToken(grant, ttlMs);
   }
+
   issueRefreshToken(
     grant: OAuthGrantRecord,
     ttlMs: number,
@@ -315,14 +260,13 @@ export class OAuthRepository {
       );
     return { token, record };
   }
+
   private issueToken(
-    kind: 'access',
     grant: OAuthGrantRecord,
     ttlMs: number,
   ): { token: string; record: OAuthTokenRecord } {
     const token = secret(32),
       createdAt = this.now(),
-      expiresAt = new Date(createdAt.getTime() + ttlMs),
       record = {
         ...grant,
         createdAt: createdAt.toISOString(),
@@ -348,10 +292,12 @@ export class OAuthRepository {
   findAccessToken(token: string): OAuthTokenRecord | null {
     return this.findToken('oauth_access_tokens', token) as OAuthTokenRecord | null;
   }
+
   findRefreshToken(token: string): (OAuthTokenRecord & { familyId: string }) | null {
     return this.findToken('oauth_refresh_tokens', token, true) as
       (OAuthTokenRecord & { familyId: string }) | null;
   }
+
   private findToken(
     table: 'oauth_access_tokens' | 'oauth_refresh_tokens',
     token: string,
@@ -388,6 +334,7 @@ export class OAuthRepository {
     this.db.prepare('DELETE FROM oauth_access_tokens WHERE token_hash=?').run(tokenHash);
     this.db.prepare('DELETE FROM oauth_refresh_tokens WHERE token_hash=?').run(tokenHash);
   }
+
   invalidateEphemeralForRestart() {
     this.db.exec(
       'DELETE FROM oauth_authorization_requests; DELETE FROM oauth_authorization_codes;',

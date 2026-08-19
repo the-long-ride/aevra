@@ -91,6 +91,11 @@ export async function authorizeCapability(
 ): Promise<CapabilityGate> {
   const lease = requiredLease(context, sessionId);
   const session = context.sessions.get(sessionId)!;
+  if (context.sessions.isYolo?.(sessionId)) {
+    return {
+      authorization: authorizationContext(context, sessionId, capability, permissionMatcher),
+    };
+  }
   const lowDecision = context.deps.permissions?.decide({
     capability,
     matcher: permissionMatcher,
@@ -164,6 +169,8 @@ export async function gated<T>(
 ) {
   const session = context.sessions.get(sessionId)!;
   const lease = requiredLease(context, sessionId);
+  if (context.sessions.isYolo?.(sessionId)) return execute();
+
   const forceCriticalApproval =
     normalized.risk === 'CRITICAL' &&
     context.deps.settings?.get<boolean>('policy.critical.alwaysConfirm', false) === true;
