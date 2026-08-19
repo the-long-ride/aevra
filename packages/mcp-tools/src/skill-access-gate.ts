@@ -69,9 +69,19 @@ export class SessionSkillAccessGate {
         'Local skill resource access requires local approval',
         { requestId: access.result.requestId, scope: 'session' },
       );
-    if (!this.inner.resourceRead)
-      throw new AevraToolError('SKILL_NOT_FOUND', 'Skills are not configured');
-    return this.inner.resourceRead(sessionId, uri);
+    const match = String(uri).match(/^aevra:\/\/skill\/(user|workspace)\/([^/]+)$/);
+    if (!match) throw new AevraToolError('INVALID_REQUEST', 'Unknown resource URI');
+    const read = await this.inner.call(sessionId, 'skill_read', {
+      source: match[1],
+      name: decodeURIComponent(match[2]!),
+    });
+    this.throwIfApprovalPending(read, 'Local skill resource access requires capability approval');
+    if (!read || typeof read.content !== 'string')
+      throw new AevraToolError('SKILL_NOT_FOUND', 'Skill content is unavailable');
+    return {
+      uri,
+      contents: [{ uri, mimeType: 'text/markdown', text: read.content }],
+    };
   }
 
   promptsList() {
@@ -86,9 +96,27 @@ export class SessionSkillAccessGate {
         'Local instruction prompt access requires local approval',
         { requestId: access.result.requestId, scope: 'session' },
       );
-    if (!this.inner.promptGet)
-      throw new AevraToolError('INVALID_REQUEST', 'Skills are not configured');
-    return this.inner.promptGet(sessionId);
+    const result = await this.inner.call(sessionId, 'instructions_read', {});
+    this.throwIfApprovalPending(result, 'Local instruction prompt access requires capability approval');
+    const instructions = Array.isArray(result?.instructions) ? result.instructions : [];
+    const text =
+      instructions
+        .map((instruction: any) => `# ${instruction.source} instructions\n\n${instruction.content}`)
+        .join('\n\n---\n\n') ||
+      result?.note ||
+      'No instruction files found.';
+    return {
+      description: 'Aevra instructions',
+      messages: [{ role: 'user', content: { type: 'text', text } }],
+    };
+  }
+
+  private throwIfApprovalPending(result: any, message: string) {
+    if (result?.status !== 'approval_pending') return;
+    throw new AevraToolError('APPROVAL_PENDING', message, {
+      requestId: result.requestId,
+      scope: result.scope ?? 'session',
+    });
   }
 
   private async ensureSkillAccess(sessionId: string): Promise<AccessResult> {
