@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { installApiFixtures } from '../../test/api-fixtures';
 import { RequestDrawer } from './RequestDrawer';
 
@@ -16,8 +16,6 @@ const commandApproval = {
     target: 'git status --short',
   },
 };
-
-beforeEach(() => installApiFixtures());
 
 function renderDrawer(onPendingCountChange = vi.fn()) {
   render(
