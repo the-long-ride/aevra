@@ -4,6 +4,7 @@ import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { SessionRepository } from '../../../packages/store/src/sessions.js';
 import { CapabilityProfileService } from '../src/policy/capabilities.js';
 import { SessionManager } from '../src/sessions/session-manager.js';
+import { McpActivityLog } from '../src/mcp/activity-log.js';
 import { McpIngressServer } from '../src/mcp/server.js';
 
 const identity = {
@@ -30,10 +31,17 @@ test('MCP initialize creates server-owned session and unknown client session is 
       return { ok: true };
     },
   } as any;
-  const server = new McpIngressServer('127.0.0.1', 0, verifier, undefined, () => false, {
-    sessions,
-    service,
-  } as any);
+  const activity = new McpActivityLog(10);
+  const server = new McpIngressServer(
+    '127.0.0.1',
+    0,
+    verifier,
+    undefined,
+    () => false,
+    { sessions, service } as any,
+    undefined,
+    { activity },
+  );
   await server.start();
   const init = await fetch(`${server.url()}/mcp`, {
     method: 'POST',
@@ -48,6 +56,11 @@ test('MCP initialize creates server-owned session and unknown client session is 
   assert.equal(init.status, 200);
   const sid = init.headers.get('mcp-session-id');
   assert.match(sid ?? '', /^ses_/);
+  assert.deepEqual(
+    activity.recent().map((entry) => [entry.action, entry.state]),
+    [['initialize', 'success']],
+  );
+
   const bad = await fetch(`${server.url()}/mcp`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'mcp-session-id': 'client-chosen' },
@@ -60,6 +73,11 @@ test('MCP initialize creates server-owned session and unknown client session is 
     body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' }),
   });
   assert.equal(good.status, 200);
+  const toolListActivity = activity.recent().at(-1);
+  assert.equal(toolListActivity?.action, 'tools/list');
+  assert.equal(toolListActivity?.kind, 'rpc');
+  assert.equal(toolListActivity?.state, 'success');
+  assert.equal(toolListActivity?.actor, identity.actor);
   await server.close();
   db.close();
 });
