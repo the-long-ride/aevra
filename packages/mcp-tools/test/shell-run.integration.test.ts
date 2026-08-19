@@ -137,7 +137,8 @@ test('native execution setting resolves an unspecified shell to host before appr
   assert.equal(pending.status, 'approval_pending');
   const ticket = x.approvals.status(pending.requestId)!;
   assert.equal(ticket.risk, 'HIGH');
-  assert.equal(ticket.operation.family, 'shell:bash:*:host-fallback');
+  const hostShell = process.platform === 'win32' ? 'powershell' : 'bash';
+  assert.equal(ticket.operation.family, `shell:${hostShell}:*:host-fallback`);
   x.approvals.approve(ticket.id, 'once');
   await x.service.call(x.session.id, 'approval_wait', { requestId: ticket.id });
   assert.equal(x.executions.length, 1);
