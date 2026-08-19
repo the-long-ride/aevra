@@ -87,17 +87,29 @@ function ApprovalCard({
 export function RequestDrawer({
   open,
   onClose,
+  onPendingCountChange,
 }: {
   open: boolean;
   onClose(): void;
+  onPendingCountChange(count: number): void;
 }) {
   const [data, setData] = useState<RequestsData | null>(null);
   const [tab, setTab] = useState<'pending' | 'history'>('pending');
   const [notifications, setNotifications] = useState(
-    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+    typeof Notification === 'undefined'
+      ? 'unsupported'
+      : Notification.permission,
   );
 
-  const refresh = useCallback(async () => setData(await loadRequests()), []);
+  const refresh = useCallback(async () => {
+    const next = await loadRequests();
+    setData(next);
+    onPendingCountChange(
+      next.approvals.filter((item) => item.state === 'PENDING').length +
+        next.oauth.length,
+    );
+  }, [onPendingCountChange]);
+
   useEffect(() => {
     void refresh();
     const timer = window.setInterval(() => void refresh(), 2200);
@@ -108,16 +120,24 @@ export function RequestDrawer({
     () => new Map(data?.workspaces.map((item) => [item.id, item.name]) ?? []),
     [data],
   );
-  const pending = data?.approvals.filter((item) => item.state === 'PENDING') ?? [];
-  const history = data?.approvals.filter((item) => item.state !== 'PENDING') ?? [];
+  const pending =
+    data?.approvals.filter((item) => item.state === 'PENDING') ?? [];
+  const history =
+    data?.approvals.filter((item) => item.state !== 'PENDING') ?? [];
 
   const requestNotifications = async () => {
     if (typeof Notification === 'undefined') return;
+    onPendingCountChange(
+      pending.length + (data?.oauth.length ?? 0),
+    );
     setNotifications(await Notification.requestPermission());
   };
 
   return (
-    <div className={`request-drawer ${open ? 'open' : ''}`} aria-hidden={!open}>
+    <div
+      className={`request-drawer ${open ? 'open' : ''}`}
+      aria-hidden={!open}
+    >
       <div className="request-drawer-backdrop" onClick={onClose} />
       <aside>
         <header>
@@ -128,7 +148,9 @@ export function RequestDrawer({
           <button
             type="button"
             id="enable-browser-notifications"
-            disabled={notifications === 'granted' || notifications === 'denied'}
+            disabled={
+              notifications === 'granted' || notifications === 'denied'
+            }
             onClick={() => void requestNotifications()}
           >
             {notifications === 'granted'
@@ -172,19 +194,24 @@ export function RequestDrawer({
                     <span className="risk medium">MEDIUM</span>
                   </div>
                   <p>
-                    {item.remoteIp ?? 'Remote client'} · code <code>{item.pairingCode}</code>
+                    {item.remoteIp ?? 'Remote client'} · code{' '}
+                    <code>{item.pairingCode}</code>
                   </p>
                   <div className="request-actions">
                     <button
                       type="button"
-                      onClick={() => void decideOauth(item.id, false).then(refresh)}
+                      onClick={() =>
+                        void decideOauth(item.id, false).then(refresh)
+                      }
                     >
                       Deny
                     </button>
                     <button
                       type="button"
                       className="primary"
-                      onClick={() => void decideOauth(item.id, true).then(refresh)}
+                      onClick={() =>
+                        void decideOauth(item.id, true).then(refresh)
+                      }
                     >
                       Allow
                     </button>
