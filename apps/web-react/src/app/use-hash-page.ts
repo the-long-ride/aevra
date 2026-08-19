@@ -22,9 +22,9 @@ export function useHashPage() {
   }, []);
 
   const navigate = (next: AdminPageId) => {
-    if (next === page) return;
-    window.history.replaceState(null, '', `#/${next}`);
-    setPage(next);
+    const nextHash = `#/${next}`;
+    if (window.location.hash === nextHash) return;
+    window.location.hash = nextHash;
   };
   return { page, navigate };
 }
