@@ -73,13 +73,10 @@ export async function adminApi<Config>(
 export async function createAuthenticatedUiUrl<Config>(
   config: Config,
   dependencies: AdminSessionDependencies<Config>,
-  destination: AdminUiDestination = '/',
+  _destination: AdminUiDestination = '/',
 ): Promise<string> {
   const token = await bootstrapToken(config, dependencies);
-  const base = `${dependencies.base(config)}/auth/bootstrap?token=${encodeURIComponent(token)}`;
-  return destination === '/'
-    ? base
-    : `${base}&to=${encodeURIComponent(destination)}`;
+  return `${dependencies.base(config)}/auth/bootstrap?token=${encodeURIComponent(token)}`;
 }
 
 export async function revokeAllAdminSessions<Config>(
