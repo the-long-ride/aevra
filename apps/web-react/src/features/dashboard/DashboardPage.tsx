@@ -18,7 +18,6 @@ import { RemoteAccessPanel } from './RemoteAccessPanel';
 function RuntimeOverview({ data }: { data: DashboardData }) {
   const snapshot = data.snapshot;
   const rows = [
-    ['Version', snapshot.status.version ?? '—'],
     ['Remote sessions', snapshot.stats.sessions],
     ['Workspace leases', snapshot.stats.workspaceLeases],
     ['Pending requests', snapshot.pending.total],
