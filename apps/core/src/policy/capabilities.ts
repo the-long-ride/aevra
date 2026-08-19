@@ -73,12 +73,16 @@ export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
 
 export class CapabilityProfileService {
   constructor(private db: DatabaseSync) {
+    const upsertBuiltin = this.db.prepare(
+      `INSERT INTO capability_profiles(id,name,capabilities_json,builtin) VALUES(?,?,?,1)
+       ON CONFLICT(id) DO UPDATE SET
+         name=excluded.name,
+         capabilities_json=excluded.capabilities_json,
+         builtin=1
+       WHERE capability_profiles.builtin=1`,
+    );
     for (const p of BUILTIN_CAPABILITY_PROFILES)
-      this.db
-        .prepare(
-          'INSERT OR IGNORE INTO capability_profiles(id,name,capabilities_json,builtin) VALUES(?,?,?,1)',
-        )
-        .run(p.id, p.name, JSON.stringify(p.capabilities));
+      upsertBuiltin.run(p.id, p.name, JSON.stringify(p.capabilities));
   }
   get(id: string): CapabilityProfile | null {
     const r = this.db.prepare('SELECT * FROM capability_profiles WHERE id=?').get(id) as any;
