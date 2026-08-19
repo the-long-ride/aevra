@@ -59,3 +59,43 @@ test('critical persistent allow is ignored for step-up', () => {
   );
   db.close();
 });
+test('skill and instruction capabilities are independent from file capabilities', () => {
+  const db = AevraDatabase.open(':memory:');
+  const r = new PermissionRepository(db.raw()),
+    e = new PermissionEngine(r);
+  r.upsert({
+    id: 'files',
+    effect: 'allow',
+    capability: 'files.write',
+    scope: 'workspace',
+    workspaceId: 'w',
+    matcher: '*',
+  });
+  r.upsert({
+    id: 'skills',
+    effect: 'allow',
+    capability: 'skills.read',
+    scope: 'workspace',
+    workspaceId: 'w',
+    matcher: '*',
+  });
+  r.upsert({
+    id: 'instructions',
+    effect: 'allow',
+    capability: 'instructions.write',
+    scope: 'workspace',
+    workspaceId: 'w',
+    matcher: '*',
+  });
+
+  const summary = e.summary({
+    workspaceId: 'w',
+    baselineCapabilities: [],
+  });
+  assert.equal(summary.effectiveCapabilities.includes('files.write'), true);
+  assert.equal(summary.effectiveCapabilities.includes('skills.read'), true);
+  assert.equal(summary.effectiveCapabilities.includes('instructions.write'), true);
+  assert.equal(summary.effectiveCapabilities.includes('skills.write'), false);
+  assert.equal(summary.effectiveCapabilities.includes('instructions.read'), false);
+  db.close();
+});
