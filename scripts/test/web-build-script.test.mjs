@@ -24,7 +24,8 @@ const modularContracts = [
   'scripts/test/safe-command-guide.test.mjs',
   'scripts/test/web-toast-single.test.mjs',
   'scripts/test/web-onboarding-runtime.test.mjs',
-  'scripts/test/web-parity-contract.test.mjs',
+  'scripts/test/admin-surface-parity.test.mjs',
+  'scripts/test/react-ui-source.test.mjs',
 ];
 
 test('build syntax-checks modular vanilla UI then copies it before React Vite output', () => {
