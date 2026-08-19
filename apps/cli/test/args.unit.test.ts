@@ -8,15 +8,26 @@ test('help aliases parse', () => {
   }
 });
 
-test('start supports optional UI launch', () => {
+test('start selects no UI, vanilla UI, or React UI', () => {
   assert.deepEqual(parseAevraArgs(['start']), {
     command: 'start',
-    ui: false,
+    uiDestination: null,
   });
   assert.deepEqual(parseAevraArgs(['start', '--ui']), {
     command: 'start',
-    ui: true,
+    uiDestination: '/',
   });
+  assert.deepEqual(parseAevraArgs(['start', '--ui-react']), {
+    command: 'start',
+    uiDestination: '/react/',
+  });
+});
+
+test('start UI flags are mutually exclusive and unknown options fail', () => {
+  assert.throws(
+    () => parseAevraArgs(['start', '--ui', '--ui-react']),
+    /mutually exclusive/i,
+  );
   assert.throws(() => parseAevraArgs(['start', '--wat']), /Unknown option/);
 });
 
