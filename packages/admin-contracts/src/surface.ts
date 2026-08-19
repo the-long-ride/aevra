@@ -54,7 +54,7 @@ export const ADMIN_SURFACE = {
       'save-admission',
     ],
     sessions: ['switch-workspace', 'revoke', 'revoke-all-others'],
-    processes: ['view-logs', 'stop', 'restart', 'forget'],
+    processes: ['stop', 'restart', 'forget'],
     changes: ['rename', 'commit', 'rollback'],
     audit: ['export-json', 'export-jsonl', 'clear'],
     settings: [
