@@ -4,6 +4,7 @@ import { afterEach, vi } from 'vitest';
 
 afterEach(() => {
   cleanup();
+  Reflect.deleteProperty(navigator, 'clipboard');
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
