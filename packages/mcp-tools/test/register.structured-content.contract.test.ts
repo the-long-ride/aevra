@@ -27,7 +27,7 @@ test('tools/call preserves object structuredContent without double wrapping', as
   assert.deepEqual(response.result.structuredContent, { path: '/a.txt', content: 'hello' });
 });
 
-test('shell_run is translated to argv command_run with sandbox default', async () => {
+test('shell_run stays on the secure MCP service dispatch path', async () => {
   let called: any;
   const service = {
     call: async (sessionId: string, name: string, args: any) => {
@@ -41,10 +41,8 @@ test('shell_run is translated to argv command_run with sandbox default', async (
     method: 'tools/call',
     params: { name: 'shell_run', arguments: { script: 'pwd' } },
   });
-  assert.equal(called.name, 'command_run');
-  assert.equal(called.args.executionMode, 'sandbox');
-  assert.equal(called.args.command.executable, 'bash');
-  assert.deepEqual(called.args.command.args, ['-lc', 'pwd']);
+  assert.equal(called.name, 'shell_run');
+  assert.deepEqual(called.args, { script: 'pwd' });
   assert.deepEqual(response.result.structuredContent, {
     status: 'approval_pending',
     requestId: 'req_1',
