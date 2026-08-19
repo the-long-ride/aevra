@@ -1,14 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import vm from 'node:vm';
+import { SAFE_COMMAND_MATCHERS } from '../../web-react/src/features/guide/safe-command-matchers.js';
 import { classifyCommand } from '../src/policy/command-family.js';
 
-function loadCatalog() {
-  const sandbox: any = { window: {} };
-  vm.runInNewContext(readFileSync('apps/web/safe-command-matchers.js', 'utf8'), sandbox);
-  return sandbox.window.AevraSafeCommandMatchers as Array<{ matcher: string; example: string }>;
-}
 function glob(pattern: string, value: string) {
   const source =
     '^' +
@@ -42,9 +36,8 @@ const samples: Record<string, string[]> = {
 };
 
 test('every documented safe matcher matches the family produced for its canonical example', () => {
-  const catalog = loadCatalog();
-  assert.equal(catalog.length, Object.keys(samples).length);
-  for (const entry of catalog) {
+  assert.equal(SAFE_COMMAND_MATCHERS.length, Object.keys(samples).length);
+  for (const entry of SAFE_COMMAND_MATCHERS) {
     const argv = samples[entry.matcher];
     assert.ok(argv, `missing classifier sample for ${entry.matcher}`);
     const classification = classifyCommand(argv);
@@ -57,7 +50,7 @@ test('every documented safe matcher matches the family produced for its canonica
 });
 
 test('safe matcher catalog never recommends broad shell families', () => {
-  const matchers = loadCatalog().map((entry) => entry.matcher);
+  const matchers = SAFE_COMMAND_MATCHERS.map((entry) => entry.matcher);
   for (const unsafe of ['shell:powershell', 'shell:bash', 'shell:sh', '*'])
     assert.ok(!matchers.includes(unsafe), `unsafe matcher ${unsafe} must not be recommended`);
 });
