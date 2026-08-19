@@ -21,16 +21,23 @@ for (const surface of ADMIN_SURFACES) {
     await expect(runtime).not.toHaveAttribute('open', '');
   });
 
-  test(`${surface.name} moves completed onboarding to the dashboard bottom`, async ({ page }) => {
+  test(`${surface.name} moves completed onboarding to the bottom and preserves collapse through polling`, async ({
+    page,
+  }) => {
     await installAdminApi(page, { onboardingCompleted: true });
     await page.goto(surface.path);
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 
-    const ids = await page
-      .locator('[data-dashboard-section]')
-      .evaluateAll((nodes) =>
-        nodes.map((node) => node.getAttribute('data-dashboard-section')),
-      );
+    const sections = page.locator('[data-dashboard-section]');
+    const ids = await sections.evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('data-dashboard-section')),
+    );
     expect(ids.at(-1)).toBe('onboarding');
+
+    const onboarding = page.locator('[data-dashboard-section="onboarding"]');
+    await onboarding.locator('summary').click();
+    await expect(onboarding).not.toHaveAttribute('open', '');
+    await page.waitForTimeout(2200);
+    await expect(onboarding).not.toHaveAttribute('open', '');
   });
 }
