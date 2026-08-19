@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { installApiFixtures } from '../test/api-fixtures';
@@ -158,11 +158,9 @@ test('Settings creates environment profiles and securely stores/removes secret r
   const profile = formForButton('Create profile');
   await user.type(profile.getByLabelText('Name'), 'test-profile');
   const vars = profile.getByLabelText('Variables JSON');
-  await user.clear(vars);
-  await user.type(vars, '{"NODE_ENV":"test"}');
+  fireEvent.change(vars, { target: { value: '{"NODE_ENV":"test"}' } });
   const refs = profile.getByLabelText('Secret refs JSON');
-  await user.clear(refs);
-  await user.type(refs, '{"TOKEN":"API_TOKEN"}');
+  fireEvent.change(refs, { target: { value: '{"TOKEN":"API_TOKEN"}' } });
   await user.click(profile.getByRole('button', { name: 'Create profile' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/environment-profiles', 'POST')).toBeTruthy(),
