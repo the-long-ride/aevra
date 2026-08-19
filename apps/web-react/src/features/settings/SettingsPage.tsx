@@ -13,9 +13,12 @@ import {
 export function SettingsPage() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [backend, setBackend] = useState('auto');
   const refresh = useCallback(async () => {
     try {
-      setData(await loadSettings());
+      const next = await loadSettings();
+      setData(next);
+      setBackend(String(next.execution.sandboxBackend ?? 'auto'));
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error(String(cause)));
@@ -114,10 +117,11 @@ export function SettingsPage() {
         </details>
       </section>
       <div className="settings-grid">
-        <section className="panel">
+        <section className="panel execution-panel">
           <div className="panel-head"><h3>Execution</h3></div>
           <form className="stack-form" onSubmit={submitExecution}>
-            <label className="field"><span>Sandbox backend</span><select name="sandboxBackend" defaultValue={String(data.execution.sandboxBackend ?? 'auto')}><option value="auto">Auto</option><option value="docker">Docker</option><option value="podman">Podman</option></select></label>
+            <label className="field"><span>Sandbox backend</span><select name="sandboxBackend" value={backend} onChange={(event) => setBackend(event.currentTarget.value)}><option value="auto">Auto</option><option value="docker">Docker</option><option value="podman">Podman</option><option value="native">Native host</option></select></label>
+            {backend === 'native' ? <p className="execution-warning" role="status">Direct computer access — no container isolation. Commands run on this machine and still pass through Aevra permissions and approvals.</p> : null}
             <label className="field"><span>Cache policy</span><select name="cachePolicy" defaultValue={String(data.execution.cachePolicy ?? 'workspace')}><option value="workspace">Workspace</option><option value="shared">Shared</option><option value="disabled">Disabled</option></select></label>
             <label className="field"><span>Drain timeout (ms)</span><input type="number" name="workspaceDrainMs" defaultValue={Number(data.execution.workspaceDrainMs ?? 60000)} /></label>
             <button className="primary" data-surface-id="settings:save-execution">Save</button>
