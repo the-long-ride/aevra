@@ -9,6 +9,7 @@ const requiredFiles = [
   'apps/web-react/vite.config.ts',
   'apps/web-react/src/main.tsx',
   'apps/web-react/src/app/App.tsx',
+  'apps/web-react/src/app/use-hash-page.ts',
   'apps/web-react/src/components/AppShell.tsx',
   'apps/web-react/src/services/api-client.ts',
   'apps/web-react/src/hooks/use-polling-resource.ts',
@@ -48,6 +49,13 @@ test('React shell keeps the same compact top navigation and shared admin contrac
   assert.match(app, /ADMIN_SURFACE/);
   assert.match(shell, /top-nav/);
   assert.doesNotMatch(shell, /sidebar/i);
+});
+
+test('React navigation uses hashchange as the single page transition path', () => {
+  const router = readFileSync('apps/web-react/src/app/use-hash-page.ts', 'utf8');
+  assert.match(router, /window\.location\.hash\s*=/);
+  assert.doesNotMatch(router, /history\.replaceState/);
+  assert.doesNotMatch(router, /setPage\(next\)/);
 });
 
 test('React feature pages cover the complete vanilla navigation surface', () => {
