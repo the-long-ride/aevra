@@ -11,7 +11,7 @@ const requiredFiles = [
   'apps/web-react/src/app/App.tsx',
   'apps/web-react/src/components/AppShell.tsx',
   'apps/web-react/src/services/api-client.ts',
-  'apps/web-react/src/hooks/use-polling-resource.ts',
+  'apps/web-react/src/hooks/use-runtime-status.ts',
   'apps/web-react/src/features/dashboard/DashboardPage.tsx',
   'apps/web-react/src/features/requests/RequestDrawer.tsx',
   'apps/web-react/src/features/permissions/PermissionsPage.tsx',
@@ -80,4 +80,21 @@ test('React Dashboard and Requests preserve approved security and onboarding beh
   assert.match(requests, /CRITICAL/);
   assert.match(requests, /approve-global/);
   assert.match(requests, /Saved matcher/);
+});
+
+test('React has a single polling owner for approvals and OAuth requests', () => {
+  const app = readFileSync('apps/web-react/src/app/App.tsx', 'utf8');
+  const runtime = readFileSync(
+    'apps/web-react/src/hooks/use-runtime-status.ts',
+    'utf8',
+  );
+  const requests = readFileSync(
+    'apps/web-react/src/features/requests/RequestDrawer.tsx',
+    'utf8',
+  );
+
+  assert.doesNotMatch(runtime, /\/api\/approvals/);
+  assert.doesNotMatch(runtime, /\/api\/oauth\/requests/);
+  assert.match(app, /onPendingCountChange/);
+  assert.match(requests, /onPendingCountChange/);
 });
