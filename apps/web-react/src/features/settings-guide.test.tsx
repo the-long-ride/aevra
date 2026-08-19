@@ -86,6 +86,28 @@ test('Settings saves Access and execution configuration', async () => {
   );
 });
 
+test('Settings offers Native host and warns before direct computer execution', async () => {
+  const user = userEvent.setup();
+  const fetchMock = settingsFixtures();
+  render(<SettingsPage />);
+  await waitForSettings();
+
+  const execution = formForButton('Save');
+  const backend = execution.getByLabelText('Sandbox backend');
+  expect(within(backend).getByRole('option', { name: 'Native host' })).toHaveValue('native');
+  expect(screen.queryByText(/no container isolation/i)).not.toBeInTheDocument();
+
+  await user.selectOptions(backend, 'native');
+  expect(screen.getByText(/no container isolation/i)).toBeInTheDocument();
+  await user.click(execution.getByRole('button', { name: 'Save' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock, '/api/execution-settings', 'PATCH');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(String(call?.[1]?.body)).sandboxBackend).toBe('native');
+  });
+});
+
 test('Settings creates and removes command and network policy entries', async () => {
   const user = userEvent.setup();
   const fetchMock = settingsFixtures();
