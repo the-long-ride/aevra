@@ -86,6 +86,7 @@ export function ConnectorModal({
               <label className="field">
                 <span>Connector name</span>
                 <input
+                  placeholder="Connector name"
                   value={name}
                   onChange={(event) => setName(event.currentTarget.value)}
                   required
