@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AevraDatabase } from '../../store/src/database.js';
@@ -16,15 +16,20 @@ import { SessionManager } from '../../../apps/core/src/sessions/session-manager.
 import { ReadVersionCache } from '../../../apps/core/src/operations/read-version-cache.js';
 import { ApprovalService } from '../../../apps/core/src/approvals/approval-service.js';
 import { AuditService } from '../../../apps/core/src/audit/audit-service.js';
+import { SkillsService } from '../../../apps/core/src/skills/skills-service.js';
 import { McpToolService } from '../src/service.js';
 
 function make() {
   const db = AevraDatabase.open(':memory:');
   const workspaces = new WorkspaceService(new WorkspaceRepository(db.raw()));
+  const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), 'aevra-cap-'));
+  const userHome = mkdtempSync(path.join(os.tmpdir(), 'aevra-cap-home-'));
   const workspace = workspaces.create({
     name: 'Aevra',
-    hostRoot: mkdtempSync(path.join(os.tmpdir(), 'aevra-cap-')),
+    hostRoot: workspaceRoot,
   });
+  mkdirSync(path.join(workspaceRoot, '.agents', 'skills', 'demo'), { recursive: true });
+  writeFileSync(path.join(workspaceRoot, '.agents', 'skills', 'demo', 'SKILL.md'), '# Demo');
   const profiles = new CapabilityProfileService(db.raw());
   const sessions = new SessionManager(new SessionRepository(db.raw()), profiles);
   const approvals = new ApprovalService(
@@ -58,9 +63,19 @@ function make() {
     { execute: async () => ({ ok: true, value: {} }) } as any,
     new ReadVersionCache(),
     approvals,
-    { approvals, operations, permissions },
+    { approvals, operations, permissions, skills: new SkillsService(userHome) },
   );
-  return { db, workspace, profiles, sessions, approvals, service, writes, permissionRepo };
+  return {
+    db,
+    workspace,
+    workspaceRoot,
+    profiles,
+    sessions,
+    approvals,
+    service,
+    writes,
+    permissionRepo,
+  };
 }
 function identity(actor: string, subject: string) {
   return {
@@ -93,7 +108,13 @@ test('remembered files.write rule is effective without broadening the baseline p
     createdAt: new Date().toISOString(),
   });
   const status: any = await x.service.call(s.id, 'aevra_status');
-  assert.deepEqual(status.baselineCapabilities.sort(), ['files.read', 'files.search', 'git.read']);
+  assert.deepEqual(status.baselineCapabilities.sort(), [
+    'files.read',
+    'files.search',
+    'git.read',
+    'instructions.read',
+    'skills.read',
+  ]);
   assert.ok(status.effectiveCapabilities.includes('files.write'));
   assert.deepEqual(status.capabilities, status.effectiveCapabilities);
   await x.service.call(s.id, 'file_write', { path: '/a.txt', content: 'hello' });
@@ -103,6 +124,78 @@ test('remembered files.write rule is effective without broadening the baseline p
     !x.sessions.activeLease(s.id)?.capabilities.includes('files.write'),
     'baseline lease must stay read-only',
   );
+  x.db.close();
+});
+
+test('files.write never authorizes skill_write or instructions_write', async () => {
+  const x = make();
+  const s = await readOnlySession(x, 'connector:ChatGPT', 'conn-skill-separation');
+  x.permissionRepo.upsert({
+    id: 'file-write-only',
+    effect: 'allow',
+    capability: 'files.write',
+    scope: 'workspace',
+    workspaceId: x.workspace.id,
+    actor: 'connector:ChatGPT',
+    matcher: '*',
+    createdAt: new Date().toISOString(),
+  });
+
+  const skillBlocked: any = await x.service.call(s.id, 'skill_write', {
+    source: 'workspace',
+    name: 'demo',
+    content: '# Changed',
+  });
+  assert.equal(skillBlocked.status, 'approval_pending');
+  assert.equal(x.approvals.status(skillBlocked.requestId)!.operation.capability, 'skills.write');
+
+  const instructionBlocked: any = await x.service.call(s.id, 'instructions_write', {
+    source: 'workspace',
+    content: 'rules',
+  });
+  assert.equal(instructionBlocked.status, 'approval_pending');
+  assert.equal(
+    x.approvals.status(instructionBlocked.requestId)!.operation.capability,
+    'instructions.write',
+  );
+  x.db.close();
+});
+
+test('dedicated skill and instruction write rules authorize only their bounded targets', async () => {
+  const x = make();
+  const actor = 'connector:Claude';
+  const s = await readOnlySession(x, actor, 'conn-dedicated-writes');
+  for (const capability of ['skills.write', 'instructions.write'] as const) {
+    x.permissionRepo.upsert({
+      id: capability,
+      effect: 'allow',
+      capability,
+      scope: 'workspace',
+      workspaceId: x.workspace.id,
+      actor,
+      matcher: '*',
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  const skill: any = await x.service.call(s.id, 'skill_write', {
+    source: 'workspace',
+    name: 'demo',
+    file: 'notes.md',
+    content: 'bounded skill note',
+  });
+  assert.equal(skill.file, 'notes.md');
+  assert.equal(
+    readFileSync(path.join(x.workspaceRoot, '.agents', 'skills', 'demo', 'notes.md'), 'utf8'),
+    'bounded skill note',
+  );
+
+  const instructions: any = await x.service.call(s.id, 'instructions_write', {
+    source: 'workspace',
+    content: 'bounded instructions',
+  });
+  assert.equal(instructions.file, 'AGENTS.md');
+  assert.equal(readFileSync(path.join(x.workspaceRoot, 'AGENTS.md'), 'utf8'), 'bounded instructions');
   x.db.close();
 });
 
