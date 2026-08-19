@@ -8,6 +8,7 @@ const runtimeStatus = readFileSync(
 );
 const main = readFileSync('apps/web/main.js', 'utf8');
 const dashboard = readFileSync('apps/web/pages/dashboard.js', 'utf8');
+const dashboardView = readFileSync('apps/web/pages/dashboard-view.js', 'utf8');
 
 test('completed onboarding remains expandable and is ordered by durable backend state', () => {
   const route = readFileSync(
@@ -16,11 +17,11 @@ test('completed onboarding remains expandable and is ordered by durable backend 
   );
   assert.match(route, /\/api\/onboarding/);
   assert.match(route, /onboarding\.state/);
-  assert.match(dashboard, /dashboardOrder\(onboarding\.completed\)/);
+  assert.match(dashboard, /dashboardOrder\(\s*onboarding\.completed/);
   assert.match(dashboard, /data-dashboard-section/);
   assert.match(dashboard, /openState/);
   assert.doesNotMatch(
-    dashboard,
+    dashboardView,
     /Remote Access remains visible above this section/,
   );
 });
