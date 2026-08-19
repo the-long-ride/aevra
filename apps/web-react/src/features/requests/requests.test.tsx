@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { beforeEach, expect, test } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, expect, test, vi } from 'vitest';
 import { installApiFixtures } from '../../test/api-fixtures';
 import { RequestDrawer } from './RequestDrawer';
 
@@ -19,10 +19,23 @@ const commandApproval = {
 
 beforeEach(() => installApiFixtures());
 
+function renderDrawer(onPendingCountChange = vi.fn()) {
+  render(
+    <RequestDrawer
+      open
+      onClose={() => undefined}
+      onPendingCountChange={onPendingCountChange}
+    />,
+  );
+  return onPendingCountChange;
+}
+
 test('non-critical command shows once session workspace global and Saved matcher', async () => {
   installApiFixtures({ approvals: [commandApproval] });
-  render(<RequestDrawer open onClose={() => undefined} />);
-  expect(await screen.findByText('ChatGPT requests commands.run')).toBeInTheDocument();
+  renderDrawer();
+  expect(
+    await screen.findByText('ChatGPT requests commands.run'),
+  ).toBeInTheDocument();
   expect(screen.getByText('Saved matcher')).toBeInTheDocument();
   expect(screen.getByText('git:status:--short')).toBeInTheDocument();
   for (const label of [
@@ -39,7 +52,7 @@ test('CRITICAL command exposes only Deny and Run once', async () => {
   installApiFixtures({
     approvals: [{ ...commandApproval, id: 'critical-1', risk: 'CRITICAL' }],
   });
-  render(<RequestDrawer open onClose={() => undefined} />);
+  renderDrawer();
   await screen.findByText('ChatGPT requests commands.run');
   expect(screen.getByRole('button', { name: 'Run once' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
@@ -52,4 +65,20 @@ test('CRITICAL command exposes only Deny and Run once', async () => {
   expect(
     screen.queryByRole('button', { name: 'Always globally' }),
   ).not.toBeInTheDocument();
+});
+
+test('request owner reports pending approval plus OAuth count to the shell', async () => {
+  installApiFixtures({
+    approvals: [commandApproval],
+    oauth: [
+      {
+        id: 'oauth-1',
+        clientId: 'client-1',
+        clientName: 'Claude',
+        pairingCode: '1234',
+      },
+    ],
+  });
+  const onPendingCountChange = renderDrawer(vi.fn());
+  await waitFor(() => expect(onPendingCountChange).toHaveBeenCalledWith(2));
 });
