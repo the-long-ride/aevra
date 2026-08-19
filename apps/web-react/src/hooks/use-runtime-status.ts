@@ -1,15 +1,6 @@
-import type {
-  ApprovalItem,
-  OauthRequestItem,
-  RuntimeHealthStatus,
-} from '@aevra/admin-contracts';
+import type { RuntimeHealthStatus } from '@aevra/admin-contracts';
 import { useEffect, useState } from 'react';
 import { requestJson } from '../services/api-client';
-
-export interface RuntimeHeaderState {
-  status: RuntimeHealthStatus;
-  pendingCount: number;
-}
 
 const unavailable: RuntimeHealthStatus = {
   core: 'unavailable',
@@ -18,33 +9,20 @@ const unavailable: RuntimeHealthStatus = {
   tunnel: 'unavailable',
 };
 
-export function useRuntimeStatus(): RuntimeHeaderState {
-  const [state, setState] = useState<RuntimeHeaderState>({
-    status: {},
-    pendingCount: 0,
-  });
+export function useRuntimeStatus(): RuntimeHealthStatus {
+  const [status, setStatus] = useState<RuntimeHealthStatus>({});
 
   useEffect(() => {
     let stopped = false;
     const refresh = async () => {
       try {
-        const [status, approvals, oauth] = await Promise.all([
-          requestJson<RuntimeHealthStatus>('/api/status'),
-          requestJson<ApprovalItem[]>('/api/approvals'),
-          requestJson<OauthRequestItem[]>('/api/oauth/requests'),
-        ]);
-        if (!stopped) {
-          setState({
-            status,
-            pendingCount:
-              approvals.filter((item) => item.state === 'PENDING').length +
-              oauth.length,
-          });
-        }
+        const next = await requestJson<RuntimeHealthStatus>('/api/status');
+        if (!stopped) setStatus(next);
       } catch {
-        if (!stopped) setState({ status: unavailable, pendingCount: 0 });
+        if (!stopped) setStatus(unavailable);
       }
     };
+
     void refresh();
     const timer = window.setInterval(() => void refresh(), 2000);
     return () => {
@@ -53,5 +31,5 @@ export function useRuntimeStatus(): RuntimeHeaderState {
     };
   }, []);
 
-  return state;
+  return status;
 }
