@@ -5,6 +5,7 @@ import type {
 } from '../../../apps/core/src/approvals/approval-service.js';
 import { AevraToolError } from './errors.js';
 
+const SKILL_READ_TOOLS = new Set(['skills_list', 'skill_read', 'instructions_read']);
 const SKILL_FAMILY = 'skills:read';
 const SKILL_SCOPE = 'local-skills';
 
@@ -45,6 +46,10 @@ export class SessionSkillAccessGate {
       const ticket = this.approvals.status(requestId);
       if (ticket?.operation.family === SKILL_FAMILY)
         return this.resumeSkillApproval(sessionId, requestId);
+    }
+    if (SKILL_READ_TOOLS.has(name) && !this.sessions.activeLease(sessionId)) {
+      const access = await this.ensureSkillAccess(sessionId);
+      if (!access.granted) return access.result;
     }
     return this.inner.call(sessionId, name, args);
   }
