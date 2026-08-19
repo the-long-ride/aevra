@@ -47,6 +47,31 @@ test('bulk permission route expands capabilities into ordinary rule records', as
   await server.close();
 });
 
+test('bulk permission route accepts dedicated skill and instruction capabilities', async () => {
+  const rules: any[] = [];
+  const permissions = { upsert: (rule: any) => rules.push(rule) };
+  const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
+    bootstrap,
+    api: { permissions } as any,
+  });
+  await server.start();
+  const response = await request(server, '/api/permissions/bulk', {
+    method: 'POST',
+    body: JSON.stringify({
+      effect: 'allow',
+      scope: 'global',
+      actors: ['oauth:Claude'],
+      capabilities: ['skills.read', 'skills.write', 'instructions.read', 'instructions.write'],
+    }),
+  });
+  assert.equal(response.status, 201);
+  assert.deepEqual(
+    rules.map((rule) => rule.capability),
+    ['skills.read', 'skills.write', 'instructions.read', 'instructions.write'],
+  );
+  await server.close();
+});
+
 test('bulk permission route rejects persistent allow records for critical command families', async () => {
   const rules: any[] = [];
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
