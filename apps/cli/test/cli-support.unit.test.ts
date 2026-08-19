@@ -7,14 +7,12 @@ import {
   usageText,
 } from '../src/cli-support.js';
 
-test('help and shell completions expose start --ui', () => {
-  assert.match(usageText(), /aevra start \[--ui\]/);
+test('help and shell completions expose vanilla and React UI launch flags', () => {
+  assert.match(usageText(), /aevra start \[--ui\|--ui-react\]/);
   for (const shell of ['bash', 'zsh', 'powershell'] as const) {
-    assert.match(
-      completionText(shell),
-      /--ui/,
-      `${shell} completion should include --ui`,
-    );
+    const completion = completionText(shell);
+    assert.match(completion, /--ui/);
+    assert.match(completion, /--ui-react/);
   }
 });
 
