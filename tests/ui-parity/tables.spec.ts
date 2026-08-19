@@ -6,7 +6,7 @@ const permissions = Array.from({ length: 30 }, (_, index) => ({
   effect: index % 2 === 0 ? 'allow' : 'deny',
   capability: index % 3 === 0 ? 'commands.run' : 'files.read',
   scope: 'workspace',
-  actor: index % 2 === 0 ? 'ChatGPT' : 'Claude',
+  actor: `actor-${index + 1}`,
   matcher: index % 3 === 0 ? 'git:status' : '*',
 }));
 
@@ -29,8 +29,8 @@ for (const surface of ADMIN_SURFACES) {
 
     await expect(page.getByText('Page 1 / 2')).toBeVisible();
     const search = page.getByPlaceholder('Search permissions…');
-    await search.fill('rule-29');
-    await expect(page.getByText('rule-29')).toBeVisible();
+    await search.fill('actor-29');
+    await expect(page.getByText('actor-29')).toBeVisible();
     await search.fill('');
 
     const effect = page.getByLabel('Effect').first();
