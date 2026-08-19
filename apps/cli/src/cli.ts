@@ -134,8 +134,12 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
             onReady: hooks.onReady,
           }),
         readyLines,
-        openUi: async () => {
-          const url = await createAuthenticatedUiUrl(config, admin);
+        openUi: async (currentConfig, destination) => {
+          const url = await createAuthenticatedUiUrl(
+            currentConfig,
+            admin,
+            destination,
+          );
           openBrowser(url);
           console.error(`[aevra] Opening ${url}`);
         },
@@ -144,8 +148,10 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       }),
     ui: (current) =>
       runUiCommand(config, current, {
-        createUrl: (currentConfig) => createAuthenticatedUiUrl(currentConfig, admin),
-        revokeAll: (currentConfig) => revokeAllAdminSessions(currentConfig, admin),
+        createUrl: (currentConfig) =>
+          createAuthenticatedUiUrl(currentConfig, admin),
+        revokeAll: (currentConfig) =>
+          revokeAllAdminSessions(currentConfig, admin),
         openBrowser,
         error: console.error,
         formatError: formatCliError,
@@ -161,7 +167,11 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     service: (current) =>
       runServiceCommand(
         current,
-        createUserServiceAdapter(process.platform, process.execPath, process.argv[1]!),
+        createUserServiceAdapter(
+          process.platform,
+          process.execPath,
+          process.argv[1]!,
+        ),
         {
           log: console.log,
           error: console.error,
