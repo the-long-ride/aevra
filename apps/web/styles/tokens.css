@@ -63,7 +63,10 @@ button,
 input,
 select,
 textarea {
+  min-height: 36px;
   font: inherit;
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 a {
@@ -82,6 +85,10 @@ button {
   color: var(--text);
   padding: 7px 11px;
   cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
 }
 
 button:hover:not(:disabled) {
@@ -118,7 +125,17 @@ textarea {
   background: #0e0e0f;
   color: var(--text);
   padding: 8px 10px;
-  outline: none;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--line-strong);
+  background: #101012;
 }
 
 input:focus,
@@ -127,6 +144,31 @@ textarea:focus {
   border-color: #686870;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid rgb(244 244 245 / 42%);
+  outline-offset: 2px;
+}
+
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background: #111113;
+  color: var(--text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6f6f77;
+}
+
 textarea {
+  min-height: 76px;
   resize: vertical;
 }
