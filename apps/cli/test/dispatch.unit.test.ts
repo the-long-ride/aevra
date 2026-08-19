@@ -8,7 +8,7 @@ import {
 
 const commands: Array<[keyof CliDispatchHandlers, AevraCommand]> = [
   ['help', { command: 'help' }],
-  ['start', { command: 'start', ui: false }],
+  ['start', { command: 'start', uiDestination: null }],
   ['ui', { command: 'ui', logoutAll: false }],
   ['setup', { command: 'setup' }],
   ['service', { command: 'service', action: 'status' }],
