@@ -59,9 +59,7 @@ export function DataTable<T>({
   rowKey = (_, index) => String(index),
 }: DataTableProps<T>) {
   const [query, setQuery] = useState('');
-  const [selectedFilters, setSelectedFilters] = useState<
-    Record<string, string>
-  >({});
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({});
   const [sortKey, setSortKey] = useState(defaultSort?.key ?? '');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(
     defaultSort?.direction ?? 'asc',
@@ -92,9 +90,7 @@ export function DataTable<T>({
         return String(actual ?? '') === selected;
       });
     });
-    const column = columns.find(
-      (item) => item.key === sortKey && item.sortable !== false,
-    );
+    const column = columns.find((item) => item.key === sortKey && item.sortable !== false);
     if (column) {
       next.sort((left, right) => {
         const direction = sortDirection === 'asc' ? 1 : -1;
@@ -123,9 +119,7 @@ export function DataTable<T>({
           )
           .filter(Boolean),
       ),
-    ].sort((left, right) =>
-      left.localeCompare(right, undefined, { numeric: true }),
-    );
+    ].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
 
   return (
     <div className="data-table-host" data-table-id={id}>
@@ -197,9 +191,7 @@ export function DataTable<T>({
                       className="dt-sort"
                       onClick={() => {
                         if (sortKey === column.key) {
-                          setSortDirection((current) =>
-                            current === 'asc' ? 'desc' : 'asc',
-                          );
+                          setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
                         } else {
                           setSortKey(column.key);
                           setSortDirection('asc');
@@ -208,11 +200,7 @@ export function DataTable<T>({
                       }}
                     >
                       {column.label}{' '}
-                      {sortKey === column.key
-                        ? sortDirection === 'asc'
-                          ? '↑'
-                          : '↓'
-                        : ''}
+                      {sortKey === column.key ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                     </button>
                   )}
                 </th>
@@ -245,9 +233,7 @@ export function DataTable<T>({
         </table>
       </div>
       <div className="dt-footer">
-        <span>
-          {filtered.length ? `${start + 1}–${end} of ${filtered.length}` : '0 rows'}
-        </span>
+        <span>{filtered.length ? `${start + 1}–${end} of ${filtered.length}` : '0 rows'}</span>
         <div className="dt-pages">
           <button type="button" disabled={safePage <= 1} onClick={() => setPage(1)}>
             «
@@ -269,11 +255,7 @@ export function DataTable<T>({
           >
             ›
           </button>
-          <button
-            type="button"
-            disabled={safePage >= pageCount}
-            onClick={() => setPage(pageCount)}
-          >
+          <button type="button" disabled={safePage >= pageCount} onClick={() => setPage(pageCount)}>
             »
           </button>
         </div>

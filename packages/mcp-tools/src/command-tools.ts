@@ -8,12 +8,7 @@ import { resumeApproval } from './approval-resume.js';
 import { authorizeCapability } from './authorization.js';
 import { AevraToolError } from './errors.js';
 import { buildShellCommand, shellRiskFloor } from './shell-command.js';
-import {
-  argsHash,
-  maxRisk,
-  oneTimeAllowed,
-  requiredLease,
-} from './service-helpers.js';
+import { argsHash, maxRisk, oneTimeAllowed, requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
 interface ShellSource {
@@ -27,25 +22,17 @@ interface ExecutionSettings {
   sandboxBackend?: 'auto' | 'docker' | 'podman' | 'native';
 }
 
-function resolveExecutionMode(
-  context: McpRuntimeContext,
-  requestedMode: unknown,
-): ExecutionMode {
+function resolveExecutionMode(context: McpRuntimeContext, requestedMode: unknown): ExecutionMode {
   if (requestedMode === 'host' || requestedMode === 'sandbox') {
     return requestedMode;
   }
-  const execution = context.deps.settings?.get<ExecutionSettings>(
-    'execution.settings',
-    { sandboxBackend: 'auto' },
-  );
+  const execution = context.deps.settings?.get<ExecutionSettings>('execution.settings', {
+    sandboxBackend: 'auto',
+  });
   return execution?.sandboxBackend === 'native' ? 'host' : 'sandbox';
 }
 
-export async function shellTool(
-  context: McpRuntimeContext,
-  sessionId: string,
-  args: any,
-) {
+export async function shellTool(context: McpRuntimeContext, sessionId: string, args: any) {
   const mode = resolveExecutionMode(context, args.executionMode);
   const command = buildShellCommand({ ...args, executionMode: mode });
   const requestedShell = String(args.shell ?? 'auto');
@@ -82,17 +69,12 @@ export async function commandTool(
 ) {
   const command = {
     executable: String(args.executable ?? args.command?.executable ?? ''),
-    args: Array.isArray(args.args)
-      ? args.args.map(String)
-      : (args.command?.args ?? []).map(String),
+    args: Array.isArray(args.args) ? args.args.map(String) : (args.command?.args ?? []).map(String),
     env: args.env ?? args.command?.env ?? {},
     timeoutMs: args.timeoutMs ?? args.command?.timeoutMs,
   };
   if (!command.executable) {
-    throw new AevraToolError(
-      'INVALID_REQUEST',
-      'command executable is required',
-    );
+    throw new AevraToolError('INVALID_REQUEST', 'command executable is required');
   }
 
   const mode = resolveExecutionMode(context, args.executionMode);
@@ -110,14 +92,10 @@ export async function commandTool(
       : { ...args, executionMode: mode },
   };
   const classification =
-    context.deps.operations?.classify?.([
-      command.executable,
-      ...command.args,
-    ]) ?? classifyCommand([command.executable, ...command.args]);
+    context.deps.operations?.classify?.([command.executable, ...command.args]) ??
+    classifyCommand([command.executable, ...command.args]);
   let risk: RiskTier =
-    mode === 'host' && classification.risk === 'LOW'
-      ? 'MEDIUM'
-      : classification.risk;
+    mode === 'host' && classification.risk === 'LOW' ? 'MEDIUM' : classification.risk;
   if (source) risk = maxRisk(risk, source.riskFloor);
 
   const classificationFamily = source
@@ -127,9 +105,7 @@ export async function commandTool(
       : classification.family;
   const permissionMatcher = commandPermissionMatcher(
     [command.executable, ...command.args],
-    source
-      ? { shell: source.shell, executionMode: mode }
-      : { executionMode: mode },
+    source ? { shell: source.shell, executionMode: mode } : { executionMode: mode },
   );
 
   const commandGate = await authorizeCapability(
@@ -155,10 +131,7 @@ export async function commandTool(
   const rawDestinations = Array.isArray(args.networkDestinations)
     ? args.networkDestinations.map(String)
     : [];
-  if (
-    rawDestinations.length > 0 &&
-    !lease.capabilities.includes('network')
-  ) {
+  if (rawDestinations.length > 0 && !lease.capabilities.includes('network')) {
     const networkGate = await authorizeCapability(
       context,
       sessionId,
@@ -179,9 +152,7 @@ export async function commandTool(
   let networkApproval: any = null;
   if (rawDestinations.length > 0) {
     const classified = rawDestinations
-      .map((value: string) =>
-        context.deps.operations?.classifyNetwork?.(value),
-      )
+      .map((value: string) => context.deps.operations?.classifyNetwork?.(value))
       .filter(Boolean);
     networkPolicy = {
       mode: 'allow-rules',
@@ -189,10 +160,7 @@ export async function commandTool(
       enforcement: 'backend',
     };
     for (const item of classified) {
-      if (
-        item.known ||
-        oneTimeAllowed(context, sessionId, 'network', item.family)
-      ) {
+      if (item.known || oneTimeAllowed(context, sessionId, 'network', item.family)) {
         continue;
       }
       const decision = context.deps.permissions?.decide({
@@ -228,19 +196,9 @@ export async function commandTool(
   if (commandDecision?.outcome === 'deny') {
     throw new AevraToolError('CAPABILITY_REQUIRED', commandDecision.reason);
   }
-  const once = oneTimeAllowed(
-    context,
-    sessionId,
-    'commands.run',
-    permissionMatcher,
-  );
-  const needsCommandApproval = needsCommandPermissionApproval(
-    commandDecision?.outcome,
-    once,
-  );
-  const approvalNormalized = needsCommandApproval
-    ? normalized
-    : networkApproval;
+  const once = oneTimeAllowed(context, sessionId, 'commands.run', permissionMatcher);
+  const needsCommandApproval = needsCommandPermissionApproval(commandDecision?.outcome, once);
+  const approvalNormalized = needsCommandApproval ? normalized : networkApproval;
   const payload = {
     tool: 'command_run',
     permissionMatcher,
@@ -257,10 +215,7 @@ export async function commandTool(
 
   if (approvalNormalized) {
     if (!context.approvals) {
-      throw new AevraToolError(
-        'APPROVAL_PENDING',
-        'Local approval service unavailable',
-      );
+      throw new AevraToolError('APPROVAL_PENDING', 'Local approval service unavailable');
     }
     const request = await context.approvals.request({
       actor: session.actor,
@@ -275,10 +230,5 @@ export async function commandTool(
     return resumeApproval(context, sessionId, request.requestId);
   }
 
-  return context.deps.operations!.runCommand(
-    sessionId,
-    command,
-    mode,
-    networkPolicy,
-  );
+  return context.deps.operations!.runCommand(sessionId, command, mode, networkPolicy);
 }

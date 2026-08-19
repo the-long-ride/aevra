@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AevraCommand } from '../src/args.js';
-import {
-  dispatchCommand,
-  type CliDispatchHandlers,
-} from '../src/dispatch.js';
+import { dispatchCommand, type CliDispatchHandlers } from '../src/dispatch.js';
 
 const commands: Array<[keyof CliDispatchHandlers, AevraCommand]> = [
   ['help', { command: 'help' }],

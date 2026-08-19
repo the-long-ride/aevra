@@ -43,9 +43,7 @@ test('Permissions creates normalized command rules and revokes remembered rules'
   });
   render(<PermissionsPage />);
 
-  expect(
-    await screen.findByRole('heading', { name: 'Permissions' }),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Permissions' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Add rules' }));
   await user.type(screen.getByLabelText('Connector actors'), 'connector:Claude');
   await user.type(screen.getByLabelText('Workspace IDs'), 'ws-1');
@@ -85,9 +83,7 @@ test('Workspaces adds and removes mounts, saves admission, and can register anot
   });
   render(<WorkspacesPage />);
 
-  expect(
-    await screen.findByRole('heading', { name: 'Workspaces' }),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Details' }));
   expect(await screen.findByText('/external/shared')).toBeInTheDocument();
 
@@ -104,30 +100,21 @@ test('Workspaces adds and removes mounts, saves admission, and can register anot
   await user.type(screen.getByLabelText('Local mount root'), '/opt/sdk');
   await user.click(screen.getByRole('button', { name: 'Add mount' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/workspaces/ws-1/mounts', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/workspaces/ws-1/mounts', 'POST')).toBeTruthy(),
   );
 
   await user.type(screen.getByLabelText('Actor'), 'connector:ChatGPT');
   await user.click(screen.getByRole('button', { name: 'Save admission' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/workspaces/ws-1/admission', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/workspaces/ws-1/admission', 'POST')).toBeTruthy(),
   );
 
   vi.stubGlobal(
     'prompt',
-    vi
-      .fn()
-      .mockReturnValueOnce('Second workspace')
-      .mockReturnValueOnce('/projects/second'),
+    vi.fn().mockReturnValueOnce('Second workspace').mockReturnValueOnce('/projects/second'),
   );
   await user.click(screen.getByRole('button', { name: 'Add workspace' }));
-  await waitFor(() =>
-    expect(mutationCall(fetchMock, '/api/workspaces', 'POST')).toBeTruthy(),
-  );
+  await waitFor(() => expect(mutationCall(fetchMock, '/api/workspaces', 'POST')).toBeTruthy());
 });
 
 test('Sessions switches workspace and revokes remote, local, and other sessions', async () => {
@@ -145,15 +132,16 @@ test('Sessions switches workspace and revokes remote, local, and other sessions'
       '/api/admin-sessions': [{ idHash: 'local-1' }],
     },
   });
-  vi.stubGlobal('prompt', vi.fn(() => 'ws-1'));
+  vi.stubGlobal(
+    'prompt',
+    vi.fn(() => 'ws-1'),
+  );
   render(<SessionsPage />);
 
   expect(await screen.findByRole('heading', { name: 'Sessions' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Switch' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/sessions/remote-1/workspace', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/sessions/remote-1/workspace', 'POST')).toBeTruthy(),
   );
 
   const remoteRevoke = document.querySelector<HTMLButtonElement>(
@@ -162,9 +150,7 @@ test('Sessions switches workspace and revokes remote, local, and other sessions'
   expect(remoteRevoke).not.toBeNull();
   await user.click(remoteRevoke!);
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/sessions/remote-1/revoke', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/sessions/remote-1/revoke', 'POST')).toBeTruthy(),
   );
 
   const localPanel = screen
@@ -173,16 +159,12 @@ test('Sessions switches workspace and revokes remote, local, and other sessions'
   expect(localPanel).not.toBeNull();
   await user.click(within(localPanel!).getByRole('button', { name: 'Revoke' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/admin-sessions/local-1/revoke', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/admin-sessions/local-1/revoke', 'POST')).toBeTruthy(),
   );
 
   await user.click(screen.getByRole('button', { name: 'Revoke all others' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/sessions/revoke-others', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/sessions/revoke-others', 'POST')).toBeTruthy(),
   );
 });
 
@@ -202,9 +184,7 @@ test('Processes exposes stop restart and forget mutations', async () => {
   });
   render(<ProcessesPage />);
 
-  expect(
-    await screen.findByRole('heading', { name: 'Processes' }),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Processes' })).toBeInTheDocument();
   for (const [label, action] of [
     ['Stop', 'stop'],
     ['Restart', 'restart'],
@@ -212,9 +192,7 @@ test('Processes exposes stop restart and forget mutations', async () => {
   ] as const) {
     await user.click(await screen.findByRole('button', { name: label }));
     await waitFor(() =>
-      expect(
-        mutationCall(fetchMock, `/api/processes/proc-1/${action}`, 'POST'),
-      ).toBeTruthy(),
+      expect(mutationCall(fetchMock, `/api/processes/proc-1/${action}`, 'POST')).toBeTruthy(),
     );
   }
 });
@@ -223,12 +201,13 @@ test('Changes renames, keeps, and rolls back an open change set', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({
     routes: {
-      '/api/changes': [
-        { id: 'change-1', name: 'Draft', state: 'OPEN', workspace_id: 'ws-1' },
-      ],
+      '/api/changes': [{ id: 'change-1', name: 'Draft', state: 'OPEN', workspace_id: 'ws-1' }],
     },
   });
-  vi.stubGlobal('prompt', vi.fn(() => 'Renamed'));
+  vi.stubGlobal(
+    'prompt',
+    vi.fn(() => 'Renamed'),
+  );
   render(<ChangesPage />);
 
   expect(await screen.findByRole('heading', { name: 'Changes' })).toBeInTheDocument();
@@ -239,16 +218,12 @@ test('Changes renames, keeps, and rolls back an open change set', async () => {
 
   await user.click(await screen.findByRole('button', { name: 'Keep' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/changes/change-1/commit', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/changes/change-1/commit', 'POST')).toBeTruthy(),
   );
 
   await user.click(await screen.findByRole('button', { name: 'Rollback' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/changes/change-1/rollback', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/changes/change-1/rollback', 'POST')).toBeTruthy(),
   );
 });
 
@@ -274,7 +249,5 @@ test('Audit renders exported events and clears history only through the mutation
   expect(await screen.findByRole('heading', { name: 'Audit' })).toBeInTheDocument();
   expect(screen.getByText('commands.run')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Clear history' }));
-  await waitFor(() =>
-    expect(mutationCall(fetchMock, '/api/audit', 'DELETE')).toBeTruthy(),
-  );
+  await waitFor(() => expect(mutationCall(fetchMock, '/api/audit', 'DELETE')).toBeTruthy());
 });

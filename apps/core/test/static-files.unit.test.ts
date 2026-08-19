@@ -7,14 +7,8 @@ const root = path.resolve('/tmp/aevra-web');
 
 test('static resolver maps vanilla and React directory entries', () => {
   assert.equal(resolveStaticAsset(root, '/'), path.join(root, 'index.html'));
-  assert.equal(
-    resolveStaticAsset(root, '/react/'),
-    path.join(root, 'react', 'index.html'),
-  );
-  assert.equal(
-    resolveStaticAsset(root, '/react'),
-    path.join(root, 'react', 'index.html'),
-  );
+  assert.equal(resolveStaticAsset(root, '/react/'), path.join(root, 'react', 'index.html'));
+  assert.equal(resolveStaticAsset(root, '/react'), path.join(root, 'react', 'index.html'));
   assert.equal(
     resolveStaticAsset(root, '/react/assets/app.js'),
     path.join(root, 'react', 'assets', 'app.js'),

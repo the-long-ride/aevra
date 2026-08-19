@@ -23,12 +23,7 @@ function response() {
   return result as any;
 }
 
-async function call(
-  pathname: string,
-  method: string,
-  context: any,
-  value?: unknown,
-) {
+async function call(pathname: string, method: string, context: any, value?: unknown) {
   const res = response();
   const handled = await handleAdminApi(
     request(method, value),
@@ -44,12 +39,7 @@ async function call(
 }
 
 test('safe mode blocks admin mutations', async () => {
-  const result = await call(
-    '/api/workspaces',
-    'POST',
-    { safeMode: () => true },
-    { name: 'x' },
-  );
+  const result = await call('/api/workspaces', 'POST', { safeMode: () => true }, { name: 'x' });
   assert.equal(result.handled, true);
   assert.equal(result.status, 503);
   assert.equal(result.value.error.code, 'SAFE_MODE');
@@ -85,12 +75,7 @@ test('critical persistent permission remains forbidden', async () => {
 });
 
 test('blank connector name remains invalid', async () => {
-  const result = await call(
-    '/api/connectors',
-    'POST',
-    { connectors: {} },
-    { name: '   ' },
-  );
+  const result = await call('/api/connectors', 'POST', { connectors: {} }, { name: '   ' });
   assert.equal(result.status, 400);
   assert.equal(result.value.error.code, 'INVALID_CONNECTOR');
 });

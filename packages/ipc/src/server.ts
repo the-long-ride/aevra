@@ -1,3 +1,66 @@
-import net from 'node:net';import {randomBytes} from 'node:crypto';import {encodeFrame,FrameDecoder} from './framing.js';import {handshakeMac} from './envelope.js';
-export interface RpcHandler{health():Promise<{ready:boolean;pid:number}>;execute(envelope:unknown):Promise<unknown>;}
-export function createIpcServer(endpoint:string,secret:Buffer,daemonInstanceId:string,handler:RpcHandler){const server=net.createServer(socket=>{let ready=false;let challengeB='';const decoder=new FrameDecoder();socket.on('data',async chunk=>{try{for(const f0 of decoder.push(chunk)){const f=f0 as any;if(!ready){if(f.type==='hello'&&f.daemonInstanceId===daemonInstanceId&&typeof f.challengeA==='string'){challengeB=randomBytes(16).toString('hex');socket.write(encodeFrame({type:'helloAck',daemonInstanceId,challengeA:f.challengeA,challengeB,mac:handshakeMac(secret,daemonInstanceId,f.challengeA,challengeB)}));continue;}if(f.type==='ready'&&f.challengeB===challengeB&&f.mac===handshakeMac(secret,daemonInstanceId,challengeB)){ready=true;continue;}socket.destroy();return;}if(f.type==='health')socket.write(encodeFrame({requestId:f.requestId,health:await handler.health()}));else if(f.type==='execute')socket.write(encodeFrame({requestId:f.requestId,result:await handler.execute(f.envelope)}));else socket.write(encodeFrame({requestId:f.requestId,error:'unknown request'}));}}catch{socket.destroy();}});});return server;}
+import net from 'node:net';
+import { randomBytes } from 'node:crypto';
+import { encodeFrame, FrameDecoder } from './framing.js';
+import { handshakeMac } from './envelope.js';
+export interface RpcHandler {
+  health(): Promise<{ ready: boolean; pid: number }>;
+  execute(envelope: unknown): Promise<unknown>;
+}
+export function createIpcServer(
+  endpoint: string,
+  secret: Buffer,
+  daemonInstanceId: string,
+  handler: RpcHandler,
+) {
+  const server = net.createServer((socket) => {
+    let ready = false;
+    let challengeB = '';
+    const decoder = new FrameDecoder();
+    socket.on('data', async (chunk) => {
+      try {
+        for (const f0 of decoder.push(chunk)) {
+          const f = f0 as any;
+          if (!ready) {
+            if (
+              f.type === 'hello' &&
+              f.daemonInstanceId === daemonInstanceId &&
+              typeof f.challengeA === 'string'
+            ) {
+              challengeB = randomBytes(16).toString('hex');
+              socket.write(
+                encodeFrame({
+                  type: 'helloAck',
+                  daemonInstanceId,
+                  challengeA: f.challengeA,
+                  challengeB,
+                  mac: handshakeMac(secret, daemonInstanceId, f.challengeA, challengeB),
+                }),
+              );
+              continue;
+            }
+            if (
+              f.type === 'ready' &&
+              f.challengeB === challengeB &&
+              f.mac === handshakeMac(secret, daemonInstanceId, challengeB)
+            ) {
+              ready = true;
+              continue;
+            }
+            socket.destroy();
+            return;
+          }
+          if (f.type === 'health')
+            socket.write(encodeFrame({ requestId: f.requestId, health: await handler.health() }));
+          else if (f.type === 'execute')
+            socket.write(
+              encodeFrame({ requestId: f.requestId, result: await handler.execute(f.envelope) }),
+            );
+          else socket.write(encodeFrame({ requestId: f.requestId, error: 'unknown request' }));
+        }
+      } catch {
+        socket.destroy();
+      }
+    });
+  });
+  return server;
+}

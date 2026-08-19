@@ -2,20 +2,25 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runBackupCommand } from '../src/commands/backup-command.js';
 
-function fixture(overrides: Partial<{
-  inspect(file: string): {
-    file: string;
-    integrityOk: boolean;
-    integrityMessage: string;
-    sizeBytes: number;
-    counts: Record<string, number>;
-  };
-  restore(file: string, stateDir: string): {
-    databasePath: string;
-    previousBackedUpTo?: string | null;
-  };
-  health(config: { stateDir: string }): Promise<{ ok: boolean }>;
-}> = {}) {
+function fixture(
+  overrides: Partial<{
+    inspect(file: string): {
+      file: string;
+      integrityOk: boolean;
+      integrityMessage: string;
+      sizeBytes: number;
+      counts: Record<string, number>;
+    };
+    restore(
+      file: string,
+      stateDir: string,
+    ): {
+      databasePath: string;
+      previousBackedUpTo?: string | null;
+    };
+    health(config: { stateDir: string }): Promise<{ ok: boolean }>;
+  }> = {},
+) {
   const logs: string[] = [];
   const errors: string[] = [];
   return {

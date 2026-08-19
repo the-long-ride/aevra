@@ -11,18 +11,22 @@ import { ensureLocalTls, localTlsPaths } from '../src/tls/local-tls.js';
 
 async function getJson(url: string, caPath: string): Promise<any> {
   return new Promise((resolve, reject) => {
-    const request = https.get(url, { ca: readFileSync(caPath), servername: 'localhost' }, (response) => {
-      const chunks: Buffer[] = [];
-      response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-      response.once('error', reject);
-      response.once('end', () => {
-        try {
-          resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
+    const request = https.get(
+      url,
+      { ca: readFileSync(caPath), servername: 'localhost' },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        response.once('error', reject);
+        response.once('end', () => {
+          try {
+            resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+          } catch (error) {
+            reject(error);
+          }
+        });
+      },
+    );
     request.once('error', reject);
   });
 }
@@ -31,12 +35,24 @@ test('integrity failure starts admin safe mode without worker authority', async 
   const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-safe-'));
   let workerStarts = 0;
   const fakeDb: any = {
-    integrityCheck() { return { ok: false, message: 'bad' }; },
-    raw() { return { prepare() { return { get() {}, run() {} }; }, exec() {} }; },
+    integrityCheck() {
+      return { ok: false, message: 'bad' };
+    },
+    raw() {
+      return {
+        prepare() {
+          return { get() {}, run() {} };
+        },
+        exec() {},
+      };
+    },
     close() {},
   };
   const worker = {
-    async start() { workerStarts++; throw new Error('must not start'); },
+    async start() {
+      workerStarts++;
+      throw new Error('must not start');
+    },
     async close() {},
   };
   const c = { ...loadCoreConfig({ AEVRA_STATE_DIR: d }), adminPort: 0, mcpPort: 0 };

@@ -1,5 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
-export const migrations=[{version:1,name:'001_gateway',sql:`
+export const migrations = [
+  {
+    version: 1,
+    name: '001_gateway',
+    sql: `
 CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY,name TEXT NOT NULL,applied_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value_json TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS workspaces(id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE,description TEXT NOT NULL DEFAULT '',host_root TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
@@ -23,15 +27,35 @@ CREATE TABLE IF NOT EXISTS admin_sessions(id_hash TEXT PRIMARY KEY,created_at TE
 CREATE TABLE IF NOT EXISTS bootstrap_tokens(token_hash TEXT PRIMARY KEY,created_at TEXT NOT NULL,expires_at TEXT NOT NULL,consumed_at TEXT);
 CREATE TABLE IF NOT EXISTS audit_chain_checkpoints(id INTEGER PRIMARY KEY CHECK(id=1),previous_hash TEXT NOT NULL,event_id TEXT,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS audit_events(id TEXT PRIMARY KEY,created_at TEXT NOT NULL,event_json TEXT NOT NULL,previous_hash TEXT NOT NULL,content_hash TEXT NOT NULL,class TEXT NOT NULL DEFAULT 'normal');
-`},{version:2,name:'002_session_permission_scope',sql:`ALTER TABLE permission_rules ADD COLUMN session_id TEXT;` },{version:3,name:'003_connectors',sql:`
+`,
+  },
+  {
+    version: 2,
+    name: '002_session_permission_scope',
+    sql: `ALTER TABLE permission_rules ADD COLUMN session_id TEXT;`,
+  },
+  {
+    version: 3,
+    name: '003_connectors',
+    sql: `
 CREATE TABLE IF NOT EXISTS connectors(id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE,token_hash TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL,last_used_at TEXT);
-`},{version:4,name:'004_connector_bindings_rotation',sql:`
+`,
+  },
+  {
+    version: 4,
+    name: '004_connector_bindings_rotation',
+    sql: `
 ALTER TABLE connectors ADD COLUMN workspace_id TEXT;
 ALTER TABLE connectors ADD COLUMN profile_cap TEXT;
 ALTER TABLE connectors ADD COLUMN expires_at TEXT;
 ALTER TABLE connectors ADD COLUMN previous_token_hash TEXT;
 ALTER TABLE connectors ADD COLUMN previous_expires_at TEXT;
-`},{version:5,name:'005_oauth',sql:`
+`,
+  },
+  {
+    version: 5,
+    name: '005_oauth',
+    sql: `
 CREATE TABLE IF NOT EXISTS oauth_clients(
   client_id TEXT PRIMARY KEY,
   client_name TEXT NOT NULL,
@@ -93,8 +117,28 @@ CREATE TABLE IF NOT EXISTS oauth_refresh_tokens(
   expires_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_expires ON oauth_refresh_tokens(expires_at);
-`}];
-export function applyMigrations(db:DatabaseSync){
- db.exec('CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY,name TEXT NOT NULL,applied_at TEXT NOT NULL)');
- for(const m of migrations){const row=db.prepare('SELECT version FROM schema_migrations WHERE version=?').get(m.version);if(row)continue;db.exec('BEGIN IMMEDIATE');try{db.exec(m.sql);db.prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)').run(m.version,m.name,new Date().toISOString());db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}}
+`,
+  },
+];
+export function applyMigrations(db: DatabaseSync) {
+  db.exec(
+    'CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY,name TEXT NOT NULL,applied_at TEXT NOT NULL)',
+  );
+  for (const m of migrations) {
+    const row = db.prepare('SELECT version FROM schema_migrations WHERE version=?').get(m.version);
+    if (row) continue;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(m.sql);
+      db.prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)').run(
+        m.version,
+        m.name,
+        new Date().toISOString(),
+      );
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+  }
 }

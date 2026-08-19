@@ -26,9 +26,6 @@ test('physical line counting ignores a trailing empty split', () => {
 });
 
 test('artificially compressed source is rejected', () => {
-  assert.equal(
-    looksArtificiallyCompressed('const a=1;const b=2;const c=3;'.repeat(30)),
-    true,
-  );
+  assert.equal(looksArtificiallyCompressed('const a=1;const b=2;const c=3;'.repeat(30)), true);
   assert.equal(looksArtificiallyCompressed('const a = 1;\nconst b = 2;\n'), false);
 });

@@ -45,9 +45,7 @@ export async function runStatusCommand<Config>(
         }),
       );
     } else {
-      dependencies.error(
-        `[aevra] status failed: ${message}. Is aevra start/service running?`,
-      );
+      dependencies.error(`[aevra] status failed: ${message}. Is aevra start/service running?`);
     }
     return 1;
   }

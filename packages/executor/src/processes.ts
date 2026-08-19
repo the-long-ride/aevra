@@ -73,7 +73,15 @@ export class ManagedProcessRuntime {
     const log = new BoundedLog();
     child.stdout?.on('data', (b) => log.append(redact(String(b))));
     child.stderr?.on('data', (b) => log.append(redact(String(b))));
-    const entry: Entry = { id, command, cwd, lifecycle, child, log, startedAt: new Date().toISOString() };
+    const entry: Entry = {
+      id,
+      command,
+      cwd,
+      lifecycle,
+      child,
+      log,
+      startedAt: new Date().toISOString(),
+    };
     this.entries.set(id, entry);
     return { processId: id, pid: child.pid!, startedAt: entry.startedAt };
   }
@@ -161,7 +169,8 @@ export class ManagedProcessRuntime {
 
   stopWithAevra() {
     for (const entry of this.entries.values()) {
-      if (entry.lifecycle === 'stop-with-aevra' && entry.child.exitCode === null) entry.child.kill('SIGTERM');
+      if (entry.lifecycle === 'stop-with-aevra' && entry.child.exitCode === null)
+        entry.child.kill('SIGTERM');
     }
   }
 

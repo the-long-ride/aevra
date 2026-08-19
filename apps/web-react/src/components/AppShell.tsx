@@ -1,7 +1,4 @@
-import type {
-  AdminPageId,
-  RuntimeHealthStatus,
-} from '@aevra/admin-contracts';
+import type { AdminPageId, RuntimeHealthStatus } from '@aevra/admin-contracts';
 import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import type { ReactNode } from 'react';
 import type { Theme } from '../hooks/theme-state';
@@ -18,10 +15,7 @@ interface AppShellProps {
   children: ReactNode;
 }
 
-function healthState(
-  key: 'core' | 'worker' | 'mcp' | 'tunnel',
-  status: RuntimeHealthStatus,
-) {
+function healthState(key: 'core' | 'worker' | 'mcp' | 'tunnel', status: RuntimeHealthStatus) {
   if (key === 'tunnel') {
     if (status.tunnel === 'unconfigured') return 'off';
     if (status.tunnelReachable === true) return 'ok';

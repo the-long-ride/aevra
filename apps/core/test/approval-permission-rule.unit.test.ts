@@ -1,11 +1,97 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {permissionRuleFromApproval} from '../src/admin/approval-permissions.js';
+import { permissionRuleFromApproval } from '../src/admin/approval-permissions.js';
 
-function ticket(overrides:any={}){return{id:'req',actor:'connector:ChatGPT',sessionId:'ses',workspaceId:'ws',operation:{family:'capability:files.write',capability:'files.write',risk:'MEDIUM',argsHash:'h'},payload:{tool:'capability_request',requestedCapability:'files.write',permissionMatcher:'*'},risk:'MEDIUM',...overrides};}
+function ticket(overrides: any = {}) {
+  return {
+    id: 'req',
+    actor: 'connector:ChatGPT',
+    sessionId: 'ses',
+    workspaceId: 'ws',
+    operation: {
+      family: 'capability:files.write',
+      capability: 'files.write',
+      risk: 'MEDIUM',
+      argsHash: 'h',
+    },
+    payload: {
+      tool: 'capability_request',
+      requestedCapability: 'files.write',
+      permissionMatcher: '*',
+    },
+    risk: 'MEDIUM',
+    ...overrides,
+  };
+}
 
-test('workspace approval persists exact capability wildcard and no unrelated capabilities',()=>{const rule=permissionRuleFromApproval(ticket(),'workspace','perm_1','2026-08-18T00:00:00.000Z');assert.deepEqual(rule,{id:'perm_1',effect:'allow',capability:'files.write',scope:'workspace',workspaceId:'ws',actor:'connector:ChatGPT',matcher:'*',createdAt:'2026-08-18T00:00:00.000Z'});});
-test('session approval binds exact session',()=>{const rule=permissionRuleFromApproval(ticket(),'session','perm_2','2026-08-18T00:00:00.000Z');assert.equal(rule?.sessionId,'ses');assert.equal(rule?.scope,'session');});
-test('command approval persists command matcher',()=>{const rule=permissionRuleFromApproval(ticket({operation:{family:'git:status',capability:'commands.run',risk:'LOW',argsHash:'h'},payload:{tool:'capability_request',requestedCapability:'commands.run',permissionMatcher:'git:status'},risk:'LOW'}),'global','perm_3','2026-08-18T00:00:00.000Z');assert.equal(rule?.matcher,'git:status');assert.equal(rule?.capability,'commands.run');});
-test('non-command capability approval stays wildcard even when the operation has a family',()=>{const rule=permissionRuleFromApproval(ticket({operation:{family:'git:commit',capability:'git.commit',risk:'MEDIUM',argsHash:'h'},payload:{tool:'capability_request',requestedCapability:'git.commit',permissionMatcher:'git:commit'},risk:'MEDIUM'}),'workspace','perm_4','2026-08-18T00:00:00.000Z');assert.equal(rule?.matcher,'*');assert.equal(rule?.capability,'git.commit');});
-test('once and critical approvals never persist',()=>{assert.equal(permissionRuleFromApproval(ticket(),'once','p','now'),null);assert.equal(permissionRuleFromApproval(ticket({risk:'CRITICAL'}),'workspace','p','now'),null);});
+test('workspace approval persists exact capability wildcard and no unrelated capabilities', () => {
+  const rule = permissionRuleFromApproval(
+    ticket(),
+    'workspace',
+    'perm_1',
+    '2026-08-18T00:00:00.000Z',
+  );
+  assert.deepEqual(rule, {
+    id: 'perm_1',
+    effect: 'allow',
+    capability: 'files.write',
+    scope: 'workspace',
+    workspaceId: 'ws',
+    actor: 'connector:ChatGPT',
+    matcher: '*',
+    createdAt: '2026-08-18T00:00:00.000Z',
+  });
+});
+test('session approval binds exact session', () => {
+  const rule = permissionRuleFromApproval(
+    ticket(),
+    'session',
+    'perm_2',
+    '2026-08-18T00:00:00.000Z',
+  );
+  assert.equal(rule?.sessionId, 'ses');
+  assert.equal(rule?.scope, 'session');
+});
+test('command approval persists command matcher', () => {
+  const rule = permissionRuleFromApproval(
+    ticket({
+      operation: { family: 'git:status', capability: 'commands.run', risk: 'LOW', argsHash: 'h' },
+      payload: {
+        tool: 'capability_request',
+        requestedCapability: 'commands.run',
+        permissionMatcher: 'git:status',
+      },
+      risk: 'LOW',
+    }),
+    'global',
+    'perm_3',
+    '2026-08-18T00:00:00.000Z',
+  );
+  assert.equal(rule?.matcher, 'git:status');
+  assert.equal(rule?.capability, 'commands.run');
+});
+test('non-command capability approval stays wildcard even when the operation has a family', () => {
+  const rule = permissionRuleFromApproval(
+    ticket({
+      operation: { family: 'git:commit', capability: 'git.commit', risk: 'MEDIUM', argsHash: 'h' },
+      payload: {
+        tool: 'capability_request',
+        requestedCapability: 'git.commit',
+        permissionMatcher: 'git:commit',
+      },
+      risk: 'MEDIUM',
+    }),
+    'workspace',
+    'perm_4',
+    '2026-08-18T00:00:00.000Z',
+  );
+  assert.equal(rule?.matcher, '*');
+  assert.equal(rule?.capability, 'git.commit');
+});
+test('once and critical approvals never persist', () => {
+  assert.equal(permissionRuleFromApproval(ticket(), 'once', 'p', 'now'), null);
+  assert.equal(
+    permissionRuleFromApproval(ticket({ risk: 'CRITICAL' }), 'workspace', 'p', 'now'),
+    null,
+  );
+});

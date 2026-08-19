@@ -36,8 +36,8 @@ export async function denyRequest(id: string) {
 }
 
 export async function decideOauth(id: string, allow: boolean) {
-  await requestJson(
-    `/api/oauth/requests/${encodeURIComponent(id)}/${allow ? 'approve' : 'deny'}`,
-    { method: 'POST', body: '{}' },
-  );
+  await requestJson(`/api/oauth/requests/${encodeURIComponent(id)}/${allow ? 'approve' : 'deny'}`, {
+    method: 'POST',
+    body: '{}',
+  });
 }

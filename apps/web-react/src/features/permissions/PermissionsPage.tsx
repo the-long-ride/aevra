@@ -133,7 +133,9 @@ export function PermissionsPage() {
                           : undefined
                       }
                     />
-                    <span><code>{capability}</code></span>
+                    <span>
+                      <code>{capability}</code>
+                    </span>
                   </label>
                 ))}
               </div>
@@ -142,12 +144,20 @@ export function PermissionsPage() {
               <h3>Rule details</h3>
               <label className="field">
                 <span>Effect</span>
-                <select name="effect"><option value="allow">Allow</option><option value="deny">Deny</option></select>
+                <select name="effect">
+                  <option value="allow">Allow</option>
+                  <option value="deny">Deny</option>
+                </select>
               </label>
               {commandEnabled ? (
                 <label className="field">
                   <span>Command matchers</span>
-                  <textarea name="commandMatchers" rows={6} placeholder={'git:status\ngit:diff\nnpm:test'} required />
+                  <textarea
+                    name="commandMatchers"
+                    rows={6}
+                    placeholder={'git:status\ngit:diff\nnpm:test'}
+                    required
+                  />
                   <small>One normalized matcher per line. Avoid broad * unless intentional.</small>
                 </label>
               ) : null}
@@ -180,7 +190,11 @@ export function PermissionsPage() {
               sortable: false,
               search: false,
               render: (row) => (
-                <button type="button" data-surface-id="permissions:revoke" onClick={() => void revoke(row.id)}>
+                <button
+                  type="button"
+                  data-surface-id="permissions:revoke"
+                  onClick={() => void revoke(row.id)}
+                >
                   Revoke
                 </button>
               ),

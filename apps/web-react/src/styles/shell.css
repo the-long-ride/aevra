@@ -101,19 +101,19 @@
   background: var(--ash);
 }
 
-.health-chip[data-state="ok"] i {
+.health-chip[data-state='ok'] i {
   background: var(--success);
 }
 
-.health-chip[data-state="pending"] i {
+.health-chip[data-state='pending'] i {
   background: var(--warning);
 }
 
-.health-chip[data-state="error"] i {
+.health-chip[data-state='error'] i {
   background: var(--danger);
 }
 
-.health-chip[data-state="off"] {
+.health-chip[data-state='off'] {
   opacity: 0.58;
 }
 

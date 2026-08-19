@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runServiceCommand } from '../src/commands/service-command.js';
 
-function fixture(overrides: Partial<{
-  install(): Promise<unknown>;
-  start(): Promise<unknown>;
-  stop(): Promise<unknown>;
-  restart(): Promise<unknown>;
-  status(): Promise<string>;
-}> = {}) {
+function fixture(
+  overrides: Partial<{
+    install(): Promise<unknown>;
+    start(): Promise<unknown>;
+    stop(): Promise<unknown>;
+    restart(): Promise<unknown>;
+    status(): Promise<string>;
+  }> = {},
+) {
   const calls: string[] = [];
   const logs: string[] = [];
   const errors: string[] = [];

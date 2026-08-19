@@ -8,14 +8,10 @@ export function sendAdminResponse(
 ): void {
   response.statusCode = status;
   response.setHeader('content-type', contentType);
-  response.end(
-    contentType === 'application/json' ? JSON.stringify(value) : String(value),
-  );
+  response.end(contentType === 'application/json' ? JSON.stringify(value) : String(value));
 }
 
-export async function readAdminBody(
-  request: IncomingMessage,
-): Promise<Record<string, any>> {
+export async function readAdminBody(request: IncomingMessage): Promise<Record<string, any>> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {

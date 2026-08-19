@@ -1,12 +1,7 @@
 import { readAdminBody, sendAdminResponse } from './http.js';
 import type { AdminRouteHandler } from './types.js';
 
-export const handleSessionConnectorRoutes: AdminRouteHandler = async (
-  req,
-  res,
-  url,
-  context,
-) => {
+export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, url, context) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
 
@@ -69,11 +64,7 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (
       return true;
     }
 
-    if (
-      context.connectors
-        ?.list?.()
-        .some((connector: any) => connector.name === name)
-    ) {
+    if (context.connectors?.list?.().some((connector: any) => connector.name === name)) {
       sendAdminResponse(res, 409, {
         error: {
           code: 'CONNECTOR_EXISTS',
@@ -126,9 +117,8 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (
       return true;
     }
     const target = String(
-      context.connectors
-        ?.list?.()
-        .find((connector: any) => connector.id === match[1])?.name ?? match[1],
+      context.connectors?.list?.().find((connector: any) => connector.id === match[1])?.name ??
+        match[1],
     );
     context.audit?.append?.({
       actor: 'admin',
@@ -145,9 +135,8 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (
   match = path.match(/^\/api\/connectors\/([^/]+)$/);
   if (match && method === 'DELETE') {
     const target =
-      context.connectors
-        ?.list?.()
-        .find((connector: any) => connector.id === match[1])?.name ?? match[1];
+      context.connectors?.list?.().find((connector: any) => connector.id === match[1])?.name ??
+      match[1];
     context.connectors?.revoke?.(match[1]);
     context.audit?.append?.({
       actor: 'admin',

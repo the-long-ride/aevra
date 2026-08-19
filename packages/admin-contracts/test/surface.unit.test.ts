@@ -4,10 +4,7 @@ import test from 'node:test';
 import { ADMIN_SURFACE, surfaceId } from '../src/surface.js';
 
 const manifest = JSON.parse(
-  readFileSync(
-    new URL('../admin-surface.json', import.meta.url),
-    'utf8',
-  ),
+  readFileSync(new URL('../admin-surface.json', import.meta.url), 'utf8'),
 );
 
 test('typed contract matches the JSON parity manifest', () => {
@@ -40,18 +37,10 @@ test('navigation and onboarding ordering are stable', () => {
 });
 
 test('approval scopes include every persistent choice after once', () => {
-  assert.deepEqual(ADMIN_SURFACE.approvalScopes, [
-    'once',
-    'session',
-    'workspace',
-    'global',
-  ]);
+  assert.deepEqual(ADMIN_SURFACE.approvalScopes, ['once', 'session', 'workspace', 'global']);
 });
 
 test('surface ids are implementation-neutral stable selectors', () => {
   assert.equal(surfaceId('page', 'dashboard'), 'page:dashboard');
-  assert.equal(
-    surfaceId('requests', 'approve-global'),
-    'requests:approve-global',
-  );
+  assert.equal(surfaceId('requests', 'approve-global'), 'requests:approve-global');
 });

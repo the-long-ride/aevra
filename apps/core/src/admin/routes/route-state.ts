@@ -54,10 +54,7 @@ export function onboardingState(value: any) {
 }
 
 export function criticalPersistentRule(input: any): boolean {
-  if (
-    input?.effect !== 'allow' ||
-    !['workspace', 'global'].includes(input?.scope)
-  ) {
+  if (input?.effect !== 'allow' || !['workspace', 'global'].includes(input?.scope)) {
     return false;
   }
   const matcher = String(input?.matcher ?? '').toLowerCase();

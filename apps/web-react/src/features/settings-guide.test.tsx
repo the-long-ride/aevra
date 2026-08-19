@@ -45,9 +45,7 @@ function settingsFixtures() {
 }
 
 async function waitForSettings() {
-  expect(
-    await screen.findByRole('heading', { name: 'Settings' }),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
 }
 
 function formForButton(name: string) {
@@ -64,10 +62,7 @@ test('Settings saves Access and execution configuration', async () => {
 
   const access = formForButton('Save Access mode');
   await user.selectOptions(access.getByLabelText('Mode'), 'access');
-  await user.type(
-    access.getByLabelText('Access issuer'),
-    'https://team.cloudflareaccess.com',
-  );
+  await user.type(access.getByLabelText('Access issuer'), 'https://team.cloudflareaccess.com');
   await user.type(access.getByLabelText('Audience'), 'aud-123');
   await user.click(access.getByRole('button', { name: 'Save Access mode' }));
   await waitFor(() =>
@@ -119,9 +114,7 @@ test('Settings creates and removes command and network policy entries', async ()
   await user.selectOptions(command.getByLabelText('Effect'), 'BUILD_OUTPUT');
   await user.click(command.getByRole('button', { name: 'Set override' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/policy/command-families', 'PATCH'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/policy/command-families', 'PATCH')).toBeTruthy(),
   );
 
   const removeCommand = document.querySelector<HTMLButtonElement>(
@@ -131,8 +124,8 @@ test('Settings creates and removes command and network policy entries', async ()
   await user.click(removeCommand!);
   await waitFor(() =>
     expect(
-      fetchMock.mock.calls.filter(([input, init]) =>
-        input === '/api/policy/command-families' && init?.method === 'PATCH',
+      fetchMock.mock.calls.filter(
+        ([input, init]) => input === '/api/policy/command-families' && init?.method === 'PATCH',
       ).length,
     ).toBeGreaterThanOrEqual(2),
   );
@@ -143,9 +136,7 @@ test('Settings creates and removes command and network policy entries', async ()
   await user.type(host, 'registry.example.com');
   await user.click(network.getByRole('button', { name: 'Add rule' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/policy/network-rules', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/policy/network-rules', 'POST')).toBeTruthy(),
   );
 
   const removeNetwork = document.querySelector<HTMLButtonElement>(
@@ -154,13 +145,7 @@ test('Settings creates and removes command and network policy entries', async ()
   expect(removeNetwork).not.toBeNull();
   await user.click(removeNetwork!);
   await waitFor(() =>
-    expect(
-      mutationCall(
-        fetchMock,
-        '/api/policy/network-rules/network-1',
-        'DELETE',
-      ),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/policy/network-rules/network-1', 'DELETE')).toBeTruthy(),
   );
 });
 
@@ -180,9 +165,7 @@ test('Settings creates environment profiles and securely stores/removes secret r
   await user.type(refs, '{"TOKEN":"API_TOKEN"}');
   await user.click(profile.getByRole('button', { name: 'Create profile' }));
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/environment-profiles', 'POST'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/environment-profiles', 'POST')).toBeTruthy(),
   );
 
   const secret = formForButton('Store securely');
@@ -199,9 +182,7 @@ test('Settings creates environment profiles and securely stores/removes secret r
   expect(removeSecret).not.toBeNull();
   await user.click(removeSecret!);
   await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/secret-references/API_TOKEN', 'DELETE'),
-    ).toBeTruthy(),
+    expect(mutationCall(fetchMock, '/api/secret-references/API_TOKEN', 'DELETE')).toBeTruthy(),
   );
 });
 
@@ -212,9 +193,7 @@ test('Guide loads chapters and copies selected-platform safe command matchers', 
   render(<GuidePage />);
 
   expect(await screen.findByRole('heading', { name: 'Guide' })).toBeInTheDocument();
-  await user.click(
-    await screen.findByRole('button', { name: 'Safe Command Matchers' }),
-  );
+  await user.click(await screen.findByRole('button', { name: 'Safe Command Matchers' }));
   const copyAll = await screen.findByRole('button', { name: 'Copy all' });
   await user.click(copyAll);
   expect(writeText).toHaveBeenCalledWith(expect.stringContaining('git:status'));

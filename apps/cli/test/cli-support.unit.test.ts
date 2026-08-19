@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import {
-  cloudflareSetupNeedsAccess,
-  completionText,
-  usageText,
-} from '../src/cli-support.js';
+import { cloudflareSetupNeedsAccess, completionText, usageText } from '../src/cli-support.js';
 
 test('help and shell completions expose only the single UI launch flag', () => {
   assert.match(usageText(), /aevra start \[--ui\]/);
@@ -24,14 +20,8 @@ test('CLI setup asks for issuer and audience only in Access mode', () => {
 });
 
 test('interactive setup keeps connector as default and gates Access-only prompts', () => {
-  const source = readFileSync(
-    'apps/cli/src/commands/setup-command.ts',
-    'utf8',
-  );
-  assert.match(
-    source,
-    /Remote MCP authentication \[connector\/access\] \(connector\)/,
-  );
+  const source = readFileSync('apps/cli/src/commands/setup-command.ts', 'utf8');
+  assert.match(source, /Remote MCP authentication \[connector\/access\] \(connector\)/);
   assert.match(source, /dependencies\.needsAccess\(authAnswer\)/);
   assert.match(source, /authMode === 'access'/);
   assert.match(source, /issuer: issuer \|\| undefined/);

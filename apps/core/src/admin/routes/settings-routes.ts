@@ -1,28 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { readAdminBody, sendAdminResponse } from './http.js';
-import {
-  DEFAULT_ONBOARDING,
-  GUIDE_CHAPTERS,
-  onboardingState,
-  revision,
-} from './route-state.js';
+import { DEFAULT_ONBOARDING, GUIDE_CHAPTERS, onboardingState, revision } from './route-state.js';
 import type { AdminRouteHandler } from './types.js';
 
-export const handleSettingsRoutes: AdminRouteHandler = async (
-  req,
-  res,
-  url,
-  context,
-) => {
+export const handleSettingsRoutes: AdminRouteHandler = async (req, res, url, context) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
 
   if (path === '/api/policy/command-families' && method === 'GET') {
-    sendAdminResponse(
-      res,
-      200,
-      context.settings?.get?.('command.family.overrides', {}) ?? {},
-    );
+    sendAdminResponse(res, 200, context.settings?.get?.('command.family.overrides', {}) ?? {});
     return true;
   }
 
@@ -37,11 +23,7 @@ export const handleSettingsRoutes: AdminRouteHandler = async (
   }
 
   if (path === '/api/policy/network-rules' && method === 'GET') {
-    sendAdminResponse(
-      res,
-      200,
-      context.settings?.get?.('network.rules', []) ?? [],
-    );
+    sendAdminResponse(res, 200, context.settings?.get?.('network.rules', []) ?? []);
     return true;
   }
 
@@ -122,10 +104,7 @@ export const handleSettingsRoutes: AdminRouteHandler = async (
     const input = await readAdminBody(req);
     context.settings?.set?.('execution.settings', input);
     if (input.workspaceDrainMs) {
-      context.settings?.set?.(
-        'workspace.drain.defaultMs',
-        Number(input.workspaceDrainMs),
-      );
+      context.settings?.set?.('workspace.drain.defaultMs', Number(input.workspaceDrainMs));
     }
     sendAdminResponse(res, 200, {
       ok: true,
@@ -135,11 +114,7 @@ export const handleSettingsRoutes: AdminRouteHandler = async (
   }
 
   if (path === '/api/settings' && method === 'GET') {
-    sendAdminResponse(
-      res,
-      200,
-      context.settings?.get?.('admin.settings', {}) ?? {},
-    );
+    sendAdminResponse(res, 200, context.settings?.get?.('admin.settings', {}) ?? {});
     return true;
   }
 
@@ -166,8 +141,7 @@ export const handleSettingsRoutes: AdminRouteHandler = async (
       res,
       200,
       onboardingState(
-        context.settings?.get?.('onboarding.state', DEFAULT_ONBOARDING) ??
-          DEFAULT_ONBOARDING,
+        context.settings?.get?.('onboarding.state', DEFAULT_ONBOARDING) ?? DEFAULT_ONBOARDING,
       ),
     );
     return true;

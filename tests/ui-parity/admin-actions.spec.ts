@@ -3,8 +3,7 @@ import { ADMIN_SURFACES, installAdminApi } from './fixtures';
 
 function waitsFor(page: Page, path: string, method = 'POST') {
   return page.waitForRequest(
-    (request) =>
-      new URL(request.url()).pathname === path && request.method() === method,
+    (request) => new URL(request.url()).pathname === path && request.method() === method,
   );
 }
 

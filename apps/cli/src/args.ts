@@ -27,10 +27,7 @@ export type AevraCommand =
   | { command: 'completion'; shell: 'bash' | 'zsh' | 'powershell' };
 
 export function parseAevraArgs(argv: string[]): AevraCommand {
-  if (
-    argv.length === 0 ||
-    ['help', '--help', '-h', '-help'].includes(argv[0]!)
-  ) {
+  if (argv.length === 0 || ['help', '--help', '-h', '-help'].includes(argv[0]!)) {
     return { command: 'help' };
   }
 
@@ -84,10 +81,7 @@ export function parseAevraArgs(argv: string[]): AevraCommand {
 
   if (command === 'completion') {
     const shell = rest[0];
-    if (
-      rest.length !== 1 ||
-      !['bash', 'zsh', 'powershell'].includes(shell ?? '')
-    ) {
+    if (rest.length !== 1 || !['bash', 'zsh', 'powershell'].includes(shell ?? '')) {
       throw new Error('completion requires bash|zsh|powershell');
     }
     return {

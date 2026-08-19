@@ -25,13 +25,13 @@
 }
 
 .dashboard-section-summary span:first-child::before {
-  content: "[+] ";
+  content: '[+] ';
   color: var(--mute);
   font-weight: 400;
 }
 
 .dashboard-section[open] > .dashboard-section-summary span:first-child::before {
-  content: "[-] ";
+  content: '[-] ';
 }
 
 .dashboard-section-summary span:last-child {

@@ -50,7 +50,7 @@
 }
 
 .guide-layout > aside button.active::before {
-  content: "[x] ";
+  content: '[x] ';
   color: var(--ink);
 }
 

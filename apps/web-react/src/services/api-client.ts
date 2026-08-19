@@ -1,7 +1,4 @@
-export async function requestJson<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
+export async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     ...init,
     cache: init.cache ?? 'no-store',
@@ -16,24 +13,18 @@ export async function requestJson<T>(
     : await response.text();
   if (!response.ok) {
     const record =
-      typeof value === 'object' && value !== null
-        ? (value as Record<string, unknown>)
-        : {};
+      typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
     const error =
       typeof record.error === 'object' && record.error !== null
         ? (record.error as Record<string, unknown>)
         : {};
-    const message =
-      error.message ?? record.error ?? record.message ?? `HTTP ${response.status}`;
+    const message = error.message ?? record.error ?? record.message ?? `HTTP ${response.status}`;
     throw new Error(String(message));
   }
   return value as T;
 }
 
-export async function requestText(
-  path: string,
-  init: RequestInit = {},
-): Promise<string> {
+export async function requestText(path: string, init: RequestInit = {}): Promise<string> {
   const response = await fetch(path, {
     ...init,
     cache: init.cache ?? 'no-store',

@@ -45,11 +45,7 @@ test('native execution setting makes unspecified commands use host execution', a
 
 test('explicit sandbox execution keeps sandbox mode and maps native backend to auto', async () => {
   const { calls, service } = fixture();
-  await service.runCommand(
-    'session-1',
-    { executable: 'git', args: ['status'] },
-    'sandbox',
-  );
+  await service.runCommand('session-1', { executable: 'git', args: ['status'] }, 'sandbox');
   assert.equal(calls.length, 1);
   assert.equal(calls[0].executionMode, 'sandbox');
   assert.equal(calls[0].operation.sandboxBackend, 'auto');

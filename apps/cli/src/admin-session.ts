@@ -20,11 +20,7 @@ export interface AdminRequestInit {
 export interface AdminSessionDependencies<Config> {
   controlSecret(config: Config): Promise<string>;
   base(config: Config): string;
-  fetch(
-    config: Config,
-    path: string,
-    init?: AdminRequestInit,
-  ): Promise<AdminResponseLike>;
+  fetch(config: Config, path: string, init?: AdminRequestInit): Promise<AdminResponseLike>;
 }
 
 async function bootstrapToken<Config>(

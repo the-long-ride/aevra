@@ -1,2 +1,25 @@
-import assert from 'node:assert/strict';import test from 'node:test';import {mkdtempSync,writeFileSync,readFileSync} from 'node:fs';import os from 'node:os';import path from 'node:path';import {snapshotFile,restoreFile} from '../../../packages/executor/src/recovery.js';
-test('snapshot and restore round trip inside workspace',async()=>{const root=mkdtempSync(path.join(os.tmpdir(),'aevra-rec-')),rec=mkdtempSync(path.join(os.tmpdir(),'aevra-recstore-'));writeFileSync(path.join(root,'a'),'before');const roots=[{id:'w',kind:'workspace' as const,logicalPrefix:'/',hostRoot:root,capabilities:['files.read' as const,'files.write' as const]}];const snap=path.join(rec,'a.snap');await snapshotFile('/a',snap,roots);writeFileSync(path.join(root,'a'),'after');await restoreFile(snap,'/a',roots);assert.equal(readFileSync(path.join(root,'a'),'utf8'),'before');});
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { snapshotFile, restoreFile } from '../../../packages/executor/src/recovery.js';
+test('snapshot and restore round trip inside workspace', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'aevra-rec-')),
+    rec = mkdtempSync(path.join(os.tmpdir(), 'aevra-recstore-'));
+  writeFileSync(path.join(root, 'a'), 'before');
+  const roots = [
+    {
+      id: 'w',
+      kind: 'workspace' as const,
+      logicalPrefix: '/',
+      hostRoot: root,
+      capabilities: ['files.read' as const, 'files.write' as const],
+    },
+  ];
+  const snap = path.join(rec, 'a.snap');
+  await snapshotFile('/a', snap, roots);
+  writeFileSync(path.join(root, 'a'), 'after');
+  await restoreFile(snap, '/a', roots);
+  assert.equal(readFileSync(path.join(root, 'a'), 'utf8'), 'before');
+});

@@ -37,8 +37,7 @@ export async function handleAdminApi(
       sendAdminResponse(res, 503, {
         error: {
           code: 'SAFE_MODE',
-          message:
-            'Administrative mutations are disabled while Aevra is in safe mode',
+          message: 'Administrative mutations are disabled while Aevra is in safe mode',
         },
       });
       return true;

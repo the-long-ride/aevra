@@ -9,10 +9,7 @@ export interface AevraSignalSource {
 export interface RunStartDependencies {
   signals: AevraSignalSource;
   createRuntime(config: CoreConfig): Promise<CoreRuntime>;
-  onReady?(info: {
-    adminUrl: string;
-    mcpUrl: string;
-  }): void | Promise<void>;
+  onReady?(info: { adminUrl: string; mcpUrl: string }): void | Promise<void>;
 }
 
 export async function runStart(

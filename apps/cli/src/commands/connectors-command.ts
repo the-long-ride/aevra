@@ -10,11 +10,7 @@ interface ResponseLike {
 }
 
 export interface ConnectorsCommandDependencies<Config> {
-  api(
-    config: Config,
-    path: string,
-    init?: AdminRequestInit,
-  ): Promise<ResponseLike>;
+  api(config: Config, path: string, init?: AdminRequestInit): Promise<ResponseLike>;
   log(message: string): void;
   error(message: string): void;
   formatError(error: unknown): string;

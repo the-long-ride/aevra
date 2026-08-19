@@ -1,3 +1,16 @@
-import assert from 'node:assert/strict';import test from 'node:test';import {redactText} from '../src/dlp.js';
-test('DLP redacts known secrets and credential-like tokens',()=>{const r=redactText('secret=alpha-secret ghp_abcdefghijklmnopqrstuvwxyz123456',['alpha-secret']);assert.equal(r.text.includes('alpha-secret'),false);assert.equal(r.text.includes('ghp_'),false);assert.ok(r.redactionCount>=2);});
-test('benign UUID and path survive entropy heuristic',()=>{const v='550e8400-e29b-41d4-a716-446655440000 /home/user/abcdefghijklmnopqrstuvwxyz123456';const r=redactText(v);assert.equal(r.text,v);});
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { redactText } from '../src/dlp.js';
+test('DLP redacts known secrets and credential-like tokens', () => {
+  const r = redactText('secret=alpha-secret ghp_abcdefghijklmnopqrstuvwxyz123456', [
+    'alpha-secret',
+  ]);
+  assert.equal(r.text.includes('alpha-secret'), false);
+  assert.equal(r.text.includes('ghp_'), false);
+  assert.ok(r.redactionCount >= 2);
+});
+test('benign UUID and path survive entropy heuristic', () => {
+  const v = '550e8400-e29b-41d4-a716-446655440000 /home/user/abcdefghijklmnopqrstuvwxyz123456';
+  const r = redactText(v);
+  assert.equal(r.text, v);
+});

@@ -4,24 +4,24 @@
 
 ## Ports and listeners (fixed hosts)
 
-| Listener | Address | Env override |
-|---|---|---|
+| Listener     | Address                                       | Env override       |
+| ------------ | --------------------------------------------- | ------------------ |
 | Admin UI/API | `https://localhost:47831` (binds `127.0.0.1`) | `AEVRA_ADMIN_PORT` |
-| Remote MCP | `https://localhost:47832` (binds `127.0.0.1`) | `AEVRA_MCP_PORT` |
+| Remote MCP   | `https://localhost:47832` (binds `127.0.0.1`) | `AEVRA_MCP_PORT`   |
 
 ## Environment variables
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `AEVRA_STATE_DIR` | platform dir (see [`07`](07-state-migration.md)) | state directory override |
-| `AEVRA_ADMIN_PORT` | `47831` | admin listener port |
-| `AEVRA_MCP_PORT` | `47832` | MCP listener port |
-| `AEVRA_TLS_CERT` | managed localhost certificate | advanced certificate PEM override; requires `AEVRA_TLS_KEY` |
-| `AEVRA_TLS_KEY` | managed localhost key | advanced private-key PEM override; requires `AEVRA_TLS_CERT` |
-| `AEVRA_TLS_CA` | system trust / managed certificate | optional CA PEM used by local CLI HTTPS verification with custom TLS |
-| `AEVRA_CF_ISSUER` | settings `cloudflare.issuer` | Access JWT issuer override |
-| `AEVRA_CF_AUDIENCE` | settings `cloudflare.audience` | Access JWT audience override |
-| `AEVRA_WORKER_ENDPOINT` / `AEVRA_WORKER_SECRET` / `AEVRA_DAEMON_INSTANCE_ID` / `AEVRA_PROCESS_LOG_DIR` / `AEVRA_PROCESS_COMMAND` / `AEVRA_PROCESS_MARKER` | internal | parent→Worker handshake (never user-set) |
+| Variable                                                                                                                                                  | Default                                          | Meaning                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------- |
+| `AEVRA_STATE_DIR`                                                                                                                                         | platform dir (see [`07`](07-state-migration.md)) | state directory override                                             |
+| `AEVRA_ADMIN_PORT`                                                                                                                                        | `47831`                                          | admin listener port                                                  |
+| `AEVRA_MCP_PORT`                                                                                                                                          | `47832`                                          | MCP listener port                                                    |
+| `AEVRA_TLS_CERT`                                                                                                                                          | managed localhost certificate                    | advanced certificate PEM override; requires `AEVRA_TLS_KEY`          |
+| `AEVRA_TLS_KEY`                                                                                                                                           | managed localhost key                            | advanced private-key PEM override; requires `AEVRA_TLS_CERT`         |
+| `AEVRA_TLS_CA`                                                                                                                                            | system trust / managed certificate               | optional CA PEM used by local CLI HTTPS verification with custom TLS |
+| `AEVRA_CF_ISSUER`                                                                                                                                         | settings `cloudflare.issuer`                     | Access JWT issuer override                                           |
+| `AEVRA_CF_AUDIENCE`                                                                                                                                       | settings `cloudflare.audience`                   | Access JWT audience override                                         |
+| `AEVRA_WORKER_ENDPOINT` / `AEVRA_WORKER_SECRET` / `AEVRA_DAEMON_INSTANCE_ID` / `AEVRA_PROCESS_LOG_DIR` / `AEVRA_PROCESS_COMMAND` / `AEVRA_PROCESS_MARKER` | internal                                         | parent→Worker handshake (never user-set)                             |
 
 ## CLI (`apps/cli`)
 
@@ -49,7 +49,7 @@ Windows: current-user Scheduled Task at logon · Linux: `systemd --user` · macO
 
 `cloudflare.config` `{issuer,audience,hostname,tunnelId}` · `cloudflare.ownership` `managed|external` · plus execution/policy keys set via Web UI. Managed mode: Aevra owns the `cloudflared` child and restarts it with backoff; external mode: never touched.
 
-**Boundaries:** what the values *do* — see the referenced specs.
+**Boundaries:** what the values _do_ — see the referenced specs.
 
 **Related:** [`07-state-migration`](07-state-migration.md) · [`../user-manual/10-service`](../user-manual/10-service.md)
 

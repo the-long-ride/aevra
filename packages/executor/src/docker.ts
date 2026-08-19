@@ -1,3 +1,140 @@
-import {spawn} from 'node:child_process';import {randomUUID} from 'node:crypto';import type {CommandInput,CommandResult,ManagedChild,NetworkPolicy,SandboxHandle,SandboxInspection,SandboxPrepareInput} from '../../protocol/src/index.js';import type {SandboxBackend} from './sandbox.js';import {appendCommandOutput,sanitizeCommandOutput} from './commands.js';
-async function cmd(exe:string,args:string[],options:{timeoutMs?:number;env?:Record<string,string>}={}):Promise<{code:number|null;signal:string|null;stdout:string;stderr:string;stdoutTruncated:boolean;stderrTruncated:boolean}>{return new Promise((resolve,reject)=>{const c=spawn(exe,args,{shell:false,windowsHide:true,env:{...process.env,...options.env}});let stdout='',stderr='',stdoutTruncated=false,stderrTruncated=false,timedOut=false;const timer=options.timeoutMs?setTimeout(()=>{timedOut=true;c.kill('SIGTERM')},options.timeoutMs):undefined;c.stdout?.on('data',b=>{const next=appendCommandOutput(stdout,b);stdout=next.value;stdoutTruncated=stdoutTruncated||next.truncated});c.stderr?.on('data',b=>{const next=appendCommandOutput(stderr,b);stderr=next.value;stderrTruncated=stderrTruncated||next.truncated});c.once('error',reject);c.once('exit',(code,signal)=>{if(timer)clearTimeout(timer);resolve({code,signal:signal??(timedOut?'SIGTERM':null),stdout,stderr,stdoutTruncated,stderrTruncated})});});}
-export class DockerBackend implements SandboxBackend{readonly id='docker' as const;protected executable='docker';private prepared=new Map<string,{input:SandboxPrepareInput;policy:NetworkPolicy;image:string}>();async available(){try{return(await cmd(this.executable,['version','--format','{{.Server.Version}}'])).code===0}catch{return false}}async prepare(input:SandboxPrepareInput){const id=`sbx_${randomUUID()}`;this.prepared.set(id,{input,policy:{mode:'deny-all',destinations:[],enforcement:'backend'},image:'node:22-bookworm-slim'});return{id,backend:this.id} as SandboxHandle;}async applyNetworkPolicy(h:SandboxHandle,p:NetworkPolicy){const s=this.prepared.get(h.id);if(!s)throw new Error('sandbox not prepared');s.policy={...p,enforcement:p.mode==='deny-all'?'backend':'advisory'};}async run(h:SandboxHandle,input:CommandInput):Promise<CommandResult>{const s=this.prepared.get(h.id);if(!s)throw new Error('sandbox not prepared');const root=s.input.roots.find(r=>r.kind==='workspace');if(!root)throw new Error('workspace root missing');const args=['run','--rm','-v',`${root.hostRoot}:/workspace`,'-w','/workspace',...(s.policy.mode==='deny-all'?['--network','none']:[]),...Object.keys(input.env).flatMap(k=>['-e',k]),s.image,input.executable,...input.args];const start=Date.now(),r=await cmd(this.executable,args,{timeoutMs:input.timeoutMs,env:input.env}),secrets=Object.values(input.env);return{exitCode:r.code,signal:r.signal,stdout:sanitizeCommandOutput(r.stdout,secrets,r.stdoutTruncated),stderr:sanitizeCommandOutput(r.stderr,secrets,r.stderrTruncated),durationMs:Date.now()-start};}async startProcess():Promise<ManagedChild>{throw new Error('managed sandbox process requires process host')}async terminate(h:SandboxHandle){this.prepared.delete(h.id)}async inspect(h:SandboxHandle):Promise<SandboxInspection>{const s=this.prepared.get(h.id);return{ready:Boolean(s),image:s?.image??'',networkPolicyApplied:s?.policy.mode==='deny-all'};}}
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import type {
+  CommandInput,
+  CommandResult,
+  ManagedChild,
+  NetworkPolicy,
+  SandboxHandle,
+  SandboxInspection,
+  SandboxPrepareInput,
+} from '../../protocol/src/index.js';
+import type { SandboxBackend } from './sandbox.js';
+import { appendCommandOutput, sanitizeCommandOutput } from './commands.js';
+async function cmd(
+  exe: string,
+  args: string[],
+  options: { timeoutMs?: number; env?: Record<string, string> } = {},
+): Promise<{
+  code: number | null;
+  signal: string | null;
+  stdout: string;
+  stderr: string;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+}> {
+  return new Promise((resolve, reject) => {
+    const c = spawn(exe, args, {
+      shell: false,
+      windowsHide: true,
+      env: { ...process.env, ...options.env },
+    });
+    let stdout = '',
+      stderr = '',
+      stdoutTruncated = false,
+      stderrTruncated = false,
+      timedOut = false;
+    const timer = options.timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          c.kill('SIGTERM');
+        }, options.timeoutMs)
+      : undefined;
+    c.stdout?.on('data', (b) => {
+      const next = appendCommandOutput(stdout, b);
+      stdout = next.value;
+      stdoutTruncated = stdoutTruncated || next.truncated;
+    });
+    c.stderr?.on('data', (b) => {
+      const next = appendCommandOutput(stderr, b);
+      stderr = next.value;
+      stderrTruncated = stderrTruncated || next.truncated;
+    });
+    c.once('error', reject);
+    c.once('exit', (code, signal) => {
+      if (timer) clearTimeout(timer);
+      resolve({
+        code,
+        signal: signal ?? (timedOut ? 'SIGTERM' : null),
+        stdout,
+        stderr,
+        stdoutTruncated,
+        stderrTruncated,
+      });
+    });
+  });
+}
+export class DockerBackend implements SandboxBackend {
+  readonly id = 'docker' as const;
+  protected executable = 'docker';
+  private prepared = new Map<
+    string,
+    { input: SandboxPrepareInput; policy: NetworkPolicy; image: string }
+  >();
+  async available() {
+    try {
+      return (
+        (await cmd(this.executable, ['version', '--format', '{{.Server.Version}}'])).code === 0
+      );
+    } catch {
+      return false;
+    }
+  }
+  async prepare(input: SandboxPrepareInput) {
+    const id = `sbx_${randomUUID()}`;
+    this.prepared.set(id, {
+      input,
+      policy: { mode: 'deny-all', destinations: [], enforcement: 'backend' },
+      image: 'node:22-bookworm-slim',
+    });
+    return { id, backend: this.id } as SandboxHandle;
+  }
+  async applyNetworkPolicy(h: SandboxHandle, p: NetworkPolicy) {
+    const s = this.prepared.get(h.id);
+    if (!s) throw new Error('sandbox not prepared');
+    s.policy = { ...p, enforcement: p.mode === 'deny-all' ? 'backend' : 'advisory' };
+  }
+  async run(h: SandboxHandle, input: CommandInput): Promise<CommandResult> {
+    const s = this.prepared.get(h.id);
+    if (!s) throw new Error('sandbox not prepared');
+    const root = s.input.roots.find((r) => r.kind === 'workspace');
+    if (!root) throw new Error('workspace root missing');
+    const args = [
+      'run',
+      '--rm',
+      '-v',
+      `${root.hostRoot}:/workspace`,
+      '-w',
+      '/workspace',
+      ...(s.policy.mode === 'deny-all' ? ['--network', 'none'] : []),
+      ...Object.keys(input.env).flatMap((k) => ['-e', k]),
+      s.image,
+      input.executable,
+      ...input.args,
+    ];
+    const start = Date.now(),
+      r = await cmd(this.executable, args, { timeoutMs: input.timeoutMs, env: input.env }),
+      secrets = Object.values(input.env);
+    return {
+      exitCode: r.code,
+      signal: r.signal,
+      stdout: sanitizeCommandOutput(r.stdout, secrets, r.stdoutTruncated),
+      stderr: sanitizeCommandOutput(r.stderr, secrets, r.stderrTruncated),
+      durationMs: Date.now() - start,
+    };
+  }
+  async startProcess(): Promise<ManagedChild> {
+    throw new Error('managed sandbox process requires process host');
+  }
+  async terminate(h: SandboxHandle) {
+    this.prepared.delete(h.id);
+  }
+  async inspect(h: SandboxHandle): Promise<SandboxInspection> {
+    const s = this.prepared.get(h.id);
+    return {
+      ready: Boolean(s),
+      image: s?.image ?? '',
+      networkPolicyApplied: s?.policy.mode === 'deny-all',
+    };
+  }
+}

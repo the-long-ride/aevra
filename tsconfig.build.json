@@ -3,10 +3,5 @@
   "compilerOptions": {
     "noEmit": false
   },
-  "exclude": [
-    "**/*.test.ts",
-    "**/test/**",
-    "tests/**",
-    "apps/web-react/**"
-  ]
+  "exclude": ["**/*.test.ts", "**/test/**", "tests/**", "apps/web-react/**"]
 }

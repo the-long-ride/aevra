@@ -30,13 +30,7 @@
   },
   "approvalScopes": ["once", "session", "workspace", "global"],
   "actions": {
-    "requests": [
-      "deny",
-      "approve-once",
-      "approve-session",
-      "approve-workspace",
-      "approve-global"
-    ],
+    "requests": ["deny", "approve-once", "approve-session", "approve-workspace", "approve-global"],
     "permissions": [
       "add",
       "revoke",
@@ -45,14 +39,7 @@
       "filter-scope",
       "filter-actor"
     ],
-    "workspaces": [
-      "add",
-      "details",
-      "remove",
-      "add-mount",
-      "remove-mount",
-      "save-admission"
-    ],
+    "workspaces": ["add", "details", "remove", "add-mount", "remove-mount", "save-admission"],
     "sessions": ["switch-workspace", "revoke", "revoke-all-others"],
     "processes": ["stop", "restart", "forget"],
     "changes": ["rename", "commit", "rollback"],

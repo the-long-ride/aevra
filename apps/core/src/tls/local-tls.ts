@@ -30,7 +30,11 @@ export interface LocalTlsOptions {
   caPath?: string;
 }
 
-interface CommandResult { code: number; stdout: string; stderr: string; }
+interface CommandResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
 
 export function localTlsPaths(stateDir: string): LocalTlsPaths {
   const dir = path.join(stateDir, 'tls');
@@ -100,11 +104,20 @@ $root.Close()
 
 function run(file: string, args: string[], env?: NodeJS.ProcessEnv): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(file, args, { shell: false, windowsHide: true, env: env ?? process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(file, args, {
+      shell: false,
+      windowsHide: true,
+      env: env ?? process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
-    child.stdout?.on('data', (chunk) => { stdout += chunk; });
-    child.stderr?.on('data', (chunk) => { stderr += chunk; });
+    child.stdout?.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk;
+    });
     child.once('error', reject);
     child.once('exit', (code) => resolve({ code: code ?? 1, stdout, stderr }));
   });
@@ -115,7 +128,12 @@ function certificateStillValid(certificatePem: string, now = Date.now()): boolea
     const cert = new X509Certificate(certificatePem);
     const sans = cert.subjectAltName ?? '';
     const enoughLifetime = Date.parse(cert.validTo) - now > 30 * 24 * 60 * 60 * 1000;
-    return enoughLifetime && sans.includes('DNS:localhost') && sans.includes('IP Address:127.0.0.1') && (sans.includes('IP Address:::1') || sans.includes('IP Address:0:0:0:0:0:0:0:1'));
+    return (
+      enoughLifetime &&
+      sans.includes('DNS:localhost') &&
+      sans.includes('IP Address:127.0.0.1') &&
+      (sans.includes('IP Address:::1') || sans.includes('IP Address:0:0:0:0:0:0:0:1'))
+    );
   } catch {
     return false;
   }
@@ -125,7 +143,12 @@ function managedFilesReady(paths: LocalTlsPaths, platform: NodeJS.Platform): boo
   if (!existsSync(paths.certificatePath)) return false;
   const cert = readFileSync(paths.certificatePath, 'utf8');
   if (!certificateStillValid(cert)) return false;
-  if (platform === 'win32') return existsSync(paths.certificateDerPath) && existsSync(paths.pfxPath) && existsSync(paths.passphrasePath);
+  if (platform === 'win32')
+    return (
+      existsSync(paths.certificateDerPath) &&
+      existsSync(paths.pfxPath) &&
+      existsSync(paths.passphrasePath)
+    );
   return existsSync(paths.keyPath);
 }
 
@@ -137,8 +160,26 @@ async function generateUnix(paths: LocalTlsPaths): Promise<void> {
   const configPath = path.join(paths.dir, 'openssl-localhost.cnf');
   writeFileSync(configPath, openSslConfig(), { mode: 0o600 });
   try {
-    const result = await run('openssl', ['req', '-x509', '-nodes', '-newkey', 'rsa:2048', '-sha256', '-days', '365', '-keyout', paths.keyPath, '-out', paths.certificatePath, '-config', configPath, '-extensions', 'server']);
-    if (result.code !== 0) throw new Error(`openssl certificate generation failed: ${result.stderr || result.stdout}`);
+    const result = await run('openssl', [
+      'req',
+      '-x509',
+      '-nodes',
+      '-newkey',
+      'rsa:2048',
+      '-sha256',
+      '-days',
+      '365',
+      '-keyout',
+      paths.keyPath,
+      '-out',
+      paths.certificatePath,
+      '-config',
+      configPath,
+      '-extensions',
+      'server',
+    ]);
+    if (result.code !== 0)
+      throw new Error(`openssl certificate generation failed: ${result.stderr || result.stdout}`);
     chmodSync(paths.keyPath, 0o600);
     chmodSync(paths.certificatePath, 0o600);
   } finally {
@@ -149,17 +190,38 @@ async function generateUnix(paths: LocalTlsPaths): Promise<void> {
 async function trustUnix(certificatePath: string, platform: NodeJS.Platform): Promise<void> {
   if (platform === 'darwin') {
     const keychain = path.join(os.homedir(), 'Library', 'Keychains', 'login.keychain-db');
-    const result = await run('security', ['add-trusted-cert', '-r', 'trustRoot', '-k', keychain, certificatePath]);
-    if (result.code !== 0) throw new Error(`Could not trust Aevra localhost certificate: ${result.stderr || result.stdout}`);
+    const result = await run('security', [
+      'add-trusted-cert',
+      '-r',
+      'trustRoot',
+      '-k',
+      keychain,
+      certificatePath,
+    ]);
+    if (result.code !== 0)
+      throw new Error(
+        `Could not trust Aevra localhost certificate: ${result.stderr || result.stdout}`,
+      );
     return;
   }
   if (platform === 'linux') {
     const nssDir = path.join(os.homedir(), '.pki', 'nssdb');
     mkdirSync(nssDir, { recursive: true, mode: 0o700 });
     try {
-      if (!existsSync(path.join(nssDir, 'cert9.db'))) await run('certutil', ['-d', `sql:${nssDir}`, '-N', '--empty-password']);
+      if (!existsSync(path.join(nssDir, 'cert9.db')))
+        await run('certutil', ['-d', `sql:${nssDir}`, '-N', '--empty-password']);
       await run('certutil', ['-d', `sql:${nssDir}`, '-D', '-n', 'Aevra Localhost']);
-      await run('certutil', ['-d', `sql:${nssDir}`, '-A', '-t', 'P,,', '-n', 'Aevra Localhost', '-i', certificatePath]);
+      await run('certutil', [
+        '-d',
+        `sql:${nssDir}`,
+        '-A',
+        '-t',
+        'P,,',
+        '-n',
+        'Aevra Localhost',
+        '-i',
+        certificatePath,
+      ]);
     } catch {
       // Linux browser trust stores vary; local HTTPS still works and Aevra's CLI pins the certificate directly.
     }
@@ -176,28 +238,67 @@ async function generateWindows(paths: LocalTlsPaths): Promise<void> {
     AEVRA_TLS_CERT: paths.certificatePath,
     AEVRA_TLS_CERT_DER: paths.certificateDerPath,
   };
-  const result = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', windowsTlsScript()], env);
-  if (result.code !== 0) throw new Error(`PowerShell localhost certificate generation failed: ${result.stderr || result.stdout}`);
+  const result = await run(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', windowsTlsScript()],
+    env,
+  );
+  if (result.code !== 0)
+    throw new Error(
+      `PowerShell localhost certificate generation failed: ${result.stderr || result.stdout}`,
+    );
   for (const file of [paths.pfxPath, paths.passphrasePath]) {
-    try { chmodSync(file, 0o600); } catch { /* Windows ACLs remain authoritative. */ }
+    try {
+      chmodSync(file, 0o600);
+    } catch {
+      /* Windows ACLs remain authoritative. */
+    }
   }
 }
 
 async function trustWindows(paths: LocalTlsPaths): Promise<void> {
   const env = { ...process.env, AEVRA_TLS_CERT_DER: paths.certificateDerPath };
-  const result = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', windowsTrustScript()], env);
-  if (result.code !== 0) throw new Error(`Could not trust Aevra localhost certificate: ${result.stderr || result.stdout}`);
+  const result = await run(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      windowsTrustScript(),
+    ],
+    env,
+  );
+  if (result.code !== 0)
+    throw new Error(
+      `Could not trust Aevra localhost certificate: ${result.stderr || result.stdout}`,
+    );
 }
 
 function loadManaged(paths: LocalTlsPaths, platform: NodeJS.Platform): LocalTlsMaterial {
   const certificatePem = readFileSync(paths.certificatePath, 'utf8');
-  const serverOptions: ServerOptions = platform === 'win32'
-    ? { pfx: readFileSync(paths.pfxPath), passphrase: readFileSync(paths.passphrasePath, 'utf8').trim() }
-    : { cert: certificatePem, key: readFileSync(paths.keyPath) };
-  return { serverOptions, certificatePem, certificatePath: paths.certificatePath, caPath: paths.certificatePath, managed: true };
+  const serverOptions: ServerOptions =
+    platform === 'win32'
+      ? {
+          pfx: readFileSync(paths.pfxPath),
+          passphrase: readFileSync(paths.passphrasePath, 'utf8').trim(),
+        }
+      : { cert: certificatePem, key: readFileSync(paths.keyPath) };
+  return {
+    serverOptions,
+    certificatePem,
+    certificatePath: paths.certificatePath,
+    caPath: paths.certificatePath,
+    managed: true,
+  };
 }
 
-export function loadLocalTlsOverride(certificatePath: string, keyPath: string, caPath?: string): LocalTlsMaterial {
+export function loadLocalTlsOverride(
+  certificatePath: string,
+  keyPath: string,
+  caPath?: string,
+): LocalTlsMaterial {
   const certPath = path.resolve(certificatePath);
   const resolvedKey = path.resolve(keyPath);
   const resolvedCa = caPath ? path.resolve(caPath) : certPath;
@@ -211,20 +312,33 @@ export function loadLocalTlsOverride(certificatePath: string, keyPath: string, c
   };
 }
 
-export async function ensureLocalTls(stateDir: string, options: LocalTlsOptions = {}): Promise<LocalTlsMaterial> {
+export async function ensureLocalTls(
+  stateDir: string,
+  options: LocalTlsOptions = {},
+): Promise<LocalTlsMaterial> {
   if (options.certificatePath || options.keyPath) {
-    if (!options.certificatePath || !options.keyPath) throw new Error('AEVRA_TLS_CERT and AEVRA_TLS_KEY must be set together');
+    if (!options.certificatePath || !options.keyPath)
+      throw new Error('AEVRA_TLS_CERT and AEVRA_TLS_KEY must be set together');
     return loadLocalTlsOverride(options.certificatePath, options.keyPath, options.caPath);
   }
   const platform = options.platform ?? process.platform;
   const paths = localTlsPaths(stateDir);
   mkdirSync(paths.dir, { recursive: true, mode: 0o700 });
   if (!managedFilesReady(paths, platform)) {
-    for (const file of [paths.certificatePath, paths.certificateDerPath, paths.keyPath, paths.pfxPath, paths.passphrasePath]) rmSync(file, { force: true });
-    if (platform === 'win32') await generateWindows(paths); else await generateUnix(paths);
+    for (const file of [
+      paths.certificatePath,
+      paths.certificateDerPath,
+      paths.keyPath,
+      paths.pfxPath,
+      paths.passphrasePath,
+    ])
+      rmSync(file, { force: true });
+    if (platform === 'win32') await generateWindows(paths);
+    else await generateUnix(paths);
   }
   if (options.trust !== false) {
-    if (platform === 'win32') await trustWindows(paths); else await trustUnix(paths.certificatePath, platform);
+    if (platform === 'win32') await trustWindows(paths);
+    else await trustUnix(paths.certificatePath, platform);
   }
   return loadManaged(paths, platform);
 }

@@ -23,9 +23,7 @@ test('completed Onboarding is the final Dashboard section', async () => {
   const { container } = render(<DashboardPage />);
   await screen.findByText('Onboarding completed');
   const sections = container.querySelectorAll('[data-dashboard-section]');
-  expect(sections[sections.length - 1]?.getAttribute('data-dashboard-section')).toBe(
-    'onboarding',
-  );
+  expect(sections[sections.length - 1]?.getAttribute('data-dashboard-section')).toBe('onboarding');
 });
 
 test('collapsed Dashboard section remains collapsed after data refresh', async () => {
@@ -50,6 +48,8 @@ test('connector creation presents the one-time token inside the React modal', as
   await user.type(within(dialog).getByLabelText('Connector name'), 'Parity client');
   await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
 
-  expect(await within(dialog).findByText('Copy this token now. It is shown once.')).toBeInTheDocument();
+  expect(
+    await within(dialog).findByText('Copy this token now. It is shown once.'),
+  ).toBeInTheDocument();
   expect(within(dialog).getByText('secret-once')).toBeInTheDocument();
 });

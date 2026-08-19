@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 Roadmap burn-down: every P0/P1 item and nearly all P2/P3 items, executed and verified in one pass.
 
 ### Added
+
 - Per-IP token-bucket rate limiting on connector admission (`429 {"error":"rate_limited"}` when exhausted; failed-attempt counters surfaced in admin status and dashboard banner). (R5)
 - Security audit events for connector lifecycle: create / revoke / rotate (class `security`, hash-chained). (R2)
 - **Connector policy bindings** — optional per-connector default workspace, capability-profile cap, and expiry TTL; admission stays separate from authority (bindings are defaults and ceilings enforced at lease time). Migration v4. (R9)
@@ -22,6 +23,7 @@ Roadmap burn-down: every P0/P1 item and nearly all P2/P3 items, executed and ver
 - Example skills pack under `examples/skills/` (workspace tour, release checklist); docs versioning stamp; `CHANGELOG.md` ships in the npm package. (R24, R26)
 
 ### Fixed
+
 - `npm test` is fully green on Windows: the macOS LaunchAgent service test is platform-agnostic, and the two process-log tests poll with a deadline instead of fixed sleeps. (R1)
 - `instructions_read` rejects instruction files larger than 256 KB (`SKILL_FILE_TOO_LARGE`) instead of reading them whole. (R3)
 - `serverInfo.version` comes from a single source (`apps/core/src/version.ts`), enforced against `package.json` by a test. (R4)
@@ -31,11 +33,13 @@ Roadmap burn-down: every P0/P1 item and nearly all P2/P3 items, executed and ver
 The product formerly known as Linker ("chatgpt-opencode-linker") becomes **Aevra**.
 
 ### Added
+
 - **Connector URLs** — per-client admission at `/mcp/<token>`: 128-bit tokens (SHA-256 at rest, constant-time verification, uniform 401s, instant revocation), managed from the dashboard's Connectors page or the admin API. Makes Claude.ai, Gemini CLI, and any MCP-capable web AI first-class clients without login flows.
 - **Skills & instructions over MCP** — `skills_list`, `skill_read`, `instructions_read` serve `~/.agents/skills` + workspace `.agents/skills` and AGENTS.md/CLAUDE.md (frontmatter preview capped at 4 KB, per-file 256 KB cap, traversal-guarded, secret-masked).
 - Documentation set: `docs/specs` (engineer/AI-agent specs), `docs/user-manual` (2-minute how-tos), roadmap.
 
 ### Changed
+
 - CLI `linker` → `aevra`; package `chatgpt-opencode-linker` → `aevra`; env vars `LINKER_*` → `AEVRA_*`; state dir `…/Linker` → `…/Aevra`; MCP tool `linker_status` → `aevra_status`; local control header `x-aevra-control`; admin cookie `aevra_admin`.
 - Schema v3: `connectors` table.
 - Web UI: Connectors page with one-time token display; Cloudflare guidance that Access must cover `/mcp` only.

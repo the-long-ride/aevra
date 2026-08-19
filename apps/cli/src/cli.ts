@@ -52,14 +52,10 @@ function adminDependencies(
 ): AdminSessionDependencies<ReturnType<typeof loadCoreConfig>> {
   return {
     async controlSecret() {
-      return readFileSync(
-        path.join(config.stateDir, 'local-control.secret'),
-        'utf8',
-      ).trim();
+      return readFileSync(path.join(config.stateDir, 'local-control.secret'), 'utf8').trim();
     },
     base: localAdminBase,
-    fetch: (currentConfig, apiPath, init) =>
-      localAdminFetch(currentConfig, apiPath, init),
+    fetch: (currentConfig, apiPath, init) => localAdminFetch(currentConfig, apiPath, init),
   };
 }
 
@@ -88,9 +84,7 @@ async function runBackup(
   command: Extract<ReturnType<typeof parseAevraArgs>, { command: 'backup' }>,
 ) {
   const { DatabaseSync } = await import('node:sqlite');
-  const { inspectBackup, restoreBackup } = await import(
-    '../../core/src/backup/verify.js'
-  );
+  const { inspectBackup, restoreBackup } = await import('../../core/src/backup/verify.js');
   return runBackupCommand(config, command, {
     inspect: (file) =>
       inspectBackup(file, (databaseFile) => {
@@ -135,11 +129,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
           }),
         readyLines,
         openUi: async (currentConfig, destination) => {
-          const url = await createAuthenticatedUiUrl(
-            currentConfig,
-            admin,
-            destination,
-          );
+          const url = await createAuthenticatedUiUrl(currentConfig, admin, destination);
           openBrowser(url);
           console.error(`[aevra] Opening ${url}`);
         },
@@ -148,10 +138,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       }),
     ui: (current) =>
       runUiCommand(config, current, {
-        createUrl: (currentConfig) =>
-          createAuthenticatedUiUrl(currentConfig, admin),
-        revokeAll: (currentConfig) =>
-          revokeAllAdminSessions(currentConfig, admin),
+        createUrl: (currentConfig) => createAuthenticatedUiUrl(currentConfig, admin),
+        revokeAll: (currentConfig) => revokeAllAdminSessions(currentConfig, admin),
         openBrowser,
         error: console.error,
         formatError: formatCliError,
@@ -167,11 +155,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     service: (current) =>
       runServiceCommand(
         current,
-        createUserServiceAdapter(
-          process.platform,
-          process.execPath,
-          process.argv[1]!,
-        ),
+        createUserServiceAdapter(process.platform, process.execPath, process.argv[1]!),
         {
           log: console.log,
           error: console.error,
@@ -180,16 +164,14 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       ),
     connectors: (current) =>
       runConnectorsCommand(config, current, {
-        api: (currentConfig, apiPath, init) =>
-          adminApi(currentConfig, apiPath, init, admin),
+        api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
         log: console.log,
         error: console.error,
         formatError: formatCliError,
       }),
     status: (current) =>
       runStatusCommand(config, current, {
-        fetch: (currentConfig, apiPath) =>
-          localAdminFetch(currentConfig, apiPath),
+        fetch: (currentConfig, apiPath) => localAdminFetch(currentConfig, apiPath),
         log: console.log,
         error: console.error,
         formatError: formatCliError,
@@ -197,16 +179,14 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     backup: (current) => runBackup(config, current),
     audit: (current) =>
       runMaintenanceCommand(config, current, {
-        api: (currentConfig, apiPath, init) =>
-          adminApi(currentConfig, apiPath, init, admin),
+        api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
         log: console.log,
         error: console.error,
         formatError: formatCliError,
       }),
     sessions: (current) =>
       runMaintenanceCommand(config, current, {
-        api: (currentConfig, apiPath, init) =>
-          adminApi(currentConfig, apiPath, init, admin),
+        api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
         log: console.log,
         error: console.error,
         formatError: formatCliError,

@@ -3,15 +3,11 @@ import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import { useEffect, useState } from 'react';
 import { commitAdminNavigation, pageTokenFromHash } from './hash-navigation';
 
-const validPages = new Set<AdminPageId>(
-  ADMIN_SURFACE.navigation.map((item) => item.id),
-);
+const validPages = new Set<AdminPageId>(ADMIN_SURFACE.navigation.map((item) => item.id));
 
 function pageFromHash(): AdminPageId {
   const candidate = pageTokenFromHash(window.location.hash);
-  return validPages.has(candidate as AdminPageId)
-    ? (candidate as AdminPageId)
-    : 'dashboard';
+  return validPages.has(candidate as AdminPageId) ? (candidate as AdminPageId) : 'dashboard';
 }
 
 export function useHashPage() {
@@ -24,11 +20,8 @@ export function useHashPage() {
   }, []);
 
   const navigate = (next: AdminPageId) => {
-    commitAdminNavigation(
-      next,
-      window.location.hash,
-      setPage,
-      (hash) => window.history.pushState(null, '', hash),
+    commitAdminNavigation(next, window.location.hash, setPage, (hash) =>
+      window.history.pushState(null, '', hash),
     );
   };
 

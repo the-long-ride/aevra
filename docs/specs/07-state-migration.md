@@ -4,11 +4,11 @@
 
 ## State directory
 
-| Platform | Default |
-|---|---|
-| Windows | `%LOCALAPPDATA%\Aevra` |
-| macOS | `~/Library/Application Support/Aevra` |
-| Linux | `$XDG_STATE_HOME/aevra` or `~/.local/state/aevra` |
+| Platform | Default                                           |
+| -------- | ------------------------------------------------- |
+| Windows  | `%LOCALAPPDATA%\Aevra`                            |
+| macOS    | `~/Library/Application Support/Aevra`             |
+| Linux    | `$XDG_STATE_HOME/aevra` or `~/.local/state/aevra` |
 
 `AEVRA_STATE_DIR` overrides the default location. Contents include `aevra.db` (SQLite, WAL), `local-control.secret`, `recovery/`, `secrets.vault`, `backups/`, and `worker.sock` on POSIX.
 

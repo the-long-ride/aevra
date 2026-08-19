@@ -41,8 +41,7 @@ export function collectRequestAnnouncements(
     if (oauthIds.has(id)) continue;
     oauthIds.add(id);
     const client = item.clientName ?? item.clientId ?? 'Remote AI';
-    const scopes =
-      (item.requestedScopes ?? item.scopes ?? []).join(', ') || 'mcp';
+    const scopes = (item.requestedScopes ?? item.scopes ?? []).join(', ') || 'mcp';
     announcements.push({
       title: 'Aevra: OAuth connection request',
       body: `${client} wants to connect · scopes: ${scopes}`,

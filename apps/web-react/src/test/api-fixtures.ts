@@ -129,41 +129,45 @@ export function installApiFixtures(options: FixtureOptions = {}) {
     routes.set(url, value);
   }
 
-  const fetchMock = vi.fn(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url =
-        typeof input === 'string'
-          ? input
-          : input instanceof URL
-            ? input.pathname + input.search
-            : input.url;
-      const method = String(init?.method ?? 'GET').toUpperCase();
-      if (url.startsWith('/manual/')) {
-        return new Response('# Quick Start\n\nLocal manual.', {
-          status: 200,
-          headers: { 'content-type': 'text/plain' },
-        });
-      }
-      if (method !== 'GET') {
-        const mutation = options.mutationResponses?.[`${method} ${url}`];
-        return json(
-          mutation ?? {
-            ok: true,
-            result: { hostname: 'aevra.example.com' },
-            token: 'secret-once',
-          },
-        );
-      }
-      if (url.includes('/mounts') && !routes.has(url)) return json([]);
-      const value = routes.get(url);
-      if (value !== undefined) return json(value);
-      return json({ error: { message: `Unmocked ${method} ${url}` } }, 404);
-    },
-  );
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.pathname + input.search
+          : input.url;
+    const method = String(init?.method ?? 'GET').toUpperCase();
+    if (url.startsWith('/manual/')) {
+      return new Response('# Quick Start\n\nLocal manual.', {
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+      });
+    }
+    if (method !== 'GET') {
+      const mutation = options.mutationResponses?.[`${method} ${url}`];
+      return json(
+        mutation ?? {
+          ok: true,
+          result: { hostname: 'aevra.example.com' },
+          token: 'secret-once',
+        },
+      );
+    }
+    if (url.includes('/mounts') && !routes.has(url)) return json([]);
+    const value = routes.get(url);
+    if (value !== undefined) return json(value);
+    return json({ error: { message: `Unmocked ${method} ${url}` } }, 404);
+  });
 
   vi.stubGlobal('fetch', fetchMock);
-  vi.stubGlobal('confirm', vi.fn(() => true));
-  vi.stubGlobal('prompt', vi.fn(() => null));
+  vi.stubGlobal(
+    'confirm',
+    vi.fn(() => true),
+  );
+  vi.stubGlobal(
+    'prompt',
+    vi.fn(() => null),
+  );
   vi.stubGlobal('alert', vi.fn());
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn(async () => undefined) },

@@ -4,12 +4,7 @@ import { readAdminBody, sendAdminResponse } from './http.js';
 import { criticalPersistentRule } from './route-state.js';
 import type { AdminRouteHandler } from './types.js';
 
-export const handleApprovalPermissionRoutes: AdminRouteHandler = async (
-  req,
-  res,
-  url,
-  context,
-) => {
+export const handleApprovalPermissionRoutes: AdminRouteHandler = async (req, res, url, context) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
 
@@ -58,8 +53,7 @@ export const handleApprovalPermissionRoutes: AdminRouteHandler = async (
       sendAdminResponse(res, 400, {
         error: {
           code: 'CRITICAL_RULE_FORBIDDEN',
-          message:
-            'Critical operations cannot receive persistent always-allow rules',
+          message: 'Critical operations cannot receive persistent always-allow rules',
         },
       });
       return true;

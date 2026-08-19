@@ -1,2 +1,35 @@
-import assert from 'node:assert/strict';import test from 'node:test';import os from 'node:os';import path from 'node:path';import {mkdtempSync,rmSync} from 'node:fs';import {startWorkerServer} from '../../../apps/worker/src/server.js';import {SocketWorkerClient} from '../src/client.js';import {HmacEnvelopeSigner} from '../src/envelope.js';
-test('authenticated IPC executes only signed envelope',async()=>{const d=mkdtempSync(path.join(os.tmpdir(),'aevra-ipc-'));const endpoint=process.platform==='win32'?`\\\\.\\pipe\\aevra-test-${Date.now()}`:path.join(d,'s.sock');const secret=Buffer.alloc(32,3);const server=await startWorkerServer({endpoint,secret,daemonInstanceId:'d'});const client=new SocketWorkerClient(endpoint,secret,'d');const signer=new HmacEnvelopeSigner(secret,'d');const e=signer.sign({version:1,daemonInstanceId:'d',operationId:'o',sessionId:'s',workspaceId:'w',issuedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+60_000).toISOString(),nonce:'n',executionMode:'sandbox',capabilityRoots:[],operation:{kind:'sandbox.inspect'}});const r=await client.execute(e);assert.equal(r.ok,true);await client.close();await new Promise<void>(res=>server.close(()=>res()));rmSync(d,{recursive:true,force:true});});
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import os from 'node:os';
+import path from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { startWorkerServer } from '../../../apps/worker/src/server.js';
+import { SocketWorkerClient } from '../src/client.js';
+import { HmacEnvelopeSigner } from '../src/envelope.js';
+test('authenticated IPC executes only signed envelope', async () => {
+  const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-ipc-'));
+  const endpoint =
+    process.platform === 'win32' ? `\\\\.\\pipe\\aevra-test-${Date.now()}` : path.join(d, 's.sock');
+  const secret = Buffer.alloc(32, 3);
+  const server = await startWorkerServer({ endpoint, secret, daemonInstanceId: 'd' });
+  const client = new SocketWorkerClient(endpoint, secret, 'd');
+  const signer = new HmacEnvelopeSigner(secret, 'd');
+  const e = signer.sign({
+    version: 1,
+    daemonInstanceId: 'd',
+    operationId: 'o',
+    sessionId: 's',
+    workspaceId: 'w',
+    issuedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    nonce: 'n',
+    executionMode: 'sandbox',
+    capabilityRoots: [],
+    operation: { kind: 'sandbox.inspect' },
+  });
+  const r = await client.execute(e);
+  assert.equal(r.ok, true);
+  await client.close();
+  await new Promise<void>((res) => server.close(() => res()));
+  rmSync(d, { recursive: true, force: true });
+});

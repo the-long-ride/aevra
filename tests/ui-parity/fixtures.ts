@@ -144,9 +144,7 @@ export async function installAdminApi(page: Page, options: FixtureOptions = {}) 
     await route.fulfill({
       status: value === undefined ? 404 : 200,
       contentType: 'application/json',
-      body: JSON.stringify(
-        value ?? { error: { message: `Unmocked GET ${key}` } },
-      ),
+      body: JSON.stringify(value ?? { error: { message: `Unmocked GET ${key}` } }),
     });
   });
 }

@@ -46,10 +46,7 @@ test('React Vite build is rooted at slash and owns the complete web output', () 
 
 test('React shell keeps compact horizontal navigation and shared admin contract', () => {
   const app = readFileSync('apps/web-react/src/app/App.tsx', 'utf8');
-  const shell = readFileSync(
-    'apps/web-react/src/components/AppShell.tsx',
-    'utf8',
-  );
+  const shell = readFileSync('apps/web-react/src/components/AppShell.tsx', 'utf8');
   assert.match(app, /ADMIN_SURFACE/);
   assert.match(shell, /top-nav/);
   assert.match(shell, /theme-toggle/);
@@ -58,10 +55,7 @@ test('React shell keeps compact horizontal navigation and shared admin contract'
 
 test('React navigation updates state synchronously and uses popstate for browser history', () => {
   const router = readFileSync('apps/web-react/src/app/use-hash-page.ts', 'utf8');
-  const transition = readFileSync(
-    'apps/web-react/src/app/hash-navigation.ts',
-    'utf8',
-  );
+  const transition = readFileSync('apps/web-react/src/app/hash-navigation.ts', 'utf8');
   assert.match(router, /popstate/);
   assert.match(router, /history\.pushState/);
   assert.doesNotMatch(router, /hashchange/);
@@ -90,14 +84,8 @@ test('React feature pages cover the complete admin navigation surface', () => {
 });
 
 test('React Dashboard and Requests preserve security and onboarding behavior', () => {
-  const dashboard = readFileSync(
-    'apps/web-react/src/features/dashboard/DashboardPage.tsx',
-    'utf8',
-  );
-  const requests = readFileSync(
-    'apps/web-react/src/features/requests/RequestDrawer.tsx',
-    'utf8',
-  );
+  const dashboard = readFileSync('apps/web-react/src/features/dashboard/DashboardPage.tsx', 'utf8');
+  const requests = readFileSync('apps/web-react/src/features/requests/RequestDrawer.tsx', 'utf8');
   assert.match(dashboard, /remote-access/);
   assert.match(dashboard, /dashboardOrder/);
   assert.match(dashboard, /completed/);
@@ -109,14 +97,8 @@ test('React Dashboard and Requests preserve security and onboarding behavior', (
 
 test('React has a single polling owner for approvals and OAuth requests', () => {
   const app = readFileSync('apps/web-react/src/app/App.tsx', 'utf8');
-  const runtime = readFileSync(
-    'apps/web-react/src/hooks/use-runtime-status.ts',
-    'utf8',
-  );
-  const requests = readFileSync(
-    'apps/web-react/src/features/requests/RequestDrawer.tsx',
-    'utf8',
-  );
+  const runtime = readFileSync('apps/web-react/src/hooks/use-runtime-status.ts', 'utf8');
+  const requests = readFileSync('apps/web-react/src/features/requests/RequestDrawer.tsx', 'utf8');
   assert.doesNotMatch(runtime, /\/api\/approvals/);
   assert.doesNotMatch(runtime, /\/api\/oauth\/requests/);
   assert.match(runtime, /usePollingResource/);
@@ -125,10 +107,7 @@ test('React has a single polling owner for approvals and OAuth requests', () => 
 });
 
 test('React connector flow stays in-page and uses the Dashboard refresh owner', () => {
-  const dashboard = readFileSync(
-    'apps/web-react/src/features/dashboard/DashboardPage.tsx',
-    'utf8',
-  );
+  const dashboard = readFileSync('apps/web-react/src/features/dashboard/DashboardPage.tsx', 'utf8');
   const connector = readFileSync(
     'apps/web-react/src/features/dashboard/ConnectorModal.tsx',
     'utf8',

@@ -1,3 +1,16 @@
-import assert from 'node:assert/strict'; import test from 'node:test'; import {loadCoreConfig} from '../src/config.js';
-test('config is split loopback listeners',()=>{const c=loadCoreConfig({AEVRA_STATE_DIR:'/tmp/aevra-state'});assert.equal(c.adminHost,'127.0.0.1');assert.equal(c.adminPort,47831);assert.equal(c.mcpPort,47832);assert.equal(c.leaseIdleMs,30*60_000);assert.notEqual(c.adminPort,c.mcpPort);});
-test('state dir names are Aevra',()=>{const c=loadCoreConfig({AEVRA_STATE_DIR:'/tmp/aevra-state'});assert.ok(c.stateDir.endsWith('aevra-state'));assert.ok(c.databasePath.endsWith('aevra.db'));});
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { loadCoreConfig } from '../src/config.js';
+test('config is split loopback listeners', () => {
+  const c = loadCoreConfig({ AEVRA_STATE_DIR: '/tmp/aevra-state' });
+  assert.equal(c.adminHost, '127.0.0.1');
+  assert.equal(c.adminPort, 47831);
+  assert.equal(c.mcpPort, 47832);
+  assert.equal(c.leaseIdleMs, 30 * 60_000);
+  assert.notEqual(c.adminPort, c.mcpPort);
+});
+test('state dir names are Aevra', () => {
+  const c = loadCoreConfig({ AEVRA_STATE_DIR: '/tmp/aevra-state' });
+  assert.ok(c.stateDir.endsWith('aevra-state'));
+  assert.ok(c.databasePath.endsWith('aevra.db'));
+});

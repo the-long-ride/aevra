@@ -7,9 +7,7 @@ export interface ApiResource<T> {
   refresh(): Promise<void>;
 }
 
-export function useApiResource<T>(
-  load: (signal: AbortSignal) => Promise<T>,
-): ApiResource<T> {
+export function useApiResource<T>(load: (signal: AbortSignal) => Promise<T>): ApiResource<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);

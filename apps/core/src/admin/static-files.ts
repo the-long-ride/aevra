@@ -8,10 +8,7 @@ function decodePathname(pathname: string): string | null {
   }
 }
 
-export function resolveStaticAsset(
-  staticRoot: string,
-  pathname: string,
-): string | null {
+export function resolveStaticAsset(staticRoot: string, pathname: string): string | null {
   const decoded = decodePathname(pathname);
   if (!decoded || !decoded.startsWith('/') || decoded.includes('\\')) {
     return null;

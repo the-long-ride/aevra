@@ -7,9 +7,7 @@ afterEach(() => vi.useRealTimers());
 test('polls on the requested interval without immediately looping after data changes', async () => {
   vi.useFakeTimers();
   const load = vi.fn(async () => ({ value: load.mock.calls.length }));
-  const { result } = renderHook(() =>
-    usePollingResource({ load, intervalMs: 2000 }),
-  );
+  const { result } = renderHook(() => usePollingResource({ load, intervalMs: 2000 }));
 
   await act(async () => {
     await vi.advanceTimersByTimeAsync(0);

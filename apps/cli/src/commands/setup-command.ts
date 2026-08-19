@@ -61,9 +61,7 @@ export async function runSetupCommand<Config>(
     }
 
     dependencies.error(`[aevra] cloudflared: ${detected.version ?? 'detected'}`);
-    const login = (
-      await prompt.question('Authenticate/select Cloudflare account now? [Y/n] ')
-    )
+    const login = (await prompt.question('Authenticate/select Cloudflare account now? [Y/n] '))
       .trim()
       .toLowerCase();
     if (login !== 'n' && login !== 'no') {
@@ -84,9 +82,7 @@ export async function runSetupCommand<Config>(
     )
       .trim()
       .toLowerCase();
-    const authMode: AuthMode = dependencies.needsAccess(authAnswer)
-      ? 'access'
-      : 'connector';
+    const authMode: AuthMode = dependencies.needsAccess(authAnswer) ? 'access' : 'connector';
 
     let issuer = '';
     let audience = '';
@@ -103,9 +99,7 @@ export async function runSetupCommand<Config>(
     }
 
     const ownership: Ownership =
-      (
-        await prompt.question('Tunnel ownership [managed/external] (managed): ')
-      )
+      (await prompt.question('Tunnel ownership [managed/external] (managed): '))
         .trim()
         .toLowerCase() === 'external'
         ? 'external'

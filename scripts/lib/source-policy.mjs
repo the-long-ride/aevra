@@ -31,7 +31,5 @@ export function countPhysicalLines(text) {
 
 export function looksArtificiallyCompressed(text) {
   const lines = text.split(/\r?\n/).filter(Boolean);
-  return lines.some(
-    (line) => line.length > 500 && (line.match(/[;{}]/g) ?? []).length >= 20,
-  );
+  return lines.some((line) => line.length > 500 && (line.match(/[;{}]/g) ?? []).length >= 20);
 }

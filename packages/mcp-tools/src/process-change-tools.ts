@@ -17,11 +17,7 @@ export const PROCESS_CHANGE_TOOL_NAMES = new Set([
   'change_rollback',
 ]);
 
-export async function processStart(
-  context: McpRuntimeContext,
-  sessionId: string,
-  args: any,
-) {
+export async function processStart(context: McpRuntimeContext, sessionId: string, args: any) {
   const command = {
     executable: String(args.executable ?? args.command?.executable ?? ''),
     args: Array.isArray(args.args) ? args.args : (args.command?.args ?? []),
@@ -29,10 +25,7 @@ export async function processStart(
     cwdLogical: '/',
     timeoutMs: args.timeoutMs,
   };
-  const classification = classifyCommand([
-    command.executable,
-    ...command.args,
-  ]);
+  const classification = classifyCommand([command.executable, ...command.args]);
   const permissionMatcher = `process:${commandPermissionMatcher(
     [command.executable, ...command.args],
     { executionMode: 'host' },
@@ -63,9 +56,7 @@ export async function processStart(
       context.deps.processes!.start(
         sessionId,
         command,
-        args.lifecycle === 'keep-running'
-          ? 'keep-running'
-          : 'stop-with-aevra',
+        args.lifecycle === 'keep-running' ? 'keep-running' : 'stop-with-aevra',
       ),
   );
 }
@@ -80,15 +71,8 @@ export async function handleProcessChangeTool(
   if (name === 'process_list') {
     return context.deps.processes?.list(sessionId) ?? unavailable(name);
   }
-  if (
-    name === 'process_logs' ||
-    name === 'process_stop' ||
-    name === 'process_restart'
-  ) {
-    const kind = name.replace('_', '.') as
-      | 'process.logs'
-      | 'process.stop'
-      | 'process.restart';
+  if (name === 'process_logs' || name === 'process_stop' || name === 'process_restart') {
+    const kind = name.replace('_', '.') as 'process.logs' | 'process.stop' | 'process.restart';
     const result = await context.deps.processes?.command(
       sessionId,
       kind,
@@ -97,11 +81,7 @@ export async function handleProcessChangeTool(
     );
     if (!result) return unavailable(name);
     if (!result.ok) {
-      throw new AevraToolError(
-        result.error.code,
-        result.error.message,
-        result.error.details,
-      );
+      throw new AevraToolError(result.error.code, result.error.message, result.error.details);
     }
     return result.value;
   }
@@ -109,20 +89,16 @@ export async function handleProcessChangeTool(
   if (name === 'change_begin') {
     const lease = requiredLease(context, sessionId);
     return (
-      context.deps.changes?.begin(sessionId, lease.workspaceId, args.name) ??
-      unavailable(name)
+      context.deps.changes?.begin(sessionId, lease.workspaceId, args.name) ?? unavailable(name)
     );
   }
   if (name === 'change_status') {
     return (
-      context.deps.changes?.status(String(args.changeSetId ?? ''), sessionId) ??
-      unavailable(name)
+      context.deps.changes?.status(String(args.changeSetId ?? ''), sessionId) ?? unavailable(name)
     );
   }
   if (name === 'change_commit') {
-    return (
-      context.deps.changes?.commit(String(args.changeSetId)) ?? unavailable(name)
-    );
+    return context.deps.changes?.commit(String(args.changeSetId)) ?? unavailable(name);
   }
   if (name === 'change_rollback') {
     const gate = await authorizeCapability(

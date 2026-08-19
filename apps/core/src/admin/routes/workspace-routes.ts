@@ -2,12 +2,7 @@ import type { Capability } from '../../../../../packages/protocol/src/index.js';
 import { readAdminBody, sendAdminResponse } from './http.js';
 import type { AdminRouteHandler } from './types.js';
 
-export const handleWorkspaceRoutes: AdminRouteHandler = async (
-  req,
-  res,
-  url,
-  context,
-) => {
+export const handleWorkspaceRoutes: AdminRouteHandler = async (req, res, url, context) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
 
@@ -15,9 +10,7 @@ export const handleWorkspaceRoutes: AdminRouteHandler = async (
     sendAdminResponse(
       res,
       200,
-      context.workspaces?.listLocal?.() ??
-        context.workspaces?.listRemote?.() ??
-        [],
+      context.workspaces?.listLocal?.() ?? context.workspaces?.listRemote?.() ?? [],
     );
     return true;
   }
@@ -39,10 +32,7 @@ export const handleWorkspaceRoutes: AdminRouteHandler = async (
 
   let match = path.match(/^\/api\/workspaces\/([^/]+)$/);
   if (match && method === 'PATCH') {
-    const workspace = context.workspaces.update(
-      match[1],
-      await readAdminBody(req),
-    );
+    const workspace = context.workspaces.update(match[1], await readAdminBody(req));
     sendAdminResponse(res, 200, {
       ok: true,
       revision: Date.now(),

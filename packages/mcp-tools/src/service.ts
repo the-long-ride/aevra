@@ -19,11 +19,7 @@ import {
   processStart,
   PROCESS_CHANGE_TOOL_NAMES,
 } from './process-change-tools.js';
-import type {
-  McpRuntimeContext,
-  McpToolDependencies,
-  WorkerGateway,
-} from './service-types.js';
+import type { McpRuntimeContext, McpToolDependencies, WorkerGateway } from './service-types.js';
 
 export type {
   McpToolDependencies,
@@ -44,15 +40,8 @@ export class McpToolService {
     private readonly deps: McpToolDependencies = {},
   ) {
     this.approvals?.setApprovedHandler((ticket) => {
-      if (
-        ticket.operation.family === 'workspace:select' &&
-        ticket.actor.startsWith('oauth:')
-      ) {
-        this.sessions.grantConnectionWorkspace(
-          ticket.sessionId,
-          ticket.workspaceId,
-          'read-only',
-        );
+      if (ticket.operation.family === 'workspace:select' && ticket.actor.startsWith('oauth:')) {
+        this.sessions.grantConnectionWorkspace(ticket.sessionId, ticket.workspaceId, 'read-only');
       }
     });
   }
@@ -75,10 +64,8 @@ export class McpToolService {
       approvals: this.approvals,
       deps: this.deps,
       oneTimeCapabilities: this.oneTimeCapabilities,
-      callInner: (sessionId, name, args) =>
-        this.callInner(sessionId, name, args),
-      processStart: (sessionId, args) =>
-        processStart(this.context(), sessionId, args),
+      callInner: (sessionId, name, args) => this.callInner(sessionId, name, args),
+      processStart: (sessionId, args) => processStart(this.context(), sessionId, args),
     };
   }
 
@@ -109,10 +96,7 @@ export class McpToolService {
       return handleProcessChangeTool(context, sessionId, name, args);
     }
 
-    throw new AevraToolError(
-      'CAPABILITY_REQUIRED',
-      `Tool ${name} is not enabled`,
-    );
+    throw new AevraToolError('CAPABILITY_REQUIRED', `Tool ${name} is not enabled`);
   }
 
   resourcesList(sessionId: string) {

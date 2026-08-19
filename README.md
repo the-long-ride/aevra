@@ -44,7 +44,6 @@ npm run build
 npm link
 ```
 
-
 ## Start Aevra
 
 Foreground/debug mode:
@@ -308,7 +307,6 @@ Linux:   $XDG_STATE_HOME/aevra or ~/.local/state/aevra
 ```
 
 The state directory contains the SQLite metadata database, local control secret, recovery data, sandbox caches, encrypted fallback vault, and backups as applicable.
-
 
 ## Development
 

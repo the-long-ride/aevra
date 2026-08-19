@@ -47,14 +47,12 @@ for (const surface of ADMIN_SURFACES) {
 
     await expect(page.getByRole('button', { name: 'Deny', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Run once', exact: true })).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Allow this session', exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Allow this session', exact: true })).toHaveCount(
+      0,
+    );
     await expect(
       page.getByRole('button', { name: 'Always in workspace', exact: true }),
     ).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: 'Always globally', exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Always globally', exact: true })).toHaveCount(0);
   });
 }

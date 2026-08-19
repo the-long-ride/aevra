@@ -31,10 +31,7 @@ function isMutation(req: IncomingMessage) {
 function sameOrigin(req: IncomingMessage, url: URL) {
   if (!isMutation(req)) return true;
   const fetchSite = req.headers['sec-fetch-site'];
-  if (
-    typeof fetchSite === 'string' &&
-    !['same-origin', 'none'].includes(fetchSite)
-  ) {
+  if (typeof fetchSite === 'string' && !['same-origin', 'none'].includes(fetchSite)) {
     return false;
   }
   const origin = req.headers.origin;
@@ -70,8 +67,7 @@ export class AdminServer {
   ) {}
 
   async start() {
-    const handler = (req: IncomingMessage, res: ServerResponse) =>
-      void this.handle(req, res);
+    const handler = (req: IncomingMessage, res: ServerResponse) => void this.handle(req, res);
     this.server = this.options.tls
       ? https.createServer(this.options.tls, handler)
       : http.createServer(handler);
@@ -102,9 +98,7 @@ export class AdminServer {
   }
 
   private isAdmin(req: IncomingMessage) {
-    return (
-      this.options.bootstrap?.validateSession(this.adminSession(req)) ?? false
-    );
+    return this.options.bootstrap?.validateSession(this.adminSession(req)) ?? false;
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse) {
@@ -145,16 +139,12 @@ export class AdminServer {
     }
 
     if (url.pathname === '/auth/bootstrap' && req.method === 'GET') {
-      const destination = parseAdminDestination(
-        url.searchParams.get('to') ?? undefined,
-      );
+      const destination = parseAdminDestination(url.searchParams.get('to') ?? undefined);
       if (!destination) {
         json(res, 400, { error: 'invalid bootstrap destination' });
         return;
       }
-      const session = await this.options.bootstrap?.consume(
-        url.searchParams.get('token') ?? '',
-      );
+      const session = await this.options.bootstrap?.consume(url.searchParams.get('token') ?? '');
       if (!session) {
         json(res, 401, { error: 'invalid bootstrap token' });
         return;
@@ -193,11 +183,7 @@ export class AdminServer {
       json(
         res,
         200,
-        buildDashboardRuntimeSnapshot(
-          this.options.api ?? {},
-          this.health(),
-          this.startedAt,
-        ),
+        buildDashboardRuntimeSnapshot(this.options.api ?? {}, this.health(), this.startedAt),
       );
       return;
     }
@@ -205,13 +191,7 @@ export class AdminServer {
     if (
       url.pathname.startsWith('/api/') &&
       this.options.api &&
-      (await handleBulkAdminAction(
-        req,
-        res,
-        url,
-        this.options.api,
-        this.adminSession(req),
-      ))
+      (await handleBulkAdminAction(req, res, url, this.options.api, this.adminSession(req)))
     ) {
       return;
     }

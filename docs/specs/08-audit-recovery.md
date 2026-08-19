@@ -18,11 +18,11 @@ Every significant action appends a redacted event to `audit_events` with `previo
 
 On restart, incomplete mutating operations are reconciled into explicit states:
 
-| State | Meaning |
-|---|---|
-| `INTERRUPTED` | stopped before execution |
-| `EXECUTION_OUTCOME_UNKNOWN` | worker died mid-execution |
-| `RECOVERY_REQUIRED` | snapshots exist; rollback available |
+| State                       | Meaning                             |
+| --------------------------- | ----------------------------------- |
+| `INTERRUPTED`               | stopped before execution            |
+| `EXECUTION_OUTCOME_UNKNOWN` | worker died mid-execution           |
+| `RECOVERY_REQUIRED`         | snapshots exist; rollback available |
 
 They are **never automatically replayed**. The client or dashboard decides.
 

@@ -1,7 +1,4 @@
-import type {
-  RemoteSessionSummary,
-  WorkspaceSummary,
-} from '@aevra/admin-contracts';
+import type { RemoteSessionSummary, WorkspaceSummary } from '@aevra/admin-contracts';
 import { DataTable } from '../../components/DataTable';
 import { PageState } from '../../components/PageState';
 import { useApiResource } from '../../hooks/use-api-resource';
@@ -61,18 +58,16 @@ export function SessionsPage() {
   };
 
   const revokeLocal = async (idHash: string) => {
-    await requestJson(
-      `/api/admin-sessions/${encodeURIComponent(idHash)}/revoke`,
-      { method: 'POST', body: '{}' },
-    );
+    await requestJson(`/api/admin-sessions/${encodeURIComponent(idHash)}/revoke`, {
+      method: 'POST',
+      body: '{}',
+    });
     await resource.refresh();
   };
 
   const revokeOthers = async () => {
     if (
-      !window.confirm(
-        'Revoke every non-connector MCP session and every other local admin session?',
-      )
+      !window.confirm('Revoke every non-connector MCP session and every other local admin session?')
     ) {
       return;
     }
@@ -100,7 +95,9 @@ export function SessionsPage() {
         </button>
       </section>
       <section className="panel">
-        <div className="panel-head"><h3>Remote MCP sessions</h3></div>
+        <div className="panel-head">
+          <h3>Remote MCP sessions</h3>
+        </div>
         <DataTable
           id="react-remote-sessions"
           rows={data?.remote ?? []}
@@ -145,7 +142,9 @@ export function SessionsPage() {
         />
       </section>
       <section className="panel">
-        <div className="panel-head"><h3>Local admin sessions</h3></div>
+        <div className="panel-head">
+          <h3>Local admin sessions</h3>
+        </div>
         <DataTable
           id="react-local-sessions"
           rows={data?.local ?? []}

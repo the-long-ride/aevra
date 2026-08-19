@@ -6,9 +6,9 @@ Security is two questions: **who gets in** (admission) and **what may they do** 
 
 ## Admission — two paths, one pipeline
 
-| Path | Credential | Verified how |
-|---|---|---|
-| `/mcp` | Cloudflare Access JWT | RS256 signature, issuer, audience, expiry, subject — **every request**; JWKS cached 5 min |
+| Path           | Credential                                   | Verified how                                                                                       |
+| -------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `/mcp`         | Cloudflare Access JWT                        | RS256 signature, issuer, audience, expiry, subject — **every request**; JWKS cached 5 min          |
 | `/mcp/<token>` | Connector token (22-char base64url, 128-bit) | SHA-256 lookup + constant-time compare; uniform `401 {"error":"unauthorized"}` for unknown/revoked |
 
 Both paths then share the same session pipeline. Connector identity becomes `actor: "connector:<name>"`. See [`04-connectors`](04-connectors.md).

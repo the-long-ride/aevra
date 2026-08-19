@@ -30,13 +30,7 @@ export const ADMIN_SURFACE = {
   },
   approvalScopes: ['once', 'session', 'workspace', 'global'],
   actions: {
-    requests: [
-      'deny',
-      'approve-once',
-      'approve-session',
-      'approve-workspace',
-      'approve-global',
-    ],
+    requests: ['deny', 'approve-once', 'approve-session', 'approve-workspace', 'approve-global'],
     permissions: [
       'add',
       'revoke',
@@ -45,14 +39,7 @@ export const ADMIN_SURFACE = {
       'filter-scope',
       'filter-actor',
     ],
-    workspaces: [
-      'add',
-      'details',
-      'remove',
-      'add-mount',
-      'remove-mount',
-      'save-admission',
-    ],
+    workspaces: ['add', 'details', 'remove', 'add-mount', 'remove-mount', 'save-admission'],
     sessions: ['switch-workspace', 'revoke', 'revoke-all-others'],
     processes: ['stop', 'restart', 'forget'],
     changes: ['rename', 'commit', 'rollback'],
@@ -79,8 +66,7 @@ export const ADMIN_SURFACE = {
 export type AdminPageId = (typeof ADMIN_SURFACE.navigation)[number]['id'];
 export type ApprovalScope = (typeof ADMIN_SURFACE.approvalScopes)[number];
 export type DashboardSectionId = (typeof ADMIN_SURFACE.dashboardSections)[number];
-export type OnboardingSectionId =
-  (typeof ADMIN_SURFACE.onboarding.beforeCompletion)[number];
+export type OnboardingSectionId = (typeof ADMIN_SURFACE.onboarding.beforeCompletion)[number];
 
 export function surfaceId(category: string, id: string): string {
   return `${category}:${id}`;

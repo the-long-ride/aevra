@@ -6,9 +6,9 @@ Aevra gives a web AI the same context conventions local coding agents use: a **s
 
 ## Sources
 
-| Source | Skills | Instructions |
-|---|---|---|
-| `user` | `~/.agents/skills/<dir>/SKILL.md` | `~/.agents/AGENTS.md` |
+| Source                          | Skills                                           | Instructions                                              |
+| ------------------------------- | ------------------------------------------------ | --------------------------------------------------------- |
+| `user`                          | `~/.agents/skills/<dir>/SKILL.md`                | `~/.agents/AGENTS.md`                                     |
 | `workspace` (active lease only) | `<workspace-root>/.agents/skills/<dir>/SKILL.md` | `<workspace-root>/AGENTS.md`, falling back to `CLAUDE.md` |
 
 User-source skills live **outside any workspace root** — `skill_read` is the only path to them, by design.
@@ -29,7 +29,7 @@ User-source skills live **outside any workspace root** — `skill_read` is the o
 
 `apps/core/src/skills/skills-service.ts` — `scanSkills()` walks a base once; `list()`/`read()`/`instructions()` build on it. Wired into `McpToolService.deps.skills`.
 
-**Boundaries:** what skills *contain* is the user's domain; execution of skill steps is the AI client's job — Aevra only serves content.
+**Boundaries:** what skills _contain_ is the user's domain; execution of skill steps is the AI client's job — Aevra only serves content.
 
 **Related:** [`03-mcp-protocol`](03-mcp-protocol.md) · [`../user-manual/09-skills`](../user-manual/09-skills.md)
 

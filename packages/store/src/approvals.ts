@@ -1,1 +1,58 @@
-import type { DatabaseSync } from 'node:sqlite'; export class ApprovalRepository{constructor(private db:DatabaseSync){} put(t:any){const now=new Date().toISOString();this.db.prepare(`INSERT OR REPLACE INTO pending_approvals(id,actor,session_id,workspace_id,operation_json,expected_state_json,risk,state,expires_at,cancellation_reason,decision_scope,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(t.id,t.actor,t.sessionId,t.workspaceId,JSON.stringify({normalized:t.operation,payload:t.payload??null}),JSON.stringify(t.expectedState??{}),t.risk,t.state,t.expiresAt,t.cancellationReason??null,t.decisionScope??null,t.createdAt??now,now);return t;} get(id:string){const r=this.db.prepare('SELECT * FROM pending_approvals WHERE id=?').get(id) as any;if(!r)return null;return{id:r.id,actor:r.actor,sessionId:r.session_id,workspaceId:r.workspace_id,operation:(()=>{const x=JSON.parse(r.operation_json);return x.normalized??x})(),payload:(()=>{const x=JSON.parse(r.operation_json);return x.payload??undefined})(),expectedState:JSON.parse(r.expected_state_json),risk:r.risk,state:r.state,expiresAt:r.expires_at,cancellationReason:r.cancellation_reason,decisionScope:r.decision_scope,createdAt:r.created_at,updatedAt:r.updated_at};} list(){return (this.db.prepare('SELECT id FROM pending_approvals ORDER BY created_at DESC').all() as any[]).map(r=>this.get(r.id));}}
+import type { DatabaseSync } from 'node:sqlite';
+export class ApprovalRepository {
+  constructor(private db: DatabaseSync) {}
+  put(t: any) {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT OR REPLACE INTO pending_approvals(id,actor,session_id,workspace_id,operation_json,expected_state_json,risk,state,expires_at,cancellation_reason,decision_scope,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        t.id,
+        t.actor,
+        t.sessionId,
+        t.workspaceId,
+        JSON.stringify({ normalized: t.operation, payload: t.payload ?? null }),
+        JSON.stringify(t.expectedState ?? {}),
+        t.risk,
+        t.state,
+        t.expiresAt,
+        t.cancellationReason ?? null,
+        t.decisionScope ?? null,
+        t.createdAt ?? now,
+        now,
+      );
+    return t;
+  }
+  get(id: string) {
+    const r = this.db.prepare('SELECT * FROM pending_approvals WHERE id=?').get(id) as any;
+    if (!r) return null;
+    return {
+      id: r.id,
+      actor: r.actor,
+      sessionId: r.session_id,
+      workspaceId: r.workspace_id,
+      operation: (() => {
+        const x = JSON.parse(r.operation_json);
+        return x.normalized ?? x;
+      })(),
+      payload: (() => {
+        const x = JSON.parse(r.operation_json);
+        return x.payload ?? undefined;
+      })(),
+      expectedState: JSON.parse(r.expected_state_json),
+      risk: r.risk,
+      state: r.state,
+      expiresAt: r.expires_at,
+      cancellationReason: r.cancellation_reason,
+      decisionScope: r.decision_scope,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
+  }
+  list() {
+    return (
+      this.db.prepare('SELECT id FROM pending_approvals ORDER BY created_at DESC').all() as any[]
+    ).map((r) => this.get(r.id));
+  }
+}

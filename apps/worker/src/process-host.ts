@@ -7,7 +7,8 @@ const encoded = process.env.AEVRA_PROCESS_COMMAND;
 const logPath = process.env.AEVRA_PROCESS_LOG;
 const marker = process.env.AEVRA_PROCESS_MARKER;
 if (!encoded || !logPath || !marker) throw new Error('process-host configuration missing');
-if (!process.argv.includes(marker)) throw new Error('process-host ownership marker missing from command line');
+if (!process.argv.includes(marker))
+  throw new Error('process-host ownership marker missing from command line');
 
 const command = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as {
   executable: string;

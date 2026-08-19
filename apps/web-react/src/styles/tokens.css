@@ -1,5 +1,5 @@
 :root,
-:root[data-theme="light"] {
+:root[data-theme='light'] {
   color-scheme: light;
   --canvas: #fdfcfc;
   --surface-soft: #f8f7f7;
@@ -35,7 +35,7 @@
   --radius-lg: 0px;
 }
 
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   color-scheme: dark;
   --canvas: #171515;
   --surface-soft: #1e1b1b;
@@ -109,16 +109,8 @@ body {
   background: var(--canvas);
   color: var(--ink);
   font-family:
-    "JetBrains Mono",
-    "IBM Plex Mono",
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    "Liberation Mono",
-    "Courier New",
-    monospace;
+    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
   font-size: 14px;
   line-height: 1.5;
 }

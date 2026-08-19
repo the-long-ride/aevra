@@ -1,8 +1,4 @@
-import type {
-  Capability,
-  NormalizedOperation,
-  RiskTier,
-} from '../../protocol/src/index.js';
+import type { Capability, NormalizedOperation, RiskTier } from '../../protocol/src/index.js';
 import { needsCommandPermissionApproval } from '../../../apps/core/src/policy/command-matcher.js';
 import { resumeApproval } from './approval-resume.js';
 import { AevraToolError } from './errors.js';
@@ -16,14 +12,9 @@ import {
 import type { McpRuntimeContext } from './service-types.js';
 
 export type CapabilityGate =
-  | { authorization: ReturnType<typeof authorizationContext> }
-  | { response: any };
+  { authorization: ReturnType<typeof authorizationContext> } | { response: any };
 
-export async function workspaceSelect(
-  context: McpRuntimeContext,
-  sessionId: string,
-  args: any,
-) {
+export async function workspaceSelect(context: McpRuntimeContext, sessionId: string, args: any) {
   const workspace = context.workspaces.getLocal(
     String(args.workspace ?? args.name ?? args.id ?? ''),
   );
@@ -39,17 +30,11 @@ export async function workspaceSelect(
     ? (context.deps.connectorBindings?.(session.subject) ?? null)
     : null;
   if (bindings?.workspaceId && bindings.workspaceId !== workspace.id) {
-    throw new AevraToolError(
-      'CAPABILITY_REQUIRED',
-      'Connector is bound to a different workspace',
-    );
+    throw new AevraToolError('CAPABILITY_REQUIRED', 'Connector is bound to a different workspace');
   }
 
   const override = bindings?.profileCap ?? undefined;
-  const drainTimeoutMs = Math.max(
-    0,
-    Number(args.drainTimeoutMs ?? 60_000) || 0,
-  );
+  const drainTimeoutMs = Math.max(0, Number(args.drainTimeoutMs ?? 60_000) || 0);
   const admission = await context.sessions.switchWorkspace(
     sessionId,
     workspace.id,
@@ -60,15 +45,10 @@ export async function workspaceSelect(
     return workspaceResult(workspace, admission.lease.capabilities);
   }
   if (!context.approvals) {
-    throw new AevraToolError(
-      'APPROVAL_PENDING',
-      'Local approval service unavailable',
-    );
+    throw new AevraToolError('APPROVAL_PENDING', 'Local approval service unavailable');
   }
 
-  const profileId = session.actor.startsWith('oauth:')
-    ? 'read-only'
-    : 'developer';
+  const profileId = session.actor.startsWith('oauth:') ? 'read-only' : 'developer';
   const request = await context.approvals.request({
     actor: session.actor,
     sessionId,
@@ -123,12 +103,7 @@ export async function authorizeCapability(
     throw new AevraToolError('CAPABILITY_REQUIRED', lowDecision.reason);
   }
 
-  const authorization = authorizationContext(
-    context,
-    sessionId,
-    capability,
-    permissionMatcher,
-  );
+  const authorization = authorizationContext(context, sessionId, capability, permissionMatcher);
   if (
     lease.capabilities.includes(capability) ||
     oneTimeAllowed(context, sessionId, capability, permissionMatcher) ||
@@ -137,14 +112,10 @@ export async function authorizeCapability(
     return { authorization };
   }
   if (!context.approvals) {
-    throw new AevraToolError(
-      'APPROVAL_PENDING',
-      'Local approval service unavailable',
-    );
+    throw new AevraToolError('APPROVAL_PENDING', 'Local approval service unavailable');
   }
 
-  const family =
-    permissionMatcher === '*' ? `capability:${capability}` : permissionMatcher;
+  const family = permissionMatcher === '*' ? `capability:${capability}` : permissionMatcher;
   const request = await context.approvals.request({
     actor: session.actor,
     sessionId,
@@ -195,16 +166,8 @@ export async function gated<T>(
   const lease = requiredLease(context, sessionId);
   const forceCriticalApproval =
     normalized.risk === 'CRITICAL' &&
-    context.deps.settings?.get<boolean>(
-      'policy.critical.alwaysConfirm',
-      false,
-    ) === true;
-  const once = oneTimeAllowed(
-    context,
-    sessionId,
-    normalized.capability,
-    normalized.family,
-  );
+    context.deps.settings?.get<boolean>('policy.critical.alwaysConfirm', false) === true;
+  const once = oneTimeAllowed(context, sessionId, normalized.capability, normalized.family);
   const decision = context.deps.permissions?.decide({
     capability: normalized.capability,
     matcher: normalized.family,
@@ -221,25 +184,14 @@ export async function gated<T>(
     normalized.capability === 'commands.run' &&
     needsCommandPermissionApproval(decision?.outcome, once);
   if (once) return execute();
-  if (
-    normalized.risk === 'LOW' &&
-    !forceCriticalApproval &&
-    !newCommandApproval
-  ) {
+  if (normalized.risk === 'LOW' && !forceCriticalApproval && !newCommandApproval) {
     return execute();
   }
-  if (
-    !forceCriticalApproval &&
-    !newCommandApproval &&
-    decision?.outcome === 'allow'
-  ) {
+  if (!forceCriticalApproval && !newCommandApproval && decision?.outcome === 'allow') {
     return execute();
   }
   if (!context.approvals) {
-    throw new AevraToolError(
-      'APPROVAL_PENDING',
-      'Local approval service unavailable',
-    );
+    throw new AevraToolError('APPROVAL_PENDING', 'Local approval service unavailable');
   }
 
   const request = await context.approvals.request({

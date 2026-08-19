@@ -8,12 +8,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "exclude": [
-    "dist",
-    "node_modules",
-    ".test-dist",
-    ".coverage-dist",
-    "coverage",
-    "apps/web-react"
-  ]
+  "exclude": ["dist", "node_modules", ".test-dist", ".coverage-dist", "coverage", "apps/web-react"]
 }

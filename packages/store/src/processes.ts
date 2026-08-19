@@ -38,7 +38,9 @@ export class ProcessRepository {
 
   markKeepRunningUncertain() {
     const result = this.db
-      .prepare("UPDATE managed_processes SET ownership='detached-uncertain',updated_at=? WHERE lifecycle='keep-running'")
+      .prepare(
+        "UPDATE managed_processes SET ownership='detached-uncertain',updated_at=? WHERE lifecycle='keep-running'",
+      )
       .run(new Date().toISOString());
     return result?.changes ?? 0;
   }

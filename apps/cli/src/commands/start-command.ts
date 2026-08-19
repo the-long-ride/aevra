@@ -8,10 +8,7 @@ interface ReadyInfo {
 }
 
 export interface StartCommandDependencies<Config> {
-  run(
-    config: Config,
-    hooks: { onReady(info: ReadyInfo): void | Promise<void> },
-  ): Promise<number>;
+  run(config: Config, hooks: { onReady(info: ReadyInfo): void | Promise<void> }): Promise<number>;
   readyLines(info: ReadyInfo): string[];
   openUi(config: Config, destination: AdminUiDestination): Promise<void>;
   error(message: string): void;
@@ -36,9 +33,7 @@ export async function runStartCommand<Config>(
       try {
         await dependencies.openUi(config, command.uiDestination);
       } catch (error) {
-        dependencies.error(
-          `[aevra] UI launch failed: ${dependencies.formatError(error)}`,
-        );
+        dependencies.error(`[aevra] UI launch failed: ${dependencies.formatError(error)}`);
       }
     },
   });

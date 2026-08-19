@@ -7,3 +7,4 @@ dist/
 *.diff
 docs/superpowers/
 .agents/
+.coverage-dist/

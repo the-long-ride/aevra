@@ -29,13 +29,7 @@ export async function completeOnboarding(): Promise<void> {
     method: 'PATCH',
     body: JSON.stringify({
       completed: true,
-      completedSections: [
-        'remote-access',
-        'connect-ai',
-        'workspace',
-        'try-aevra',
-        'explore',
-      ],
+      completedSections: ['remote-access', 'connect-ai', 'workspace', 'try-aevra', 'explore'],
     }),
   });
 }

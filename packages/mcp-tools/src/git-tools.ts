@@ -23,11 +23,7 @@ export async function gitTool(
   args: any,
 ) {
   const capability: Capability =
-    name === 'git_commit'
-      ? 'git.commit'
-      : name === 'git_push'
-        ? 'git.push'
-        : 'git.read';
+    name === 'git_commit' ? 'git.commit' : name === 'git_push' ? 'git.push' : 'git.read';
   const matcher = capability === 'git.read' ? '*' : name.replace('_', ':');
   const risk = classifyOperationRisk(name.replace('_', ':'), args.args ?? []);
   const gate = await authorizeCapability(
@@ -73,22 +69,13 @@ export async function gitTool(
       executionMode: 'host',
     });
     if (!result.ok) {
-      throw new AevraToolError(
-        result.error.code,
-        result.error.message,
-        result.error.details,
-      );
+      throw new AevraToolError(result.error.code, result.error.message, result.error.details);
     }
     return result.value;
   };
   if (risk === 'LOW') return execute();
 
-  const expectedState = await repoState(
-    context,
-    sessionId,
-    lease.workspaceId,
-    roots,
-  );
+  const expectedState = await repoState(context, sessionId, lease.workspaceId, roots);
   return gated(
     context,
     sessionId,

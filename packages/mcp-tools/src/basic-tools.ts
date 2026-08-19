@@ -53,12 +53,8 @@ export async function handleBasicTool(
   }
 
   if (name === 'skills_list') {
-    const all =
-      context.deps.skills?.list(workspaceRoot(context, sessionId)) ?? [];
-    const query =
-      typeof args.query === 'string' && args.query
-        ? args.query.toLowerCase()
-        : null;
+    const all = context.deps.skills?.list(workspaceRoot(context, sessionId)) ?? [];
+    const query = typeof args.query === 'string' && args.query ? args.query.toLowerCase() : null;
     const filtered = query
       ? all.filter(
           (skill) =>
@@ -67,10 +63,7 @@ export async function handleBasicTool(
         )
       : all;
     const offset = Math.max(0, Number(args.offset ?? 0) || 0);
-    const limit =
-      args.limit === undefined
-        ? filtered.length
-        : Math.max(0, Number(args.limit) || 0);
+    const limit = args.limit === undefined ? filtered.length : Math.max(0, Number(args.limit) || 0);
     return {
       skills: filtered.slice(offset, offset + limit),
       total: filtered.length,
@@ -114,17 +107,15 @@ export async function handleBasicTool(
   if (name === 'workspace_current') {
     const lease = context.sessions.activeLease(sessionId);
     return lease
-      ? (context.workspaces
-          .listRemote()
-          .find((workspace) => workspace.id === lease.workspaceId) ?? null)
+      ? (context.workspaces.listRemote().find((workspace) => workspace.id === lease.workspaceId) ??
+          null)
       : null;
   }
   return workspaceSelect(context, sessionId, args);
 }
 
 export function resourcesList(context: McpRuntimeContext, sessionId: string) {
-  const skills =
-    context.deps.skills?.list(workspaceRoot(context, sessionId)) ?? [];
+  const skills = context.deps.skills?.list(workspaceRoot(context, sessionId)) ?? [];
   return {
     resources: skills.map((skill) => ({
       uri: `aevra://skill/${skill.source}/${encodeURIComponent(skill.name)}`,
@@ -135,14 +126,8 @@ export function resourcesList(context: McpRuntimeContext, sessionId: string) {
   };
 }
 
-export async function resourceRead(
-  context: McpRuntimeContext,
-  sessionId: string,
-  uri: string,
-) {
-  const match = String(uri).match(
-    /^aevra:\/\/skill\/(user|workspace)\/([^/]+)$/,
-  );
+export async function resourceRead(context: McpRuntimeContext, sessionId: string, uri: string) {
+  const match = String(uri).match(/^aevra:\/\/skill\/(user|workspace)\/([^/]+)$/);
   if (!match) {
     throw new AevraToolError('INVALID_REQUEST', 'Unknown resource URI');
   }
@@ -171,32 +156,20 @@ export function promptsList() {
     prompts: [
       {
         name: 'aevra-instructions',
-        description:
-          'Merged AGENTS.md instructions (user global then active workspace)',
+        description: 'Merged AGENTS.md instructions (user global then active workspace)',
       },
     ],
   };
 }
 
-export async function promptGet(
-  context: McpRuntimeContext,
-  sessionId: string,
-) {
-  const result = context.deps.skills?.instructions(
-    workspaceRoot(context, sessionId),
-  );
+export async function promptGet(context: McpRuntimeContext, sessionId: string) {
+  const result = context.deps.skills?.instructions(workspaceRoot(context, sessionId));
   if (!result) {
-    throw new AevraToolError(
-      'INVALID_REQUEST',
-      'Skills are not configured',
-    );
+    throw new AevraToolError('INVALID_REQUEST', 'Skills are not configured');
   }
   const text =
     result.instructions
-      .map(
-        (instruction) =>
-          `# ${instruction.source} instructions\n\n${instruction.content}`,
-      )
+      .map((instruction) => `# ${instruction.source} instructions\n\n${instruction.content}`)
       .join('\n\n---\n\n') ||
     result.note ||
     'No instruction files found.';

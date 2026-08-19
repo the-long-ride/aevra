@@ -2,12 +2,12 @@
 
 Welcome. Everything here is written in **2-minute files** — pick a path and go.
 
-| Path | Audience | Question it answers |
-|---|---|---|
-| [`specs/`](specs/README.md) | Engineers & AI agents | How does Aevra work inside, and why? |
-| [`user-manual/`](user-manual/README.md) | End users | How do I connect Claude.ai / ChatGPT / Gemini to my machine? |
-| [`ROADMAP.md`](ROADMAP.md) | Everyone | What's weak right now, and what gets built next (prioritized)? |
-| [`RELEASING.md`](RELEASING.md) | Maintainers | How do I cut a release? |
+| Path                                    | Audience              | Question it answers                                            |
+| --------------------------------------- | --------------------- | -------------------------------------------------------------- |
+| [`specs/`](specs/README.md)             | Engineers & AI agents | How does Aevra work inside, and why?                           |
+| [`user-manual/`](user-manual/README.md) | End users             | How do I connect Claude.ai / ChatGPT / Gemini to my machine?   |
+| [`ROADMAP.md`](ROADMAP.md)              | Everyone              | What's weak right now, and what gets built next (prioritized)? |
+| [`RELEASING.md`](RELEASING.md)          | Maintainers           | How do I cut a release?                                        |
 
 ## Reading paths
 
@@ -22,7 +22,7 @@ Welcome. Everything here is written in **2-minute files** — pick a path and go
 ## Rules of this documentation
 
 - One file, one topic, ≤ 2 minutes to read.
-- Specs describe *what and why*; the manual describes *how*.
+- Specs describe _what and why_; the manual describes _how_.
 - Every spec ends with **Boundaries** (what it does not cover) and **Related** links.
 - Filenames are stable and numbered — cite them directly (`docs/specs/02-security-model.md`).
 - Facts are verified against Aevra `0.4.0`.

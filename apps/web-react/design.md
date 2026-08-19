@@ -10,16 +10,8 @@ Aevra must not bundle or redistribute Berkeley Mono. Use this stack instead:
 
 ```css
 font-family:
-  "JetBrains Mono",
-  "IBM Plex Mono",
-  ui-monospace,
-  SFMono-Regular,
-  Menlo,
-  Monaco,
-  Consolas,
-  "Liberation Mono",
-  "Courier New",
-  monospace;
+  'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+  'Liberation Mono', 'Courier New', monospace;
 ```
 
 ## Principles

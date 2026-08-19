@@ -1,3 +1,19 @@
-import assert from 'node:assert/strict';import test from 'node:test';import {BoundedLog,verifyReAdoption} from '../src/processes.js';
-test('bounded log evicts oldest lines',()=>{const l=new BoundedLog(2);l.append('a\nb\nc\n');assert.deepEqual(l.read().lines,['b','c']);});
-test('re-adoption requires pid start identity and exact marker',()=>{const r={helperPid:2,helperStartedAt:'t',marker:'secret-marker'};assert.equal(verifyReAdoption(r,{pid:2,startedAt:'t',commandLine:'node helper secret-marker'}),true);assert.equal(verifyReAdoption(r,{pid:2,startedAt:'wrong',commandLine:'node helper secret-marker'}),false);});
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { BoundedLog, verifyReAdoption } from '../src/processes.js';
+test('bounded log evicts oldest lines', () => {
+  const l = new BoundedLog(2);
+  l.append('a\nb\nc\n');
+  assert.deepEqual(l.read().lines, ['b', 'c']);
+});
+test('re-adoption requires pid start identity and exact marker', () => {
+  const r = { helperPid: 2, helperStartedAt: 't', marker: 'secret-marker' };
+  assert.equal(
+    verifyReAdoption(r, { pid: 2, startedAt: 't', commandLine: 'node helper secret-marker' }),
+    true,
+  );
+  assert.equal(
+    verifyReAdoption(r, { pid: 2, startedAt: 'wrong', commandLine: 'node helper secret-marker' }),
+    false,
+  );
+});

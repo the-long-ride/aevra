@@ -23,10 +23,5 @@
     "scripts/**/*.mjs",
     "tests/**/*.{ts,mjs}"
   ],
-  "ignore": [
-    "dist/**",
-    ".test-dist/**",
-    ".coverage-dist/**",
-    "coverage/**"
-  ]
+  "ignore": ["dist/**", ".test-dist/**", ".coverage-dist/**", "coverage/**"]
 }

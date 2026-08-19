@@ -38,7 +38,9 @@ for (const surface of ADMIN_SURFACES) {
     await expect(page.getByText(/of 15$/)).toBeVisible();
   });
 
-  test(`${surface.name} sessions table keeps actor and workspace-state filtering`, async ({ page }) => {
+  test(`${surface.name} sessions table keeps actor and workspace-state filtering`, async ({
+    page,
+  }) => {
     await installAdminApi(page, { sessions });
     await page.goto(surface.path);
     await page.getByRole('button', { name: 'Sessions', exact: true }).click();

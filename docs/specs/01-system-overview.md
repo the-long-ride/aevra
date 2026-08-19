@@ -30,15 +30,15 @@ Everything else in these specs is an elaboration of that sentence.
 
 ## Components
 
-| Component | Location | Responsibility |
-|---|---|---|
-| CLI | `apps/cli` | `aevra start/ui/setup/service` |
-| Core Daemon | `apps/core` | sessions, leases, policy, approvals, audit, migration |
-| MCP ingress | `apps/core/src/mcp/server.ts` | admission (Access JWT or connector token), JSON-RPC |
-| Admin server | `apps/core/src/admin/` | localhost Web UI API, bootstrap sessions |
-| Worker | `apps/worker` + `packages/executor` | file/git/command/process execution, sandboxing |
-| Store | `packages/store` | SQLite repositories (`node:sqlite`, WAL) |
-| Web UI | `apps/web` | vanilla-JS dashboard served by the admin plane |
+| Component    | Location                            | Responsibility                                        |
+| ------------ | ----------------------------------- | ----------------------------------------------------- |
+| CLI          | `apps/cli`                          | `aevra start/ui/setup/service`                        |
+| Core Daemon  | `apps/core`                         | sessions, leases, policy, approvals, audit, migration |
+| MCP ingress  | `apps/core/src/mcp/server.ts`       | admission (Access JWT or connector token), JSON-RPC   |
+| Admin server | `apps/core/src/admin/`              | localhost Web UI API, bootstrap sessions              |
+| Worker       | `apps/worker` + `packages/executor` | file/git/command/process execution, sandboxing        |
+| Store        | `packages/store`                    | SQLite repositories (`node:sqlite`, WAL)              |
+| Web UI       | `apps/web`                          | vanilla-JS dashboard served by the admin plane        |
 
 ## Dependency boundaries (enforced by tests)
 

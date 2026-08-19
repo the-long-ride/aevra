@@ -61,10 +61,14 @@ export function AuditPage() {
         </div>
         <div className="actions">
           <a href="/api/audit/export?format=json" target="_blank" rel="noreferrer">
-            <button type="button" data-surface-id="audit:export-json">Export JSON</button>
+            <button type="button" data-surface-id="audit:export-json">
+              Export JSON
+            </button>
           </a>
           <a href="/api/audit/export?format=jsonl" target="_blank" rel="noreferrer">
-            <button type="button" data-surface-id="audit:export-jsonl">Export JSONL</button>
+            <button type="button" data-surface-id="audit:export-jsonl">
+              Export JSONL
+            </button>
           </a>
           <button
             type="button"

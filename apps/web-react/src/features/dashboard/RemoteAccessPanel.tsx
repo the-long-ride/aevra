@@ -16,10 +16,10 @@ export function RemoteAccessPanel({
 
   const authenticate = async () => {
     try {
-      const result = await requestJson<{ message?: string }>(
-        '/api/cloudflare/authenticate',
-        { method: 'POST', body: '{}' },
-      );
+      const result = await requestJson<{ message?: string }>('/api/cloudflare/authenticate', {
+        method: 'POST',
+        body: '{}',
+      });
       setMessage(result.message ?? 'Authentication checked.');
       await onChanged();
     } catch (error) {
@@ -48,13 +48,10 @@ export function RemoteAccessPanel({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     try {
-      const result = await requestJson<{ result: { hostname: string } }>(
-        '/api/cloudflare/setup',
-        {
-          method: 'POST',
-          body: JSON.stringify(Object.fromEntries(form)),
-        },
-      );
+      const result = await requestJson<{ result: { hostname: string } }>('/api/cloudflare/setup', {
+        method: 'POST',
+        body: JSON.stringify(Object.fromEntries(form)),
+      });
       setMessage(`Configured https://${result.result.hostname}`);
       await onChanged();
     } catch (error) {
@@ -69,18 +66,14 @@ export function RemoteAccessPanel({
           <div>
             <b>cloudflared</b>
             <p>
-              {status.found ? status.version ?? 'Detected' : 'Not detected on PATH'} ·{' '}
+              {status.found ? (status.version ?? 'Detected') : 'Not detected on PATH'} ·{' '}
               {status.authenticationMessage ?? 'Authentication has not been checked.'}
             </p>
           </div>
           <span
             className={`status ${status.authenticated ? 'success' : status.found ? 'warning' : 'muted'}`}
           >
-            {status.authenticated
-              ? 'Authenticated'
-              : status.found
-                ? 'Login needed'
-                : 'Unavailable'}
+            {status.authenticated ? 'Authenticated' : status.found ? 'Login needed' : 'Unavailable'}
           </span>
         </div>
         <button type="button" disabled={!status.found} onClick={authenticate}>
@@ -91,10 +84,7 @@ export function RemoteAccessPanel({
         <span>Canonical MCP endpoint</span>
         <code>{canonical}</code>
         {status.hostname ? (
-          <button
-            type="button"
-            onClick={() => void navigator.clipboard.writeText(canonical)}
-          >
+          <button type="button" onClick={() => void navigator.clipboard.writeText(canonical)}>
             Copy
           </button>
         ) : null}

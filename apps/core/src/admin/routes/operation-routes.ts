@@ -1,12 +1,7 @@
 import { readAdminBody, sendAdminResponse } from './http.js';
 import type { AdminRouteHandler } from './types.js';
 
-export const handleOperationRoutes: AdminRouteHandler = async (
-  req,
-  res,
-  url,
-  context,
-) => {
+export const handleOperationRoutes: AdminRouteHandler = async (req, res, url, context) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
 
@@ -15,14 +10,9 @@ export const handleOperationRoutes: AdminRouteHandler = async (
     return true;
   }
 
-  let match = path.match(
-    /^\/api\/processes\/([^/]+)\/(stop|restart|forget)$/,
-  );
+  let match = path.match(/^\/api\/processes\/([^/]+)\/(stop|restart|forget)$/);
   if (match && method === 'POST') {
-    const result = await context.processes?.localAction?.(
-      match[1],
-      match[2],
-    );
+    const result = await context.processes?.localAction?.(match[1], match[2]);
     sendAdminResponse(res, 200, {
       ok: true,
       revision: Date.now(),
@@ -57,10 +47,7 @@ export const handleOperationRoutes: AdminRouteHandler = async (
   match = path.match(/^\/api\/changes\/([^/]+)$/);
   if (match && method === 'PATCH') {
     const input = await readAdminBody(req);
-    const result = context.changes?.rename?.(
-      match[1],
-      String(input.name ?? ''),
-    );
+    const result = context.changes?.rename?.(match[1], String(input.name ?? ''));
     sendAdminResponse(res, 200, {
       ok: true,
       revision: Date.now(),

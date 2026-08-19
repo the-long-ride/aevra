@@ -19,10 +19,7 @@ export function maxRisk(left: RiskTier, right: RiskTier): RiskTier {
   return riskRank[left] >= riskRank[right] ? left : right;
 }
 
-export function workspaceRoot(
-  context: McpRuntimeContext,
-  sessionId: string,
-): string | null {
+export function workspaceRoot(context: McpRuntimeContext, sessionId: string): string | null {
   const lease = context.sessions.activeLease(sessionId);
   if (!lease) return null;
   return context.workspaces.getLocal(lease.workspaceId)?.hostRoot ?? null;
@@ -41,10 +38,7 @@ export function requiredLease(
   }
   const lease = context.sessions.activeLease(sessionId);
   if (!lease) {
-    throw new AevraToolError(
-      'SESSION_WORKSPACE_REQUIRED',
-      'Select a workspace first',
-    );
+    throw new AevraToolError('SESSION_WORKSPACE_REQUIRED', 'Select a workspace first');
   }
   if (capability && !lease.capabilities.includes(capability)) {
     throw new AevraToolError('CAPABILITY_REQUIRED', capability);
@@ -67,11 +61,7 @@ export function workspaceResult(
   };
 }
 
-export function oneTimeKey(
-  sessionId: string,
-  capability: Capability,
-  matcher: string,
-): string {
+export function oneTimeKey(sessionId: string, capability: Capability, matcher: string): string {
   return `${sessionId}\u0000${capability}\u0000${matcher}`;
 }
 
@@ -108,8 +98,5 @@ export function authorizationContext(
 }
 
 export function unavailable(name: string): never {
-  throw new AevraToolError(
-    'CAPABILITY_REQUIRED',
-    `Tool ${name} is not configured`,
-  );
+  throw new AevraToolError('CAPABILITY_REQUIRED', `Tool ${name} is not configured`);
 }

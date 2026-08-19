@@ -1,12 +1,7 @@
 import { readAdminBody, sendAdminResponse } from './http.js';
 import type { AdminRouteHandler } from './types.js';
 
-export const handleAccessRoutes: AdminRouteHandler = async (
-  req,
-  res,
-  url,
-  context,
-) => {
+export const handleAccessRoutes: AdminRouteHandler = async (req, res, url, context) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
 
@@ -16,17 +11,11 @@ export const handleAccessRoutes: AdminRouteHandler = async (
   }
 
   if (path === '/api/oauth/requests' && method === 'GET') {
-    sendAdminResponse(
-      res,
-      200,
-      context.oauth?.listPendingAuthorizations?.() ?? [],
-    );
+    sendAdminResponse(res, 200, context.oauth?.listPendingAuthorizations?.() ?? []);
     return true;
   }
 
-  let match = path.match(
-    /^\/api\/oauth\/requests\/([^/]+)\/(approve|deny)$/,
-  );
+  let match = path.match(/^\/api\/oauth\/requests\/([^/]+)\/(approve|deny)$/);
   if (match && method === 'POST') {
     const id = decodeURIComponent(match[1]);
     const decision = match[2];
@@ -60,13 +49,11 @@ export const handleAccessRoutes: AdminRouteHandler = async (
     const auth = await context.cloudflare?.authenticationStatus?.();
     const config = context.settings?.get?.('cloudflare.config', null);
     const authMode =
-      config?.authMode ??
-      (config?.issuer && config?.audience ? 'access' : 'connector');
+      config?.authMode ?? (config?.issuer && config?.audience ? 'access' : 'connector');
     sendAdminResponse(res, 200, {
       ...(detected ?? { found: false }),
       authenticated: auth?.authenticated ?? false,
-      authenticationMessage:
-        auth?.message ?? 'Cloudflare authentication has not been checked',
+      authenticationMessage: auth?.message ?? 'Cloudflare authentication has not been checked',
       ownership: context.cloudflare?.ownership?.() ?? 'managed',
       authMode,
       ...(config ?? {}),
@@ -86,8 +73,7 @@ export const handleAccessRoutes: AdminRouteHandler = async (
     }
     sendAdminResponse(res, 200, {
       ok: true,
-      message:
-        result.stdout || result.stderr || 'Cloudflare authentication completed',
+      message: result.stdout || result.stderr || 'Cloudflare authentication completed',
     });
     return true;
   }
@@ -184,9 +170,7 @@ export const handleAccessRoutes: AdminRouteHandler = async (
     sendAdminResponse(
       res,
       200,
-      context.database?.configExport?.(
-        url.searchParams.get('portable') === '1',
-      ) ?? {},
+      context.database?.configExport?.(url.searchParams.get('portable') === '1') ?? {},
     );
     return true;
   }

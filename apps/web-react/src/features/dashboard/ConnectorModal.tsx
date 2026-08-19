@@ -74,10 +74,7 @@ export function ConnectorModal({
             <div className="secret-result">
               <b>Copy this token now. It is shown once.</b>
               <code>{token}</code>
-              <button
-                type="button"
-                onClick={() => void navigator.clipboard.writeText(token)}
-              >
+              <button type="button" onClick={() => void navigator.clipboard.writeText(token)}>
                 Copy token
               </button>
             </div>

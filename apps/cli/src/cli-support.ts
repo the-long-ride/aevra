@@ -21,10 +21,7 @@ export function formatCliError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function readyLines(info: {
-  adminUrl: string;
-  mcpUrl: string;
-}): string[] {
+export function readyLines(info: { adminUrl: string; mcpUrl: string }): string[] {
   return [
     '[aevra] Core: ready',
     `[aevra] MCP: ${info.mcpUrl}/mcp`,
@@ -33,9 +30,7 @@ export function readyLines(info: {
   ];
 }
 
-export function completionText(
-  shell: 'bash' | 'zsh' | 'powershell',
-): string {
+export function completionText(shell: 'bash' | 'zsh' | 'powershell'): string {
   const commands = [
     'start',
     'ui',

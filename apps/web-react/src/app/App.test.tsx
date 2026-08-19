@@ -15,9 +15,7 @@ describe('React admin shell', () => {
   test('renders every shared navigation destination', async () => {
     render(<App />);
     for (const item of ADMIN_SURFACE.navigation) {
-      expect(
-        await screen.findByRole('button', { name: item.label }),
-      ).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: item.label })).toBeInTheDocument();
     }
     expect(screen.getByTestId('react-admin-root')).toBeInTheDocument();
   });
@@ -48,9 +46,7 @@ describe('React admin shell', () => {
     render(<App />);
     const theme = await screen.findByRole('button', { name: /Switch to .* mode/ });
     const requests = screen.getByRole('button', { name: /Requests/ });
-    expect(
-      theme.compareDocumentPosition(requests) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(theme.compareDocumentPosition(requests) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Settings' }));
     const hash = window.location.hash;

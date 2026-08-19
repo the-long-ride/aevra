@@ -2,7 +2,7 @@
 
 **Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `0.4.0`
 
-A **connector** is a named admission credential for one AI client — the thing that makes "works with any web AI" true, because the client needs no auth capability at all: the credential *is* the URL.
+A **connector** is a named admission credential for one AI client — the thing that makes "works with any web AI" true, because the client needs no auth capability at all: the credential _is_ the URL.
 
 ## Model
 
@@ -26,17 +26,17 @@ URL         → https://<tunnel-host>/mcp/<token>
 
 ## Management — localhost only
 
-| Route | Effect |
-|---|---|
-| `GET /api/connectors` | list (never returns token/hash) |
+| Route                         | Effect                                                             |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `GET /api/connectors`         | list (never returns token/hash)                                    |
 | `POST /api/connectors {name}` | create → `201` with token; duplicate name → `409 CONNECTOR_EXISTS` |
-| `DELETE /api/connectors/:id` | revoke |
+| `DELETE /api/connectors/:id`  | revoke                                                             |
 
 Admin session + same-origin required; safe mode blocks mutations. There is **no connector management on the remote MCP surface** — no tool can create, list, or revoke connectors.
 
 ## Deployment rule
 
-The Cloudflare Access application must cover **`/mcp` only**. Connector URLs carry their own unguessable credential and must *not* sit behind Access (a web AI client cannot complete an Access login). Both paths share everything downstream: sessions, leases, capability profiles, approvals, audit.
+The Cloudflare Access application must cover **`/mcp` only**. Connector URLs carry their own unguessable credential and must _not_ sit behind Access (a web AI client cannot complete an Access login). Both paths share everything downstream: sessions, leases, capability profiles, approvals, audit.
 
 **Boundaries:** general admission (`02`), tunnel setup (manual `03`/`05`).
 

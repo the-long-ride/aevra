@@ -2,10 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runSetupCommand } from '../src/commands/setup-command.js';
 
-function resources(
-  answers: string[],
-  options: { found?: boolean } = {},
-) {
+function resources(answers: string[], options: { found?: boolean } = {}) {
   const prompts: string[] = [];
   const setups: Array<Record<string, unknown>> = [];
   let closed = 0;

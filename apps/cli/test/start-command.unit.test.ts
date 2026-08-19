@@ -30,8 +30,7 @@ function fixture(openError?: string) {
         if (openError) throw new Error(openError);
       },
       error: (message: string) => errors.push(message),
-      formatError: (error: unknown) =>
-        error instanceof Error ? error.message : String(error),
+      formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
     },
   };
 }
@@ -46,10 +45,7 @@ test('start opens the React admin root when --ui is requested', async () => {
 
   assert.equal(code, 4);
   assert.deepEqual(state.destinations, ['/']);
-  assert.deepEqual(state.errors, [
-    'ready https://localhost:47831',
-    'mcp https://localhost:47832',
-  ]);
+  assert.deepEqual(state.errors, ['ready https://localhost:47831', 'mcp https://localhost:47832']);
 });
 
 test('start does not open UI when flag is absent', async () => {

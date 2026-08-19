@@ -1,9 +1,6 @@
 import type { AevraCommand } from './args.js';
 
-type CommandOf<Name extends AevraCommand['command']> = Extract<
-  AevraCommand,
-  { command: Name }
->;
+type CommandOf<Name extends AevraCommand['command']> = Extract<AevraCommand, { command: Name }>;
 
 type Handler<Name extends AevraCommand['command']> = (
   command: CommandOf<Name>,

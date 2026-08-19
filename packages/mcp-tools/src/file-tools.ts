@@ -1,17 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { Capability, RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
-import {
-  classifySensitivity,
-  maskSecretFile,
-} from '../../security/src/sensitive.js';
+import { classifySensitivity, maskSecretFile } from '../../security/src/sensitive.js';
 import { authorizeCapability, gated } from './authorization.js';
 import { AevraToolError } from './errors.js';
-import {
-  argsHash,
-  requiredLease,
-  unavailable,
-} from './service-helpers.js';
+import { argsHash, requiredLease, unavailable } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
 export const FILE_TOOL_NAMES = new Set([
@@ -32,8 +25,7 @@ export async function handleFileTool(
   args: any,
 ) {
   if (['file_list', 'file_read', 'file_search'].includes(name)) {
-    const capability: Capability =
-      name === 'file_search' ? 'files.search' : 'files.read';
+    const capability: Capability = name === 'file_search' ? 'files.search' : 'files.read';
     const gate = await authorizeCapability(
       context,
       sessionId,
@@ -139,12 +131,7 @@ export async function handleFileTool(
   );
 }
 
-async function writeGate(
-  context: McpRuntimeContext,
-  sessionId: string,
-  name: string,
-  args: any,
-) {
+async function writeGate(context: McpRuntimeContext, sessionId: string, name: string, args: any) {
   return authorizeCapability(
     context,
     sessionId,
@@ -155,12 +142,7 @@ async function writeGate(
   );
 }
 
-async function readTool(
-  context: McpRuntimeContext,
-  sessionId: string,
-  name: string,
-  args: any,
-) {
+async function readTool(context: McpRuntimeContext, sessionId: string, name: string, args: any) {
   const lease = requiredLease(context, sessionId);
   const roots = context.workspaces.capabilityRoots(lease.workspaceId);
   const operation: WorkerOperation =
@@ -181,20 +163,14 @@ async function readTool(
     executionMode: 'host',
   });
   if (!result.ok) {
-    throw new AevraToolError(
-      result.error.code,
-      result.error.message,
-      result.error.details,
-    );
+    throw new AevraToolError(result.error.code, result.error.message, result.error.details);
   }
   if (name !== 'file_read') return result.value;
 
   const value = result.value as any;
   const sensitivity = classifySensitivity({ path: value.path });
   const content =
-    sensitivity === 'SECRET'
-      ? maskSecretFile(value.path, value.content)
-      : value.content;
+    sensitivity === 'SECRET' ? maskSecretFile(value.path, value.content) : value.content;
   if (args.offset !== undefined || args.length !== undefined) {
     const offset = Math.max(0, Number(args.offset ?? 0) || 0);
     const length =

@@ -27,21 +27,14 @@ test('first request poll announces already-pending approval and OAuth requests o
   const seenApprovals = new Set<string>();
   const seenOauth = new Set<string>();
 
-  const first = collectRequestAnnouncements(
-    [approval],
-    [oauth],
-    seenApprovals,
-    seenOauth,
-  );
+  const first = collectRequestAnnouncements([approval], [oauth], seenApprovals, seenOauth);
   expect(first).toHaveLength(2);
   expect(first.map((item) => item.title)).toEqual([
     'Aevra: ChatGPT requests commands.run',
     'Aevra: OAuth connection request',
   ]);
 
-  expect(
-    collectRequestAnnouncements([approval], [oauth], seenApprovals, seenOauth),
-  ).toEqual([]);
+  expect(collectRequestAnnouncements([approval], [oauth], seenApprovals, seenOauth)).toEqual([]);
 });
 
 test('resolved request IDs are forgotten so a later request with the same ID can announce again', () => {
@@ -50,7 +43,5 @@ test('resolved request IDs are forgotten so a later request with the same ID can
   collectRequestAnnouncements([approval], [], seenApprovals, seenOauth);
   collectRequestAnnouncements([], [], seenApprovals, seenOauth);
 
-  expect(
-    collectRequestAnnouncements([approval], [], seenApprovals, seenOauth),
-  ).toHaveLength(1);
+  expect(collectRequestAnnouncements([approval], [], seenApprovals, seenOauth)).toHaveLength(1);
 });

@@ -1,10 +1,7 @@
 import type { AevraCommand } from '../args.js';
 import type { AdminRequestInit } from '../admin-session.js';
 
-type MaintenanceCommand = Extract<
-  AevraCommand,
-  { command: 'audit' | 'sessions' }
->;
+type MaintenanceCommand = Extract<AevraCommand, { command: 'audit' | 'sessions' }>;
 
 interface ResponseLike {
   ok: boolean;
@@ -13,11 +10,7 @@ interface ResponseLike {
 }
 
 export interface MaintenanceCommandDependencies<Config> {
-  api(
-    config: Config,
-    path: string,
-    init?: AdminRequestInit,
-  ): Promise<ResponseLike>;
+  api(config: Config, path: string, init?: AdminRequestInit): Promise<ResponseLike>;
   log(message: string): void;
   error(message: string): void;
   formatError(error: unknown): string;

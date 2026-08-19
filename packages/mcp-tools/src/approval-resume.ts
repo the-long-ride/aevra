@@ -19,10 +19,10 @@ function sameConnection(
   const original = context.sessions.connectionIdentity(ticket.sessionId);
   return Boolean(
     current &&
-      original &&
-      current.actor === ticket.actor &&
-      current.actor === original.actor &&
-      current.subject === original.subject,
+    original &&
+    current.actor === ticket.actor &&
+    current.actor === original.actor &&
+    current.subject === original.subject,
   );
 }
 
@@ -47,11 +47,7 @@ export async function resumeApproval(
     async (current) => {
       const session = context.sessions.get(sessionId);
       const lease = context.sessions.activeLease(sessionId);
-      if (
-        !session ||
-        session.id !== current.sessionId ||
-        session.actor !== current.actor
-      ) {
+      if (!session || session.id !== current.sessionId || session.actor !== current.actor) {
         return { ok: false, reason: 'session changed' };
       }
       if (!lease || lease.workspaceId !== current.workspaceId) {
@@ -72,12 +68,7 @@ export async function resumeApproval(
       if (
         !lease.capabilities.includes(current.operation.capability) &&
         currentPermission?.outcome !== 'allow' &&
-        !oneTimeAllowed(
-          context,
-          sessionId,
-          current.operation.capability,
-          current.operation.family,
-        )
+        !oneTimeAllowed(context, sessionId, current.operation.capability, current.operation.family)
       ) {
         return { ok: false, reason: 'capability changed' };
       }
@@ -113,10 +104,7 @@ async function resumeWorkspaceAdmission(
         if (!sameConnection(context, sessionId, ticket)) {
           return { ok: false, reason: 'OAuth connection changed' };
         }
-      } else if (
-        session.id !== ticket.sessionId ||
-        session.actor !== ticket.actor
-      ) {
+      } else if (session.id !== ticket.sessionId || session.actor !== ticket.actor) {
         return { ok: false, reason: 'session changed' };
       }
       if (!context.workspaces.getLocal(ticket.workspaceId)) {
@@ -142,10 +130,7 @@ async function resumeCapabilityRequest(
         if (!sameConnection(context, sessionId, ticket)) {
           return { ok: false, reason: 'OAuth connection changed' };
         }
-      } else if (
-        session.id !== ticket.sessionId ||
-        session.actor !== ticket.actor
-      ) {
+      } else if (session.id !== ticket.sessionId || session.actor !== ticket.actor) {
         return { ok: false, reason: 'session changed' };
       }
       if (!context.workspaces.getLocal(ticket.workspaceId)) {
@@ -161,10 +146,7 @@ async function resumeCapabilityRequest(
       const payload = ticket.payload as any;
       const original = payload?.original;
       if (!original?.tool) {
-        throw new AevraToolError(
-          'INVALID_REQUEST',
-          'Capability approval has no frozen operation',
-        );
+        throw new AevraToolError('INVALID_REQUEST', 'Capability approval has no frozen operation');
       }
       const key = oneTimeKey(
         sessionId,
@@ -174,11 +156,7 @@ async function resumeCapabilityRequest(
       const once = ticket.decisionScope === 'once';
       if (once) context.oneTimeCapabilities.add(key);
       try {
-        return await context.callInner(
-          sessionId,
-          String(original.tool),
-          original.args ?? {},
-        );
+        return await context.callInner(sessionId, String(original.tool), original.args ?? {});
       } finally {
         if (once) context.oneTimeCapabilities.delete(key);
       }
@@ -193,10 +171,7 @@ async function executeFrozen(
 ) {
   const payload = ticket.payload as any;
   if (!payload?.tool) {
-    throw new AevraToolError(
-      'INVALID_REQUEST',
-      'Frozen approval payload is missing',
-    );
+    throw new AevraToolError('INVALID_REQUEST', 'Frozen approval payload is missing');
   }
 
   if (payload.tool === 'workspace_select') {
@@ -209,11 +184,8 @@ async function executeFrozen(
     const session = context.sessions.get(sessionId)!;
     if (session.actor.startsWith('oauth:')) {
       const lease =
-        context.sessions.grantConnectionWorkspace(
-          sessionId,
-          workspace.id,
-          'read-only',
-        ) ?? context.sessions.activeLease(sessionId);
+        context.sessions.grantConnectionWorkspace(sessionId, workspace.id, 'read-only') ??
+        context.sessions.activeLease(sessionId);
       if (!lease) {
         throw new AevraToolError(
           'APPROVAL_CONTEXT_CHANGED',
@@ -271,22 +243,13 @@ async function executeFrozen(
       executionMode: 'host',
     });
     if (!result.ok) {
-      throw new AevraToolError(
-        result.error.code,
-        result.error.message,
-        result.error.details,
-      );
+      throw new AevraToolError(result.error.code, result.error.message, result.error.details);
     }
     return result.value;
   }
 
   if (payload.tool === 'file_delete') {
-    const authorization = authorizationContext(
-      context,
-      sessionId,
-      'files.delete',
-      'files:delete',
-    );
+    const authorization = authorizationContext(context, sessionId, 'files.delete', 'files:delete');
     return context.deps.operations!.delete(
       sessionId,
       {
@@ -308,8 +271,5 @@ async function executeFrozen(
     return context.processStart(sessionId, payload.args);
   }
 
-  throw new AevraToolError(
-    'INVALID_REQUEST',
-    'Unsupported frozen operation',
-  );
+  throw new AevraToolError('INVALID_REQUEST', 'Unsupported frozen operation');
 }

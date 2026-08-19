@@ -5,10 +5,7 @@ import test from 'node:test';
 test('vanilla UI source and compatibility routes are absent', () => {
   assert.equal(existsSync('apps/web'), false);
   const args = readFileSync('apps/cli/src/args.ts', 'utf8');
-  const destination = readFileSync(
-    'apps/core/src/admin/bootstrap-destination.ts',
-    'utf8',
-  );
+  const destination = readFileSync('apps/core/src/admin/bootstrap-destination.ts', 'utf8');
   assert.doesNotMatch(args, /--ui-react|\/react\//);
   assert.doesNotMatch(destination, /\/react/);
 });
@@ -27,10 +24,7 @@ test('React is built at root and owns the canonical design document', () => {
 });
 
 test('React shell exposes theme immediately before Requests', () => {
-  const shell = readFileSync(
-    'apps/web-react/src/components/AppShell.tsx',
-    'utf8',
-  );
+  const shell = readFileSync('apps/web-react/src/components/AppShell.tsx', 'utf8');
   const themeIndex = shell.indexOf('className="theme-toggle"');
   const requestsIndex = shell.indexOf('id="open-requests"');
   assert.ok(themeIndex >= 0);

@@ -1,2 +1,15 @@
-import assert from 'node:assert/strict';import test from 'node:test';import {CommandSecretStore} from '../src/platform.js';
-test('platform adapter probe is injectable and does not touch real stores',async()=>{const calls:any[]=[];const adapter={async run(file:string,args:string[]){calls.push([file,args]);return{code:0,stdout:'ok'}}};const s=new CommandSecretStore('linux',adapter);assert.equal(await s.probe(),true);assert.equal(calls[0][0],'secret-tool');});
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { CommandSecretStore } from '../src/platform.js';
+test('platform adapter probe is injectable and does not touch real stores', async () => {
+  const calls: any[] = [];
+  const adapter = {
+    async run(file: string, args: string[]) {
+      calls.push([file, args]);
+      return { code: 0, stdout: 'ok' };
+    },
+  };
+  const s = new CommandSecretStore('linux', adapter);
+  assert.equal(await s.probe(), true);
+  assert.equal(calls[0][0], 'secret-tool');
+});

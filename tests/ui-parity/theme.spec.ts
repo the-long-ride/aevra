@@ -17,8 +17,7 @@ test('theme toggle persists without changing the active page', async ({ page }) 
     );
     return Boolean(
       requestsButton &&
-        (element.compareDocumentPosition(requestsButton) &
-          Node.DOCUMENT_POSITION_FOLLOWING),
+      element.compareDocumentPosition(requestsButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     );
   }, 'Requests');
   expect(toggleBeforeRequests).toBe(true);

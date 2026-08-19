@@ -48,9 +48,7 @@ export function GuidePage() {
         setChapters(items);
         if (items[0]) await loadChapter(items[0]);
       })
-      .catch((cause) =>
-        setError(cause instanceof Error ? cause : new Error(String(cause))),
-      );
+      .catch((cause) => setError(cause instanceof Error ? cause : new Error(String(cause))));
   }, [loadChapter]);
 
   const matchers = useMemo(
@@ -94,9 +92,7 @@ export function GuidePage() {
                     className={platform === value ? 'active' : ''}
                     onClick={() => setPlatform(value)}
                   >
-                    {value === 'macos'
-                      ? 'macOS'
-                      : value[0].toUpperCase() + value.slice(1)}
+                    {value === 'macos' ? 'macOS' : value[0].toUpperCase() + value.slice(1)}
                   </button>
                 ))}
                 <button
@@ -116,14 +112,22 @@ export function GuidePage() {
                 <table className="simple-table">
                   <thead>
                     <tr>
-                      <th>Matcher</th><th>Example</th><th>Purpose</th><th>Risk note</th><th />
+                      <th>Matcher</th>
+                      <th>Example</th>
+                      <th>Purpose</th>
+                      <th>Risk note</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
                     {matchers.map((item) => (
                       <tr key={item.matcher}>
-                        <td><code>{item.matcher}</code></td>
-                        <td><code>{item.example}</code></td>
+                        <td>
+                          <code>{item.matcher}</code>
+                        </td>
+                        <td>
+                          <code>{item.example}</code>
+                        </td>
                         <td>{item.purpose}</td>
                         <td>{item.riskNote}</td>
                         <td>

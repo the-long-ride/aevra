@@ -41,19 +41,13 @@ export function usePollingResource<T>({
 
     try {
       const value = await load(nextController.signal);
-      if (
-        !nextController.signal.aborted &&
-        currentGeneration === generation.current
-      ) {
+      if (!nextController.signal.aborted && currentGeneration === generation.current) {
         hasData.current = true;
         setData(value);
         setError(null);
       }
     } catch (cause) {
-      if (
-        !nextController.signal.aborted &&
-        currentGeneration === generation.current
-      ) {
+      if (!nextController.signal.aborted && currentGeneration === generation.current) {
         setError(cause instanceof Error ? cause : new Error(String(cause)));
       }
     } finally {

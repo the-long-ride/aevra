@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runStatusCommand } from '../src/commands/status-command.js';
 
-function response(options: {
-  ok?: boolean;
-  status?: number;
-  body?: Record<string, unknown>;
-} = {}) {
+function response(
+  options: {
+    ok?: boolean;
+    status?: number;
+    body?: Record<string, unknown>;
+  } = {},
+) {
   return {
     ok: options.ok ?? true,
     status: options.status ?? 200,

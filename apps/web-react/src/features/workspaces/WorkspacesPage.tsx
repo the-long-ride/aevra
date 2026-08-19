@@ -42,8 +42,7 @@ async function load(signal: AbortSignal): Promise<WorkspaceRow[]> {
 export function WorkspacesPage() {
   const resource = useApiResource(load);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected =
-    resource.data?.find((workspace) => workspace.id === selectedId) ?? null;
+  const selected = resource.data?.find((workspace) => workspace.id === selectedId) ?? null;
 
   const addWorkspace = async () => {
     const name = window.prompt('Workspace name');
@@ -70,17 +69,14 @@ export function WorkspacesPage() {
     event.preventDefault();
     if (!selected) return;
     const data = Object.fromEntries(new FormData(event.currentTarget));
-    await requestJson(
-      `/api/workspaces/${encodeURIComponent(selected.id)}/mounts`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          logicalPath: data.logicalPath,
-          hostRoot: data.hostRoot,
-          capabilities: ['files.read', 'files.search'],
-        }),
-      },
-    );
+    await requestJson(`/api/workspaces/${encodeURIComponent(selected.id)}/mounts`, {
+      method: 'POST',
+      body: JSON.stringify({
+        logicalPath: data.logicalPath,
+        hostRoot: data.hostRoot,
+        capabilities: ['files.read', 'files.search'],
+      }),
+    });
     await resource.refresh();
   };
 
@@ -95,13 +91,10 @@ export function WorkspacesPage() {
   const saveAdmission = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selected) return;
-    await requestJson(
-      `/api/workspaces/${encodeURIComponent(selected.id)}/admission`,
-      {
-        method: 'POST',
-        body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))),
-      },
-    );
+    await requestJson(`/api/workspaces/${encodeURIComponent(selected.id)}/admission`, {
+      method: 'POST',
+      body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))),
+    });
   };
 
   return (
@@ -110,8 +103,7 @@ export function WorkspacesPage() {
         <div>
           <h2>Workspaces</h2>
           <p>
-            Primary project roots with optional external directory mounts and
-            connector admission.
+            Primary project roots with optional external directory mounts and connector admission.
           </p>
         </div>
         <button
@@ -193,10 +185,7 @@ export function WorkspacesPage() {
                 <span>Local mount root</span>
                 <input name="hostRoot" required />
               </label>
-              <button
-                className="primary"
-                data-surface-id="workspaces:add-mount"
-              >
+              <button className="primary" data-surface-id="workspaces:add-mount">
                 Add mount
               </button>
             </form>
@@ -258,10 +247,7 @@ export function WorkspacesPage() {
                   <option value="ask">Ask every time</option>
                 </select>
               </label>
-              <button
-                className="primary"
-                data-surface-id="workspaces:save-admission"
-              >
+              <button className="primary" data-surface-id="workspaces:save-admission">
                 Save admission
               </button>
             </form>

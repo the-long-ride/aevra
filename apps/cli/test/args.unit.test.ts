@@ -20,10 +20,7 @@ test('start selects no UI or the single React admin UI', () => {
 });
 
 test('removed React compatibility flag and unknown options fail', () => {
-  assert.throws(
-    () => parseAevraArgs(['start', '--ui-react']),
-    /Unknown option: --ui-react/,
-  );
+  assert.throws(() => parseAevraArgs(['start', '--ui-react']), /Unknown option: --ui-react/);
   assert.throws(() => parseAevraArgs(['start', '--wat']), /Unknown option/);
 });
 
@@ -35,10 +32,7 @@ test('ui supports logout-all', () => {
 });
 
 test('legacy flags rejected', () => {
-  assert.throws(
-    () => parseAevraArgs(['start', '--password', 'x']),
-    /Unknown option/,
-  );
+  assert.throws(() => parseAevraArgs(['start', '--password', 'x']), /Unknown option/);
 });
 
 test('connectors subcommands parse', () => {
@@ -57,10 +51,7 @@ test('connectors subcommands parse', () => {
     id: 'con_x',
   });
   assert.throws(() => parseAevraArgs(['connectors']), /connectors requires/);
-  assert.throws(
-    () => parseAevraArgs(['connectors', 'create']),
-    /requires a name/,
-  );
+  assert.throws(() => parseAevraArgs(['connectors', 'create']), /requires a name/);
 });
 
 test('status parses --json and rejects unknown flags', () => {
@@ -72,10 +63,7 @@ test('status parses --json and rejects unknown flags', () => {
     command: 'status',
     json: true,
   });
-  assert.throws(
-    () => parseAevraArgs(['status', '--verbose']),
-    /Unknown option/,
-  );
+  assert.throws(() => parseAevraArgs(['status', '--verbose']), /Unknown option/);
 });
 
 test('completion parses shells and rejects others', () => {
@@ -87,8 +75,5 @@ test('completion parses shells and rejects others', () => {
     command: 'completion',
     shell: 'powershell',
   });
-  assert.throws(
-    () => parseAevraArgs(['completion', 'fish']),
-    /completion requires/,
-  );
+  assert.throws(() => parseAevraArgs(['completion', 'fish']), /completion requires/);
 });

@@ -38,13 +38,7 @@ function RuntimeOverview({ data }: { data: DashboardData }) {
   );
 }
 
-function Onboarding({
-  data,
-  refresh,
-}: {
-  data: DashboardData;
-  refresh(): Promise<void>;
-}) {
+function Onboarding({ data, refresh }: { data: DashboardData; refresh(): Promise<void> }) {
   const endpoint = data.cloudflare.hostname
     ? `https://${data.cloudflare.hostname}/mcp`
     : 'Configure Remote Access first';
@@ -88,9 +82,7 @@ function Onboarding({
         <div className="section-heading">
           <span>Workspace</span>
           <strong>
-            {data.workspaces.length
-              ? `${data.workspaces.length} registered`
-              : 'Register one'}
+            {data.workspaces.length ? `${data.workspaces.length} registered` : 'Register one'}
           </strong>
         </div>
         {data.workspaces.length ? (
@@ -115,8 +107,8 @@ function Onboarding({
           <strong>Start read-only</strong>
         </div>
         <p>
-          Select a workspace from chat, approve access locally, then start with status,
-          skills and file reads.
+          Select a workspace from chat, approve access locally, then start with status, skills and
+          file reads.
         </p>
       </section>
       <section

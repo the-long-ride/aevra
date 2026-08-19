@@ -22,7 +22,9 @@ for (const surface of ADMIN_SURFACES) {
     }
   });
 
-  test(`${surface.name} Guide copies the selected-platform safe matcher catalog`, async ({ page }) => {
+  test(`${surface.name} Guide copies the selected-platform safe matcher catalog`, async ({
+    page,
+  }) => {
     await installAdminApi(page);
     await page.goto(surface.path);
     await page.getByRole('button', { name: 'Guide', exact: true }).click();
