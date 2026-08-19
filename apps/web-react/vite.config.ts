@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/react/',
+  base: '/',
   plugins: [react()],
   resolve: {
     alias: {
@@ -13,8 +13,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../../dist/apps/web/react',
-    emptyOutDir: false,
+    outDir: '../../dist/apps/web',
+    emptyOutDir: true,
   },
   test: {
     environment: 'jsdom',
