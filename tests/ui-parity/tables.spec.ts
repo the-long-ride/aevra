@@ -29,17 +29,19 @@ for (const surface of ADMIN_SURFACES) {
       page.getByRole('heading', { name: 'Permissions', exact: true }),
     ).toBeVisible();
 
-    await expect(page.getByText('Page 1 / 2')).toBeVisible();
+    await expect(page.getByText('Page 1 / 2', { exact: true })).toBeVisible();
     const search = page.getByPlaceholder('Search permissions…');
     await search.fill('actor-29');
     await expect(
       page.getByRole('cell', { name: 'actor-29', exact: true }),
     ).toBeVisible();
+
     await search.fill('');
+    await expect(page.getByText('1–25 of 30', { exact: true })).toBeVisible();
 
     const effect = page.getByLabel('Effect').first();
     await effect.selectOption('deny');
-    await expect(page.getByText(/of 15$/)).toBeVisible();
+    await expect(page.getByText('1–15 of 15', { exact: true })).toBeVisible();
   });
 
   test(`${surface.name} sessions table keeps actor and workspace-state filtering`, async ({
