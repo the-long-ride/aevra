@@ -1,0 +1,321 @@
+#root,
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-width: 0;
+  background: var(--canvas);
+}
+
+.topbar {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--canvas);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand-mark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 700;
+}
+
+.brand > div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.brand strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand small {
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.app-version {
+  color: var(--mute);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.topbar-actions,
+.health-cluster,
+.health-chip {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-actions {
+  flex: 0 0 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.health-cluster {
+  gap: 4px;
+}
+
+.health-chip {
+  gap: 5px;
+  min-height: 28px;
+  border: 1px solid var(--hairline);
+  padding: 3px 7px;
+  color: var(--mute);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.health-chip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--ash);
+}
+
+.health-chip[data-state="ok"] i {
+  background: var(--success);
+}
+
+.health-chip[data-state="pending"] i {
+  background: var(--warning);
+}
+
+.health-chip[data-state="error"] i {
+  background: var(--danger);
+}
+
+.health-chip[data-state="off"] {
+  opacity: 0.58;
+}
+
+.theme-toggle,
+#open-requests {
+  flex: 0 0 auto;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.theme-toggle {
+  border-color: transparent;
+  color: var(--mute);
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+}
+
+#open-requests {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#requests-count {
+  min-width: 18px;
+  border: 1px solid var(--hairline);
+  border-radius: 9999px;
+  padding: 0 5px;
+  font-size: 10px;
+  text-align: center;
+}
+
+#open-requests.has-pending {
+  border-color: var(--warning);
+}
+
+.safe-mode-banner {
+  padding: 8px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, var(--canvas));
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.top-nav {
+  position: sticky;
+  z-index: 19;
+  top: 56px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--hairline-strong);
+  background: var(--canvas);
+  white-space: nowrap;
+}
+
+.top-nav button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 12px 6px;
+  color: var(--mute);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.top-nav button:hover,
+.top-nav button.active {
+  background: transparent;
+  color: var(--ink);
+}
+
+.top-nav button.active {
+  border-bottom-color: var(--ink);
+  font-weight: 600;
+}
+
+.page {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  padding: 24px 24px 48px;
+}
+
+.page-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.page-head h2,
+.panel-head h2,
+.panel-head h3 {
+  margin: 0;
+}
+
+.page-head h2 {
+  font-size: 24px;
+  line-height: 1.4;
+}
+
+.page-head p,
+.panel-head p {
+  margin: 4px 0 0;
+  color: var(--mute);
+  font-size: 12px;
+}
+
+.page-loading,
+.error-panel,
+.empty-panel,
+.react-page-state {
+  min-height: 180px;
+  padding: 28px 16px;
+  border: 1px dashed var(--hairline-strong);
+  color: var(--mute);
+  text-align: center;
+}
+
+.error-panel h2 {
+  color: var(--ink);
+}
+
+@media (max-width: 1023px) {
+  .health-cluster {
+    display: none;
+  }
+
+  .page {
+    width: 100%;
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    gap: 8px;
+    min-height: 54px;
+    padding-inline: 12px;
+  }
+
+  .brand small,
+  .app-version {
+    display: none;
+  }
+
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .topbar-actions {
+    gap: 4px;
+  }
+
+  .theme-toggle,
+  #open-requests {
+    min-height: 40px;
+    padding-inline: 8px;
+  }
+
+  .theme-toggle {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .top-nav {
+    top: 54px;
+    padding-inline: 8px;
+  }
+
+  .top-nav button {
+    min-height: 44px;
+    padding-inline: 10px;
+  }
+
+  .page {
+    gap: 12px;
+    padding: 16px 12px 32px;
+  }
+
+  .page-head {
+    display: grid;
+    align-items: start;
+    gap: 8px;
+  }
+
+  .page-head h2 {
+    font-size: 21px;
+  }
+}
