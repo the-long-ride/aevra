@@ -4,13 +4,16 @@ import type {
 } from '@aevra/admin-contracts';
 import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import type { ReactNode } from 'react';
+import type { Theme } from '../hooks/theme-state';
 
 interface AppShellProps {
   page: AdminPageId;
   status: RuntimeHealthStatus;
+  theme: Theme;
   pendingCount: number;
   requestsOpen: boolean;
   onNavigate(page: AdminPageId): void;
+  onToggleTheme(): void;
   onOpenRequests(): void;
   children: ReactNode;
 }
@@ -51,9 +54,11 @@ function HealthChip({
 export function AppShell({
   page,
   status,
+  theme,
   pendingCount,
   requestsOpen,
   onNavigate,
+  onToggleTheme,
   onOpenRequests,
   children,
 }: AppShellProps) {
@@ -62,6 +67,8 @@ export function AppShell({
       ? String(status.version)
       : `v${status.version}`
     : '';
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+
   return (
     <div className="app-shell" data-testid="react-admin-root">
       <header className="topbar">
@@ -80,6 +87,14 @@ export function AppShell({
               <HealthChip key={name} name={name} status={status} />
             ))}
           </div>
+          <button
+            type="button"
+            className="theme-toggle"
+            aria-label={`Switch to ${nextTheme} mode`}
+            onClick={onToggleTheme}
+          >
+            [{theme}]
+          </button>
           <button
             type="button"
             id="open-requests"
