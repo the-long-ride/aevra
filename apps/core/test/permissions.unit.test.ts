@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { PermissionRepository } from '../../../packages/store/src/permissions.js';
+import { CapabilityProfileService } from '../src/policy/capabilities.js';
 import { PermissionEngine } from '../src/policy/permissions.js';
 test('workspace allow beats global deny; equal specificity deny wins', () => {
   const db = AevraDatabase.open(':memory:');
@@ -97,5 +98,19 @@ test('skill and instruction capabilities are independent from file capabilities'
   assert.equal(summary.effectiveCapabilities.includes('instructions.write'), true);
   assert.equal(summary.effectiveCapabilities.includes('skills.write'), false);
   assert.equal(summary.effectiveCapabilities.includes('instructions.read'), false);
+  db.close();
+});
+test('built-in profiles refresh capability definitions on upgrade', () => {
+  const db = AevraDatabase.open(':memory:');
+  const raw = db.raw();
+  raw
+    .prepare(
+      'INSERT INTO capability_profiles(id,name,capabilities_json,builtin) VALUES(?,?,?,1)',
+    )
+    .run('read-only', 'Read Only', JSON.stringify(['files.read']));
+  const profiles = new CapabilityProfileService(raw);
+  const readOnly = profiles.get('read-only')!;
+  assert.equal(readOnly.capabilities.includes('skills.read'), true);
+  assert.equal(readOnly.capabilities.includes('instructions.read'), true);
   db.close();
 });
