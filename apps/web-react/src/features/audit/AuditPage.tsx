@@ -1,4 +1,5 @@
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
@@ -34,11 +35,15 @@ async function load(signal: AbortSignal): Promise<AuditData> {
 
 export function AuditPage() {
   const resource = useApiResource(load);
+  const dialog = useDialog();
   const clear = async () => {
     if (
-      !window.confirm(
-        'Permanently clear all audit event history? Aevra keeps the hash-chain checkpoint.',
-      )
+      !(await dialog.confirm({
+        title: 'Clear audit history',
+        message: 'Permanently clear all audit event history? Aevra keeps the hash-chain checkpoint.',
+        confirmLabel: 'Clear history',
+        confirmTone: 'danger',
+      }))
     ) {
       return;
     }
