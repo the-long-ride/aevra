@@ -2,32 +2,47 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { STABLE_TOOL_NAMES, toolDefinitions } from '../src/registry.js';
 
+type StableToolName = (typeof STABLE_TOOL_NAMES)[number];
+
+const READ_ONLY_TOOLS = [
+  'aevra_status',
+  'workspace_list',
+  'workspace_select',
+  'workspace_current',
+  'file_list',
+  'file_read',
+  'file_search',
+] as const satisfies readonly StableToolName[];
+
+const MUTATING_TOOLS = [
+  'file_write',
+  'command_run',
+  'shell_run',
+  'git_push',
+] as const satisfies readonly StableToolName[];
+
 test('stable tool vocabulary includes read and policy tools but no root mutation', () => {
-  for (const n of [
+  for (const name of [
     'aevra_status',
     'workspace_select',
     'file_read',
     'approval_wait',
     'change_rollback',
     'shell_run',
-  ])
-    assert.ok(STABLE_TOOL_NAMES.includes(n as any));
-  for (const n of ['workspace_add', 'workspace_remove', 'mount_add', 'mount_remove'])
-    assert.equal(STABLE_TOOL_NAMES.includes(n as any), false);
+  ] as const satisfies readonly StableToolName[]) {
+    assert.ok(STABLE_TOOL_NAMES.includes(name));
+  }
+
+  for (const name of ['workspace_add', 'workspace_remove', 'mount_add', 'mount_remove']) {
+    assert.equal(STABLE_TOOL_NAMES.includes(name as StableToolName), false);
+  }
 });
 
 test('workspace and file discovery tools are explicitly read-only for ChatGPT filtering', () => {
   const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
-  for (const name of [
-    'aevra_status',
-    'workspace_list',
-    'workspace_select',
-    'workspace_current',
-    'file_list',
-    'file_read',
-    'file_search',
-  ]) {
-    const tool = definitions.get(name) as any;
+
+  for (const name of READ_ONLY_TOOLS) {
+    const tool = definitions.get(name);
     assert.ok(tool, `${name} descriptor missing`);
     assert.equal(
       tool.annotations?.readOnlyHint,
@@ -40,19 +55,21 @@ test('workspace and file discovery tools are explicitly read-only for ChatGPT fi
       `${name} stays inside Aevra/local workspace state`,
     );
   }
-  for (const name of ['file_write', 'command_run', 'shell_run', 'git_push'])
+
+  for (const name of MUTATING_TOOLS) {
     assert.notEqual(
-      (definitions.get(name) as any)?.annotations?.readOnlyHint,
+      definitions.get(name)?.annotations?.readOnlyHint,
       true,
       `${name} must not be presented as read-only`,
     );
+  }
 });
 
 test('workspace and file read tools publish concrete input schemas', () => {
   const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
-  const workspaceSelect = (definitions.get('workspace_select') as any)?.inputSchema;
-  const fileRead = (definitions.get('file_read') as any)?.inputSchema;
-  const fileSearch = (definitions.get('file_search') as any)?.inputSchema;
+  const workspaceSelect = definitions.get('workspace_select')?.inputSchema as any;
+  const fileRead = definitions.get('file_read')?.inputSchema as any;
+  const fileSearch = definitions.get('file_search')?.inputSchema as any;
   assert.equal(workspaceSelect?.type, 'object');
   assert.ok(workspaceSelect?.properties?.workspace, 'workspace_select.workspace schema missing');
   assert.equal(fileRead?.required?.includes('path'), true, 'file_read.path must be required');
