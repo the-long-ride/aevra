@@ -1,13 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test } from 'vitest';
 import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import { installApiFixtures } from '../test/api-fixtures';
 import { App } from './App';
 
 describe('React admin shell', () => {
   beforeEach(() => {
-    window.location.hash = '#/dashboard';
+    window.history.replaceState(null, '', '#/dashboard');
+    window.localStorage.clear();
     installApiFixtures();
   });
 
@@ -29,24 +30,34 @@ describe('React admin shell', () => {
     expect(screen.getByTestId('react-admin-root')).toBeInTheDocument();
   });
 
-  test('drives repeated tab switches through hashchange', async () => {
+  test('repeated tab switches synchronously update page state and history', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const hashChanges = vi.fn();
-    window.addEventListener('hashchange', hashChanges);
 
     await user.click(await screen.findByRole('button', { name: 'Settings' }));
-    await waitFor(() => expect(window.location.hash).toBe('#/settings'));
-    await waitFor(() => expect(hashChanges).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/settings');
 
     await user.click(screen.getByRole('button', { name: 'Guide' }));
-    await waitFor(() => expect(window.location.hash).toBe('#/guide'));
-    await waitFor(() => expect(hashChanges).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole('heading', { name: 'Guide' })).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/guide');
+  });
 
-    window.removeEventListener('hashchange', hashChanges);
+  test('places persistent theme control immediately before Requests without navigating', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const theme = await screen.findByRole('button', { name: /Switch to .* mode/ });
+    const requests = screen.getByRole('button', { name: /Requests/ });
+    expect(
+      theme.compareDocumentPosition(requests) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    const hash = window.location.hash;
+    await user.click(theme);
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBeDefined());
+    expect(window.location.hash).toBe(hash);
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
   });
 
   test('shows version, runtime health, requests count, and safe mode from status', async () => {
