@@ -8,7 +8,7 @@ test('help aliases parse', () => {
   }
 });
 
-test('start selects no UI, vanilla UI, or React UI', () => {
+test('start selects no UI or the single React admin UI', () => {
   assert.deepEqual(parseAevraArgs(['start']), {
     command: 'start',
     uiDestination: null,
@@ -17,16 +17,12 @@ test('start selects no UI, vanilla UI, or React UI', () => {
     command: 'start',
     uiDestination: '/',
   });
-  assert.deepEqual(parseAevraArgs(['start', '--ui-react']), {
-    command: 'start',
-    uiDestination: '/react/',
-  });
 });
 
-test('start UI flags are mutually exclusive and unknown options fail', () => {
+test('removed React compatibility flag and unknown options fail', () => {
   assert.throws(
-    () => parseAevraArgs(['start', '--ui', '--ui-react']),
-    /mutually exclusive/i,
+    () => parseAevraArgs(['start', '--ui-react']),
+    /Unknown option: --ui-react/,
   );
   assert.throws(() => parseAevraArgs(['start', '--wat']), /Unknown option/);
 });
