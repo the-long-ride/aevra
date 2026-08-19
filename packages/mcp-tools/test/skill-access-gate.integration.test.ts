@@ -25,6 +25,10 @@ function fixture() {
   const inner = {
     async call(sessionId: string, name: string, args: any = {}) {
       calls.push({ sessionId, name, args });
+      if (name === 'skill_read')
+        return { skill: { name: args.name, source: args.source }, content: 'skill body', files: [] };
+      if (name === 'instructions_read')
+        return { instructions: [{ source: 'user', content: 'AGENTS' }] };
       return { name, args };
     },
     resourcesList() {
@@ -39,17 +43,8 @@ function fixture() {
         ],
       };
     },
-    async resourceRead(_sessionId: string, uri: string) {
-      return { uri, contents: [{ uri, mimeType: 'text/markdown', text: 'skill body' }] };
-    },
     promptsList() {
       return { prompts: [{ name: 'aevra-instructions', description: 'instructions' }] };
-    },
-    async promptGet() {
-      return {
-        description: 'instructions',
-        messages: [{ role: 'user', content: { type: 'text', text: 'AGENTS' } }],
-      };
     },
   };
   const gate = new SessionSkillAccessGate(inner as any, sessions, approvals);
@@ -74,8 +69,8 @@ test('skill and instruction tools use capability-aware handlers when a workspace
     ['instructions_read', {}],
     ['instructions_write', { source: 'user', content: 'x' }],
   ] as const) {
-    const result = await f.gate.call(session.id, name, args);
-    assert.equal(result.name, name);
+    await f.gate.call(session.id, name, args);
+    assert.equal(f.calls.at(-1)?.name, name);
   }
   assert.equal(f.approvals.list().length, 0, 'tool permission is owned by the inner capability gate');
   f.db.close();
@@ -96,7 +91,7 @@ test('skill read tools keep session approval compatibility before workspace sele
   f.db.close();
 });
 
-test('one local approval unlocks passive skill resources and instruction prompts for one MCP session', async () => {
+test('one local approval unlocks passive resources but actual reads still use dedicated tools', async () => {
   const f = fixture();
   const session = f.sessions.create(f.identity);
   assert.deepEqual(
@@ -122,7 +117,9 @@ test('one local approval unlocks passive skill resources and instruction prompts
     (await f.gate.resourceRead(session.id, 'aevra://skill/user/demo')).contents[0]?.text,
     'skill body',
   );
-  assert.equal((await f.gate.promptGet(session.id)).messages[0]?.content.text, 'AGENTS');
+  assert.equal(f.calls.at(-1)?.name, 'skill_read');
+  assert.equal((await f.gate.promptGet(session.id)).messages[0]?.content.text, '# user instructions\n\nAGENTS');
+  assert.equal(f.calls.at(-1)?.name, 'instructions_read');
   f.db.close();
 });
 
