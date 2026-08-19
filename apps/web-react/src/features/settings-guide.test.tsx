@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { installApiFixtures } from '../test/api-fixtures';
@@ -50,30 +50,37 @@ async function waitForSettings() {
   ).toBeInTheDocument();
 }
 
+function formForButton(name: string) {
+  const form = screen.getByRole('button', { name }).closest('form');
+  expect(form).not.toBeNull();
+  return within(form!);
+}
+
 test('Settings saves Access and execution configuration', async () => {
   const user = userEvent.setup();
   const fetchMock = settingsFixtures();
   render(<SettingsPage />);
   await waitForSettings();
 
-  await user.selectOptions(screen.getByLabelText('Mode'), 'access');
+  const access = formForButton('Save Access mode');
+  await user.selectOptions(access.getByLabelText('Mode'), 'access');
   await user.type(
-    screen.getByLabelText('Access issuer'),
+    access.getByLabelText('Access issuer'),
     'https://team.cloudflareaccess.com',
   );
-  await user.type(screen.getByLabelText('Audience'), 'aud-123');
-  await user.click(screen.getByRole('button', { name: 'Save Access mode' }));
+  await user.type(access.getByLabelText('Audience'), 'aud-123');
+  await user.click(access.getByRole('button', { name: 'Save Access mode' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/cloudflare/setup', 'POST')).toBeTruthy(),
   );
 
-  await waitForSettings();
-  await user.selectOptions(screen.getByLabelText('Sandbox backend'), 'docker');
-  await user.selectOptions(screen.getByLabelText('Cache policy'), 'shared');
-  const drain = screen.getByLabelText('Drain timeout (ms)');
+  const execution = formForButton('Save');
+  await user.selectOptions(execution.getByLabelText('Sandbox backend'), 'docker');
+  await user.selectOptions(execution.getByLabelText('Cache policy'), 'shared');
+  const drain = execution.getByLabelText('Drain timeout (ms)');
   await user.clear(drain);
   await user.type(drain, '90000');
-  await user.click(screen.getByRole('button', { name: 'Save' }));
+  await user.click(execution.getByRole('button', { name: 'Save' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/execution-settings', 'PATCH')).toBeTruthy(),
   );
@@ -85,16 +92,16 @@ test('Settings creates and removes command and network policy entries', async ()
   render(<SettingsPage />);
   await waitForSettings();
 
-  await user.type(screen.getByLabelText('Family'), 'codegen');
-  await user.selectOptions(screen.getByLabelText('Effect'), 'BUILD_OUTPUT');
-  await user.click(screen.getByRole('button', { name: 'Set override' }));
+  const command = formForButton('Set override');
+  await user.type(command.getByLabelText('Family'), 'codegen');
+  await user.selectOptions(command.getByLabelText('Effect'), 'BUILD_OUTPUT');
+  await user.click(command.getByRole('button', { name: 'Set override' }));
   await waitFor(() =>
     expect(
       mutationCall(fetchMock, '/api/policy/command-families', 'PATCH'),
     ).toBeTruthy(),
   );
 
-  await waitForSettings();
   const removeCommand = document.querySelector<HTMLButtonElement>(
     '[data-surface-id="settings:remove-command-family"]',
   );
@@ -108,18 +115,17 @@ test('Settings creates and removes command and network policy entries', async ()
     ).toBeGreaterThanOrEqual(2),
   );
 
-  await waitForSettings();
-  const host = screen.getByLabelText('Host');
+  const network = formForButton('Add rule');
+  const host = network.getByLabelText('Host');
   await user.clear(host);
   await user.type(host, 'registry.example.com');
-  await user.click(screen.getByRole('button', { name: 'Add rule' }));
+  await user.click(network.getByRole('button', { name: 'Add rule' }));
   await waitFor(() =>
     expect(
       mutationCall(fetchMock, '/api/policy/network-rules', 'POST'),
     ).toBeTruthy(),
   );
 
-  await waitForSettings();
   const removeNetwork = document.querySelector<HTMLButtonElement>(
     '[data-surface-id="settings:remove-network-rule"]',
   );
@@ -142,30 +148,29 @@ test('Settings creates environment profiles and securely stores/removes secret r
   render(<SettingsPage />);
   await waitForSettings();
 
-  const profileName = screen.getByLabelText('Name');
-  await user.type(profileName, 'test-profile');
-  const vars = screen.getByLabelText('Variables JSON');
+  const profile = formForButton('Create profile');
+  await user.type(profile.getByLabelText('Name'), 'test-profile');
+  const vars = profile.getByLabelText('Variables JSON');
   await user.clear(vars);
   await user.type(vars, '{"NODE_ENV":"test"}');
-  const refs = screen.getByLabelText('Secret refs JSON');
+  const refs = profile.getByLabelText('Secret refs JSON');
   await user.clear(refs);
   await user.type(refs, '{"TOKEN":"API_TOKEN"}');
-  await user.click(screen.getByRole('button', { name: 'Create profile' }));
+  await user.click(profile.getByRole('button', { name: 'Create profile' }));
   await waitFor(() =>
     expect(
       mutationCall(fetchMock, '/api/environment-profiles', 'POST'),
     ).toBeTruthy(),
   );
 
-  await waitForSettings();
-  await user.type(screen.getByLabelText('Reference'), 'NEW_SECRET');
-  await user.type(screen.getByLabelText('Secret value'), 'super-secret');
-  await user.click(screen.getByRole('button', { name: 'Store securely' }));
+  const secret = formForButton('Store securely');
+  await user.type(secret.getByLabelText('Reference'), 'NEW_SECRET');
+  await user.type(secret.getByLabelText('Secret value'), 'super-secret');
+  await user.click(secret.getByRole('button', { name: 'Store securely' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/secret-references', 'POST')).toBeTruthy(),
   );
 
-  await waitForSettings();
   const removeSecret = document.querySelector<HTMLButtonElement>(
     '[data-surface-id="settings:remove-secret"]',
   );
