@@ -1,5 +1,5 @@
 import { ADMIN_SURFACE, type AdminPageId } from '@aevra/admin-contracts';
-import { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 import { AppShell } from '../components/AppShell';
 import { AuditPage } from '../features/audit/AuditPage';
 import { ChangesPage } from '../features/changes/ChangesPage';
@@ -14,7 +14,7 @@ import { WorkspacesPage } from '../features/workspaces/WorkspacesPage';
 import { useRuntimeStatus } from '../hooks/use-runtime-status';
 import { useHashPage } from './use-hash-page';
 
-const pageRegistry: Record<AdminPageId, React.ComponentType> = {
+const pageRegistry: Record<AdminPageId, ComponentType> = {
   dashboard: DashboardPage,
   workspaces: WorkspacesPage,
   permissions: PermissionsPage,
@@ -28,8 +28,9 @@ const pageRegistry: Record<AdminPageId, React.ComponentType> = {
 
 export function App() {
   const { page, navigate } = useHashPage();
-  const runtime = useRuntimeStatus();
+  const status = useRuntimeStatus();
   const [requestsOpen, setRequestsOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const Page = pageRegistry[page];
 
   if (!ADMIN_SURFACE.navigation.some((item) => item.id === page)) {
@@ -40,15 +41,19 @@ export function App() {
     <>
       <AppShell
         page={page}
-        status={runtime.status}
-        pendingCount={runtime.pendingCount}
+        status={status}
+        pendingCount={pendingCount}
         requestsOpen={requestsOpen}
         onNavigate={navigate}
         onOpenRequests={() => setRequestsOpen(true)}
       >
         <Page />
       </AppShell>
-      <RequestDrawer open={requestsOpen} onClose={() => setRequestsOpen(false)} />
+      <RequestDrawer
+        open={requestsOpen}
+        onClose={() => setRequestsOpen(false)}
+        onPendingCountChange={setPendingCount}
+      />
     </>
   );
 }
