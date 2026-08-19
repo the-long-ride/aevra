@@ -1,13 +1,14 @@
 import type { AdminPageId } from '@aevra/admin-contracts';
 import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import { useEffect, useState } from 'react';
+import { commitAdminNavigation, pageTokenFromHash } from './hash-navigation';
 
 const validPages = new Set<AdminPageId>(
   ADMIN_SURFACE.navigation.map((item) => item.id),
 );
 
 function pageFromHash(): AdminPageId {
-  const candidate = window.location.hash.replace(/^#\/?/, '').split('/')[0];
+  const candidate = pageTokenFromHash(window.location.hash);
   return validPages.has(candidate as AdminPageId)
     ? (candidate as AdminPageId)
     : 'dashboard';
@@ -15,16 +16,21 @@ function pageFromHash(): AdminPageId {
 
 export function useHashPage() {
   const [page, setPage] = useState<AdminPageId>(pageFromHash);
+
   useEffect(() => {
-    const onHashChange = () => setPage(pageFromHash());
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    const onPopState = () => setPage(pageFromHash());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   const navigate = (next: AdminPageId) => {
-    const nextHash = `#/${next}`;
-    if (window.location.hash === nextHash) return;
-    window.location.hash = nextHash;
+    commitAdminNavigation(
+      next,
+      window.location.hash,
+      setPage,
+      (hash) => window.history.pushState(null, '', hash),
+    );
   };
+
   return { page, navigate };
 }
