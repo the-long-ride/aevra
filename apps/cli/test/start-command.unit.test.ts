@@ -4,7 +4,7 @@ import { runStartCommand } from '../src/commands/start-command.js';
 
 function fixture(openError?: string) {
   const errors: string[] = [];
-  const destinations: Array<'/' | '/react/'> = [];
+  const destinations: Array<'/'> = [];
   return {
     errors,
     destinations,
@@ -25,7 +25,7 @@ function fixture(openError?: string) {
         `ready ${info.adminUrl}`,
         `mcp ${info.mcpUrl}`,
       ],
-      openUi: async (_config: object, destination: '/' | '/react/') => {
+      openUi: async (_config: object, destination: '/') => {
         destinations.push(destination);
         if (openError) throw new Error(openError);
       },
@@ -36,7 +36,7 @@ function fixture(openError?: string) {
   };
 }
 
-test('start opens the requested vanilla UI destination', async () => {
+test('start opens the React admin root when --ui is requested', async () => {
   const state = fixture();
   const code = await runStartCommand(
     {},
@@ -50,18 +50,6 @@ test('start opens the requested vanilla UI destination', async () => {
     'ready https://localhost:47831',
     'mcp https://localhost:47832',
   ]);
-});
-
-test('start opens the requested React UI destination', async () => {
-  const state = fixture();
-  const code = await runStartCommand(
-    {},
-    { command: 'start', uiDestination: '/react/' },
-    state.dependencies,
-  );
-
-  assert.equal(code, 4);
-  assert.deepEqual(state.destinations, ['/react/']);
 });
 
 test('start does not open UI when flag is absent', async () => {
@@ -80,7 +68,7 @@ test('start keeps running when automatic UI launch fails', async () => {
   const state = fixture('browser unavailable');
   const code = await runStartCommand(
     {},
-    { command: 'start', uiDestination: '/react/' },
+    { command: 'start', uiDestination: '/' },
     state.dependencies,
   );
 
