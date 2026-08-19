@@ -208,15 +208,13 @@ export class AevraOAuthService {
   }
 
   listClients() {
-    return this.repo
-      .listClients()
-      .map((record) => ({
-        clientId: record.clientId,
-        clientName: record.clientName,
-        actor: `oauth:${record.clientName}`,
-        redirectUris: [...record.redirectUris],
-        createdAt: record.createdAt,
-      }));
+    return this.repo.listClients().map((record) => ({
+      clientId: record.clientId,
+      clientName: record.clientName,
+      actor: `oauth:${record.clientName}`,
+      redirectUris: [...record.redirectUris],
+      createdAt: record.createdAt,
+    }));
   }
 
   beginAuthorization(
@@ -255,13 +253,11 @@ export class AevraOAuthService {
     return request ?? { id, status: 'EXPIRED' };
   }
   listPendingAuthorizations() {
-    return this.repo
-      .listPendingAuthorizationRequests()
-      .map((request) => ({
-        ...request,
-        clientName: this.repo.getClient(request.clientId)?.clientName ?? request.clientId,
-        requestedScopes: request.scope.split(/\s+/).filter(Boolean),
-      }));
+    return this.repo.listPendingAuthorizationRequests().map((request) => ({
+      ...request,
+      clientName: this.repo.getClient(request.clientId)?.clientName ?? request.clientId,
+      requestedScopes: request.scope.split(/\s+/).filter(Boolean),
+    }));
   }
   approveAuthorization(id: string) {
     const request = this.repo.approveAuthorizationRequest(id);

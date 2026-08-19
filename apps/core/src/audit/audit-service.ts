@@ -66,15 +66,13 @@ export class AuditService {
   }
   exportJson() {
     return JSON.stringify(
-      this.repo
-        .list()
-        .map((r) => ({
-          id: r.id,
-          createdAt: r.created_at,
-          event: JSON.parse(r.event_json),
-          previousHash: r.previous_hash,
-          contentHash: r.content_hash,
-        })),
+      this.repo.list().map((r) => ({
+        id: r.id,
+        createdAt: r.created_at,
+        event: JSON.parse(r.event_json),
+        previousHash: r.previous_hash,
+        contentHash: r.content_hash,
+      })),
       null,
       2,
     );

@@ -25,9 +25,7 @@ for (const surface of ADMIN_SURFACES) {
     await installAdminApi(page, { permissions });
     await page.goto(surface.path);
     await page.getByRole('button', { name: 'Permissions', exact: true }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Permissions', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Permissions', exact: true })).toBeVisible();
 
     await expect(page.getByText('Page 1 / 2', { exact: true })).toBeVisible();
     const search = page.getByPlaceholder('Search permissions…');
@@ -50,18 +48,12 @@ for (const surface of ADMIN_SURFACES) {
     await installAdminApi(page, { sessions });
     await page.goto(surface.path);
     await page.getByRole('button', { name: 'Sessions', exact: true }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Sessions', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
 
     const search = page.getByPlaceholder('Search remote sessions…');
     await search.fill('ChatGPT');
-    await expect(
-      page.getByRole('cell', { name: 'session-chatgpt', exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('cell', { name: 'session-claude', exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByRole('cell', { name: 'session-chatgpt', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'session-claude', exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Actor')).toBeVisible();
     await expect(page.getByLabel('Workspace state')).toBeVisible();
   });
