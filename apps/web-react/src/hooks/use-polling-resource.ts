@@ -23,6 +23,7 @@ export function usePollingResource<T>({
   const [loading, setLoading] = useState(enabled);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  const hasData = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
@@ -30,13 +31,15 @@ export function usePollingResource<T>({
     controller.current?.abort();
     const nextController = new AbortController();
     controller.current = nextController;
-    setLoading((current) => current && data === null);
+    if (!hasData.current) setLoading(true);
+
     try {
       const value = await load(nextController.signal);
       if (
         !nextController.signal.aborted &&
         currentGeneration === generation.current
       ) {
+        hasData.current = true;
         setData(value);
         setError(null);
       }
@@ -50,14 +53,20 @@ export function usePollingResource<T>({
     } finally {
       if (currentGeneration === generation.current) setLoading(false);
     }
-  }, [data, enabled, load]);
+  }, [enabled, load]);
 
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled) {
+      controller.current?.abort();
+      setLoading(false);
+      return undefined;
+    }
+
     void refresh();
     if (intervalMs <= 0) {
       return () => controller.current?.abort();
     }
+
     const timer = window.setInterval(() => void refresh(), intervalMs);
     return () => {
       window.clearInterval(timer);
