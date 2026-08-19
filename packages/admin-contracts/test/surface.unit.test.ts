@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import { ADMIN_SURFACE, surfaceId } from '../src/surface.js';
 
 const manifest = JSON.parse(
-  readFileSync(new URL('../admin-surface.json', import.meta.url), 'utf8'),
+  readFileSync(path.resolve('packages/admin-contracts/admin-surface.json'), 'utf8'),
 );
 
 test('typed contract matches the JSON parity manifest', () => {
