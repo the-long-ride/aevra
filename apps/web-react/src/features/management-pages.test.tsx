@@ -47,7 +47,7 @@ test('Permissions creates normalized command rules and revokes remembered rules'
   await user.click(screen.getByRole('button', { name: 'Add rules' }));
   await user.type(screen.getByLabelText('Connector actors'), 'connector:Claude');
   await user.type(screen.getByLabelText('Workspace IDs'), 'ws-1');
-  await user.click(screen.getByRole('checkbox', { name: 'commands.run' }));
+  await user.click(screen.getByRole('switch', { name: 'commands.run' }));
   await waitFor(() =>
     expect(document.querySelector<HTMLTextAreaElement>('textarea[name="commandMatchers"]')).not.toBeNull(),
   );
