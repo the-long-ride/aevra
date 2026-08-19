@@ -49,6 +49,16 @@ function pageFromHash() {
   return Object.hasOwn(renderers, value) ? value : 'dashboard';
 }
 
+function navigate(page) {
+  const target = Object.hasOwn(renderers, page) ? page : 'dashboard';
+  const nextHash = `#/${target}`;
+  if (location.hash === nextHash) {
+    if (target !== activePage) void activate(target);
+    return;
+  }
+  location.hash = nextHash;
+}
+
 function healthChip(key, label) {
   return `<span class="health-chip" data-health="${key}" data-state="pending"><i></i><span>${label}</span></span>`;
 }
@@ -79,11 +89,8 @@ function syncNavigation(page) {
   }
 }
 
-async function activate(page, { updateHash = true } = {}) {
+async function activate(page) {
   if (!Object.hasOwn(renderers, page)) page = 'dashboard';
-  if (updateHash && pageFromHash() !== page) {
-    history.replaceState(null, '', `#/${page}`);
-  }
   cleanup?.();
   cleanup = undefined;
   activePage = page;
@@ -108,14 +115,15 @@ function installGlobalActions() {
   document.addEventListener('click', (event) => {
     const page = event.target.closest('[data-nav-page]')?.dataset.navPage;
     if (page) {
-      void activate(page);
+      navigate(page);
       return;
     }
     const guideSlug = event.target.closest('[data-guide-slug]')?.dataset
       .guideSlug;
     if (guideSlug) {
       context.guideSlug = guideSlug;
-      void activate('guide');
+      if (pageFromHash() === 'guide') void activate('guide');
+      else navigate('guide');
       return;
     }
     if (
@@ -133,7 +141,7 @@ function installGlobalActions() {
   });
   window.addEventListener('hashchange', () => {
     const page = pageFromHash();
-    if (page !== activePage) void activate(page, { updateHash: false });
+    if (page !== activePage) void activate(page);
   });
 }
 
@@ -143,7 +151,7 @@ function boot() {
   installGlobalActions();
   startRuntimeStatus();
   startRequestWatch();
-  void activate(pageFromHash(), { updateHash: false });
+  void activate(pageFromHash());
 }
 
 boot();
