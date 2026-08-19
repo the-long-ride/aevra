@@ -136,3 +136,17 @@ test('React binary controls use the shared Switch component instead of raw featu
     assert.doesNotMatch(readFileSync(file, 'utf8'), /type\s*=\s*["']checkbox["']/i, file);
   }
 });
+
+test('React admin never falls back to browser-native dialogs', () => {
+  const files = requiredFiles.filter((value) => value.endsWith('.tsx'));
+  for (const file of files) {
+    assert.doesNotMatch(
+      readFileSync(file, 'utf8'),
+      /window\.(?:alert|confirm|prompt)\s*\(/,
+      `${file} must use the shared Dialog component`,
+    );
+  }
+  const dialog = readFileSync('apps/web-react/src/components/Dialog.tsx', 'utf8');
+  assert.match(dialog, /DialogProvider/);
+  assert.match(dialog, /useDialog/);
+});
