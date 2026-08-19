@@ -20,6 +20,7 @@ const requiredFiles = [
   'apps/web-react/src/features/dashboard/ConnectorModal.tsx',
   'apps/web-react/src/features/dashboard/DashboardPage.tsx',
   'apps/web-react/src/features/requests/RequestDrawer.tsx',
+  'apps/web-react/src/features/requests/request-actions.ts',
   'apps/web-react/src/features/permissions/PermissionsPage.tsx',
   'apps/web-react/src/features/workspaces/WorkspacesPage.tsx',
   'apps/web-react/src/features/sessions/SessionsPage.tsx',
@@ -86,12 +87,16 @@ test('React feature pages cover the complete admin navigation surface', () => {
 test('React Dashboard and Requests preserve security and onboarding behavior', () => {
   const dashboard = readFileSync('apps/web-react/src/features/dashboard/DashboardPage.tsx', 'utf8');
   const requests = readFileSync('apps/web-react/src/features/requests/RequestDrawer.tsx', 'utf8');
+  const requestActions = readFileSync(
+    'apps/web-react/src/features/requests/request-actions.ts',
+    'utf8',
+  );
   assert.match(dashboard, /remote-access/);
   assert.match(dashboard, /dashboardOrder/);
   assert.match(dashboard, /completed/);
   assert.doesNotMatch(dashboard, /\['Version'/);
-  assert.match(requests, /CRITICAL/);
-  assert.match(requests, /approve-global/);
+  assert.match(requestActions, /CRITICAL/);
+  assert.match(requestActions, /approve-global/);
   assert.match(requests, /Saved matcher/);
 });
 
