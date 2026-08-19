@@ -1,6 +1,5 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
-import { commitAdminNavigation, pageTokenFromHash } from './hash-navigation.js';
+import { expect, test } from 'vitest';
+import { commitAdminNavigation, pageTokenFromHash } from './hash-navigation';
 
 test('navigation updates page state synchronously before writing browser history', () => {
   const events: string[] = [];
@@ -10,7 +9,7 @@ test('navigation updates page state synchronously before writing browser history
     (page) => events.push(`state:${page}`),
     (hash) => events.push(`history:${hash}`),
   );
-  assert.deepEqual(events, ['state:settings', 'history:#/settings']);
+  expect(events).toEqual(['state:settings', 'history:#/settings']);
 });
 
 test('navigation still updates state when the URL already has the target hash', () => {
@@ -21,11 +20,11 @@ test('navigation still updates state when the URL already has the target hash', 
     (page) => events.push(`state:${page}`),
     (hash) => events.push(`history:${hash}`),
   );
-  assert.deepEqual(events, ['state:settings']);
+  expect(events).toEqual(['state:settings']);
 });
 
 test('page token parsing accepts hash routes and leaves validation to the hook', () => {
-  assert.equal(pageTokenFromHash('#/settings'), 'settings');
-  assert.equal(pageTokenFromHash('#/dashboard/details'), 'dashboard');
-  assert.equal(pageTokenFromHash(''), '');
+  expect(pageTokenFromHash('#/settings')).toBe('settings');
+  expect(pageTokenFromHash('#/dashboard/details')).toBe('dashboard');
+  expect(pageTokenFromHash('')).toBe('');
 });
