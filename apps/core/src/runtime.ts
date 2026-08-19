@@ -1,112 +1,97 @@
-import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { CoreConfig } from './config.js';
-import { AevraDatabase } from '../../../packages/store/src/database.js';
-import { WorkspaceRepository } from '../../../packages/store/src/workspaces.js';
-import { SessionRepository } from '../../../packages/store/src/sessions.js';
-import { PermissionRepository } from '../../../packages/store/src/permissions.js';
-import { ApprovalRepository } from '../../../packages/store/src/approvals.js';
-import { OperationRepository } from '../../../packages/store/src/operations.js';
-import { ChangeRepository } from '../../../packages/store/src/changes.js';
-import { AuditRepository } from '../../../packages/store/src/audit.js';
-import { ProcessRepository } from '../../../packages/store/src/processes.js';
-import { ConnectorRepository } from '../../../packages/store/src/connectors.js';
-import { OAuthRepository } from '../../../packages/store/src/oauth.js';
-import { SkillsService } from './skills/skills-service.js';
-import { IpRateLimiter } from './mcp/rate-limit.js';
-import { createConnectorAdmission } from './mcp/connector-admission.js';
-import { AEVRA_VERSION } from './version.js';
-import { MetricsService } from './metrics.js';
-import { TunnelWatchdog } from './cloudflare/watchdog.js';
-import { SettingsRepository } from '../../../packages/store/src/settings.js';
-import { WorkerManager } from './worker/worker-manager.js';
-import { AdminServer } from './admin/server.js';
-import { McpIngressServer } from './mcp/server.js';
-import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
-import type { WorkerClient } from '../../../packages/ipc/src/client.js';
+import { AevraDatabase } from '../../packages/store/src/database.js';
+import { SettingsRepository } from '../../packages/store/src/settings.js';
+import { WorkspaceRepository } from '../../packages/store/src/workspaces.js';
+import { SessionRepository } from '../../packages/store/src/sessions.js';
+import { PermissionRepository } from '../../packages/store/src/permissions.js';
+import { ApprovalRepository } from '../../packages/store/src/approvals.js';
+import { OperationRepository } from '../../packages/store/src/operations.js';
+import { ChangeRepository } from '../../packages/store/src/changes.js';
+import { AuditRepository } from '../../packages/store/src/audit.js';
+import { ProcessRepository } from '../../packages/store/src/processes.js';
+import { ConnectorRepository } from '../../packages/store/src/connectors.js';
+import { OAuthRepository } from '../../packages/store/src/oauth.js';
+import { WorkspaceService } from './workspaces/workspace-service.js';
 import { CapabilityProfileService } from './policy/capabilities.js';
 import { SessionManager } from './sessions/session-manager.js';
-import { WorkspaceService } from './workspaces/workspace-service.js';
-import { ReadVersionCache } from './operations/read-version-cache.js';
 import { AuditService } from './audit/audit-service.js';
-import { ApprovalService } from './approvals/approval-service.js';
 import { PermissionEngine } from './policy/permissions.js';
-import { OperationService } from './operations/operation-service.js';
+import { ReadVersionCache } from './operations/read-version-cache.js';
 import { ChangeSetService } from './changes/change-service.js';
+import { OperationService } from './operations/operation-service.js';
 import { ProcessService } from './processes/process-service.js';
-import { McpToolService, type WorkerGateway } from '../../../packages/mcp-tools/src/service.js';
-import { SessionSkillAccessGate } from '../../../packages/mcp-tools/src/skill-access-gate.js';
-import { CloudflareAccessVerifier, RejectingIdentityVerifier } from './auth/cloudflare.js';
+import { ApprovalService } from './approvals/approval-service.js';
+import { McpToolService, type WorkerGateway } from '../../packages/mcp-tools/src/service.js';
+import { SessionSkillAccessGate } from '../../packages/mcp-tools/src/skill-access-gate.js';
+import { SkillsService } from './skills/skills-service.js';
+import { MetricsService } from './metrics.js';
+import { AdminBootstrapService } from './admin/bootstrap.js';
+import { AdminServer } from './admin/server.js';
+import { CloudflareManagerImpl } from './cloudflare/manager.js';
+import { TunnelWatchdog } from './cloudflare/watchdog.js';
+import { CloudflareAccessVerifier } from './auth/cloudflare.js';
+import { createConnectorAdmission } from './mcp/connector-admission.js';
+import { IpRateLimiter } from './mcp/rate-limit.js';
+import { McpIngressServer } from './mcp/server.js';
 import { AevraOAuthService } from './auth/oauth.js';
-import {
-  CloudflareManagerImpl,
-  resolveCloudflareAuthMode,
-  type CloudflareManager,
-} from './cloudflare/manager.js';
-import { BackupService } from './backup/backup-service.js';
-import { ConfigExportService } from './config/export-service.js';
-import { EncryptedVault } from '../../../packages/secrets/src/vault.js';
-import { CommandSecretStore } from '../../../packages/secrets/src/platform.js';
+import { EncryptedVault } from '../../packages/secrets/src/vault.js';
+import { CommandSecretStore } from '../../packages/secrets/src/platform.js';
 import { EnvironmentService } from './secrets/environment-service.js';
+import { ConfigExportService } from './config/export-service.js';
+import { BackupService } from './backup/backup-service.js';
 import { ensureLocalTls } from './tls/local-tls.js';
-import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
+import { AEVRA_VERSION } from './version.js';
+import { resolveCloudflareAuthMode } from './mcp/diagnostics.js';
+import { ensureLocalControlSecret } from './admin/bootstrap.js';
+import type { CoreConfig } from './config.js';
+import type { WorkerManager } from './worker/worker-manager.js';
+import type { IdentityVerifier } from './mcp/server.js';
 
-export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
+class RejectingIdentityVerifier implements IdentityVerifier {
+  async verify() {
+    throw new Error('Cloudflare Access is not configured');
+  }
+}
 
-export async function createCoreRuntime(
-  config: CoreConfig,
-  deps: RuntimeDependencies = {},
-): Promise<CoreRuntime> {
+export interface CoreRuntimeDependencies {
+  databaseOpen?: typeof AevraDatabase.open;
+  workerManager: WorkerManager;
+  cloudflare?: CloudflareManagerImpl;
+  ensureTls?: typeof ensureLocalTls;
+}
+
+export function createCoreRuntime(config: CoreConfig, deps: CoreRuntimeDependencies) {
+  const wm = deps.workerManager;
   let db: AevraDatabase | undefined,
-    worker: WorkerClient | undefined,
+    worker: Awaited<ReturnType<WorkerManager['start']>> | undefined,
     admin: AdminServer | undefined,
     mcp: McpIngressServer | undefined,
-    cloudflare: CloudflareManager | undefined;
-  let safeMode = false,
+    cloudflare: CloudflareManagerImpl | undefined,
+    watchdog: TunnelWatchdog | undefined,
     started = false,
-    watchdog: TunnelWatchdog | undefined;
-  const wm: any =
-    deps.worker ??
-    new WorkerManager(config.workerSocketPath, path.join(config.stateDir, 'process-logs'));
-  const cleanup = async () => {
+    safeMode = false;
+
+  async function cleanup() {
+    await mcp?.close().catch(() => undefined);
+    await admin?.close().catch(() => undefined);
     watchdog?.stop();
-    watchdog = undefined;
-    const safe = async (fn: () => Promise<unknown>) => {
-      try {
-        await fn();
-      } catch {
-        /* Preserve the original startup/shutdown error. */
-      }
-    };
-    if (cloudflare) await safe(() => cloudflare!.stopManagedTunnel());
-    if (mcp) await safe(() => mcp!.close());
+    await cloudflare?.stopManagedTunnel().catch(() => undefined);
+    await wm.close().catch(() => undefined);
+    db?.close();
     mcp = undefined;
-    if (admin) await safe(() => admin!.close());
     admin = undefined;
-    if (worker) await safe(() => wm.close());
+    watchdog = undefined;
+    cloudflare = undefined;
     worker = undefined;
-    try {
-      db?.close();
-    } catch {
-      /* best-effort close */
-    }
     db = undefined;
     started = false;
-  };
+  }
+
   return {
-    get adminUrl() {
-      return admin ? admin.url() : `https://localhost:${config.adminPort}`;
-    },
-    get mcpUrl() {
-      return mcp ? mcp.url() : `https://localhost:${config.mcpPort}`;
-    },
     async start() {
       if (started) return;
       try {
-        await mkdir(config.stateDir, { recursive: true, mode: 0o700 });
-        await mkdir(config.recoveryDir, { recursive: true, mode: 0o700 });
         const tls =
-          deps.tls ??
           (await (
             deps.ensureTls ??
             (async (c: CoreConfig) =>
@@ -214,6 +199,7 @@ export async function createCoreRuntime(
           permissions,
           approvals,
           skills: new SkillsService(),
+          audit,
           connectorBindings,
           metrics,
           settings,
