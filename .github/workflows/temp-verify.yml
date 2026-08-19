@@ -1,0 +1,23 @@
+name: Temporary verification
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run format:check
+      - run: npm run lint:loc
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
