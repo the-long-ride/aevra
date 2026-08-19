@@ -54,7 +54,7 @@ test('PowerShell is rejected in the current Linux strict sandbox image', () => {
   );
 });
 
-test('shell execution has a stronger approval floor than argv commands', () => {
-  assert.equal(shellRiskFloor('sandbox'), 'MEDIUM');
+test('raw shell execution is always high risk', () => {
+  assert.equal(shellRiskFloor('sandbox'), 'HIGH');
   assert.equal(shellRiskFloor('host'), 'HIGH');
 });
