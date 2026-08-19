@@ -7,7 +7,7 @@ function files(root) {
   const walk = (d) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       const f = path.join(d, e.name);
-      e.isDirectory() ? walk(f) : /\.(?:ts|js)$/.test(f) && out.push(f);
+      e.isDirectory() ? walk(f) : /\.(?:ts|tsx|js)$/.test(f) && out.push(f);
     }
   };
   walk(root);
@@ -20,7 +20,7 @@ function combined(root) {
 }
 test('architecture import boundaries stay one-way', () => {
   const mcp = combined('packages/mcp-tools/src'),
-    web = combined('apps/web'),
+    web = combined('apps/web-react/src'),
     worker = combined('apps/worker/src');
   assert.doesNotMatch(mcp, /packages\/executor|\.\.\/executor/);
   assert.doesNotMatch(web, /packages\/ipc|apps\/worker|worker-manager/);
