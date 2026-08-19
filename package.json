@@ -25,7 +25,7 @@
     "test:coverage:web": "npm --prefix apps/web-react run test:coverage",
     "test:coverage": "node scripts/test-coverage-node.mjs && npm run test:coverage:web",
     "test:ui-parity": "npm run build && playwright test",
-    "typecheck": "tsc -p tsconfig.typecheck.json && npm --prefix apps/web-react run typecheck",
+    "typecheck": "tsc -p tsconfig.typecheck.json && tsc -p tsconfig.playwright.json && npm --prefix apps/web-react run typecheck",
     "build": "tsc -p tsconfig.build.json --noCheck && npm --prefix apps/web-react run build && node scripts/copy-manual.mjs",
     "start": "node dist/apps/cli/src/cli.js start",
     "prepublishOnly": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:coverage && npm run build",
