@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { SkillsService, parseFrontmatter } from '../src/skills/skills-service.js';
@@ -57,9 +57,9 @@ test('read returns SKILL.md, supporting files list, and file content', () => {
   assert.equal(extra.content, 'extra');
 });
 test('read blocks traversal and size caps', () => {
-  const { home, ws, base } = tree();
+  const { home, ws } = tree();
   const svc = new SkillsService(home);
-  writeFileSync(path.join(home, '.agents', 'escape.txt'), 'x'); // '../../escape.txt' from a skill dir resolves to .agents/
+  writeFileSync(path.join(home, '.agents', 'escape.txt'), 'x');
   assert.throws(
     () => svc.read('user', 'Alpha', ws, '../../escape.txt'),
     (e: any) => e.code === 'SKILL_PATH_ESCAPE',
@@ -75,6 +75,44 @@ test('read blocks traversal and size caps', () => {
   );
   assert.throws(
     () => svc.read('workspace', 'Alpha', null),
+    (e: any) => e.code === 'SKILL_NOT_FOUND',
+  );
+});
+test('skill write stays inside an existing skill package', () => {
+  const { home, ws } = tree();
+  const svc = new SkillsService(home);
+  const result = svc.write('workspace', 'Alpha', ws, 'notes/usage.md', 'updated notes');
+  assert.equal(result.source, 'workspace');
+  assert.equal(result.name, 'Alpha');
+  assert.equal(result.file, 'notes/usage.md');
+  assert.equal(
+    readFileSync(path.join(ws, '.agents', 'skills', 'alpha', 'notes', 'usage.md'), 'utf8'),
+    'updated notes',
+  );
+  assert.throws(
+    () => svc.write('workspace', 'Alpha', ws, '../../escape.md', 'nope'),
+    (e: any) => e.code === 'SKILL_PATH_ESCAPE',
+  );
+  assert.throws(
+    () => svc.write('user', 'Alpha', ws, path.resolve('/tmp/escape.md'), 'nope'),
+    (e: any) => e.code === 'SKILL_PATH_ESCAPE',
+  );
+  assert.throws(
+    () => svc.write('user', 'Alpha', ws, 'too-big.md', 'x'.repeat(256 * 1024 + 1)),
+    (e: any) => e.code === 'SKILL_FILE_TOO_LARGE',
+  );
+});
+test('instruction write targets only user or active workspace AGENTS.md', () => {
+  const { home, ws } = tree();
+  const svc = new SkillsService(home);
+  const user = svc.writeInstructions('user', ws, 'new global');
+  const workspace = svc.writeInstructions('workspace', ws, 'new workspace');
+  assert.equal(user.source, 'user');
+  assert.equal(workspace.source, 'workspace');
+  assert.equal(readFileSync(path.join(home, '.agents', 'AGENTS.md'), 'utf8'), 'new global');
+  assert.equal(readFileSync(path.join(ws, 'AGENTS.md'), 'utf8'), 'new workspace');
+  assert.throws(
+    () => svc.writeInstructions('workspace', null, 'no workspace'),
     (e: any) => e.code === 'SKILL_NOT_FOUND',
   );
 });
@@ -102,6 +140,10 @@ test('oversized instruction file throws SKILL_FILE_TOO_LARGE', () => {
   const svc = new SkillsService(home);
   assert.throws(
     () => svc.instructions(null),
+    (e: any) => e.code === 'SKILL_FILE_TOO_LARGE',
+  );
+  assert.throws(
+    () => svc.writeInstructions('user', null, 'x'.repeat(256 * 1024 + 1)),
     (e: any) => e.code === 'SKILL_FILE_TOO_LARGE',
   );
 });
