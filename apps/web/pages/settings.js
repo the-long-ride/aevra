@@ -42,6 +42,16 @@ export async function renderSettingsPage(container) {
     container.innerHTML = settingsMarkup(data);
     wireRemoteAccess(container, data.cloudflare, 'settings', render);
 
+    const backend = container.querySelector(
+      '#execution-settings [name="sandboxBackend"]',
+    );
+    const nativeWarning = container.querySelector('[data-native-warning]');
+    const syncNativeWarning = () => {
+      if (nativeWarning && backend) nativeWarning.hidden = backend.value !== 'native';
+    };
+    backend?.addEventListener('change', syncNativeWarning);
+    syncNativeWarning();
+
     container
       .querySelector('#access-settings')
       .addEventListener('submit', async (event) => {
