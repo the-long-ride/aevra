@@ -1,4 +1,4 @@
-import type { RiskTier } from '../../protocol/src/index.js';
+import type { ExecutionMode, RiskTier } from '../../protocol/src/index.js';
 import { classifyCommand } from '../../../apps/core/src/policy/command-family.js';
 import {
   commandPermissionMatcher,
@@ -23,12 +23,30 @@ interface ShellSource {
   riskFloor: RiskTier;
 }
 
+interface ExecutionSettings {
+  sandboxBackend?: 'auto' | 'docker' | 'podman' | 'native';
+}
+
+function resolveExecutionMode(
+  context: McpRuntimeContext,
+  requestedMode: unknown,
+): ExecutionMode {
+  if (requestedMode === 'host' || requestedMode === 'sandbox') {
+    return requestedMode;
+  }
+  const execution = context.deps.settings?.get<ExecutionSettings>(
+    'execution.settings',
+    { sandboxBackend: 'auto' },
+  );
+  return execution?.sandboxBackend === 'native' ? 'host' : 'sandbox';
+}
+
 export async function shellTool(
   context: McpRuntimeContext,
   sessionId: string,
   args: any,
 ) {
-  const mode = args.executionMode === 'host' ? 'host' : 'sandbox';
+  const mode = resolveExecutionMode(context, args.executionMode);
   const command = buildShellCommand({ ...args, executionMode: mode });
   const requestedShell = String(args.shell ?? 'auto');
   const shell =
@@ -77,25 +95,25 @@ export async function commandTool(
     );
   }
 
+  const mode = resolveExecutionMode(context, args.executionMode);
   const original = {
     tool: source?.tool ?? 'command_run',
     args: source
       ? {
           script: source.script,
           shell: source.shell,
-          executionMode: args.executionMode,
+          executionMode: mode,
           networkDestinations: args.networkDestinations,
           env: command.env,
           timeoutMs: command.timeoutMs,
         }
-      : args,
+      : { ...args, executionMode: mode },
   };
   const classification =
     context.deps.operations?.classify?.([
       command.executable,
       ...command.args,
     ]) ?? classifyCommand([command.executable, ...command.args]);
-  const mode = args.executionMode === 'host' ? 'host' : 'sandbox';
   let risk: RiskTier =
     mode === 'host' && classification.risk === 'LOW'
       ? 'MEDIUM'
