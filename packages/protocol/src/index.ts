@@ -27,7 +27,11 @@ export type Capability =
   | 'commands.run'
   | 'git.commit'
   | 'git.push'
-  | 'network';
+  | 'network'
+  | 'skills.read'
+  | 'skills.write'
+  | 'instructions.read'
+  | 'instructions.write';
 export type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type CommandEffect =
   | 'READ_ONLY'
