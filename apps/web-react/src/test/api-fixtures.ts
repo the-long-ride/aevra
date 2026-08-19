@@ -169,8 +169,9 @@ export function installApiFixtures(options: FixtureOptions = {}) {
     vi.fn(() => null),
   );
   vi.stubGlobal('alert', vi.fn());
-  Object.assign(navigator, {
-    clipboard: { writeText: vi.fn(async () => undefined) },
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn(async () => undefined) },
   });
   return fetchMock;
 }
