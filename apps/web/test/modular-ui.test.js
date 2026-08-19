@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { deriveTableRows } from '../components/data-table-state.js';
 import { approvalActions } from '../components/request-actions.js';
 import { selectedPlatformMatchers } from '../data/safe-command-matchers.js';
