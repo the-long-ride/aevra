@@ -6,6 +6,7 @@ const main = readFileSync('apps/web/main.js', 'utf8');
 const shellCss = readFileSync('apps/web/styles/shell.css', 'utf8');
 const tokens = readFileSync('apps/web/styles/tokens.css', 'utf8');
 const dashboard = readFileSync('apps/web/pages/dashboard.js', 'utf8');
+const dashboardView = readFileSync('apps/web/pages/dashboard-view.js', 'utf8');
 const remoteAccess = readFileSync(
   'apps/web/components/remote-access.js',
   'utf8',
@@ -79,16 +80,17 @@ test('Dashboard onboarding keeps OAuth-first Remote Access and provider guidance
     'Claude',
     'Gemini',
     'OAuth',
-    'Test endpoint',
   ]) {
-    assert.match(dashboard, new RegExp(text, 'i'));
+    assert.match(dashboardView, new RegExp(text, 'i'));
   }
   assert.match(remoteAccess, /\/api\/cloudflare\/authenticate/);
   assert.match(remoteAccess, /\/api\/cloudflare\/setup/);
   assert.match(remoteAccess, /Check authentication/);
+  assert.match(remoteAccess, /Test endpoint/);
   assert.doesNotMatch(remoteAccess, />Re-authenticate</);
-  assert.match(dashboard, /`https:\/\/\$\{cloudflare\.hostname\}\/mcp`/);
-  assert.doesNotMatch(dashboard, /\/mcp\/\$\{created\.token\}/);
+  assert.match(dashboardView, /`https:\/\/\$\{cloudflare\.hostname\}\/mcp`/);
+  assert.doesNotMatch(dashboardView, /\/mcp\/\$\{created\.token\}/);
+  assert.match(dashboard, /from ['"]\.\/dashboard-view\.js['"]/);
 });
 
 test('workspace admission and OAuth pairing remain local request actions', () => {
@@ -114,12 +116,12 @@ test('header renders compact Core Worker MCP and Tunnel health chips without rep
 });
 
 test('Connect an AI is parallel example guidance and not a pairing queue', () => {
-  assert.match(dashboard, /Examples only/i);
+  assert.match(dashboardView, /Examples only/i);
   for (const provider of ['ChatGPT', 'Claude', 'Gemini']) {
-    assert.match(dashboard, new RegExp(provider));
+    assert.match(dashboardView, new RegExp(provider));
   }
-  assert.match(dashboard, /client-grid/);
-  assert.doesNotMatch(dashboard, />Pairing requests</i);
+  assert.match(dashboardView, /client-grid/);
+  assert.doesNotMatch(dashboardView, />Pairing requests</i);
 });
 
 test('rendered timestamps use the browser device locale and timezone', () => {
