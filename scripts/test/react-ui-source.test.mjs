@@ -11,7 +11,9 @@ const requiredFiles = [
   'apps/web-react/src/app/App.tsx',
   'apps/web-react/src/components/AppShell.tsx',
   'apps/web-react/src/services/api-client.ts',
+  'apps/web-react/src/hooks/use-polling-resource.ts',
   'apps/web-react/src/hooks/use-runtime-status.ts',
+  'apps/web-react/src/features/dashboard/ConnectorModal.tsx',
   'apps/web-react/src/features/dashboard/DashboardPage.tsx',
   'apps/web-react/src/features/requests/RequestDrawer.tsx',
   'apps/web-react/src/features/permissions/PermissionsPage.tsx',
@@ -95,6 +97,25 @@ test('React has a single polling owner for approvals and OAuth requests', () => 
 
   assert.doesNotMatch(runtime, /\/api\/approvals/);
   assert.doesNotMatch(runtime, /\/api\/oauth\/requests/);
+  assert.match(runtime, /usePollingResource/);
   assert.match(app, /onPendingCountChange/);
   assert.match(requests, /onPendingCountChange/);
+});
+
+test('React connector flow stays in-page and uses the shared Dashboard refresh owner', () => {
+  const dashboard = readFileSync(
+    'apps/web-react/src/features/dashboard/DashboardPage.tsx',
+    'utf8',
+  );
+  const connector = readFileSync(
+    'apps/web-react/src/features/dashboard/ConnectorModal.tsx',
+    'utf8',
+  );
+
+  assert.match(dashboard, /ConnectorModal/);
+  assert.match(dashboard, /usePollingResource/);
+  assert.doesNotMatch(dashboard, /window\.prompt|window\.alert/);
+  assert.match(connector, /\/api\/connectors/);
+  assert.match(connector, /Copy this token now\. It is shown once\./);
+  assert.match(connector, /navigator\.clipboard\.writeText/);
 });
