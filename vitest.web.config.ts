@@ -1,6 +1,14 @@
+import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@aevra/admin-contracts': fileURLToPath(
+        new URL('./packages/admin-contracts/src/index.ts', import.meta.url),
+      ),
+    },
+  },
   test: {
     environment: 'jsdom',
     include: [
@@ -8,6 +16,7 @@ export default defineConfig({
       'apps/web-react/src/**/*.test.ts',
       'apps/web-react/src/**/*.test.tsx',
     ],
+    setupFiles: ['apps/web-react/src/test/setup.ts'],
     coverage: {
       provider: 'v8',
       include: [
