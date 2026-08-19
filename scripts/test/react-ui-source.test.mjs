@@ -3,17 +3,20 @@ import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const requiredFiles = [
+  'apps/web-react/design.md',
   'apps/web-react/index.html',
   'apps/web-react/package.json',
   'apps/web-react/tsconfig.json',
   'apps/web-react/vite.config.ts',
   'apps/web-react/src/main.tsx',
   'apps/web-react/src/app/App.tsx',
+  'apps/web-react/src/app/hash-navigation.ts',
   'apps/web-react/src/app/use-hash-page.ts',
   'apps/web-react/src/components/AppShell.tsx',
   'apps/web-react/src/services/api-client.ts',
   'apps/web-react/src/hooks/use-polling-resource.ts',
   'apps/web-react/src/hooks/use-runtime-status.ts',
+  'apps/web-react/src/hooks/use-theme.ts',
   'apps/web-react/src/features/dashboard/ConnectorModal.tsx',
   'apps/web-react/src/features/dashboard/DashboardPage.tsx',
   'apps/web-react/src/features/requests/RequestDrawer.tsx',
@@ -33,14 +36,15 @@ test('React admin uses a feature-oriented TypeScript architecture', () => {
   }
 });
 
-test('React Vite build is rooted at /react/ and writes beside vanilla assets', () => {
+test('React Vite build is rooted at slash and owns the complete web output', () => {
   const vite = readFileSync('apps/web-react/vite.config.ts', 'utf8');
-  assert.match(vite, /base:\s*['"]\/react\/['"]/);
-  assert.match(vite, /dist\/apps\/web\/react/);
-  assert.match(vite, /emptyOutDir:\s*false/);
+  assert.match(vite, /base:\s*['"]\/['"]/);
+  assert.match(vite, /dist\/apps\/web/);
+  assert.match(vite, /emptyOutDir:\s*true/);
+  assert.doesNotMatch(vite, /dist\/apps\/web\/react|\/react\//);
 });
 
-test('React shell keeps the same compact top navigation and shared admin contract', () => {
+test('React shell keeps compact horizontal navigation and shared admin contract', () => {
   const app = readFileSync('apps/web-react/src/app/App.tsx', 'utf8');
   const shell = readFileSync(
     'apps/web-react/src/components/AppShell.tsx',
@@ -48,17 +52,27 @@ test('React shell keeps the same compact top navigation and shared admin contrac
   );
   assert.match(app, /ADMIN_SURFACE/);
   assert.match(shell, /top-nav/);
+  assert.match(shell, /theme-toggle/);
   assert.doesNotMatch(shell, /sidebar/i);
 });
 
-test('React navigation uses hashchange as the single page transition path', () => {
+test('React navigation updates state synchronously and uses popstate for browser history', () => {
   const router = readFileSync('apps/web-react/src/app/use-hash-page.ts', 'utf8');
-  assert.match(router, /window\.location\.hash\s*=/);
-  assert.doesNotMatch(router, /history\.replaceState/);
-  assert.doesNotMatch(router, /setPage\(next\)/);
+  const transition = readFileSync(
+    'apps/web-react/src/app/hash-navigation.ts',
+    'utf8',
+  );
+  assert.match(router, /popstate/);
+  assert.match(router, /history\.pushState/);
+  assert.doesNotMatch(router, /hashchange/);
+  assert.match(transition, /setPage\(next\)/);
+  assert.ok(
+    transition.indexOf('setPage(next)') < transition.indexOf('pushHash(nextHash)'),
+    'React page state must update before browser history',
+  );
 });
 
-test('React feature pages cover the complete vanilla navigation surface', () => {
+test('React feature pages cover the complete admin navigation surface', () => {
   const app = readFileSync('apps/web-react/src/app/App.tsx', 'utf8');
   for (const page of [
     'DashboardPage',
@@ -75,7 +89,7 @@ test('React feature pages cover the complete vanilla navigation surface', () => 
   }
 });
 
-test('React Dashboard and Requests preserve approved security and onboarding behavior', () => {
+test('React Dashboard and Requests preserve security and onboarding behavior', () => {
   const dashboard = readFileSync(
     'apps/web-react/src/features/dashboard/DashboardPage.tsx',
     'utf8',
@@ -87,6 +101,7 @@ test('React Dashboard and Requests preserve approved security and onboarding beh
   assert.match(dashboard, /remote-access/);
   assert.match(dashboard, /dashboardOrder/);
   assert.match(dashboard, /completed/);
+  assert.doesNotMatch(dashboard, /\['Version'/);
   assert.match(requests, /CRITICAL/);
   assert.match(requests, /approve-global/);
   assert.match(requests, /Saved matcher/);
@@ -102,7 +117,6 @@ test('React has a single polling owner for approvals and OAuth requests', () => 
     'apps/web-react/src/features/requests/RequestDrawer.tsx',
     'utf8',
   );
-
   assert.doesNotMatch(runtime, /\/api\/approvals/);
   assert.doesNotMatch(runtime, /\/api\/oauth\/requests/);
   assert.match(runtime, /usePollingResource/);
@@ -110,7 +124,7 @@ test('React has a single polling owner for approvals and OAuth requests', () => 
   assert.match(requests, /onPendingCountChange/);
 });
 
-test('React connector flow stays in-page and uses the shared Dashboard refresh owner', () => {
+test('React connector flow stays in-page and uses the Dashboard refresh owner', () => {
   const dashboard = readFileSync(
     'apps/web-react/src/features/dashboard/DashboardPage.tsx',
     'utf8',
@@ -119,7 +133,6 @@ test('React connector flow stays in-page and uses the shared Dashboard refresh o
     'apps/web-react/src/features/dashboard/ConnectorModal.tsx',
     'utf8',
   );
-
   assert.match(dashboard, /ConnectorModal/);
   assert.match(dashboard, /usePollingResource/);
   assert.doesNotMatch(dashboard, /window\.prompt|window\.alert/);
