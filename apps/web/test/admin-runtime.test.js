@@ -74,6 +74,12 @@ function heading() {
   return document.querySelector('#page h2')?.textContent;
 }
 
+function submit(selector) {
+  const form = document.querySelector(selector);
+  expect(form).toBeTruthy();
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
 const fetchMock = vi.fn(async (input, init = {}) => {
   const url = typeof input === 'string' ? input : input.url;
   const method = String(init.method ?? 'GET').toUpperCase();
@@ -117,6 +123,10 @@ test('modular vanilla runtime boots every admin page and executes primary contro
   document.querySelector('#open-requests').click();
   await settle();
   expect(document.querySelector('[data-scope="global"]')).toBeTruthy();
+  document.querySelector('[data-scope="global"]').click();
+  await settle();
+  document.querySelector('[data-request-oauth-deny]')?.click();
+  await settle();
   document.querySelector('[data-request-tab="history"]').click();
   document.querySelector('[data-request-tab="pending"]').click();
 
@@ -167,10 +177,29 @@ test('modular vanilla runtime boots every admin page and executes primary contro
   nav('Settings');
   await settle();
   expect(heading()).toBe('Settings');
-  document.querySelector('#execution-settings').dispatchEvent(
-    new Event('submit', { bubbles: true, cancelable: true }),
-  );
-  await settle();
+
+  for (const selector of [
+    '#access-settings',
+    '#execution-settings',
+    '#command-family',
+    '#network-rule',
+    '#environment-profile',
+    '#secret-reference',
+  ]) {
+    submit(selector);
+    await settle();
+  }
+
+  for (const selector of [
+    '[data-command-remove]',
+    '[data-network-remove]',
+    '[data-secret-remove]',
+  ]) {
+    const control = document.querySelector(selector);
+    expect(control).toBeTruthy();
+    control.click();
+    await settle();
+  }
 
   nav('Guide');
   await settle();
