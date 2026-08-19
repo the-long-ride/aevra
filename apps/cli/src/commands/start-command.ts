@@ -1,4 +1,4 @@
-import type { AevraCommand } from '../args.js';
+import type { AdminUiDestination, AevraCommand } from '../args.js';
 
 type StartCommand = Extract<AevraCommand, { command: 'start' }>;
 
@@ -13,7 +13,7 @@ export interface StartCommandDependencies<Config> {
     hooks: { onReady(info: ReadyInfo): void | Promise<void> },
   ): Promise<number>;
   readyLines(info: ReadyInfo): string[];
-  openUi(config: Config): Promise<void>;
+  openUi(config: Config, destination: AdminUiDestination): Promise<void>;
   error(message: string): void;
   formatError(error: unknown): string;
 }
@@ -29,12 +29,12 @@ export async function runStartCommand<Config>(
         dependencies.error(line);
       }
 
-      if (!command.ui) {
+      if (!command.uiDestination) {
         return;
       }
 
       try {
-        await dependencies.openUi(config);
+        await dependencies.openUi(config, command.uiDestination);
       } catch (error) {
         dependencies.error(
           `[aevra] UI launch failed: ${dependencies.formatError(error)}`,
