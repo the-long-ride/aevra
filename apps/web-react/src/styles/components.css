@@ -104,21 +104,14 @@
 .choice-inline {
   display: flex;
   gap: 8px;
-  align-items: flex-start;
+  align-items: center;
   border: 1px solid var(--hairline);
   border-radius: 0;
   background: var(--canvas);
   padding: 10px;
 }
 
-.choice-card input,
-.choice-inline input {
-  width: auto;
-  min-height: 20px;
-  margin-top: 2px;
-}
-
-.choice-card span {
+.choice-card > .switch-label {
   display: grid;
   gap: 3px;
 }
@@ -126,6 +119,76 @@
 .choice-card small {
   color: var(--mute);
   font-size: 11px;
+}
+
+.switch-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch-control > input[type='checkbox'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch-track {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 20px;
+  align-items: center;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 4px;
+  background: var(--surface-soft);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.switch-thumb {
+  width: 12px;
+  height: 12px;
+  margin-left: 3px;
+  border-radius: 2px;
+  background: var(--mute);
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+
+.switch-control > input[type='checkbox']:checked + .switch-track {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--canvas));
+}
+
+.switch-control > input[type='checkbox']:checked + .switch-track .switch-thumb {
+  transform: translateX(14px);
+  background: var(--accent);
+}
+
+.switch-control > input[type='checkbox']:focus-visible + .switch-track {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.switch-control:has(> input[type='checkbox']:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.switch-label {
+  min-width: 0;
+  color: var(--body);
 }
 
 .form-section {
