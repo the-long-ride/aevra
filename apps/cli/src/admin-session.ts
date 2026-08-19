@@ -1,3 +1,5 @@
+import type { AdminUiDestination } from './args.js';
+
 interface HeadersLike {
   get(name: string): string | null;
 }
@@ -71,9 +73,13 @@ export async function adminApi<Config>(
 export async function createAuthenticatedUiUrl<Config>(
   config: Config,
   dependencies: AdminSessionDependencies<Config>,
+  destination: AdminUiDestination = '/',
 ): Promise<string> {
   const token = await bootstrapToken(config, dependencies);
-  return `${dependencies.base(config)}/auth/bootstrap?token=${encodeURIComponent(token)}`;
+  const base = `${dependencies.base(config)}/auth/bootstrap?token=${encodeURIComponent(token)}`;
+  return destination === '/'
+    ? base
+    : `${base}&to=${encodeURIComponent(destination)}`;
 }
 
 export async function revokeAllAdminSessions<Config>(
