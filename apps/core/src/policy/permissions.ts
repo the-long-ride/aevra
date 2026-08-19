@@ -68,10 +68,14 @@ function fromRow(r: any): PermissionRule {
     expiresAt: r.expires_at ?? r.expiresAt,
   };
 }
+function specificityScore(rule: PermissionRule) {
+  return scopeScore[rule.scope] * 100 + matcherScore(rule.matcher);
+}
 function specificity(a: PermissionRule, b: PermissionRule) {
-  const sa = scopeScore[a.scope] * 100 + matcherScore(a.matcher),
-    sb = scopeScore[b.scope] * 100 + matcherScore(b.matcher);
+  const sa = specificityScore(a),
+    sb = specificityScore(b);
   if (sa !== sb) return sb - sa;
+  if (a.effect !== b.effect) return a.effect === 'deny' ? -1 : 1;
   return a.id.localeCompare(b.id);
 }
 
@@ -99,20 +103,26 @@ export class PermissionEngine {
     sessionId?: string;
     risk: RiskTier;
   }): PermissionDecision {
-    const candidates = this.applicable(input).filter(
-      (r) => r.capability === input.capability && matches(r.matcher, input.matcher),
-    );
-    const denied = candidates.filter((r) => r.effect === 'deny').sort(specificity)[0];
-    if (denied)
-      return { outcome: 'deny', ruleId: denied.id, reason: `matched ${denied.scope} deny rule` };
+    const matched = this.applicable(input)
+      .filter((r) => r.capability === input.capability && matches(r.matcher, input.matcher))
+      .sort(specificity)[0];
+    if (matched?.effect === 'deny')
+      return {
+        outcome: 'deny',
+        ruleId: matched.id,
+        reason: `matched ${matched.scope} deny rule`,
+      };
     if (input.risk === 'CRITICAL')
       return {
         outcome: 'approval',
         reason: 'critical operations require one-time local authorization',
       };
-    const allowed = candidates.filter((r) => r.effect === 'allow').sort(specificity)[0];
-    if (!allowed) return { outcome: 'approval', reason: 'no remembered permission rule' };
-    return { outcome: 'allow', ruleId: allowed.id, reason: `matched ${allowed.scope} allow rule` };
+    if (!matched) return { outcome: 'approval', reason: 'no remembered permission rule' };
+    return {
+      outcome: 'allow',
+      ruleId: matched.id,
+      reason: `matched ${matched.scope} allow rule`,
+    };
   }
 
   summary(input: {
