@@ -30,6 +30,28 @@ async function authorizeRead(
   return authorizeCapability(context, sessionId, capability, { tool, args }, matcher, 'LOW');
 }
 
+function auditContextWrite(
+  context: McpRuntimeContext,
+  sessionId: string,
+  tool: 'skill_write' | 'instructions_write',
+  target: string,
+) {
+  const session = context.sessions.get(sessionId),
+    lease = context.sessions.activeLease(sessionId);
+  context.deps.audit?.append({
+    actor: session?.actor,
+    sessionId,
+    workspaceId: lease?.workspaceId,
+    tool,
+    operation: tool,
+    target,
+    risk: 'HIGH',
+    decision: 'allowed',
+    result: 'ok',
+    redactionCount: 0,
+  });
+}
+
 async function authorizeWrite(
   context: McpRuntimeContext,
   sessionId: string,
@@ -39,7 +61,14 @@ async function authorizeWrite(
   matcher: string,
   execute: () => Promise<any>,
 ) {
-  const gate = await authorizeCapability(context, sessionId, capability, { tool, args }, matcher, 'HIGH');
+  const gate = await authorizeCapability(
+    context,
+    sessionId,
+    capability,
+    { tool, args },
+    matcher,
+    'HIGH',
+  );
   if ('response' in gate) return gate.response;
   return gated(
     context,
@@ -127,17 +156,18 @@ export async function handleBasicTool(
     const skillName = String(args.name ?? '');
     const file = args.file ? String(args.file) : undefined;
     const matcher = `${source}:${skillName}:${file ?? 'SKILL.md'}`;
-    return authorizeWrite(context, sessionId, 'skills.write', name, args, matcher, async () =>
-      context.deps.skills
-        ? context.deps.skills.write(
-            source,
-            skillName,
-            workspaceRoot(context, sessionId),
-            file,
-            String(args.content ?? ''),
-          )
-        : unavailable(name),
-    );
+    return authorizeWrite(context, sessionId, 'skills.write', name, args, matcher, async () => {
+      if (!context.deps.skills) return unavailable(name);
+      const result = context.deps.skills.write(
+        source,
+        skillName,
+        workspaceRoot(context, sessionId),
+        file,
+        String(args.content ?? ''),
+      );
+      auditContextWrite(context, sessionId, 'skill_write', matcher);
+      return result;
+    });
   }
 
   if (name === 'instructions_read') {
@@ -160,14 +190,16 @@ export async function handleBasicTool(
       name,
       args,
       source,
-      async () =>
-        context.deps.skills
-          ? context.deps.skills.writeInstructions(
-              source,
-              workspaceRoot(context, sessionId),
-              String(args.content ?? ''),
-            )
-          : unavailable(name),
+      async () => {
+        if (!context.deps.skills) return unavailable(name);
+        const result = context.deps.skills.writeInstructions(
+          source,
+          workspaceRoot(context, sessionId),
+          String(args.content ?? ''),
+        );
+        auditContextWrite(context, sessionId, 'instructions_write', source);
+        return result;
+      },
     );
   }
 
