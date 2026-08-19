@@ -11,6 +11,8 @@ const permissionBulk = readFileSync(
   'utf8',
 );
 const sessions = readFileSync('apps/web/pages/sessions.js', 'utf8');
+const settings = readFileSync('apps/web/pages/settings.js', 'utf8');
+const settingsMarkup = readFileSync('apps/web/pages/settings-markup.js', 'utf8');
 const requests = readFileSync(
   'apps/web/components/request-drawer.js',
   'utf8',
@@ -31,6 +33,7 @@ const matcherCatalog = readFileSync(
 );
 const tokens = readFileSync('apps/web/styles/tokens.css', 'utf8');
 const shell = readFileSync('apps/web/styles/shell.css', 'utf8');
+const components = readFileSync('apps/web/styles/components.css', 'utf8');
 
 test('modular shell exposes every supported admin destination and requests drawer', () => {
   for (const page of [
@@ -52,10 +55,17 @@ test('modular shell exposes every supported admin destination and requests drawe
 test('modular shell uses compact top navigation without dead sidebar rail styles', () => {
   assert.match(main, /class="top-nav"/);
   assert.match(shell, /\.top-nav\s*\{/);
+  assert.match(shell, /flex-wrap:\s*nowrap/);
   assert.match(shell, /\.safe-mode-banner\s*\{/);
   assert.doesNotMatch(main, /class="sidebar"/);
   assert.doesNotMatch(shell, /\.sidebar(?:\s|\{|\.)/);
   assert.doesNotMatch(shell, /grid-template-columns:\s*220px/);
+});
+
+test('vanilla navigation uses the hash as the single page transition path', () => {
+  assert.match(main, /location\.hash\s*=/);
+  assert.match(main, /function navigate\(/);
+  assert.doesNotMatch(main, /history\.replaceState/);
 });
 
 test('Dashboard view keeps Remote Access first inside Onboarding and behavior owns completion ordering', () => {
@@ -129,12 +139,28 @@ test('permissions and sessions retain searchable paginated filters', () => {
   assert.match(sessions, /Search admin sessions/);
 });
 
+test('Settings exposes native host with direct-computer warning in vanilla UI', () => {
+  assert.match(settingsMarkup, /value="native"/);
+  assert.match(settingsMarkup, /Native host/);
+  assert.match(settingsMarkup, /data-native-warning/);
+  assert.match(settingsMarkup, /no container isolation/i);
+  assert.match(settings, /data-native-warning/);
+  assert.match(settings, /sandboxBackend/);
+});
+
 test('safe matcher guide keeps platform tabs individual copy and Copy all', () => {
   assert.match(guide, /data-copy-all-matchers/);
   assert.match(guide, /data-copy-matcher/);
   assert.match(guide, /selectedPlatformMatchers/);
   assert.match(matcherCatalog, /git:status/);
   assert.match(matcherCatalog, /dotnet:test/);
+});
+
+test('shared form styling keeps dark controls compact and keyboard-visible', () => {
+  assert.match(tokens, /select\s+option\s*\{/);
+  assert.match(tokens, /:focus-visible/);
+  assert.match(tokens, /min-height:\s*36px/);
+  assert.match(components, /\.execution-warning/);
 });
 
 test('scrollbars remain thin with transparent tracks', () => {
