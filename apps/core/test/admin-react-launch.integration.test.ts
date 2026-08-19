@@ -13,10 +13,10 @@ async function issue(server: AdminServer) {
     headers: { 'x-aevra-control': 'secret' },
   });
   assert.equal(response.status, 200);
-  return (await response.json() as { token: string }).token;
+  return ((await response.json()) as { token: string }).token;
 }
 
-test('admin bootstrap redirects only to approved local UI destinations', async () => {
+test('admin bootstrap redirects only to the React root and preserves rejected tokens', async () => {
   const db = AevraDatabase.open(':memory:');
   const bootstrap = new AdminBootstrapService(db.raw());
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
@@ -25,54 +25,52 @@ test('admin bootstrap redirects only to approved local UI destinations', async (
   });
   await server.start();
   try {
-    const reactToken = await issue(server);
-    const react = await fetch(
-      `${server.url()}/auth/bootstrap?token=${reactToken}&to=${encodeURIComponent('/react/')}`,
+    const rootToken = await issue(server);
+    const root = await fetch(
+      `${server.url()}/auth/bootstrap?token=${rootToken}&to=${encodeURIComponent('/')}`,
       { redirect: 'manual' },
     );
-    assert.equal(react.status, 302);
-    assert.equal(react.headers.get('location'), '/react/');
+    assert.equal(root.status, 302);
+    assert.equal(root.headers.get('location'), '/');
 
     const protectedToken = await issue(server);
     const rejected = await fetch(
-      `${server.url()}/auth/bootstrap?token=${protectedToken}&to=${encodeURIComponent('https://evil.example')}`,
+      `${server.url()}/auth/bootstrap?token=${protectedToken}&to=${encodeURIComponent('/react/')}`,
       { redirect: 'manual' },
     );
     assert.equal(rejected.status, 400);
 
     const retry = await fetch(
-      `${server.url()}/auth/bootstrap?token=${protectedToken}&to=${encodeURIComponent('/react/')}`,
+      `${server.url()}/auth/bootstrap?token=${protectedToken}&to=${encodeURIComponent('/')}`,
       { redirect: 'manual' },
     );
     assert.equal(retry.status, 302);
-    assert.equal(retry.headers.get('location'), '/react/');
+    assert.equal(retry.headers.get('location'), '/');
   } finally {
     await server.close();
     db.close();
   }
 });
 
-test('admin static server exposes vanilla and React builds from one static root', async () => {
+test('admin static server exposes one React build from the root', async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'aevra-web-'));
-  mkdirSync(path.join(dir, 'react', 'assets'), { recursive: true });
-  writeFileSync(path.join(dir, 'index.html'), 'vanilla');
-  writeFileSync(path.join(dir, 'react', 'index.html'), 'react');
-  writeFileSync(path.join(dir, 'react', 'assets', 'app.js'), 'export default 1;');
+  mkdirSync(path.join(dir, 'assets'), { recursive: true });
+  writeFileSync(path.join(dir, 'index.html'), 'react');
+  writeFileSync(path.join(dir, 'assets', 'app.js'), 'export default 1;');
 
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
     staticDir: dir,
   });
   await server.start();
   try {
-    const vanilla = await fetch(`${server.url()}/`);
-    assert.equal(vanilla.status, 200);
-    assert.equal(await vanilla.text(), 'vanilla');
+    const root = await fetch(`${server.url()}/`);
+    assert.equal(root.status, 200);
+    assert.equal(await root.text(), 'react');
 
-    const react = await fetch(`${server.url()}/react/`);
-    assert.equal(react.status, 200);
-    assert.equal(await react.text(), 'react');
+    const removedCompatibility = await fetch(`${server.url()}/react/`);
+    assert.equal(removedCompatibility.status, 404);
 
-    const asset = await fetch(`${server.url()}/react/assets/app.js`);
+    const asset = await fetch(`${server.url()}/assets/app.js`);
     assert.equal(asset.status, 200);
     assert.equal(asset.headers.get('content-type'), 'text/javascript');
     assert.equal(await asset.text(), 'export default 1;');
