@@ -7,13 +7,14 @@ import { App } from './App';
 function requestPath(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
   if (input instanceof URL) return input.pathname + input.search;
-  return new URL(input.url).pathname + new URL(input.url).search;
+  const url = new URL(input.url);
+  return url.pathname + url.search;
 }
 
 test('delayed Dashboard completion cannot switch the user back from another tab', async () => {
   window.history.replaceState(null, '', '#/settings');
   const baseFetch = installApiFixtures();
-  let releaseDashboard!: () => void;
+  let releaseDashboard: (() => void) | null = null;
 
   vi.stubGlobal(
     'fetch',
@@ -34,10 +35,11 @@ test('delayed Dashboard completion cannot switch the user back from another tab'
   expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: 'Dashboard' }));
+  await waitFor(() => expect(releaseDashboard).not.toBeNull());
   await user.click(screen.getByRole('button', { name: 'Guide' }));
   expect(await screen.findByRole('heading', { name: 'Guide' })).toBeInTheDocument();
 
-  releaseDashboard();
+  releaseDashboard?.();
   await waitFor(() => expect(window.location.hash).toBe('#/guide'));
   expect(screen.getByRole('heading', { name: 'Guide' })).toBeInTheDocument();
 });
