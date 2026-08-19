@@ -11,6 +11,10 @@ interface FixtureOptions {
   oauth?: unknown[];
   permissions?: unknown[];
   sessions?: unknown[];
+  adminSessions?: unknown[];
+  processes?: unknown[];
+  changes?: unknown[];
+  mounts?: unknown[];
 }
 
 function dashboardSnapshot() {
@@ -86,13 +90,13 @@ export async function installAdminApi(page: Page, options: FixtureOptions = {}) 
       },
     ],
     ['/api/workspaces', [{ id: 'ws-1', name: 'Aevra', hostRoot: '/repo' }]],
-    ['/api/workspaces/ws-1/mounts', []],
+    ['/api/workspaces/ws-1/mounts', options.mounts ?? []],
     ['/api/dashboard/runtime', dashboardSnapshot()],
     ['/api/permissions', options.permissions ?? []],
-    ['/api/admin-sessions', []],
+    ['/api/admin-sessions', options.adminSessions ?? []],
     ['/api/sessions', options.sessions ?? []],
-    ['/api/processes', []],
-    ['/api/changes', []],
+    ['/api/processes', options.processes ?? []],
+    ['/api/changes', options.changes ?? []],
     ['/api/audit/verify', { valid: true }],
     ['/api/audit/export?format=json', []],
     ['/api/settings', {}],
