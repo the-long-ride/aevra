@@ -119,6 +119,17 @@ CREATE TABLE IF NOT EXISTS oauth_refresh_tokens(
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_expires ON oauth_refresh_tokens(expires_at);
 `,
   },
+  {
+    version: 6,
+    name: '006_managed_process_terminal_state',
+    sql: `
+ALTER TABLE managed_processes ADD COLUMN state TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE managed_processes ADD COLUMN exit_code INTEGER;
+ALTER TABLE managed_processes ADD COLUMN signal TEXT;
+ALTER TABLE managed_processes ADD COLUMN finished_at TEXT;
+ALTER TABLE managed_processes ADD COLUMN failure_message TEXT;
+`,
+  },
 ];
 export function applyMigrations(db: DatabaseSync) {
   db.exec(
