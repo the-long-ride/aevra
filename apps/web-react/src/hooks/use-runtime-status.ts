@@ -1,6 +1,6 @@
 import type { RuntimeHealthStatus } from '@aevra/admin-contracts';
-import { useEffect, useState } from 'react';
 import { requestJson } from '../services/api-client';
+import { usePollingResource } from './use-polling-resource';
 
 const unavailable: RuntimeHealthStatus = {
   core: 'unavailable',
@@ -9,27 +9,16 @@ const unavailable: RuntimeHealthStatus = {
   tunnel: 'unavailable',
 };
 
+function loadRuntimeStatus(signal: AbortSignal) {
+  return requestJson<RuntimeHealthStatus>('/api/status', { signal });
+}
+
 export function useRuntimeStatus(): RuntimeHealthStatus {
-  const [status, setStatus] = useState<RuntimeHealthStatus>({});
+  const resource = usePollingResource({
+    load: loadRuntimeStatus,
+    intervalMs: 2000,
+  });
 
-  useEffect(() => {
-    let stopped = false;
-    const refresh = async () => {
-      try {
-        const next = await requestJson<RuntimeHealthStatus>('/api/status');
-        if (!stopped) setStatus(next);
-      } catch {
-        if (!stopped) setStatus(unavailable);
-      }
-    };
-
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 2000);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-    };
-  }, []);
-
-  return status;
+  if (resource.data) return resource.data;
+  return resource.error ? unavailable : {};
 }
