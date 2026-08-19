@@ -39,7 +39,6 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
       return { ok: true, value: await fileDelete(op.path, op.recursive, roots) };
     if (op.kind === 'sandbox.inspect')
       return { ok: true, value: { ready: true, backend: 'worker' } };
-    if (op.kind === 'process.list') return { ok: true, value: processRuntime.list() };
     const cwd = (await resolveCapabilityPath('/', roots, 'command')).canonicalHostPath;
     if (op.kind === 'command.run') {
       if (envelope.executionMode === 'sandbox') {
@@ -82,6 +81,9 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
     if (op.kind === 'process.start')
       return { ok: true, value: processRuntime.start(op.command, cwd, op.lifecycle) };
     if (op.kind === 'process.list') return { ok: true, value: processRuntime.list() };
+    if (op.kind === 'process.status') return { ok: true, value: processRuntime.status(op.processId) };
+    if (op.kind === 'process.wait')
+      return { ok: true, value: await processRuntime.wait(op.processId, op.timeoutMs) };
     if (op.kind === 'process.logs')
       return { ok: true, value: processRuntime.logs(op.processId, Number(op.cursor ?? 0)) };
     if (op.kind === 'process.stop') return { ok: true, value: processRuntime.stop(op.processId) };
