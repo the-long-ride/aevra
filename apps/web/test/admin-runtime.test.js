@@ -126,7 +126,7 @@ test('modular vanilla runtime boots every admin page and executes primary contro
   document.querySelector('[data-table-action="details"]').click();
   await settle();
   expect(document.querySelector('#add-mount')).toBeTruthy();
-  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 
   nav('Permissions');
   await settle();
@@ -143,7 +143,7 @@ test('modular vanilla runtime boots every admin page and executes primary contro
   nav('Sessions');
   await settle();
   expect(heading()).toBe('Sessions');
-  document.querySelector('[data-table-action="revoke"]').click();
+  document.querySelector('#remote-sessions-admin [data-table-action="revoke"]').click();
   await settle();
 
   nav('Processes');
@@ -161,7 +161,7 @@ test('modular vanilla runtime boots every admin page and executes primary contro
   nav('Audit');
   await settle();
   expect(heading()).toBe('Audit');
-  document.querySelector('[data-audit-clear]')?.click();
+  document.querySelector('#clear-audit').click();
   await settle();
 
   nav('Settings');
