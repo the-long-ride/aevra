@@ -14,6 +14,10 @@
     ".coverage-dist",
     "coverage",
     "apps/web-react",
-    "tests/ui-parity"
+    "tests",
+    "**/test/**",
+    "**/tests/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }
