@@ -69,15 +69,37 @@ test('Permissions creates normalized command rules and revokes remembered rules'
   );
 });
 
-test('Workspaces adds mounts, saves admission, and can register another root', async () => {
+test('Workspaces adds and removes mounts, saves admission, and can register another root', async () => {
   const user = userEvent.setup();
-  const fetchMock = installApiFixtures();
+  const fetchMock = installApiFixtures({
+    routes: {
+      '/api/workspaces/ws-1/mounts': [
+        {
+          id: 'mount-1',
+          logicalPath: '/external/shared',
+          hostRoot: '/opt/shared',
+          capabilities: ['files.read', 'files.search'],
+        },
+      ],
+    },
+  });
   render(<WorkspacesPage />);
 
   expect(
     await screen.findByRole('heading', { name: 'Workspaces' }),
   ).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Details' }));
+  expect(await screen.findByText('/external/shared')).toBeInTheDocument();
+
+  const removeMount = document.querySelector<HTMLButtonElement>(
+    '[data-surface-id="workspaces:remove-mount"]',
+  );
+  expect(removeMount).not.toBeNull();
+  await user.click(removeMount!);
+  await waitFor(() =>
+    expect(mutationCall(fetchMock, '/api/mounts/mount-1', 'DELETE')).toBeTruthy(),
+  );
+
   await user.type(screen.getByLabelText('Logical path'), '/external/sdk');
   await user.type(screen.getByLabelText('Local mount root'), '/opt/sdk');
   await user.click(screen.getByRole('button', { name: 'Add mount' }));
