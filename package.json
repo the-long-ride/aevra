@@ -15,7 +15,7 @@
     "lint:loc": "node scripts/loc-lint.mjs",
     "lint:dead": "knip",
     "lint": "npm run lint:source && npm run lint:loc && npm run lint:dead",
-    "test": "node scripts/test.mjs && npm --prefix apps/web-react test",
+    "test": "node scripts/test.mjs && npm run test:web",
     "test:unit": "node scripts/test.mjs unit",
     "test:contract": "node scripts/test.mjs contract",
     "test:integration": "node scripts/test.mjs integration",
