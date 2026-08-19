@@ -66,7 +66,7 @@ test('connector bound to another workspace is rejected', async () => {
   );
   db.close();
 });
-test('non-connector actors ignore bindings entirely', async () => {
+test('non-connector actors ignore connector bindings and follow normal approval flow', async () => {
   const db = AevraDatabase.open(':memory:');
   const raw = db.raw();
   const wsRepo = new WorkspaceRepository(raw);
@@ -100,7 +100,9 @@ test('non-connector actors ignore bindings entirely', async () => {
     undefined,
     { connectorBindings: () => ({ workspaceId: 'x', profileCap: 'read-only' }) },
   );
-  const r = await tools.call(session.id, 'workspace_select', { workspace: ws.id });
-  assert.equal(r.status, 'approval_required'); // no mapping for this actor and no override -> ask
+  await assert.rejects(
+    () => tools.call(session.id, 'workspace_select', { workspace: ws.id }),
+    (e: any) => e.code === 'APPROVAL_PENDING',
+  );
   db.close();
 });
