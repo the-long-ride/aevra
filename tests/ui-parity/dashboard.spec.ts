@@ -17,6 +17,8 @@ for (const surface of ADMIN_SURFACES) {
 
     const runtime = page.locator('[data-dashboard-section="runtime-overview"]');
     await expect(runtime).toHaveAttribute('open', '');
+    await expect(runtime.getByText('Remote sessions')).toBeVisible();
+    await expect(runtime.getByText('Version', { exact: true })).toHaveCount(0);
     await runtime.locator('summary').click();
     await expect(runtime).not.toHaveAttribute('open', '');
   });
