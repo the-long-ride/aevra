@@ -3,10 +3,28 @@
     "apps/cli/src/cli.ts",
     "apps/core/src/main.ts",
     "apps/worker/src/main.ts",
+    "apps/web/main.js",
+    "apps/web-react/src/main.tsx",
     "packages/mcp-tools/src/register.ts",
-    "scripts/*.mjs",
+    "scripts/check-web-syntax.mjs",
+    "scripts/copy-static.mjs",
+    "scripts/lint.mjs",
+    "scripts/loc-lint.mjs",
+    "scripts/run-ts-tests.mjs",
+    "scripts/test-coverage-node.mjs",
+    "scripts/test.mjs",
+    "scripts/ts-loader.mjs",
     "scripts/test/*.test.mjs"
   ],
-  "project": ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.mjs"],
-  "ignore": ["dist/**", ".test-dist/**", ".coverage-dist/**", "coverage/**"]
+  "project": [
+    "apps/**/*.{ts,tsx,js,mjs}",
+    "packages/**/*.{ts,tsx,js,mjs}",
+    "scripts/**/*.mjs"
+  ],
+  "ignore": [
+    "dist/**",
+    ".test-dist/**",
+    ".coverage-dist/**",
+    "coverage/**"
+  ]
 }
