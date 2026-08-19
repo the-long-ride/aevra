@@ -26,6 +26,7 @@ async function authorizeRead(
   args: any,
   matcher: string,
 ) {
+  if (!context.sessions.activeLease(sessionId)) return null;
   return authorizeCapability(context, sessionId, capability, { tool, args }, matcher, 'LOW');
 }
 
@@ -88,7 +89,7 @@ export async function handleBasicTool(
 
   if (name === 'skills_list') {
     const gate = await authorizeRead(context, sessionId, 'skills.read', name, args, '*');
-    if ('response' in gate) return gate.response;
+    if (gate && 'response' in gate) return gate.response;
     const all = context.deps.skills?.list(workspaceRoot(context, sessionId)) ?? [];
     const query = typeof args.query === 'string' && args.query ? args.query.toLowerCase() : null;
     const filtered = query
@@ -114,7 +115,7 @@ export async function handleBasicTool(
     const file = args.file ? String(args.file) : undefined;
     const matcher = `${source}:${skillName}:${file ?? 'SKILL.md'}`;
     const gate = await authorizeRead(context, sessionId, 'skills.read', name, args, matcher);
-    if ('response' in gate) return gate.response;
+    if (gate && 'response' in gate) return gate.response;
     return (
       context.deps.skills?.read(source, skillName, workspaceRoot(context, sessionId), file) ??
       unavailable(name)
@@ -141,7 +142,7 @@ export async function handleBasicTool(
 
   if (name === 'instructions_read') {
     const gate = await authorizeRead(context, sessionId, 'instructions.read', name, args, '*');
-    if ('response' in gate) return gate.response;
+    if (gate && 'response' in gate) return gate.response;
     return (
       context.deps.skills?.instructions(workspaceRoot(context, sessionId)) ?? {
         instructions: [],
