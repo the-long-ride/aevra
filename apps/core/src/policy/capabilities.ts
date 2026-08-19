@@ -14,25 +14,37 @@ export const ALL_CAPABILITIES: Capability[] = [
   'files.read',
   'files.search',
   'git.read',
+  'skills.read',
+  'instructions.read',
   'files.write',
   'files.delete',
   'commands.run',
   'git.commit',
   'git.push',
   'network',
+  'skills.write',
+  'instructions.write',
 ];
 
 export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
   {
     id: 'read-only',
     name: 'Read Only',
-    capabilities: ['files.read', 'files.search', 'git.read'],
+    capabilities: ['files.read', 'files.search', 'git.read', 'skills.read', 'instructions.read'],
     builtin: true,
   },
   {
     id: 'coding-session',
     name: 'Coding Session',
-    capabilities: ['files.read', 'files.search', 'git.read', 'files.write', 'commands.run'],
+    capabilities: [
+      'files.read',
+      'files.search',
+      'git.read',
+      'skills.read',
+      'instructions.read',
+      'files.write',
+      'commands.run',
+    ],
     builtin: true,
   },
   {
@@ -42,6 +54,8 @@ export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
       'files.read',
       'files.search',
       'git.read',
+      'skills.read',
+      'instructions.read',
       'files.write',
       'commands.run',
       'git.commit',
@@ -52,17 +66,7 @@ export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
   {
     id: 'full-workspace',
     name: 'Full Workspace',
-    capabilities: [
-      'files.read',
-      'files.search',
-      'git.read',
-      'files.write',
-      'files.delete',
-      'commands.run',
-      'git.commit',
-      'git.push',
-      'network',
-    ],
+    capabilities: [...ALL_CAPABILITIES],
     builtin: true,
   },
 ];
