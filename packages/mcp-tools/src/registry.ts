@@ -15,6 +15,8 @@ export const STABLE_TOOL_NAMES = [
   'shell_run',
   'process_start',
   'process_list',
+  'process_status',
+  'process_wait',
   'process_logs',
   'process_stop',
   'process_restart',
@@ -37,12 +39,7 @@ export const STABLE_TOOL_NAMES = [
 ] as const;
 export type AevraToolName = (typeof STABLE_TOOL_NAMES)[number];
 
-type JsonSchema = {
-  type: 'object';
-  properties?: Record<string, unknown>;
-  required?: string[];
-  additionalProperties?: boolean;
-};
+type JsonSchema = Record<string, unknown>;
 type ToolAnnotations = {
   readOnlyHint?: boolean;
   destructiveHint?: boolean;
@@ -53,12 +50,64 @@ type ToolDescriptor = {
   name: AevraToolName;
   description: string;
   inputSchema: JsonSchema;
+  outputSchema: JsonSchema;
   annotations: ToolAnnotations;
 };
 
 const emptySchema: JsonSchema = { type: 'object', properties: {}, additionalProperties: false };
 const stringProp = (description: string) => ({ type: 'string', description });
 const nonNegativeInteger = (description: string) => ({ type: 'integer', minimum: 0, description });
+const stringArray = (description: string) => ({
+  type: 'array',
+  items: { type: 'string' },
+  description,
+});
+const stringMap = (description: string) => ({
+  type: 'object',
+  additionalProperties: { type: 'string' },
+  description,
+});
+
+const processState = {
+  type: 'string',
+  enum: ['running', 'completed', 'failed', 'stopped', 'unknown'],
+};
+const processStatusProperties = {
+  processId: { type: 'string' },
+  pid: { type: 'integer' },
+  startedAt: { type: 'string' },
+  lifecycle: { type: 'string', enum: ['stop-with-aevra', 'keep-running'] },
+  state: processState,
+  exitCode: { type: ['integer', 'null'] },
+  signal: { type: ['string', 'null'] },
+  finishedAt: { type: ['string', 'null'] },
+  durationMs: { type: ['number', 'null'], minimum: 0 },
+  marker: { type: 'string' },
+  logPath: { type: 'string' },
+  resultPath: { type: 'string' },
+};
+const processStatusSchema: JsonSchema = {
+  type: 'object',
+  properties: processStatusProperties,
+  required: [
+    'processId',
+    'pid',
+    'startedAt',
+    'lifecycle',
+    'state',
+    'exitCode',
+    'signal',
+    'finishedAt',
+    'durationMs',
+  ],
+  additionalProperties: false,
+};
+const processIdSchema: JsonSchema = {
+  type: 'object',
+  properties: { processId: stringProp('Managed process ID.') },
+  required: ['processId'],
+  additionalProperties: false,
+};
 
 const schemas: Partial<Record<AevraToolName, JsonSchema>> = {
   aevra_status: emptySchema,
@@ -121,52 +170,66 @@ const schemas: Partial<Record<AevraToolName, JsonSchema>> = {
         maximum: 86400000,
         description: 'Execution timeout in milliseconds, up to 24 hours.',
       },
-      env: {
-        type: 'object',
-        additionalProperties: { type: 'string' },
-        description: 'Environment variables injected only into the child process.',
-      },
-      networkDestinations: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
-          'Optional network destinations subject to Aevra network capability and approval policy.',
-      },
+      env: stringMap('Environment variables injected only into the child process.'),
+      networkDestinations: stringArray(
+        'Optional network destinations subject to Aevra network capability and approval policy.',
+      ),
     },
     required: ['script'],
     additionalProperties: false,
   },
+  process_start: {
+    type: 'object',
+    properties: {
+      executable: stringProp('Executable to start in the active workspace.'),
+      args: stringArray('Arguments passed directly to the executable.'),
+      env: stringMap('Environment variables injected only into the managed process.'),
+      timeoutMs: nonNegativeInteger('Optional command timeout hint in milliseconds.'),
+      lifecycle: {
+        type: 'string',
+        enum: ['stop-with-aevra', 'keep-running'],
+        description: 'Whether Aevra stops the process when the gateway stops.',
+      },
+    },
+    required: ['executable'],
+    additionalProperties: false,
+  },
   process_list: emptySchema,
-  process_logs: {
+  process_status: processIdSchema,
+  process_wait: {
     type: 'object',
     properties: {
       processId: stringProp('Managed process ID.'),
-      cursor: { description: 'Optional log cursor returned by a previous process_logs call.' },
+      timeoutMs: {
+        type: 'integer',
+        minimum: 0,
+        maximum: 30000,
+        description: 'Maximum bounded wait before returning current status. Defaults to 15000 ms.',
+      },
     },
     required: ['processId'],
     additionalProperties: false,
   },
+  process_logs: {
+    type: 'object',
+    properties: {
+      processId: stringProp('Managed process ID.'),
+      cursor: { type: ['integer', 'string'], description: 'Optional cursor from a previous call.' },
+    },
+    required: ['processId'],
+    additionalProperties: false,
+  },
+  process_stop: processIdSchema,
+  process_restart: processIdSchema,
   git_status: emptySchema,
   git_diff: {
     type: 'object',
-    properties: {
-      args: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Optional git diff arguments.',
-      },
-    },
+    properties: { args: stringArray('Optional git diff arguments.') },
     additionalProperties: false,
   },
   git_log: {
     type: 'object',
-    properties: {
-      args: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Optional git log arguments.',
-      },
-    },
+    properties: { args: stringArray('Optional git log arguments.') },
     additionalProperties: false,
   },
   change_status: {
@@ -203,6 +266,34 @@ const schemas: Partial<Record<AevraToolName, JsonSchema>> = {
   instructions_read: emptySchema,
 };
 
+const outputSchemas: Partial<Record<AevraToolName, JsonSchema>> = {
+  process_start: processStatusSchema,
+  process_list: { type: 'array', items: processStatusSchema },
+  process_status: processStatusSchema,
+  process_wait: processStatusSchema,
+  process_logs: {
+    type: 'object',
+    properties: {
+      cursor: { type: 'integer' },
+      lines: { type: 'array', items: { type: 'string' } },
+      state: processState,
+      exitCode: { type: ['integer', 'null'] },
+      signal: { type: ['string', 'null'] },
+      finishedAt: { type: ['string', 'null'] },
+      eof: { type: 'boolean' },
+    },
+    required: ['cursor', 'lines', 'state', 'exitCode', 'signal', 'finishedAt', 'eof'],
+    additionalProperties: false,
+  },
+  process_stop: {
+    type: 'object',
+    properties: { processId: { type: 'string' }, stopped: { type: 'boolean' } },
+    required: ['processId', 'stopped'],
+    additionalProperties: false,
+  },
+  process_restart: processStatusSchema,
+};
+
 const readOnly = new Set<AevraToolName>([
   'aevra_status',
   'workspace_list',
@@ -212,6 +303,8 @@ const readOnly = new Set<AevraToolName>([
   'file_read',
   'file_search',
   'process_list',
+  'process_status',
+  'process_wait',
   'process_logs',
   'git_status',
   'git_diff',
@@ -236,8 +329,15 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
   file_search: 'Search for text inside files in the active workspace.',
   shell_run:
     'Run a PowerShell, bash, or sh script in the active workspace through Aevra command policy, sandbox, and local approval controls.',
-  process_list: 'List managed processes owned by the active workspace.',
-  process_logs: 'Read logs from a managed process owned by the active workspace.',
+  process_start:
+    'Start a managed process and return immediately with a durable process ID for later status, wait, and log calls.',
+  process_list: 'List managed processes owned by the active workspace with terminal state.',
+  process_status: 'Read durable state and exit information for one managed process.',
+  process_wait:
+    'Wait for one managed process for a bounded interval, returning terminal state immediately when it finishes.',
+  process_logs: 'Read logs and terminal state from a managed process owned by the active workspace.',
+  process_stop: 'Stop one managed process owned by the active workspace.',
+  process_restart: 'Restart one managed process owned by the active workspace.',
   git_status: 'Read Git status for the active workspace.',
   git_diff: 'Read a Git diff for the active workspace.',
   git_log: 'Read Git history for the active workspace.',
@@ -255,6 +355,7 @@ export function toolDefinitions(): ToolDescriptor[] {
       descriptions[name] ??
       `Aevra ${name.startsWith('aevra_') ? name.slice('aevra_'.length) : name.replaceAll('_', ' ')}`,
     inputSchema: schemas[name] ?? { type: 'object', additionalProperties: true },
+    outputSchema: outputSchemas[name] ?? {},
     annotations: {
       readOnlyHint: readOnly.has(name),
       destructiveHint: destructive.has(name),
