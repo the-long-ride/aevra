@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ADMIN_SURFACE } from '@aevra/admin-contracts';
@@ -27,6 +27,26 @@ describe('React admin shell', () => {
     await user.click(await screen.findByRole('button', { name: 'Permissions' }));
     expect(await screen.findByRole('heading', { name: 'Permissions' })).toBeInTheDocument();
     expect(screen.getByTestId('react-admin-root')).toBeInTheDocument();
+  });
+
+  test('drives repeated tab switches through hashchange', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const hashChanges = vi.fn();
+    window.addEventListener('hashchange', hashChanges);
+
+    await user.click(await screen.findByRole('button', { name: 'Settings' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/settings'));
+    await waitFor(() => expect(hashChanges).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Guide' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/guide'));
+    await waitFor(() => expect(hashChanges).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('heading', { name: 'Guide' })).toBeInTheDocument();
+
+    window.removeEventListener('hashchange', hashChanges);
   });
 
   test('shows version, runtime health, requests count, and safe mode from status', async () => {
