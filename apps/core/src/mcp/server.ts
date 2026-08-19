@@ -8,7 +8,8 @@ import {
 } from '../auth/cloudflare.js';
 import type { AevraOAuthService } from '../auth/oauth.js';
 import { handleJsonRpc } from '../../../../packages/mcp-tools/src/register.js';
-import { McpActivityLog } from './activity-log.js';
+import type { McpActivityLog } from './activity-log.js';
+import { McpActivityRecorder } from './activity-recorder.js';
 import { McpDiagnostics } from './diagnostics.js';
 import { bearerToken, readJson, remoteIp, sendJson } from './http-response.js';
 import { handleOAuthRoute } from './oauth-routes.js';
@@ -78,6 +79,7 @@ function unsupportedProtocol(res: ServerResponse, id: unknown, requested: string
 export class McpIngressServer {
   private server?: http.Server | https.Server;
   private readonly diagnostics = new McpDiagnostics();
+  private readonly activity: McpActivityRecorder;
 
   constructor(
     private host: string,
@@ -88,7 +90,9 @@ export class McpIngressServer {
     private runtime?: McpSessionRuntime,
     private connectors?: ConnectorAdmission,
     private options: McpIngressServerOptions = {},
-  ) {}
+  ) {
+    this.activity = new McpActivityRecorder(options.activity, runtime?.sessions);
+  }
 
   async start() {
     const handler = (req: IncomingMessage, res: ServerResponse) => void this.handle(req, res);
@@ -126,10 +130,6 @@ export class McpIngressServer {
     await new Promise<void>((resolve) => this.server!.close(() => resolve()));
     this.server = undefined;
     this.diagnostics.stopped();
-  }
-
-  private activeWorkspaceId(sessionId: string) {
-    return this.runtime?.sessions.activeLease?.(sessionId)?.workspaceId as string | undefined;
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse) {
@@ -213,15 +213,8 @@ export class McpIngressServer {
         return;
       }
       this.diagnostics.recordIdentity(identity.actor, sessionId);
-      const workspaceId = this.activeWorkspaceId(sessionId);
+      this.activity.session(identity.actor, sessionId, 'disconnect');
       this.runtime!.sessions.disconnect(sessionId);
-      this.options.activity?.instant({
-        actor: identity.actor,
-        sessionId,
-        workspaceId,
-        kind: 'session',
-        action: 'disconnect',
-      });
       res.statusCode = 204;
       res.end();
       return;
@@ -247,13 +240,7 @@ export class McpIngressServer {
     if (body?.method === 'initialize') {
       const session = this.runtime!.sessions.create(identity, remoteIp(req));
       this.diagnostics.recordIdentity(identity.actor, session.id);
-      this.options.activity?.instant({
-        actor: identity.actor,
-        sessionId: session.id,
-        workspaceId: this.activeWorkspaceId(session.id),
-        kind: 'session',
-        action: 'initialize',
-      });
+      this.activity.session(identity.actor, session.id, 'initialize');
       res.setHeader('mcp-session-id', session.id);
       sendJson(res, 200, {
         jsonrpc: '2.0',
@@ -296,37 +283,18 @@ export class McpIngressServer {
       this.diagnostics.recordToolCall(body?.params?.name, sessionId);
     }
 
-    const method = typeof body?.method === 'string' && body.method ? body.method : 'unknown';
-    const toolName = typeof body?.params?.name === 'string' && body.params.name ? body.params.name : 'unknown-tool';
-    const activity = this.options.activity?.begin({
-      actor: identity.actor,
+    const activity = this.activity.begin(
+      identity.actor,
       sessionId,
-      workspaceId: this.activeWorkspaceId(sessionId),
-      kind: method === 'tools/call' ? 'tool' : 'rpc',
-      action: method === 'tools/call' ? toolName : method,
-    });
-    const startedAt = Date.now();
+      body?.method,
+      body?.params?.name,
+    );
     try {
       const result = await handleJsonRpc(this.runtime!.service, sessionId, body);
-      const failed = Boolean((result as any)?.error || (result as any)?.result?.isError);
-      if (activity) {
-        this.options.activity?.finish(
-          activity.id,
-          failed ? 'error' : 'success',
-          Date.now() - startedAt,
-          this.activeWorkspaceId(sessionId),
-        );
-      }
+      this.activity.finish(activity, result);
       sendJson(res, 200, result);
     } catch (error) {
-      if (activity) {
-        this.options.activity?.finish(
-          activity.id,
-          'error',
-          Date.now() - startedAt,
-          this.activeWorkspaceId(sessionId),
-        );
-      }
+      this.activity.fail(activity);
       throw error;
     }
   }
