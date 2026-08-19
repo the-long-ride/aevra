@@ -2,6 +2,7 @@ import type { ApprovalItem, ApprovalScope } from '@aevra/admin-contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { actionsForApproval } from './request-actions';
+import { announceNewRequests } from './request-notifications';
 import {
   approveRequest,
   decideOauth,
@@ -104,6 +105,7 @@ export function RequestDrawer({
   const refresh = useCallback(async () => {
     const next = await loadRequests();
     setData(next);
+    announceNewRequests(next.approvals, next.oauth);
     onPendingCountChange(
       next.approvals.filter((item) => item.state === 'PENDING').length +
         next.oauth.length,
@@ -127,9 +129,6 @@ export function RequestDrawer({
 
   const requestNotifications = async () => {
     if (typeof Notification === 'undefined') return;
-    onPendingCountChange(
-      pending.length + (data?.oauth.length ?? 0),
-    );
     setNotifications(await Notification.requestPermission());
   };
 
