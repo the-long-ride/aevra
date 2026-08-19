@@ -1,7 +1,7 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ADMIN_SURFACES, installAdminApi } from './fixtures';
 
-function waitsFor(page, path: string, method = 'POST') {
+function waitsFor(page: Page, path: string, method = 'POST') {
   return page.waitForRequest(
     (request) =>
       new URL(request.url()).pathname === path && request.method() === method,
