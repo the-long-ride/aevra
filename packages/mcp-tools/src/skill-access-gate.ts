@@ -5,7 +5,6 @@ import type {
 } from '../../../apps/core/src/approvals/approval-service.js';
 import { AevraToolError } from './errors.js';
 
-const SKILL_TOOLS = new Set(['skills_list', 'skill_read', 'instructions_read']);
 const SKILL_FAMILY = 'skills:read';
 const SKILL_SCOPE = 'local-skills';
 
@@ -46,11 +45,6 @@ export class SessionSkillAccessGate {
       const ticket = this.approvals.status(requestId);
       if (ticket?.operation.family === SKILL_FAMILY)
         return this.resumeSkillApproval(sessionId, requestId);
-      return this.inner.call(sessionId, name, args);
-    }
-    if (SKILL_TOOLS.has(name)) {
-      const access = await this.ensureSkillAccess(sessionId);
-      if (!access.granted) return access.result;
     }
     return this.inner.call(sessionId, name, args);
   }
@@ -67,7 +61,7 @@ export class SessionSkillAccessGate {
     if (!access.granted)
       throw new AevraToolError(
         'APPROVAL_PENDING',
-        'Local skills read access requires local approval',
+        'Local skill resource access requires local approval',
         { requestId: access.result.requestId, scope: 'session' },
       );
     if (!this.inner.resourceRead)
@@ -84,7 +78,7 @@ export class SessionSkillAccessGate {
     if (!access.granted)
       throw new AevraToolError(
         'APPROVAL_PENDING',
-        'Local skills read access requires local approval',
+        'Local instruction prompt access requires local approval',
         { requestId: access.result.requestId, scope: 'session' },
       );
     if (!this.inner.promptGet)
@@ -114,7 +108,7 @@ export class SessionSkillAccessGate {
       if (latest.state === 'DENIED')
         throw new AevraToolError(
           'APPROVAL_DENIED',
-          'Local skills read access was denied for this MCP session',
+          'Local skill resource access was denied for this MCP session',
         );
       if (latest.state === 'PENDING') return { granted: false, result: this.pendingResult(latest) };
     }
@@ -125,9 +119,9 @@ export class SessionSkillAccessGate {
       workspaceId: SKILL_SCOPE,
       operation: {
         family: SKILL_FAMILY,
-        capability: 'files.read',
+        capability: 'skills.read',
         risk: 'MEDIUM',
-        argsHash: 'session-local-skills-read-v1',
+        argsHash: 'session-local-skills-read-v2',
       },
       payload: { tool: 'skills_access', scope: 'session', sources: ['user', 'workspace'] },
       expectedState: { sessionId },
@@ -175,7 +169,7 @@ export class SessionSkillAccessGate {
       expiresInSeconds: Math.max(0, Math.ceil((Date.parse(ticket.expiresAt) - Date.now()) / 1000)),
       scope: 'session' as const,
       sources: ['user', 'workspace'] as ['user', 'workspace'],
-      message: 'Approve local Aevra skills and instructions once for this MCP session.',
+      message: 'Approve passive local Aevra skill resources and instruction prompts for this MCP session.',
     };
   }
 }
