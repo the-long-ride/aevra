@@ -63,9 +63,10 @@ function fixture() {
   return { db, sessions, approvals, calls, gate, identity };
 }
 
-test('skill and instruction tools pass through to their capability-aware MCP handlers', async () => {
+test('skill and instruction tools use capability-aware handlers when a workspace lease exists', async () => {
   const f = fixture();
   const session = f.sessions.create(f.identity);
+  assert.equal(f.sessions.admitWorkspace(session.id, 'workspace', 'read-only').status, 'admitted');
   for (const [name, args] of [
     ['skills_list', {}],
     ['skill_read', { source: 'user', name: 'demo' }],
@@ -77,6 +78,21 @@ test('skill and instruction tools pass through to their capability-aware MCP han
     assert.equal(result.name, name);
   }
   assert.equal(f.approvals.list().length, 0, 'tool permission is owned by the inner capability gate');
+  f.db.close();
+});
+
+test('skill read tools keep session approval compatibility before workspace selection', async () => {
+  const f = fixture();
+  const session = f.sessions.create(f.identity);
+  const pending = (await f.gate.call(session.id, 'skills_list', {})) as any;
+  assert.equal(pending.status, 'approval_pending');
+  assert.equal(f.calls.length, 0);
+  const ticket = f.approvals.status(pending.requestId)!;
+  assert.equal(ticket.operation.capability, 'skills.read');
+  f.approvals.approve(ticket.id, 'once');
+  await f.gate.call(session.id, 'approval_wait', { requestId: ticket.id });
+  const result = await f.gate.call(session.id, 'skills_list', {});
+  assert.equal(result.name, 'skills_list');
   f.db.close();
 });
 
