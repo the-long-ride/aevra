@@ -21,7 +21,7 @@ const suffixes = {
   security: '.security.test.ts',
 };
 const ts = [];
-for (const root of ['apps', 'packages', 'tests'])
+for (const root of ['apps/cli', 'apps/core', 'apps/worker', 'packages', 'tests'])
   ts.push(
     ...collect(root, (f) => {
       if (!f.endsWith('.test.ts')) return false;
