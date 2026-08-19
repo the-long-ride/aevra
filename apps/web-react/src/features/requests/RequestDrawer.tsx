@@ -7,6 +7,7 @@ import {
   approveRequest,
   decideOauth,
   denyRequest,
+  enableYoloRequest,
   loadRequests,
   type RequestsData,
 } from './requests-service';
@@ -38,9 +39,20 @@ function ApprovalCard({
     target: workspaceName ?? item.workspaceId ?? '',
   };
   const matcher = savedMatcher(item);
+  const yoloEligible =
+    Boolean(item.sessionId) &&
+    (item.actor.startsWith('connector:') || item.actor.startsWith('oauth:'));
   const perform = async (scope: ApprovalScope | null) => {
     if (scope) await approveRequest(item.id, scope);
     else await denyRequest(item.id);
+    await onChanged();
+  };
+  const enableYolo = async () => {
+    const confirmed = window.confirm(
+      'Enable YOLO for this connector session? Future operations in this session will skip capability and approval prompts until YOLO is disabled or the session ends.',
+    );
+    if (!confirmed) return;
+    await enableYoloRequest(item.id);
     await onChanged();
   };
   return (
@@ -77,6 +89,17 @@ function ApprovalCard({
             {action.label}
           </button>
         ))}
+        {yoloEligible ? (
+          <button
+            type="button"
+            className="danger"
+            data-surface-id="requests:yolo-session"
+            title="Allow this connector session to skip future Aevra capability and approval prompts"
+            onClick={() => void enableYolo()}
+          >
+            YOLO session
+          </button>
+        ) : null}
       </div>
     </article>
   );

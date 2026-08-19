@@ -56,7 +56,9 @@ export class SessionSkillAccessGate {
   }
 
   resourcesList(sessionId: string) {
-    if (!this.grantedSessions.has(sessionId)) return { resources: [] };
+    if (!this.grantedSessions.has(sessionId) && !this.sessions.isYolo(sessionId)) {
+      return { resources: [] };
+    }
     return this.inner.resourcesList?.(sessionId) ?? { resources: [] };
   }
 
@@ -91,6 +93,7 @@ export class SessionSkillAccessGate {
   }
 
   private async ensureSkillAccess(sessionId: string): Promise<AccessResult> {
+    if (this.sessions.isYolo(sessionId)) return { granted: true };
     if (this.grantedSessions.has(sessionId)) return { granted: true };
     const session = this.sessions.get(sessionId);
     if (!session) throw new AevraToolError('UNAUTHORIZED', 'Unknown Aevra session');

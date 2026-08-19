@@ -28,6 +28,13 @@ export async function approveRequest(id: string, scope: ApprovalScope) {
   });
 }
 
+export async function enableYoloRequest(id: string) {
+  await requestJson(`/api/approvals/${encodeURIComponent(id)}/yolo`, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
 export async function denyRequest(id: string) {
   await requestJson(`/api/approvals/${encodeURIComponent(id)}/deny`, {
     method: 'POST',

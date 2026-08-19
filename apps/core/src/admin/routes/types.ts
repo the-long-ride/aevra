@@ -18,6 +18,7 @@ export interface AdminApiContext {
   environment?: any;
   vault?: any;
   database?: any;
+  mcpDiagnostics?: () => unknown;
   safeMode?: () => boolean;
 }
 

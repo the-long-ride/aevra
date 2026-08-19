@@ -14,6 +14,7 @@ import { ConnectorRepository } from '../../../packages/store/src/connectors.js';
 import { OAuthRepository } from '../../../packages/store/src/oauth.js';
 import { SkillsService } from './skills/skills-service.js';
 import { IpRateLimiter } from './mcp/rate-limit.js';
+import { createConnectorAdmission } from './mcp/connector-admission.js';
 import { AEVRA_VERSION } from './version.js';
 import { MetricsService } from './metrics.js';
 import { TunnelWatchdog } from './cloudflare/watchdog.js';
@@ -47,25 +48,10 @@ import { ConfigExportService } from './config/export-service.js';
 import { EncryptedVault } from '../../../packages/secrets/src/vault.js';
 import { CommandSecretStore } from '../../../packages/secrets/src/platform.js';
 import { EnvironmentService } from './secrets/environment-service.js';
-import { ensureLocalTls, type LocalTlsMaterial } from './tls/local-tls.js';
+import { ensureLocalTls } from './tls/local-tls.js';
+import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
 
-export interface CoreRuntime {
-  readonly adminUrl: string;
-  readonly mcpUrl: string;
-  start(): Promise<void>;
-  close(): Promise<void>;
-}
-export interface RuntimeDependencies {
-  worker?: {
-    start(): Promise<WorkerClient>;
-    close(): Promise<void>;
-    execute?: (input: any) => Promise<any>;
-  };
-  databaseOpen?: (path: string) => AevraDatabase;
-  tls?: LocalTlsMaterial;
-  ensureTls?: (config: CoreConfig) => Promise<LocalTlsMaterial>;
-  cloudflare?: CloudflareManager;
-}
+export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
 
 export async function createCoreRuntime(
   config: CoreConfig,
@@ -77,8 +63,8 @@ export async function createCoreRuntime(
     mcp: McpIngressServer | undefined,
     cloudflare: CloudflareManager | undefined;
   let safeMode = false,
-    started = false;
-  let watchdog: TunnelWatchdog | undefined;
+    started = false,
+    watchdog: TunnelWatchdog | undefined;
   const wm: any =
     deps.worker ??
     new WorkerManager(config.workerSocketPath, path.join(config.stateDir, 'process-logs'));
@@ -266,6 +252,7 @@ export async function createCoreRuntime(
             core: 'running',
             worker: worker ? 'running' : 'unavailable',
             mcp: mcp ? 'running' : 'starting',
+            mcpDiagnostics: mcp?.diagnosticsSnapshot() ?? null,
             tunnel: settings.get('cloudflare.config', null) ? 'configured' : 'unconfigured',
             tunnelReachable: watchdog?.status.reachable ?? null,
             tunnelCheckedAt: watchdog?.status.checkedAt ?? null,
@@ -296,6 +283,7 @@ export async function createCoreRuntime(
               database: databaseAdmin,
               connectors: connectorRepo,
               metrics,
+              mcpDiagnostics: () => mcp?.diagnosticsSnapshot() ?? null,
               safeMode: () => safeMode,
             },
           },
@@ -317,27 +305,7 @@ export async function createCoreRuntime(
           ? new CloudflareAccessVerifier(issuer, audience)
           : new RejectingIdentityVerifier();
         const connectorLimiter = new IpRateLimiter(30, 1);
-        const connectorsAdmission = {
-          verify: async (token: string, ip: string) => {
-            if (!connectorLimiter.allow(ip)) return { kind: 'rate-limited' } as const;
-            const row = connectorRepo.findByToken(token);
-            if (!row) {
-              connectorLimiter.recordFailure(ip);
-              return { kind: 'denied' } as const;
-            }
-            connectorRepo.recordUse(row.id);
-            return {
-              kind: 'admitted',
-              identity: {
-                actor: `connector:${row.name}`,
-                subject: row.id,
-                issuer: 'aevra:connector',
-                audience: 'aevra',
-                expiresAt: new Date(Date.now() + 24 * 3_600_000).toISOString(),
-              },
-            } as const;
-          },
-        };
+        const connectorsAdmission = createConnectorAdmission(connectorRepo, connectorLimiter);
         mcp = new McpIngressServer(
           config.mcpHost,
           config.mcpPort,

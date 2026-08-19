@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
 import type {
   OAuthAuthorizationRequestRecord,
   OAuthClientRecord,
@@ -6,6 +5,13 @@ import type {
   OAuthTokenRecord,
 } from '../../../../packages/store/src/oauth.js';
 import type { VerifiedRemoteIdentity } from './cloudflare.js';
+import {
+  SUPPORTED_SCOPES,
+  base64urlSha256,
+  normalizeScope,
+  safeEqualText,
+  validateRedirectUri,
+} from './oauth-helpers.js';
 
 export interface OAuthServiceOptions {
   issuer: string;
@@ -62,47 +68,6 @@ export interface OAuthTokenResponse {
   refresh_token?: string;
 }
 
-const SUPPORTED_SCOPES = ['mcp', 'offline_access'] as const;
-
-function base64urlSha256(value: string) {
-  return createHash('sha256').update(value).digest('base64url');
-}
-function safeEqualText(left: string, right: string) {
-  const a = Buffer.from(left),
-    b = Buffer.from(right);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-function isLoopbackHost(hostname: string) {
-  return (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '[::1]' ||
-    hostname === '::1'
-  );
-}
-function validateRedirectUri(value: string) {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error('redirect_uri must be an absolute URL');
-  }
-  if (url.hash) throw new Error('redirect_uri must not contain a fragment');
-  if (url.protocol === 'https:') return value;
-  if (url.protocol === 'http:' && isLoopbackHost(url.hostname)) return value;
-  throw new Error('redirect_uri must use HTTPS or localhost HTTP');
-}
-function normalizeScope(value: string | undefined) {
-  const scopes = String(value ?? 'mcp')
-    .split(/\s+/)
-    .map((v) => v.trim())
-    .filter(Boolean);
-  if (!scopes.includes('mcp')) scopes.unshift('mcp');
-  const unique = [...new Set(scopes)];
-  const unsupported = unique.filter((scope) => !SUPPORTED_SCOPES.includes(scope as any));
-  if (unsupported.length) throw new Error(`unsupported OAuth scope: ${unsupported.join(' ')}`);
-  return unique.join(' ');
-}
 function publicClient(record: OAuthClientRecord, applicationType?: string) {
   return {
     client_id: record.clientId,

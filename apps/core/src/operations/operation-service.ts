@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { WorkerOperation } from '../../../../packages/protocol/src/worker.js';
 import type { ReadVersionCache } from './read-version-cache.js';
 import type { WorkspaceService } from '../workspaces/workspace-service.js';
 import type { SessionManager } from '../sessions/session-manager.js';
@@ -16,6 +15,13 @@ import type {
 } from '../../../../packages/protocol/src/index.js';
 import type { ChangeSetService } from '../changes/change-service.js';
 import { classifyNetworkDestination } from '../policy/network.js';
+import {
+  createFileMutation,
+  deleteFileMutation,
+  moveFileMutation,
+  patchFileMutation,
+} from './file-mutations.js';
+import { CommandExecution, type CommandRunInput } from './command-execution.js';
 
 export interface AuthorizedCapabilityContext {
   sessionId: string;
@@ -25,45 +31,12 @@ export interface AuthorizedCapabilityContext {
   matcher: string;
 }
 
-function applyUnifiedPatch(source: string, patch: string) {
-  const lines = source.replace(/\r\n/g, '\n').split('\n'),
-    out = [...lines];
-  let offset = 0;
-  const rows = patch.replace(/\r\n/g, '\n').split('\n');
-  for (let i = 0; i < rows.length; i++) {
-    const m = rows[i]!.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-    if (!m) continue;
-    const start = Number(m[1]) - 1 + offset,
-      oldChunk: string[] = [],
-      newChunk: string[] = [];
-    i++;
-    for (; i < rows.length && !rows[i]!.startsWith('@@ '); i++) {
-      const row = rows[i]!;
-      if (row.startsWith(' ') || row.startsWith('-')) oldChunk.push(row.slice(1));
-      if (row.startsWith(' ') || row.startsWith('+')) newChunk.push(row.slice(1));
-    }
-    i--;
-    const actual = out.slice(start, start + oldChunk.length);
-    if (actual.join('\n') !== oldChunk.join('\n'))
-      throw Object.assign(new Error('Patch context does not match file'), {
-        code: 'WRITE_CONFLICT',
-      });
-    out.splice(start, oldChunk.length, ...newChunk);
-    offset += newChunk.length - oldChunk.length;
-  }
-  const eol = source.includes('\r\n') ? '\r\n' : '\n';
-  return out.join(eol);
-}
-
 export class OperationService {
   private recoveryReady = false;
   private changes?: ChangeSetService;
-  private activeCommands = new Map<string, Set<Promise<unknown>>>();
   private commandEffectResolver?: (family: string, defaultEffect: CommandEffect) => CommandEffect;
-  private executionSettingsResolver?: () => {
-    sandboxBackend?: 'auto' | 'docker' | 'podman' | 'native';
-    cachePolicy?: 'shared' | 'workspace' | 'disabled';
-  };
+  private commandExecution: CommandExecution;
+
   constructor(
     private sessions: SessionManager,
     private workspaces: WorkspaceService,
@@ -72,20 +45,31 @@ export class OperationService {
     private audit: AuditService,
     private reads: ReadVersionCache,
     private locks = new WorkspaceLockCoordinator(),
-  ) {}
+  ) {
+    this.commandExecution = new CommandExecution(
+      sessions,
+      workspaces,
+      worker,
+      locks,
+      (tokens) => this.classify(tokens),
+    );
+  }
+
   setCommandEffectResolver(
     resolver: (family: string, defaultEffect: CommandEffect) => CommandEffect,
   ) {
     this.commandEffectResolver = resolver;
   }
+
   setExecutionSettingsResolver(
     resolver: () => {
       sandboxBackend?: 'auto' | 'docker' | 'podman' | 'native';
       cachePolicy?: 'shared' | 'workspace' | 'disabled';
     },
   ) {
-    this.executionSettingsResolver = resolver;
+    this.commandExecution.setSettingsResolver(resolver);
   }
+
   classify(tokens: string[]) {
     const result = classifyCommand(tokens);
     return {
@@ -93,13 +77,16 @@ export class OperationService {
       effect: this.commandEffectResolver?.(result.family, result.effect) ?? result.effect,
     };
   }
+
   classifyNetwork(value: string) {
     return classifyNetworkDestination(value);
   }
+
   attachChangeService(changes: ChangeSetService) {
     this.changes = changes;
     this.recoveryReady = true;
   }
+
   setRecoveryReady(v = true) {
     this.recoveryReady = v;
   }
@@ -109,28 +96,33 @@ export class OperationService {
     input: { path: string; content: string; expectedHash?: string },
     authorization?: AuthorizedCapabilityContext,
   ) {
-    const lease = this.requiredLease(sessionId, 'files.write', authorization),
-      roots = this.workspaces.capabilityRoots(lease.workspaceId);
+    const lease = this.requiredLease(sessionId, 'files.write', authorization);
+    const roots = this.workspaces.capabilityRoots(lease.workspaceId);
     const current = await this.worker.execute({
       sessionId,
       workspaceId: lease.workspaceId,
       roots,
       operation: { kind: 'file.read', path: input.path },
     });
-    if (!current.ok)
+    if (!current.ok) {
       throw Object.assign(new Error(current.error.message), { code: current.error.code });
+    }
     const cur = current.value as any;
     let content = input.content;
     if (input.expectedHash && input.expectedHash !== cur.hash) {
       const base = this.reads.get(sessionId, lease.workspaceId, cur.path, input.expectedHash);
-      if (!base)
-        throw Object.assign(new Error('Stale write base unavailable'), { code: 'WRITE_CONFLICT' });
+      if (!base) {
+        throw Object.assign(new Error('Stale write base unavailable'), {
+          code: 'WRITE_CONFLICT',
+        });
+      }
       const merged = mergeText(base.content, cur.content, input.content);
-      if (merged.kind === 'conflict')
+      if (merged.kind === 'conflict') {
         throw Object.assign(new Error('Overlapping edits'), {
           code: 'MERGE_CONFLICT',
           ranges: merged.ranges,
         });
+      }
       content = merged.content;
     }
     const operationId = `op_${randomUUID()}`;
@@ -149,7 +141,9 @@ export class OperationService {
       input.path,
       operationId,
     );
-    this.operations.updateState(operationId, 'AUTHORIZED', { snapshotPath: recovery.snapshotPath });
+    this.operations.updateState(operationId, 'AUTHORIZED', {
+      snapshotPath: recovery.snapshotPath,
+    });
     const ticket = await this.locks.acquire({
       operationId,
       sessionId,
@@ -166,8 +160,9 @@ export class OperationService {
         operation: { kind: 'file.write', path: input.path, content, encoding: 'utf8' },
         expectedState: { beforeHash: cur.hash },
       });
-      if (!result.ok)
+      if (!result.ok) {
         throw Object.assign(new Error(result.error.message), { code: result.error.code });
+      }
       const afterHash = (result.value as any).hash;
       await this.changes!.recordMutation({
         changeSetId: recovery.changeSet.id,
@@ -189,11 +184,11 @@ export class OperationService {
         redactionCount: 0,
       });
       return result.value;
-    } catch (e) {
+    } catch (error) {
       this.operations.updateState(operationId, 'FAILED', {
-        message: e instanceof Error ? e.message : String(e),
+        message: error instanceof Error ? error.message : String(error),
       });
-      throw e;
+      throw error;
     } finally {
       ticket.release();
     }
@@ -205,216 +200,78 @@ export class OperationService {
     authorization?: AuthorizedCapabilityContext,
   ) {
     const lease = this.requiredLease(sessionId, 'files.write', authorization);
-    const operationId = `op_${randomUUID()}`,
-      roots = this.workspaces.capabilityRoots(lease.workspaceId),
-      changeSet = await this.changesRequired().activeOrBegin(sessionId, lease.workspaceId);
-    this.operations.put({
-      id: operationId,
-      sessionId,
-      workspaceId: lease.workspaceId,
-      kind: 'file.create',
-      state: 'PREPARING',
-      intent: input,
-      expectedState: { missing: 'true' },
-    });
-    this.operations.updateState(operationId, 'AUTHORIZED');
-    const lock = await this.locks.acquire({
-      operationId,
-      sessionId,
-      workspaceId: lease.workspaceId,
-      effect: 'SOURCE_MUTATION',
-      outputKeys: [],
-    });
-    try {
-      this.operations.updateState(operationId, 'EXECUTING');
-      const result = await this.worker.execute({
-        sessionId,
-        workspaceId: lease.workspaceId,
-        roots,
-        operation: {
-          kind: 'file.create',
-          path: input.path,
-          content: input.content,
-          encoding: input.encoding,
-        },
-      });
-      if (!result.ok)
-        throw Object.assign(new Error(result.error.message), { code: result.error.code });
-      await this.changes!.recordMutation({
-        changeSetId: changeSet.id,
-        operationId,
-        logicalPath: input.path,
-        afterHash: (result.value as any).hash,
-        metadata: { kind: 'create' },
-      } as any);
-      this.operations.updateState(operationId, 'SUCCEEDED', result.value);
-      return result.value;
-    } catch (e) {
-      this.operations.updateState(operationId, 'FAILED', {
-        message: e instanceof Error ? e.message : String(e),
-      });
-      throw e;
-    } finally {
-      lock.release();
-    }
+    return createFileMutation(this.mutationDeps(), sessionId, lease, input);
   }
+
   async delete(
     sessionId: string,
     input: { path: string; recursive: boolean },
     authorization?: AuthorizedCapabilityContext,
   ) {
-    const lease = this.requiredLease(sessionId, 'files.delete', authorization),
-      operationId = `op_${randomUUID()}`,
-      roots = this.workspaces.capabilityRoots(lease.workspaceId);
-    this.operations.put({
-      id: operationId,
-      sessionId,
-      workspaceId: lease.workspaceId,
-      kind: 'file.delete',
-      state: 'PREPARING',
-      intent: input,
-    });
-    const recovery = await this.changesRequired().snapshot(
-      sessionId,
-      lease.workspaceId,
-      input.path,
-      operationId,
-    );
-    this.operations.updateState(operationId, 'AUTHORIZED', { snapshotPath: recovery.snapshotPath });
-    const lock = await this.locks.acquire({
-      operationId,
-      sessionId,
-      workspaceId: lease.workspaceId,
-      effect: 'SOURCE_MUTATION',
-      outputKeys: [],
-    });
-    try {
-      this.operations.updateState(operationId, 'EXECUTING');
-      const result = await this.worker.execute({
-        sessionId,
-        workspaceId: lease.workspaceId,
-        roots,
-        operation: { kind: 'file.delete', path: input.path, recursive: input.recursive },
-      });
-      if (!result.ok)
-        throw Object.assign(new Error(result.error.message), { code: result.error.code });
-      await this.changes!.recordMutation({
-        changeSetId: recovery.changeSet.id,
-        operationId,
-        logicalPath: input.path,
-        snapshotPath: recovery.snapshotPath,
-        metadata: { kind: 'delete' },
-      } as any);
-      this.operations.updateState(operationId, 'SUCCEEDED', result.value);
-      return result.value;
-    } catch (e) {
-      this.operations.updateState(operationId, 'FAILED', {
-        message: e instanceof Error ? e.message : String(e),
-      });
-      throw e;
-    } finally {
-      lock.release();
-    }
+    const lease = this.requiredLease(sessionId, 'files.delete', authorization);
+    return deleteFileMutation(this.mutationDeps(), sessionId, lease, input);
   }
+
   async move(
     sessionId: string,
     input: { from: string; to: string },
     authorization?: AuthorizedCapabilityContext,
   ) {
-    const lease = this.requiredLease(sessionId, 'files.write', authorization),
-      operationId = `op_${randomUUID()}`,
-      roots = this.workspaces.capabilityRoots(lease.workspaceId);
-    this.operations.put({
-      id: operationId,
-      sessionId,
-      workspaceId: lease.workspaceId,
-      kind: 'file.move',
-      state: 'PREPARING',
-      intent: input,
-    });
-    const recovery = await this.changesRequired().snapshot(
-      sessionId,
-      lease.workspaceId,
-      input.from,
-      operationId,
-    );
-    this.operations.updateState(operationId, 'AUTHORIZED', { snapshotPath: recovery.snapshotPath });
-    const lock = await this.locks.acquire({
-      operationId,
-      sessionId,
-      workspaceId: lease.workspaceId,
-      effect: 'SOURCE_MUTATION',
-      outputKeys: [],
-    });
-    try {
-      this.operations.updateState(operationId, 'EXECUTING');
-      const result = await this.worker.execute({
-        sessionId,
-        workspaceId: lease.workspaceId,
-        roots,
-        operation: { kind: 'file.move', from: input.from, to: input.to },
-      });
-      if (!result.ok)
-        throw Object.assign(new Error(result.error.message), { code: result.error.code });
-      await this.changes!.recordMutation({
-        changeSetId: recovery.changeSet.id,
-        operationId,
-        logicalPath: input.from,
-        snapshotPath: recovery.snapshotPath,
-        metadata: { kind: 'move', to: input.to },
-      } as any);
-      this.operations.updateState(operationId, 'SUCCEEDED', result.value);
-      return result.value;
-    } catch (e) {
-      this.operations.updateState(operationId, 'FAILED', {
-        message: e instanceof Error ? e.message : String(e),
-      });
-      throw e;
-    } finally {
-      lock.release();
-    }
+    const lease = this.requiredLease(sessionId, 'files.write', authorization);
+    return moveFileMutation(this.mutationDeps(), sessionId, lease, input);
   }
+
   async patch(
     sessionId: string,
     input: { path: string; patch: string; expectedHash?: string },
     authorization?: AuthorizedCapabilityContext,
   ) {
-    const lease = this.requiredLease(sessionId, 'files.write', authorization),
-      roots = this.workspaces.capabilityRoots(lease.workspaceId);
-    const read = await this.worker.execute({
+    const lease = this.requiredLease(sessionId, 'files.write', authorization);
+    return patchFileMutation(
+      {
+        workspaces: this.workspaces,
+        worker: this.worker,
+        reads: this.reads,
+      },
       sessionId,
-      workspaceId: lease.workspaceId,
-      roots,
-      operation: { kind: 'file.read', path: input.path },
-    });
-    if (!read.ok) throw Object.assign(new Error(read.error.message), { code: read.error.code });
-    const current = read.value as any;
-    let source = current.content;
-    if (input.expectedHash && input.expectedHash !== current.hash) {
-      const base = this.reads.get(sessionId, lease.workspaceId, current.path, input.expectedHash);
-      if (!base)
-        throw Object.assign(new Error('Stale patch base unavailable'), { code: 'WRITE_CONFLICT' });
-      source = base.content;
-    }
-    const requested = applyUnifiedPatch(source, input.patch);
-    return this.write(
-      sessionId,
-      { path: input.path, content: requested, expectedHash: input.expectedHash ?? current.hash },
-      authorization,
+      lease,
+      input,
+      (content, expectedHash) =>
+        this.write(
+          sessionId,
+          { path: input.path, content, expectedHash },
+          authorization,
+        ),
     );
   }
+
+  private mutationDeps() {
+    return {
+      workspaces: this.workspaces,
+      worker: this.worker,
+      operations: this.operations,
+      locks: this.locks,
+      changes: this.changesRequired(),
+      reads: this.reads,
+    };
+  }
+
   private requiredLease(
     sessionId: string,
     capability: 'files.write' | 'files.delete',
     authorization?: AuthorizedCapabilityContext,
   ) {
-    if (!this.recoveryReady)
+    if (!this.recoveryReady) {
       throw Object.assign(new Error('Recovery journal not active'), {
         code: 'CAPABILITY_REQUIRED',
       });
+    }
     const lease = this.sessions.activeLease(sessionId);
-    if (!lease)
-      throw Object.assign(new Error('Select a workspace'), { code: 'SESSION_WORKSPACE_REQUIRED' });
+    if (!lease) {
+      throw Object.assign(new Error('Select a workspace'), {
+        code: 'SESSION_WORKSPACE_REQUIRED',
+      });
+    }
     if (lease.capabilities.includes(capability)) return lease;
     const trusted =
       authorization &&
@@ -422,94 +279,33 @@ export class OperationService {
       authorization.workspaceId === lease.workspaceId &&
       authorization.actor === lease.actor &&
       authorization.capability === capability;
-    if (!trusted)
-      throw Object.assign(new Error(`${capability} required`), { code: 'CAPABILITY_REQUIRED' });
+    if (!trusted) {
+      throw Object.assign(new Error(`${capability} required`), {
+        code: 'CAPABILITY_REQUIRED',
+      });
+    }
     return lease;
   }
+
   private changesRequired() {
-    if (!this.changes)
-      throw Object.assign(new Error('Recovery journal not active'), { code: 'RECOVERY_REQUIRED' });
+    if (!this.changes) {
+      throw Object.assign(new Error('Recovery journal not active'), {
+        code: 'RECOVERY_REQUIRED',
+      });
+    }
     return this.changes;
   }
 
   async runCommand(
     sessionId: string,
-    command: {
-      executable: string;
-      args: string[];
-      env?: Record<string, string>;
-      timeoutMs?: number;
-    },
+    command: CommandRunInput,
     executionMode?: 'sandbox' | 'host',
     networkPolicy?: NetworkPolicy,
   ) {
-    const lease = this.sessions.activeLease(sessionId);
-    if (!lease)
-      throw Object.assign(new Error('Select a workspace'), { code: 'SESSION_WORKSPACE_REQUIRED' });
-    const c = this.classify([command.executable, ...command.args]);
-    const lock = await this.locks.acquire({
-      operationId: `op_${randomUUID()}`,
-      sessionId,
-      workspaceId: lease.workspaceId,
-      effect: c.effect,
-      outputKeys: c.outputKeys,
-    });
-    const execution = this.executionSettingsResolver?.() ?? {},
-      resolvedMode = executionMode ?? (execution.sandboxBackend === 'native' ? 'host' : 'sandbox'),
-      sandboxBackend =
-        execution.sandboxBackend === 'native' ? 'auto' : (execution.sandboxBackend ?? 'auto');
-    const task = this.worker.execute({
-      sessionId,
-      workspaceId: lease.workspaceId,
-      roots: this.workspaces.capabilityRoots(lease.workspaceId),
-      operation: {
-        kind: 'command.run',
-        command: { ...command, env: command.env ?? {}, cwdLogical: '/' },
-        sandboxBackend,
-        cachePolicy: execution.cachePolicy ?? 'workspace',
-        networkPolicy: networkPolicy ?? {
-          mode: 'deny-all',
-          destinations: [],
-          enforcement: 'backend',
-        },
-      },
-      executionMode: resolvedMode,
-    });
-    let set = this.activeCommands.get(sessionId);
-    if (!set) {
-      set = new Set();
-      this.activeCommands.set(sessionId, set);
-    }
-    set.add(task);
-    try {
-      return await task;
-    } finally {
-      set.delete(task);
-      if (!set.size) this.activeCommands.delete(sessionId);
-      lock.release();
-    }
+    return this.commandExecution.run(sessionId, command, executionMode, networkPolicy);
   }
+
   async drainSession(sessionId: string, timeoutMs = 60_000) {
-    const pending = [...(this.activeCommands.get(sessionId) ?? [])];
-    if (!pending.length) return;
-    let timer: any;
-    try {
-      await Promise.race([
-        Promise.allSettled(pending),
-        new Promise((_, reject) => {
-          timer = setTimeout(
-            () =>
-              reject(
-                Object.assign(new Error('Workspace switch drain timeout'), {
-                  code: 'WORKSPACE_SWITCH_TIMEOUT',
-                }),
-              ),
-            timeoutMs,
-          );
-        }),
-      ]);
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
+    return this.commandExecution.drain(sessionId, timeoutMs);
   }
 }
