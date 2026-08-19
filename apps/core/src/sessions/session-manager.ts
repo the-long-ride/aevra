@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto';
 import type { Capability, Clock } from '../../../../packages/protocol/src/index.js';
 import type { VerifiedRemoteIdentity } from '../auth/cloudflare.js';
 import type { SessionRepository } from '../../../../packages/store/src/sessions.js';
-import type { CapabilityProfileService } from '../policy/capabilities.js';
+import {
+  ALL_CAPABILITIES,
+  type CapabilityProfileService,
+} from '../policy/capabilities.js';
 
 export interface SecuritySession {
   id: string;
@@ -23,10 +26,15 @@ export interface WorkspaceLease {
 }
 const systemClock: Clock = { now: () => new Date() };
 
+function isConnectorSessionActor(actor: string) {
+  return actor.startsWith('connector:') || actor.startsWith('oauth:');
+}
+
 export class SessionManager {
   private sessions = new Map<string, SecuritySession>();
   private leases = new Map<string, WorkspaceLease>();
   private switching = new Set<string>();
+  private yoloSessions = new Set<string>();
   private connectionWorkspaceGrants = new Map<string, Map<string, string>>();
   private connectionActiveWorkspace = new Map<string, string>();
   private disconnectedIdentities = new Map<string, { actor: string; subject: string }>();
@@ -55,6 +63,22 @@ export class SessionManager {
   }
   isSwitching(sessionId: string) {
     return this.switching.has(sessionId);
+  }
+  isYolo(sessionId: string) {
+    return this.yoloSessions.has(sessionId);
+  }
+  enableYolo(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error('session not found');
+    if (!isConnectorSessionActor(session.actor)) {
+      throw new Error('YOLO mode is only available for connector sessions');
+    }
+    this.yoloSessions.add(sessionId);
+    return { sessionId, enabled: true, capabilities: [...ALL_CAPABILITIES] };
+  }
+  disableYolo(sessionId: string) {
+    const existed = this.yoloSessions.delete(sessionId);
+    return { sessionId, enabled: false, changed: existed };
   }
   connectionIdentity(sessionId: string) {
     const source = this.sessions.get(sessionId) ?? this.disconnectedIdentities.get(sessionId);
@@ -99,6 +123,7 @@ export class SessionManager {
   list() {
     return [...this.sessions.values()].map((s) => ({
       ...s,
+      yolo: this.isYolo(s.id),
       lease: s.activeLeaseId ? this.activeLease(s.id) : null,
     }));
   }
@@ -124,7 +149,8 @@ export class SessionManager {
       this.revokeLease(l.id);
       return null;
     }
-    return l;
+    if (!this.isYolo(sessionId)) return l;
+    return { ...l, capabilities: [...ALL_CAPABILITIES] };
   }
 
   grantConnectionWorkspace(
@@ -178,7 +204,7 @@ export class SessionManager {
     this.repo.saveLease(lease);
     if (s.actor.startsWith('oauth:'))
       this.rememberConnectionWorkspace(s.subject, workspaceId, profileId);
-    return { status: 'admitted', lease };
+    return { status: 'admitted', lease: this.activeLease(s.id) ?? lease };
   }
 
   revokeLease(id: string) {
@@ -194,11 +220,14 @@ export class SessionManager {
     if (s?.actor.startsWith('oauth:'))
       this.disconnectedIdentities.set(sessionId, { actor: s.actor, subject: s.subject });
     if (s?.activeLeaseId) this.revokeLease(s.activeLeaseId);
+    this.yoloSessions.delete(sessionId);
     this.sessions.delete(sessionId);
   }
   invalidateForRestart() {
     this.sessions.clear();
     this.leases.clear();
+    this.switching.clear();
+    this.yoloSessions.clear();
     this.connectionWorkspaceGrants.clear();
     this.connectionActiveWorkspace.clear();
     this.disconnectedIdentities.clear();

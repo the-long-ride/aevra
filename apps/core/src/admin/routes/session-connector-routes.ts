@@ -5,12 +5,52 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
   const path = url.pathname;
   const method = req.method ?? 'GET';
 
+  if (path === '/api/diagnostics/mcp' && method === 'GET') {
+    sendAdminResponse(res, 200, context.mcpDiagnostics?.() ?? null);
+    return true;
+  }
+
   if (path === '/api/sessions' && method === 'GET') {
     sendAdminResponse(res, 200, context.sessions?.list?.() ?? []);
     return true;
   }
 
-  let match = path.match(/^\/api\/sessions\/([^/]+)\/revoke$/);
+  let match = path.match(/^\/api\/sessions\/([^/]+)\/yolo$/);
+  if (match && (method === 'POST' || method === 'DELETE')) {
+    const session = context.sessions?.get?.(match[1]);
+    if (!session) {
+      sendAdminResponse(res, 404, {
+        error: { code: 'NOT_FOUND', message: 'Session not found' },
+      });
+      return true;
+    }
+    try {
+      const result =
+        method === 'POST'
+          ? context.sessions.enableYolo(match[1])
+          : context.sessions.disableYolo(match[1]);
+      context.audit?.append?.({
+        actor: 'admin',
+        sessionId: match[1],
+        operation: method === 'POST' ? 'session.yolo.enable' : 'session.yolo.disable',
+        target: session.actor,
+        result: 'ok',
+        redactionCount: 0,
+        class: 'security',
+      });
+      sendAdminResponse(res, 200, { ok: true, revision: Date.now(), result });
+    } catch (error) {
+      sendAdminResponse(res, 400, {
+        error: {
+          code: 'YOLO_NOT_ALLOWED',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+    return true;
+  }
+
+  match = path.match(/^\/api\/sessions\/([^/]+)\/revoke$/);
   if (match && method === 'POST') {
     context.sessions?.revoke?.(match[1]);
     sendAdminResponse(res, 200, { ok: true, revision: Date.now() });

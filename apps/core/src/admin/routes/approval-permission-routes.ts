@@ -13,7 +13,58 @@ export const handleApprovalPermissionRoutes: AdminRouteHandler = async (req, res
     return true;
   }
 
-  let match = path.match(/^\/api\/approvals\/([^/]+)\/(approve|deny)$/);
+  let match = path.match(/^\/api\/approvals\/([^/]+)\/yolo$/);
+  if (match && method === 'POST') {
+    const before = context.approvals?.status?.(match[1]);
+    if (!before) {
+      sendAdminResponse(res, 404, {
+        error: { code: 'NOT_FOUND', message: 'Approval request not found' },
+      });
+      return true;
+    }
+    if (before.state !== 'PENDING') {
+      sendAdminResponse(res, 409, {
+        error: { code: 'INVALID_STATE', message: `Cannot enable YOLO for ${before.state} request` },
+      });
+      return true;
+    }
+    try {
+      const yolo = context.sessions?.enableYolo?.(before.sessionId);
+      let ticket;
+      try {
+        ticket = context.approvals.approve(match[1], 'once');
+      } catch (error) {
+        context.sessions?.disableYolo?.(before.sessionId);
+        throw error;
+      }
+      context.audit?.append?.({
+        actor: 'admin',
+        sessionId: before.sessionId,
+        workspaceId: before.workspaceId,
+        operation: 'session.yolo.enable',
+        target: before.actor,
+        result: 'ok',
+        redactionCount: 0,
+        class: 'security',
+      });
+      sendAdminResponse(res, 200, {
+        ok: true,
+        revision: Date.now(),
+        ticket,
+        yolo,
+      });
+    } catch (error) {
+      sendAdminResponse(res, 400, {
+        error: {
+          code: 'YOLO_NOT_ALLOWED',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+    return true;
+  }
+
+  match = path.match(/^\/api\/approvals\/([^/]+)\/(approve|deny)$/);
   if (match && method === 'POST') {
     const input = await readAdminBody(req);
     const before = context.approvals?.status?.(match[1]);

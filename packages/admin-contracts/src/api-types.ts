@@ -17,6 +17,7 @@ export interface ApprovalItem {
   id: string;
   state: ApprovalState;
   actor: string;
+  sessionId?: string;
   risk: RiskTier;
   workspaceId?: string;
   expiresAt?: string;
@@ -49,6 +50,7 @@ export interface WorkspaceSummary {
 export interface RemoteSessionSummary {
   id: string;
   actor: string;
+  yolo?: boolean;
   activeLeaseId?: string | null;
   lastActivityAt?: string;
   lease?: {
@@ -76,11 +78,26 @@ export interface CloudflareStatus {
   audience?: string;
 }
 
+export interface McpDiagnosticSnapshot {
+  state: 'listening' | 'stopped';
+  startedAt: string | null;
+  requestCount: number;
+  initializeCount: number;
+  toolCallCount: number;
+  lastInboundAt: string | null;
+  lastMethod: string | null;
+  lastActor: string | null;
+  lastSessionId: string | null;
+  lastToolName: string | null;
+  hint: 'no-client-traffic' | 'initialized-no-tools' | 'active' | 'stopped';
+}
+
 export interface RuntimeHealthStatus {
   version?: string;
   core?: string;
   worker?: string;
   mcp?: string;
+  mcpDiagnostics?: McpDiagnosticSnapshot | null;
   tunnel?: string;
   tunnelReachable?: boolean;
   safeMode?: boolean;

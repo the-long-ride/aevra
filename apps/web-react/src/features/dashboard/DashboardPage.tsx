@@ -13,6 +13,7 @@ import {
   type DashboardData,
 } from './dashboard-service';
 import { DashboardSection } from './DashboardSection';
+import { McpDiagnosticsNotice } from './McpDiagnosticsNotice';
 import { RemoteAccessPanel } from './RemoteAccessPanel';
 
 function RuntimeOverview({ data }: { data: DashboardData }) {
@@ -27,14 +28,17 @@ function RuntimeOverview({ data }: { data: DashboardData }) {
     ['Connectors', snapshot.stats.connectors],
   ];
   return (
-    <div className="runtime-grid">
-      {rows.map(([label, value]) => (
-        <div key={label}>
-          <span>{label}</span>
-          <strong>{String(value)}</strong>
-        </div>
-      ))}
-    </div>
+    <>
+      <McpDiagnosticsNotice snapshot={snapshot.status.mcpDiagnostics} />
+      <div className="runtime-grid">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <span>{label}</span>
+            <strong>{String(value)}</strong>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 

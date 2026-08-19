@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { PageState } from '../../components/PageState';
-import { RemoteAccessPanel } from '../dashboard/RemoteAccessPanel';
+import { RemoteAccessSettings } from './RemoteAccessSettings';
 import {
   deleteResource,
   loadSettings,
@@ -84,19 +84,6 @@ export function SettingsPage() {
     await refresh();
   };
 
-  const submitAccess = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!data.cloudflare.hostname) return;
-    const value = Object.fromEntries(new FormData(event.currentTarget));
-    await postJson('/api/cloudflare/setup', {
-      ...value,
-      hostname: data.cloudflare.hostname,
-      tunnelId: data.cloudflare.tunnelId,
-      ownership: data.cloudflare.ownership,
-    });
-    await refresh();
-  };
-
   return (
     <>
       <section className="page-head">
@@ -105,33 +92,7 @@ export function SettingsPage() {
           <p>Execution, remote access, network, environment, and secure local configuration.</p>
         </div>
       </section>
-      <section className="panel remote-card">
-        <div className="panel-head">
-          <h3>Remote Access</h3>
-        </div>
-        <RemoteAccessPanel status={data.cloudflare} onChanged={refresh} />
-        <details className="advanced-access">
-          <summary>Cloudflare Access verifier</summary>
-          <form className="form-row" onSubmit={submitAccess}>
-            <label className="field">
-              <span>Mode</span>
-              <select name="authMode" defaultValue={data.cloudflare.authMode ?? 'connector'}>
-                <option value="connector">Aevra OAuth only</option>
-                <option value="access">Cloudflare Access plus Aevra</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Access issuer</span>
-              <input name="issuer" defaultValue={data.cloudflare.issuer ?? ''} />
-            </label>
-            <label className="field">
-              <span>Audience</span>
-              <input name="audience" defaultValue={data.cloudflare.audience ?? ''} />
-            </label>
-            <button data-surface-id="settings:save-access-mode">Save Access mode</button>
-          </form>
-        </details>
-      </section>
+      <RemoteAccessSettings status={data.cloudflare} onChanged={refresh} />
       <div className="settings-grid">
         <section className="panel execution-panel">
           <div className="panel-head">

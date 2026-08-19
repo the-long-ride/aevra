@@ -1,12 +1,27 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { Capability } from '../../../../packages/protocol/src/index.js';
+
 export interface CapabilityProfile {
   id: string;
   name: string;
   capabilities: Capability[];
   builtin: boolean;
 }
+
 export type AdmissionPolicy = 'ask' | 'auto';
+
+export const ALL_CAPABILITIES: Capability[] = [
+  'files.read',
+  'files.search',
+  'git.read',
+  'files.write',
+  'files.delete',
+  'commands.run',
+  'git.commit',
+  'git.push',
+  'network',
+];
+
 export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
   {
     id: 'read-only',
@@ -51,6 +66,7 @@ export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
     builtin: true,
   },
 ];
+
 export class CapabilityProfileService {
   constructor(private db: DatabaseSync) {
     for (const p of BUILTIN_CAPABILITY_PROFILES)
