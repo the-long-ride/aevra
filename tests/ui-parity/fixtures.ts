@@ -1,9 +1,6 @@
 import type { Page } from '@playwright/test';
 
-export const ADMIN_SURFACES = [
-  { name: 'Vanilla', path: '/' },
-  { name: 'React', path: '/react/' },
-] as const;
+export const ADMIN_SURFACES = [{ name: 'React', path: '/' }] as const;
 
 interface FixtureOptions {
   onboardingCompleted?: boolean;
