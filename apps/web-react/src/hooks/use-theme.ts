@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { nextTheme, resolveInitialTheme, type Theme } from './theme-state';
 
 const STORAGE_KEY = 'aevra.ui.theme.v1';
@@ -14,7 +14,7 @@ function initialTheme(): Theme {
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(initialTheme);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
