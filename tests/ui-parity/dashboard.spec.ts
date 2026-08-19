@@ -5,7 +5,7 @@ for (const surface of ADMIN_SURFACES) {
   test(`${surface.name} keeps dashboard section and collapse behavior`, async ({ page }) => {
     await installAdminApi(page);
     await page.goto(surface.path);
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 
     const onboardingBlocks = page.locator(
       '[data-dashboard-section="onboarding"] [data-onboarding-section]',
@@ -19,7 +19,7 @@ for (const surface of ADMIN_SURFACES) {
     await expect(runtime).toHaveAttribute('open', '');
     await expect(runtime.getByText('Remote sessions')).toBeVisible();
     await expect(runtime.getByText('Version', { exact: true })).toHaveCount(0);
-    await runtime.locator('summary').click();
+    await runtime.locator(':scope > summary').click();
     await expect(runtime).not.toHaveAttribute('open', '');
   });
 
@@ -28,7 +28,7 @@ for (const surface of ADMIN_SURFACES) {
   }) => {
     await installAdminApi(page, { onboardingCompleted: true });
     await page.goto(surface.path);
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 
     const sections = page.locator('[data-dashboard-section]');
     const ids = await sections.evaluateAll((nodes) =>
@@ -37,7 +37,7 @@ for (const surface of ADMIN_SURFACES) {
     expect(ids.at(-1)).toBe('onboarding');
 
     const onboarding = page.locator('[data-dashboard-section="onboarding"]');
-    await onboarding.locator('summary').click();
+    await onboarding.locator(':scope > summary').click();
     await expect(onboarding).not.toHaveAttribute('open', '');
     await page.waitForTimeout(2200);
     await expect(onboarding).not.toHaveAttribute('open', '');
