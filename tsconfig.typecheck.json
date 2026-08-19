@@ -4,7 +4,16 @@
     "noCheck": false,
     "noEmit": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "types": ["node"]
   },
-  "exclude": ["dist", "node_modules", ".test-dist", ".coverage-dist", "coverage", "apps/web-react"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    ".test-dist",
+    ".coverage-dist",
+    "coverage",
+    "apps/web-react",
+    "tests/ui-parity"
+  ]
 }
