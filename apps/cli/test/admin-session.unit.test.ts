@@ -56,7 +56,6 @@ function transport() {
 
 test('adminApi bootstraps a cookie before the requested API call', async () => {
   const { calls, dependencies } = transport();
-
   const result = await adminApi(
     {},
     '/api/connectors',
@@ -77,30 +76,22 @@ test('adminApi bootstraps a cookie before the requested API call', async () => {
   assert.equal(calls[2]!.init.headers?.cookie, 'aevra_admin=session-token');
 });
 
-test('createAuthenticatedUiUrl returns vanilla bootstrap URL by default', async () => {
+test('createAuthenticatedUiUrl returns the React root bootstrap URL', async () => {
   const { calls, dependencies } = transport();
-
   const url = await createAuthenticatedUiUrl({}, dependencies);
 
   assert.equal(url, 'https://localhost:47831/auth/bootstrap?token=boot-token');
   assert.deepEqual(calls.map((call) => call.path), ['/api/local/bootstrap']);
 });
 
-test('createAuthenticatedUiUrl encodes the React destination', async () => {
-  const { calls, dependencies } = transport();
-
-  const url = await createAuthenticatedUiUrl({}, dependencies, '/react/');
-
-  assert.equal(
-    url,
-    'https://localhost:47831/auth/bootstrap?token=boot-token&to=%2Freact%2F',
-  );
-  assert.deepEqual(calls.map((call) => call.path), ['/api/local/bootstrap']);
+test('the single typed UI destination does not add an alternate path', async () => {
+  const { dependencies } = transport();
+  const url = await createAuthenticatedUiUrl({}, dependencies, '/');
+  assert.equal(url, 'https://localhost:47831/auth/bootstrap?token=boot-token');
 });
 
 test('revokeAllAdminSessions authenticates with the local control secret', async () => {
   const { calls, dependencies } = transport();
-
   const status = await revokeAllAdminSessions({}, dependencies);
 
   assert.equal(status, 200);
