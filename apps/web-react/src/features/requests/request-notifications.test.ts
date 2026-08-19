@@ -1,7 +1,8 @@
+import type { ApprovalItem, OauthRequestItem } from '@aevra/admin-contracts';
 import { expect, test } from 'vitest';
 import { collectRequestAnnouncements } from './request-notifications';
 
-const approval = {
+const approval: ApprovalItem = {
   id: 'approval-1',
   state: 'PENDING',
   actor: 'ChatGPT',
@@ -14,7 +15,7 @@ const approval = {
   },
 };
 
-const oauth = {
+const oauth: OauthRequestItem = {
   id: 'oauth-1',
   clientId: 'client-1',
   clientName: 'Claude',
