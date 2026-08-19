@@ -209,10 +209,7 @@ test('request notification state announces new items once and can request permis
       FakeNotification.created.push({ title, options });
     }
   }
-  Object.defineProperty(window, 'Notification', {
-    configurable: true,
-    value: FakeNotification,
-  });
+  vi.stubGlobal('Notification', FakeNotification);
   expect(notificationButtonLabel()).toBe('Browser notifications enabled');
 
   const approvals = [
