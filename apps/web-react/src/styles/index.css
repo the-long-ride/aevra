@@ -1,19 +1,6 @@
-@import url("../../../web/styles/tokens.css");
-@import url("../../../web/styles/shell.css");
-@import url("../../../web/styles/components.css");
-@import url("../../../web/styles/dashboard.css");
-@import url("../../../web/styles/admin.css");
-@import url("../../../web/styles/requests.css");
-
-#root {
-  min-height: 100vh;
-}
-
-.react-page-state {
-  display: grid;
-  place-items: center;
-  min-height: 180px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
-  color: var(--muted);
-}
+@import url("./tokens.css");
+@import url("./shell.css");
+@import url("./components.css");
+@import url("./dashboard.css");
+@import url("./admin.css");
+@import url("./requests.css");
