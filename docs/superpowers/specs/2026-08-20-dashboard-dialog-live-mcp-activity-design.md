@@ -86,3 +86,7 @@ Add tests for:
 - SSE route snapshot/subscription behavior;
 - Dashboard EventSource merge/update rendering;
 - Dashboard section ordering with Live MCP activity.
+
+## Implementation status
+
+Implemented on `feat/mcp-long-running-processes-permissions-switches`; branch verification is the final gate.
