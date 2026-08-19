@@ -22,13 +22,7 @@ export function resolveStaticAsset(
     return null;
   }
 
-  const relative =
-    decoded === '/'
-      ? 'index.html'
-      : decoded === '/react' || decoded === '/react/'
-        ? path.join('react', 'index.html')
-        : decoded.replace(/^\/+/, '');
-
+  const relative = decoded === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
   const root = path.resolve(staticRoot);
   const candidate = path.resolve(root, relative);
   if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) {
