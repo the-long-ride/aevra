@@ -17,7 +17,9 @@ function response(options: {
     status: options.status ?? 200,
     headers: {
       get(name: string) {
-        return name.toLowerCase() === 'set-cookie' ? (options.setCookie ?? '') : null;
+        return name.toLowerCase() === 'set-cookie'
+          ? (options.setCookie ?? '')
+          : null;
       },
     },
     async json() {
@@ -55,23 +57,44 @@ function transport() {
 test('adminApi bootstraps a cookie before the requested API call', async () => {
   const { calls, dependencies } = transport();
 
-  const result = await adminApi({}, '/api/connectors', { method: 'GET' }, dependencies);
+  const result = await adminApi(
+    {},
+    '/api/connectors',
+    { method: 'GET' },
+    dependencies,
+  );
 
   assert.equal(result.status, 200);
   assert.deepEqual(
     calls.map((call) => call.path),
-    ['/api/local/bootstrap', '/auth/bootstrap?token=boot-token', '/api/connectors'],
+    [
+      '/api/local/bootstrap',
+      '/auth/bootstrap?token=boot-token',
+      '/api/connectors',
+    ],
   );
   assert.equal(calls[0]!.init.headers?.['x-aevra-control'], 'control-secret');
   assert.equal(calls[2]!.init.headers?.cookie, 'aevra_admin=session-token');
 });
 
-test('createAuthenticatedUiUrl returns a one-time bootstrap URL', async () => {
+test('createAuthenticatedUiUrl returns vanilla bootstrap URL by default', async () => {
   const { calls, dependencies } = transport();
 
   const url = await createAuthenticatedUiUrl({}, dependencies);
 
   assert.equal(url, 'https://localhost:47831/auth/bootstrap?token=boot-token');
+  assert.deepEqual(calls.map((call) => call.path), ['/api/local/bootstrap']);
+});
+
+test('createAuthenticatedUiUrl encodes the React destination', async () => {
+  const { calls, dependencies } = transport();
+
+  const url = await createAuthenticatedUiUrl({}, dependencies, '/react/');
+
+  assert.equal(
+    url,
+    'https://localhost:47831/auth/bootstrap?token=boot-token&to=%2Freact%2F',
+  );
   assert.deepEqual(calls.map((call) => call.path), ['/api/local/bootstrap']);
 });
 
