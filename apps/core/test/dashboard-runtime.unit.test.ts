@@ -54,7 +54,7 @@ test('dashboard snapshot aggregates runtime state and active connections', () =>
     new Date('2026-08-18T00:10:00Z'),
   );
   assert.equal(snapshot.stats.toolCalls, 4);
-  assert.equal(snapshot.stats.pendingRequests, 2);
+  assert.equal(snapshot.pending.total, 2);
   assert.equal(snapshot.stats.sessions, 2);
   assert.equal(snapshot.stats.workspaceLeases, 1);
   assert.equal(snapshot.stats.processes, 1);
