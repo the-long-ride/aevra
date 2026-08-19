@@ -66,6 +66,7 @@ for (const surface of ADMIN_SURFACES) {
     await page.getByRole('button', { name: 'Workspaces', exact: true }).click();
     await page.getByRole('button', { name: 'Details', exact: true }).click();
     await expect(page.getByText('/external/shared')).toBeVisible();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     const workspaceRemove = waitsFor(page, '/api/workspaces/ws-1', 'DELETE');
     await page.getByRole('button', { name: 'Remove', exact: true }).first().click();
     await workspaceRemove;
