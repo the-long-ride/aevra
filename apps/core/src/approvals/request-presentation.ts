@@ -71,6 +71,20 @@ export function presentApproval(ticket: FrozenOperationTicket): ApprovalPresenta
       action: 'Read local skills and instructions',
       target: 'User + active workspace',
     };
+  if (
+    family === 'workspace:capability-upgrade' ||
+    payload.tool === 'workspace_capability_upgrade'
+  ) {
+    const added = Array.isArray(payload.addedCapabilities)
+      ? payload.addedCapabilities.map((capability: unknown) => clean(capability, 80)).filter(Boolean)
+      : [];
+    return {
+      title: 'Enable coding access',
+      action: `Grant ${clean(payload.profileId ?? 'coding profile', 80)}`,
+      target: String(payload.workspaceId ?? ticket.workspaceId),
+      ...(added.length ? { preview: `Adds: ${clean(added.join(', '), 220)}` } : {}),
+    };
+  }
   if (payload.tool === 'capability_request') {
     const capability = String(payload.requestedCapability ?? ticket.operation.capability),
       matcher = String(payload.permissionMatcher ?? '*'),
