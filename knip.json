@@ -6,6 +6,10 @@
     "apps/web/main.js",
     "apps/web-react/src/main.tsx",
     "packages/mcp-tools/src/register.ts",
+    "playwright.config.ts",
+    "vitest.web.config.ts",
+    "tests/ui-parity/*.spec.ts",
+    "tests/ui-parity/static-server.mjs",
     "scripts/check-web-syntax.mjs",
     "scripts/copy-static.mjs",
     "scripts/lint.mjs",
@@ -19,7 +23,8 @@
   "project": [
     "apps/**/*.{ts,tsx,js,mjs}",
     "packages/**/*.{ts,tsx,js,mjs}",
-    "scripts/**/*.mjs"
+    "scripts/**/*.mjs",
+    "tests/**/*.{ts,mjs}"
   ],
   "ignore": [
     "dist/**",
