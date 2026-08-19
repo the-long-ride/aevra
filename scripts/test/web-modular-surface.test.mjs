@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const main = readFileSync('apps/web/main.js', 'utf8');
 const dashboard = readFileSync('apps/web/pages/dashboard.js', 'utf8');
+const dashboardView = readFileSync('apps/web/pages/dashboard-view.js', 'utf8');
 const permissions = readFileSync('apps/web/pages/permissions.js', 'utf8');
 const permissionBulk = readFileSync(
   'apps/web/components/permission-bulk.js',
@@ -57,18 +58,22 @@ test('modular shell uses compact top navigation without dead sidebar rail styles
   assert.doesNotMatch(shell, /grid-template-columns:\s*220px/);
 });
 
-test('dashboard keeps Remote Access first inside Onboarding and completion ordering is state-driven', () => {
-  const onboardingStart = dashboard.indexOf('class="onboarding-body"');
-  const remote = dashboard.indexOf(
+test('Dashboard view keeps Remote Access first inside Onboarding and behavior owns completion ordering', () => {
+  const onboardingStart = dashboardView.indexOf('class="onboarding-body"');
+  const remote = dashboardView.indexOf(
     'data-onboarding-section="remote-access"',
   );
-  const connect = dashboard.indexOf('data-onboarding-section="connect-ai"');
+  const connect = dashboardView.indexOf(
+    'data-onboarding-section="connect-ai"',
+  );
   assert.ok(onboardingStart >= 0);
   assert.ok(remote > onboardingStart);
   assert.ok(connect > remote);
-  assert.match(dashboard, /dashboardOrder\(onboarding\.completed\)/);
+  assert.match(dashboard, /dashboardOrder\(\s*onboarding\.completed/);
+  assert.match(dashboard, /from ['"]\.\/dashboard-view\.js['"]/);
+  assert.match(dashboard, /shouldRefreshDashboard/);
   assert.doesNotMatch(
-    dashboard,
+    dashboardView,
     /Remote Access remains visible above this section/,
   );
 });
