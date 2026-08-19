@@ -7,7 +7,7 @@
 }
 
 .panel {
-  padding: 14px;
+  padding: 13px;
 }
 
 .panel.wide {
@@ -27,7 +27,7 @@
 }
 
 .panel-head {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .panel-toolbar {
@@ -52,7 +52,7 @@
 .field,
 .stack-form {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .field > span {
@@ -62,7 +62,26 @@
 }
 
 .stack-form {
-  gap: 10px;
+  gap: 9px;
+}
+
+.execution-panel .stack-form {
+  align-content: start;
+}
+
+.execution-warning {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid rgb(232 187 99 / 34%);
+  border-radius: var(--radius-sm);
+  background: rgb(232 187 99 / 7%);
+  color: #ead8ae;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.execution-warning[hidden] {
+  display: none;
 }
 
 .form-row {
