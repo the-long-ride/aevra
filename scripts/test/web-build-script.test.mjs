@@ -37,6 +37,7 @@ const paritySpecs = [
   'tests/ui-parity/requests.spec.ts',
   'tests/ui-parity/tables.spec.ts',
   'tests/ui-parity/settings-guide.spec.ts',
+  'tests/ui-parity/admin-actions.spec.ts',
 ];
 
 test('build syntax-checks modular vanilla UI then copies it before React Vite output', () => {
