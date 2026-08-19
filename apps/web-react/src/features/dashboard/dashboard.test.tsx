@@ -18,6 +18,15 @@ test('Remote Access is first inside incomplete Onboarding', async () => {
   expect(within(details as HTMLElement).getByText('Connect an AI')).toBeInTheDocument();
 });
 
+test('live MCP activity follows Runtime overview', async () => {
+  const { container } = render(<DashboardPage />);
+  await screen.findByText('Runtime overview');
+  const ids = [...container.querySelectorAll('[data-dashboard-section]')].map((section) =>
+    section.getAttribute('data-dashboard-section'),
+  );
+  expect(ids.indexOf('live-mcp-activity')).toBe(ids.indexOf('runtime-overview') + 1);
+});
+
 test('completed Onboarding is the final Dashboard section', async () => {
   installApiFixtures({ onboardingCompleted: true });
   const { container } = render(<DashboardPage />);
