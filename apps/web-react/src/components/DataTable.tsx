@@ -111,7 +111,21 @@ export function DataTable<T>({
   const end = Math.min(start + size, filtered.length);
 
   const filterOptions = (filter: FilterDefinition<T>) =>
-    [...new Set(rows.map((row) => String(filter.value ? filter.value(row) ?? '' : (row as Record<string, unknown>)[filter.key] ?? '')).filter(Boolean))].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+    [
+      ...new Set(
+        rows
+          .map((row) =>
+            String(
+              filter.value
+                ? (filter.value(row) ?? '')
+                : ((row as Record<string, unknown>)[filter.key] ?? ''),
+            ),
+          )
+          .filter(Boolean),
+      ),
+    ].sort((left, right) =>
+      left.localeCompare(right, undefined, { numeric: true }),
+    );
 
   return (
     <div className="data-table-host" data-table-id={id}>
@@ -231,13 +245,37 @@ export function DataTable<T>({
         </table>
       </div>
       <div className="dt-footer">
-        <span>{filtered.length ? `${start + 1}–${end} of ${filtered.length}` : '0 rows'}</span>
+        <span>
+          {filtered.length ? `${start + 1}–${end} of ${filtered.length}` : '0 rows'}
+        </span>
         <div className="dt-pages">
-          <button type="button" disabled={safePage <= 1} onClick={() => setPage(1)}>«</button>
-          <button type="button" disabled={safePage <= 1} onClick={() => setPage(Math.max(1, safePage - 1))}>‹</button>
-          <span>Page {safePage} / {pageCount}</span>
-          <button type="button" disabled={safePage >= pageCount} onClick={() => setPage(Math.min(pageCount, safePage + 1))}>›</button>
-          <button type="button" disabled={safePage >= pageCount} onClick={() => setPage(pageCount)}>»</button>
+          <button type="button" disabled={safePage <= 1} onClick={() => setPage(1)}>
+            «
+          </button>
+          <button
+            type="button"
+            disabled={safePage <= 1}
+            onClick={() => setPage(Math.max(1, safePage - 1))}
+          >
+            ‹
+          </button>
+          <span>
+            Page {safePage} / {pageCount}
+          </span>
+          <button
+            type="button"
+            disabled={safePage >= pageCount}
+            onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+          >
+            ›
+          </button>
+          <button
+            type="button"
+            disabled={safePage >= pageCount}
+            onClick={() => setPage(pageCount)}
+          >
+            »
+          </button>
         </div>
       </div>
     </div>
