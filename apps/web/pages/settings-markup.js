@@ -70,6 +70,7 @@ export function settingsMarkup(data) {
   } = data;
   const workspaceNames = new Map(workspaces.map((item) => [item.id, item.name]));
   const accessMode = cloudflare.authMode === 'access';
+  const nativeExecution = execution.sandboxBackend === 'native';
   return `<section class="page-head"><div><h2>Settings</h2><p>Execution, remote access, network, environment, and secure local configuration.</p></div></section>
     <section class="panel remote-card">
       <div class="panel-head"><h3>Remote Access</h3></div>
@@ -85,10 +86,11 @@ export function settingsMarkup(data) {
       </details>
     </section>
     <div class="settings-grid">
-      <section class="panel">
+      <section class="panel execution-panel">
         <div class="panel-head"><h3>Execution</h3></div>
         <form id="execution-settings" class="stack-form">
-          <label class="field"><span>Sandbox backend</span><select name="sandboxBackend"><option value="auto" ${execution.sandboxBackend === 'auto' ? 'selected' : ''}>Auto</option><option value="docker" ${execution.sandboxBackend === 'docker' ? 'selected' : ''}>Docker</option><option value="podman" ${execution.sandboxBackend === 'podman' ? 'selected' : ''}>Podman</option></select></label>
+          <label class="field"><span>Sandbox backend</span><select name="sandboxBackend"><option value="auto" ${execution.sandboxBackend === 'auto' ? 'selected' : ''}>Auto</option><option value="docker" ${execution.sandboxBackend === 'docker' ? 'selected' : ''}>Docker</option><option value="podman" ${execution.sandboxBackend === 'podman' ? 'selected' : ''}>Podman</option><option value="native" ${nativeExecution ? 'selected' : ''}>Native host</option></select></label>
+          <p class="execution-warning" data-native-warning ${nativeExecution ? '' : 'hidden'}>Direct computer access — no container isolation. Commands run on this machine and still pass through Aevra permissions and approvals.</p>
           <label class="field"><span>Cache policy</span><select name="cachePolicy"><option value="workspace" ${execution.cachePolicy === 'workspace' ? 'selected' : ''}>Workspace</option><option value="shared" ${execution.cachePolicy === 'shared' ? 'selected' : ''}>Shared</option><option value="disabled" ${execution.cachePolicy === 'disabled' ? 'selected' : ''}>Disabled</option></select></label>
           <label class="field"><span>Drain timeout (ms)</span><input type="number" name="workspaceDrainMs" min="0" value="${escapeHtml(execution.workspaceDrainMs ?? 60000)}"></label>
           <button class="primary">Save</button>
