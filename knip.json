@@ -1,27 +1,35 @@
 {
-  "entry": [
-    "apps/cli/src/cli.ts",
-    "apps/core/src/main.ts",
-    "apps/worker/src/main.ts",
-    "apps/web-react/src/main.tsx",
-    "packages/mcp-tools/src/register.ts",
-    "playwright.config.ts",
-    "tests/ui-parity/*.spec.ts",
-    "tests/ui-parity/static-server.mjs",
-    "scripts/copy-manual.mjs",
-    "scripts/lint.mjs",
-    "scripts/loc-lint.mjs",
-    "scripts/run-ts-tests.mjs",
-    "scripts/test-coverage-node.mjs",
-    "scripts/test.mjs",
-    "scripts/ts-loader.mjs",
-    "scripts/test/*.test.mjs"
-  ],
-  "project": [
-    "apps/**/*.{ts,tsx,js,mjs}",
-    "packages/**/*.{ts,tsx,js,mjs}",
-    "scripts/**/*.mjs",
-    "tests/**/*.{ts,mjs}"
-  ],
-  "ignore": ["dist/**", ".test-dist/**", ".coverage-dist/**", "coverage/**"]
+  "exclude": ["exports", "types"],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "apps/cli/src/cli.ts",
+        "apps/core/src/main.ts",
+        "apps/worker/src/main.ts",
+        "packages/mcp-tools/src/register.ts",
+        "tests/ui-parity/*.spec.ts",
+        "tests/ui-parity/static-server.mjs",
+        "scripts/run-ts-tests.mjs",
+        "scripts/ts-loader.mjs",
+        "scripts/test/*.test.mjs"
+      ],
+      "project": [
+        "apps/cli/**/*.{ts,js,mjs}",
+        "apps/core/**/*.{ts,js,mjs}",
+        "apps/worker/**/*.{ts,js,mjs}",
+        "packages/**/*.{ts,tsx,js,mjs}",
+        "scripts/**/*.mjs",
+        "tests/**/*.{ts,mjs}"
+      ],
+      "paths": {
+        "@aevra/admin-contracts": ["packages/admin-contracts/src/index.ts"]
+      },
+      "ignoreDependencies": ["@vitest/coverage-v8", "c8", "jsdom", "vitest"]
+    },
+    "apps/web-react": {
+      "paths": {
+        "@aevra/admin-contracts": ["../../packages/admin-contracts/src/index.ts"]
+      }
+    }
+  }
 }
