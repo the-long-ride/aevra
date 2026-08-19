@@ -5,7 +5,9 @@ const STORAGE_KEY = 'aevra.ui.theme.v1';
 
 function initialTheme(): Theme {
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const prefersDark =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches;
   return resolveInitialTheme(stored, prefersDark);
 }
 
