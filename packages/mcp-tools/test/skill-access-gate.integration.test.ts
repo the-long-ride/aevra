@@ -63,7 +63,24 @@ function fixture() {
   return { db, sessions, approvals, calls, gate, identity };
 }
 
-test('one local approval unlocks all skill and instruction reads for one MCP session', async () => {
+test('skill and instruction tools pass through to their capability-aware MCP handlers', async () => {
+  const f = fixture();
+  const session = f.sessions.create(f.identity);
+  for (const [name, args] of [
+    ['skills_list', {}],
+    ['skill_read', { source: 'user', name: 'demo' }],
+    ['skill_write', { source: 'user', name: 'demo', content: 'x' }],
+    ['instructions_read', {}],
+    ['instructions_write', { source: 'user', content: 'x' }],
+  ] as const) {
+    const result = await f.gate.call(session.id, name, args);
+    assert.equal(result.name, name);
+  }
+  assert.equal(f.approvals.list().length, 0, 'tool permission is owned by the inner capability gate');
+  f.db.close();
+});
+
+test('one local approval unlocks passive skill resources and instruction prompts for one MCP session', async () => {
   const f = fixture();
   const session = f.sessions.create(f.identity);
   assert.deepEqual(
@@ -73,45 +90,17 @@ test('one local approval unlocks all skill and instruction reads for one MCP ses
   );
   assert.equal(f.approvals.list().length, 0);
 
-  const first = (await f.gate.call(session.id, 'skills_list', {})) as any;
-  assert.equal(first.status, 'approval_pending');
-  assert.match(first.requestId, /^req_/);
-  assert.equal(first.scope, 'session');
-  assert.deepEqual(first.sources, ['user', 'workspace']);
-  assert.equal(f.calls.length, 0, 'skill inventory must stay hidden before approval');
-
-  const repeated = (await f.gate.call(session.id, 'skill_read', {
-    source: 'user',
-    name: 'demo',
-  })) as any;
-  assert.equal(repeated.requestId, first.requestId);
-  assert.equal(
-    f.approvals.list().filter((ticket) => ticket.operation.family === 'skills:read').length,
-    1,
+  await assert.rejects(
+    () => f.gate.resourceRead(session.id, 'aevra://skill/user/demo'),
+    (error: any) => error?.code === 'APPROVAL_PENDING',
   );
+  const pending = f.approvals.list().find((ticket) => ticket.operation.family === 'skills:read');
+  assert.ok(pending);
+  assert.equal(pending.operation.capability, 'skills.read');
 
-  f.approvals.approve(first.requestId, 'once');
-  const granted = (await f.gate.call(session.id, 'approval_wait', {
-    requestId: first.requestId,
-  })) as any;
+  f.approvals.approve(pending.id, 'once');
+  const granted = (await f.gate.call(session.id, 'approval_wait', { requestId: pending.id })) as any;
   assert.equal(granted.status, 'skill_access_granted');
-  assert.equal(granted.scope, 'session');
-  assert.deepEqual(granted.sources, ['user', 'workspace']);
-
-  const list = (await f.gate.call(session.id, 'skills_list', { query: 'demo' })) as any;
-  assert.equal(list.name, 'skills_list');
-  const read = (await f.gate.call(session.id, 'skill_read', {
-    source: 'workspace',
-    name: 'demo',
-  })) as any;
-  assert.equal(read.name, 'skill_read');
-  const instructions = (await f.gate.call(session.id, 'instructions_read', {})) as any;
-  assert.equal(instructions.name, 'instructions_read');
-  assert.equal(
-    f.approvals.list().filter((ticket) => ticket.operation.family === 'skills:read').length,
-    1,
-    'all skill reads in the session share the same approval',
-  );
   assert.equal(f.gate.resourcesList(session.id).resources.length, 1);
   assert.equal(
     (await f.gate.resourceRead(session.id, 'aevra://skill/user/demo')).contents[0]?.text,
@@ -121,42 +110,23 @@ test('one local approval unlocks all skill and instruction reads for one MCP ses
   f.db.close();
 });
 
-test('a fresh MCP session requires a new local skills approval even for the same OAuth authorization', async () => {
+test('a fresh MCP session requires a new passive resource approval', async () => {
   const f = fixture();
   const first = f.sessions.create(f.identity);
-  const pending = (await f.gate.call(first.id, 'skills_list', {})) as any;
-  f.approvals.approve(pending.requestId, 'once');
-  await f.gate.call(first.id, 'approval_wait', { requestId: pending.requestId });
+  await assert.rejects(() => f.gate.resourceRead(first.id, 'aevra://skill/user/demo'));
+  const pending = f.approvals.list()[0]!;
+  f.approvals.approve(pending.id, 'once');
+  await f.gate.call(first.id, 'approval_wait', { requestId: pending.id });
   f.sessions.disconnect(first.id);
 
   const second = f.sessions.create(f.identity);
-  const next = (await f.gate.call(second.id, 'skills_list', {})) as any;
-  assert.equal(next.status, 'approval_pending');
-  assert.notEqual(next.requestId, pending.requestId);
+  await assert.rejects(
+    () => f.gate.resourceRead(second.id, 'aevra://skill/user/demo'),
+    (error: any) => error?.code === 'APPROVAL_PENDING',
+  );
   assert.equal(
     f.approvals.list().filter((ticket) => ticket.operation.family === 'skills:read').length,
     2,
-  );
-  f.db.close();
-});
-
-test('denying local skills access blocks the rest of that MCP session without repeated prompts', async () => {
-  const f = fixture();
-  const session = f.sessions.create(f.identity);
-  const pending = (await f.gate.call(session.id, 'instructions_read', {})) as any;
-  f.approvals.deny(pending.requestId);
-
-  await assert.rejects(
-    () => f.gate.call(session.id, 'skills_list', {}),
-    (error: any) => error?.code === 'APPROVAL_DENIED',
-  );
-  await assert.rejects(
-    () => f.gate.promptGet(session.id),
-    (error: any) => error?.code === 'APPROVAL_DENIED',
-  );
-  assert.equal(
-    f.approvals.list().filter((ticket) => ticket.operation.family === 'skills:read').length,
-    1,
   );
   f.db.close();
 });
