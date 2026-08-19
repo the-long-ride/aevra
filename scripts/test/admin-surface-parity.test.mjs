@@ -20,6 +20,19 @@ const reactActions = readFileSync(
   'apps/web-react/src/features/requests/request-actions.ts',
   'utf8',
 );
+const vanillaWorkspaceDetail = readFileSync(
+  'apps/web/components/workspace-detail.js',
+  'utf8',
+);
+const reactWorkspaces = readFileSync(
+  'apps/web-react/src/features/workspaces/WorkspacesPage.tsx',
+  'utf8',
+);
+const vanillaProcesses = readFileSync('apps/web/pages/processes.js', 'utf8');
+const reactProcesses = readFileSync(
+  'apps/web-react/src/features/processes/ProcessesPage.tsx',
+  'utf8',
+);
 
 function matcherNames(path) {
   const source = readFileSync(path, 'utf8');
@@ -64,6 +77,24 @@ test('both request implementations expose the same remembered command scopes', (
   }
   assert.match(vanillaActions, /CRITICAL/);
   assert.match(reactActions, /CRITICAL/);
+});
+
+test('workspace mount removal exists in both admin surfaces', () => {
+  assert.ok(manifest.actions.workspaces.includes('remove-mount'));
+  assert.match(vanillaWorkspaceDetail, /data-remove-mount/);
+  assert.match(reactWorkspaces, /workspaces:remove-mount/);
+  assert.match(vanillaWorkspaceDetail, /\/api\/mounts\//);
+  assert.match(reactWorkspaces, /\/api\/mounts\//);
+});
+
+test('process action contract contains only actions implemented by both surfaces', () => {
+  assert.deepEqual(manifest.actions.processes, ['stop', 'restart', 'forget']);
+  for (const label of ['Stop', 'Restart', 'Forget']) {
+    assert.match(vanillaProcesses, new RegExp(label));
+    assert.match(reactProcesses, new RegExp(label));
+  }
+  assert.doesNotMatch(vanillaProcesses, /View logs/);
+  assert.doesNotMatch(reactProcesses, /View logs/);
 });
 
 test('vanilla and React Safe Matcher catalogs contain the same matcher identities', () => {
