@@ -12,6 +12,7 @@ interface FixtureOptions {
   processes?: unknown[];
   changes?: unknown[];
   mounts?: unknown[];
+  dashboardDelayMs?: number;
 }
 
 function dashboardSnapshot() {
@@ -133,6 +134,10 @@ export async function installAdminApi(page: Page, options: FixtureOptions = {}) 
         }),
       });
       return;
+    }
+
+    if (key === '/api/dashboard/runtime' && options.dashboardDelayMs) {
+      await new Promise((resolve) => setTimeout(resolve, options.dashboardDelayMs));
     }
 
     const value = routes.get(key);
