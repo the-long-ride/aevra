@@ -3,7 +3,7 @@ export function usageText(): string {
     'Aevra — workspace-scoped local MCP execution gateway for AI web interfaces',
     '',
     'Usage:',
-    '  aevra start [--ui|--ui-react]',
+    '  aevra start [--ui]',
     '  aevra ui [--logout-all]',
     '  aevra setup',
     '  aevra service install|start|stop|restart|status',
@@ -49,7 +49,7 @@ export function completionText(
     'completion',
     '--help',
   ];
-  const startOptions = '--ui --ui-react';
+  const startOptions = '--ui';
 
   if (shell === 'bash') {
     return `_aevra() {
@@ -70,8 +70,7 @@ complete -F _aevra aevra
 _aevra() {
   if (( CURRENT >= 3 )) && [[ $words[2] == start ]]; then
     _values 'start options' \
-      '--ui[open authenticated vanilla dashboard when ready]' \
-      '--ui-react[open authenticated React dashboard when ready]'
+      '--ui[open authenticated React dashboard when ready]'
     return
   fi
   _arguments '1:command:(${commands.join(' ')})'
@@ -84,7 +83,7 @@ _aevra "$@"
   param($wordToComplete, $commandAst, $cursorPosition)
   $elements = $commandAst.CommandElements
   if ($elements.Count -ge 2 -and $elements[1].Value -eq 'start') {
-    @('--ui','--ui-react') | Where-Object { $_ -like "$wordToComplete*" }
+    @('--ui') | Where-Object { $_ -like "$wordToComplete*" }
     return
   }
   @('start','ui','setup','service','connectors','sessions','audit','status','backup','completion') | Where-Object { $_ -like "$wordToComplete*" }
