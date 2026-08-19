@@ -1,8 +1,10 @@
 import type { ConnectorSummary } from '@aevra/admin-contracts';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { PageState } from '../../components/PageState';
+import { usePollingResource } from '../../hooks/use-polling-resource';
 import { requestJson } from '../../services/api-client';
+import { ConnectorModal } from './ConnectorModal';
 import { dashboardOrder } from './dashboard-order';
 import {
   completeOnboarding,
@@ -143,66 +145,28 @@ function Onboarding({
 }
 
 export function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [error, setError] = useState<Error | null>(null);
-
-  const refresh = useCallback(async () => {
-    try {
-      setData(await loadDashboard());
-      setError(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause : new Error(String(cause)));
-    }
-  }, []);
-
-  useEffect(() => {
-    let stopped = false;
-    const poll = async () => {
-      try {
-        const next = await loadDashboard();
-        if (!stopped) {
-          setData(next);
-          setError(null);
-        }
-      } catch (cause) {
-        if (!stopped) {
-          setError(cause instanceof Error ? cause : new Error(String(cause)));
-        }
-      }
-    };
-    void poll();
-    const timer = window.setInterval(() => void poll(), 2000);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-    };
-  }, []);
+  const resource = usePollingResource({ load: loadDashboard, intervalMs: 2000 });
+  const [connectorModalOpen, setConnectorModalOpen] = useState(false);
+  const data = resource.data;
 
   if (!data) {
-    return <PageState loading={!error} error={error}>Dashboard</PageState>;
+    return (
+      <PageState loading={resource.loading} error={resource.error}>
+        Dashboard
+      </PageState>
+    );
   }
 
   const revokeConnector = async (connector: ConnectorSummary) => {
     if (!window.confirm(`Revoke ${connector.name}?`)) return;
     await requestJson(`/api/connectors/${connector.id}`, { method: 'DELETE' });
-    await refresh();
-  };
-
-  const createConnector = async () => {
-    const name = window.prompt('Connector name');
-    if (!name?.trim()) return;
-    const created = await requestJson<{ token: string }>('/api/connectors', {
-      method: 'POST',
-      body: JSON.stringify({ name: name.trim() }),
-    });
-    window.alert(`Copy this token now. It is shown once.\n\n${created.token}`);
-    await refresh();
+    await resource.refresh();
   };
 
   const sections = {
     onboarding: (
       <DashboardSection key="onboarding" id="onboarding" title="Onboarding">
-        <Onboarding data={data} refresh={refresh} />
+        <Onboarding data={data} refresh={resource.refresh} />
       </DashboardSection>
     ),
     'runtime-overview': (
@@ -250,7 +214,11 @@ export function DashboardPage() {
       <DashboardSection key="connections" id="connections" title="Connections">
         <div className="panel-toolbar">
           <p>OAuth is recommended. Static Bearer connectors remain available when needed.</p>
-          <button type="button" onClick={() => void createConnector()}>
+          <button
+            type="button"
+            data-surface-id="connections:create-connector"
+            onClick={() => setConnectorModalOpen(true)}
+          >
             New connector
           </button>
         </div>
@@ -267,7 +235,11 @@ export function DashboardPage() {
               sortable: false,
               search: false,
               render: (row) => (
-                <button type="button" onClick={() => void revokeConnector(row)}>
+                <button
+                  type="button"
+                  data-surface-id="connections:revoke-connector"
+                  onClick={() => void revokeConnector(row)}
+                >
                   Revoke
                 </button>
               ),
@@ -304,6 +276,11 @@ export function DashboardPage() {
         </div>
       </section>
       {dashboardOrder(data.onboarding.completed).map((id) => sections[id])}
+      <ConnectorModal
+        open={connectorModalOpen}
+        onClose={() => setConnectorModalOpen(false)}
+        onCreated={resource.refresh}
+      />
     </>
   );
 }
