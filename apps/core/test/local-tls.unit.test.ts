@@ -61,8 +61,11 @@ test('Windows TLS source has no PowerShell certificate-provider dependency', () 
 });
 
 test(
-  'Windows normal-start path can trust the generated certificate in CurrentUser Root',
-  { skip: process.platform !== 'win32' },
+  'Windows real trust-store integration can trust the generated certificate in CurrentUser Root',
+  {
+    skip:
+      process.platform !== 'win32' || process.env.AEVRA_TEST_REAL_CERT_STORE !== '1',
+  },
   async (t) => {
     const stateDir = mkdtempSync(path.join(os.tmpdir(), 'aevra-tls-trust-'));
     const material = await ensureLocalTls(stateDir, { platform: 'win32', trust: true });
