@@ -1,4 +1,4 @@
-export type AdminUiDestination = '/' | '/react/';
+export type AdminUiDestination = '/';
 
 export type AevraCommand =
   | { command: 'help' }
@@ -39,13 +39,8 @@ export function parseAevraArgs(argv: string[]): AevraCommand {
   if (command === 'start') {
     let uiDestination: AdminUiDestination | null = null;
     for (const arg of rest) {
-      const next =
-        arg === '--ui' ? '/' : arg === '--ui-react' ? '/react/' : null;
-      if (!next) throw new Error(`Unknown option: ${arg}`);
-      if (uiDestination && uiDestination !== next) {
-        throw new Error('--ui and --ui-react are mutually exclusive');
-      }
-      uiDestination = next;
+      if (arg !== '--ui') throw new Error(`Unknown option: ${arg}`);
+      uiDestination = '/';
     }
     return { command: 'start', uiDestination };
   }
