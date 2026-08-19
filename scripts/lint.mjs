@@ -1,8 +1,21 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+
 const bad = [];
+const ignoredDirectories = new Set([
+  'node_modules',
+  'dist',
+  'coverage',
+  '.test-dist',
+  '.coverage-dist',
+  'test-results',
+  'playwright-report',
+]);
+
 function walk(dir) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.isDirectory() && ignoredDirectories.has(e.name)) continue;
+
     const f = path.join(dir, e.name);
     if (e.isDirectory()) walk(f);
     else if (/\.(?:ts|tsx|js|mjs)$/.test(f)) {
@@ -13,11 +26,13 @@ function walk(dir) {
     }
   }
 }
+
 for (const r of ['apps', 'packages', 'scripts']) {
   try {
     walk(r);
   } catch {}
 }
+
 if (bad.length) {
   console.error(bad.join('\n'));
   process.exit(1);
