@@ -1,13 +1,15 @@
-import { workspaceSelect } from './authorization.js';
+import { authorizeCapability, gated, workspaceSelect } from './authorization.js';
 import { AevraToolError } from './errors.js';
-import { unavailable, workspaceRoot } from './service-helpers.js';
+import { argsHash, unavailable, workspaceRoot } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
 export const BASIC_TOOL_NAMES = new Set([
   'aevra_status',
   'skills_list',
   'skill_read',
+  'skill_write',
   'instructions_read',
+  'instructions_write',
   'approval_status',
   'approval_cancel',
   'approval_wait',
@@ -15,6 +17,38 @@ export const BASIC_TOOL_NAMES = new Set([
   'workspace_current',
   'workspace_select',
 ]);
+
+async function authorizeRead(
+  context: McpRuntimeContext,
+  sessionId: string,
+  capability: 'skills.read' | 'instructions.read',
+  tool: string,
+  args: any,
+  matcher: string,
+) {
+  return authorizeCapability(context, sessionId, capability, { tool, args }, matcher, 'LOW');
+}
+
+async function authorizeWrite(
+  context: McpRuntimeContext,
+  sessionId: string,
+  capability: 'skills.write' | 'instructions.write',
+  tool: string,
+  args: any,
+  matcher: string,
+  execute: () => Promise<any>,
+) {
+  const gate = await authorizeCapability(context, sessionId, capability, { tool, args }, matcher, 'HIGH');
+  if ('response' in gate) return gate.response;
+  return gated(
+    context,
+    sessionId,
+    { family: matcher, capability, risk: 'HIGH', argsHash: argsHash(args) },
+    { tool, args },
+    {},
+    execute,
+  );
+}
 
 export async function handleBasicTool(
   context: McpRuntimeContext,
@@ -53,6 +87,8 @@ export async function handleBasicTool(
   }
 
   if (name === 'skills_list') {
+    const gate = await authorizeRead(context, sessionId, 'skills.read', name, args, '*');
+    if ('response' in gate) return gate.response;
     const all = context.deps.skills?.list(workspaceRoot(context, sessionId)) ?? [];
     const query = typeof args.query === 'string' && args.query ? args.query.toLowerCase() : null;
     const filtered = query
@@ -73,22 +109,64 @@ export async function handleBasicTool(
   }
 
   if (name === 'skill_read') {
+    const source = args.source === 'workspace' ? 'workspace' : 'user';
+    const skillName = String(args.name ?? '');
+    const file = args.file ? String(args.file) : undefined;
+    const matcher = `${source}:${skillName}:${file ?? 'SKILL.md'}`;
+    const gate = await authorizeRead(context, sessionId, 'skills.read', name, args, matcher);
+    if ('response' in gate) return gate.response;
     return (
-      context.deps.skills?.read(
-        args.source === 'workspace' ? 'workspace' : 'user',
-        String(args.name ?? ''),
-        workspaceRoot(context, sessionId),
-        args.file ? String(args.file) : undefined,
-      ) ?? unavailable(name)
+      context.deps.skills?.read(source, skillName, workspaceRoot(context, sessionId), file) ??
+      unavailable(name)
+    );
+  }
+
+  if (name === 'skill_write') {
+    const source = args.source === 'workspace' ? 'workspace' : 'user';
+    const skillName = String(args.name ?? '');
+    const file = args.file ? String(args.file) : undefined;
+    const matcher = `${source}:${skillName}:${file ?? 'SKILL.md'}`;
+    return authorizeWrite(context, sessionId, 'skills.write', name, args, matcher, async () =>
+      context.deps.skills
+        ? context.deps.skills.write(
+            source,
+            skillName,
+            workspaceRoot(context, sessionId),
+            file,
+            String(args.content ?? ''),
+          )
+        : unavailable(name),
     );
   }
 
   if (name === 'instructions_read') {
+    const gate = await authorizeRead(context, sessionId, 'instructions.read', name, args, '*');
+    if ('response' in gate) return gate.response;
     return (
       context.deps.skills?.instructions(workspaceRoot(context, sessionId)) ?? {
         instructions: [],
         note: 'skills not configured',
       }
+    );
+  }
+
+  if (name === 'instructions_write') {
+    const source = args.source === 'workspace' ? 'workspace' : 'user';
+    return authorizeWrite(
+      context,
+      sessionId,
+      'instructions.write',
+      name,
+      args,
+      source,
+      async () =>
+        context.deps.skills
+          ? context.deps.skills.writeInstructions(
+              source,
+              workspaceRoot(context, sessionId),
+              String(args.content ?? ''),
+            )
+          : unavailable(name),
     );
   }
 
