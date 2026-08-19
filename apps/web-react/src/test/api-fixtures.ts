@@ -4,6 +4,8 @@ export interface FixtureOptions {
   onboardingCompleted?: boolean;
   approvals?: unknown[];
   oauth?: unknown[];
+  routes?: Record<string, unknown>;
+  mutationResponses?: Record<string, unknown>;
 }
 
 function json(value: unknown, status = 200) {
@@ -123,6 +125,10 @@ export function installApiFixtures(options: FixtureOptions = {}) {
     ],
   ]);
 
+  for (const [url, value] of Object.entries(options.routes ?? {})) {
+    routes.set(url, value);
+  }
+
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url =
@@ -139,13 +145,16 @@ export function installApiFixtures(options: FixtureOptions = {}) {
         });
       }
       if (method !== 'GET') {
-        return json({
-          ok: true,
-          result: { hostname: 'aevra.example.com' },
-          token: 'secret-once',
-        });
+        const mutation = options.mutationResponses?.[`${method} ${url}`];
+        return json(
+          mutation ?? {
+            ok: true,
+            result: { hostname: 'aevra.example.com' },
+            token: 'secret-once',
+          },
+        );
       }
-      if (url.includes('/mounts')) return json([]);
+      if (url.includes('/mounts') && !routes.has(url)) return json([]);
       const value = routes.get(url);
       if (value !== undefined) return json(value);
       return json({ error: { message: `Unmocked ${method} ${url}` } }, 404);
