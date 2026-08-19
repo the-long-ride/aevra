@@ -178,7 +178,9 @@ export class ManagedProcessRuntime {
     while (true) {
       const status = this.status(id);
       if (status.state !== 'running' || Date.now() >= deadline) return status;
-      await new Promise((resolve) => setTimeout(resolve, Math.min(50, Math.max(1, deadline - Date.now()))));
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(50, Math.max(1, deadline - Date.now()))),
+      );
     }
   }
 
@@ -202,6 +204,7 @@ export class ManagedProcessRuntime {
     }
     const status = this.statusValue(entry);
     return {
+      processId: id,
       ...chunk,
       state: status.state,
       exitCode: status.exitCode,
