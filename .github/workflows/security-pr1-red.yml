@@ -10,6 +10,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   immutable-approval:
@@ -21,5 +22,48 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --ignore-scripts
-      - run: node --experimental-strip-types --experimental-transform-types --loader ./scripts/ts-loader.mjs --test --test-name-pattern="immutable security approvals" apps/core/test/approval-service.unit.test.ts
+      - name: Focused verification
+        id: verify
+        shell: bash
+        run: |
+          set +e
+          npm ci --ignore-scripts > /tmp/install.log 2>&1
+          install=$?
+          test=99
+          if [ "$install" -eq 0 ]; then
+            node --experimental-strip-types --experimental-transform-types --loader ./scripts/ts-loader.mjs --test --test-name-pattern="immutable security approvals" apps/core/test/approval-service.unit.test.ts > /tmp/test.log 2>&1
+            test=$?
+          else
+            : > /tmp/test.log
+          fi
+          echo "install=$install" >> "$GITHUB_OUTPUT"
+          echo "test=$test" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Report focused result
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          INSTALL: ${{ steps.verify.outputs.install }}
+          TEST: ${{ steps.verify.outputs.test }}
+        run: |
+          {
+            echo '<!-- security-pr1-immutable -->'
+            echo "Focused immutable-approval verification: install=$INSTALL test=$TEST"
+            echo '```text'
+            echo '--- install tail ---'
+            tail -n 20 /tmp/install.log 2>/dev/null || true
+            echo '--- test tail ---'
+            tail -n 40 /tmp/test.log 2>/dev/null || true
+            echo '```'
+          } > /tmp/comment.md
+          gh pr comment "$PR" --repo "$REPOSITORY" --body-file /tmp/comment.md
+      - name: Enforce result
+        shell: bash
+        env:
+          INSTALL: ${{ steps.verify.outputs.install }}
+          TEST: ${{ steps.verify.outputs.test }}
+        run: |
+          [ "$INSTALL" = 0 ] && [ "$TEST" = 0 ]
