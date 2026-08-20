@@ -23,6 +23,19 @@ function rangeHash(data: Buffer | string) {
   return createHash('sha256').update(data).digest('hex');
 }
 
+function assertResolvedSecretAllowed(logicalPath: string, canonicalHostPath: string) {
+  assertRemoteSecretAllowed(logicalPath);
+  assertRemoteSecretAllowed(canonicalHostPath);
+}
+
+function assertNoAmbiguousHardLinks(linkCount: number, logicalPath: string) {
+  if (linkCount <= 1) return;
+  throw Object.assign(
+    new Error(`Protected hard-linked file cannot be read remotely: ${logicalPath}`),
+    { code: 'CAPABILITY_REQUIRED' },
+  );
+}
+
 async function readUtf8Range(file: string, offset: number, requestedLength: number) {
   const length = Math.min(requestedLength, MAX_RANGE_READ_CHARACTERS);
   const decoder = new StringDecoder('utf8');
@@ -72,8 +85,9 @@ export async function fileRead(
   range?: { offset?: number; length?: number },
 ) {
   const r = await resolveCapabilityPath(logicalPath, roots, 'read');
-  assertRemoteSecretAllowed(r.logicalPath);
+  assertResolvedSecretAllowed(r.logicalPath, r.canonicalHostPath);
   const info = await stat(r.canonicalHostPath);
+  assertNoAmbiguousHardLinks(info.nlink, r.logicalPath);
   const ranged = range?.offset !== undefined || range?.length !== undefined;
   if (ranged) {
     const offset = Math.max(0, Math.floor(Number(range?.offset ?? 0) || 0));
@@ -115,7 +129,9 @@ export async function fileSearch(
         await walk(full, lp);
         continue;
       }
-      if (!e.isFile() || (await stat(full)).size >= 1024 * 1024) continue;
+      if (!e.isFile()) continue;
+      const info = await stat(full);
+      if (info.size >= 1024 * 1024 || info.nlink > 1) continue;
       const sensitivity = classifySensitivity({ path: lp });
       if (sensitivity === 'SECRET') continue;
       let s: string;
@@ -143,7 +159,7 @@ export async function fileCreate(
   encoding: 'utf8' | 'base64' = 'utf8',
 ) {
   const r = await resolveCapabilityPath(logicalPath, roots, 'write');
-  assertRemoteSecretAllowed(r.logicalPath);
+  assertResolvedSecretAllowed(r.logicalPath, r.canonicalHostPath);
   await mkdir(path.dirname(r.canonicalHostPath), { recursive: true });
   await writeFile(
     r.canonicalHostPath,
@@ -161,7 +177,7 @@ export async function fileWrite(
   encoding: 'utf8' | 'base64' = 'utf8',
 ) {
   const r = await resolveCapabilityPath(logicalPath, roots, 'write');
-  assertRemoteSecretAllowed(r.logicalPath);
+  assertResolvedSecretAllowed(r.logicalPath, r.canonicalHostPath);
   await mkdir(path.dirname(r.canonicalHostPath), { recursive: true });
   const tmp = `${r.canonicalHostPath}.aevra-${process.pid}-${Date.now()}.tmp`;
   await writeFile(tmp, encoding === 'base64' ? Buffer.from(content, 'base64') : content);
@@ -173,8 +189,8 @@ export async function fileWrite(
 export async function fileMove(from: string, to: string, roots: CapabilityRoot[]) {
   const a = await resolveCapabilityPath(from, roots, 'write'),
     b = await resolveCapabilityPath(to, roots, 'write');
-  assertRemoteSecretAllowed(a.logicalPath);
-  assertRemoteSecretAllowed(b.logicalPath);
+  assertResolvedSecretAllowed(a.logicalPath, a.canonicalHostPath);
+  assertResolvedSecretAllowed(b.logicalPath, b.canonicalHostPath);
   await mkdir(path.dirname(b.canonicalHostPath), { recursive: true });
   await rename(a.canonicalHostPath, b.canonicalHostPath);
   return { from: a.logicalPath, to: b.logicalPath };
@@ -182,7 +198,7 @@ export async function fileMove(from: string, to: string, roots: CapabilityRoot[]
 
 export async function fileDelete(logicalPath: string, recursive: boolean, roots: CapabilityRoot[]) {
   const r = await resolveCapabilityPath(logicalPath, roots, 'write');
-  assertRemoteSecretAllowed(r.logicalPath);
+  assertResolvedSecretAllowed(r.logicalPath, r.canonicalHostPath);
   await rm(r.canonicalHostPath, { recursive, force: false });
   return { path: r.logicalPath, deleted: true };
 }
