@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { linkSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -54,6 +54,27 @@ test('Executor rejects direct SECRET reads even if Core is bypassed', async () =
   const { root, roots } = fixture();
   writeFileSync(path.join(root, '.env'), 'TOKEN=secret-value\n');
   await assert.rejects(() => fileRead('/.env', roots), /secret|protected/i);
+});
+
+test(
+  'Executor rejects a normal-looking symlink that resolves to a SECRET file',
+  { skip: process.platform === 'win32' },
+  async () => {
+    const { root, roots } = fixture();
+    writeFileSync(path.join(root, '.env'), 'TOKEN=secret-through-symlink\n');
+    symlinkSync('.env', path.join(root, 'alias.txt'));
+    await assert.rejects(() => fileRead('/alias.txt', roots), /secret|protected/i);
+  },
+);
+
+test('Executor rejects hard-link aliases that could hide SECRET file identity', async () => {
+  const { root, roots } = fixture();
+  writeFileSync(path.join(root, '.env'), 'TOKEN=hardlink-secret-marker\n');
+  linkSync(path.join(root, '.env'), path.join(root, 'alias.txt'));
+
+  await assert.rejects(() => fileRead('/alias.txt', roots), /hard.?link|protected/i);
+  const hits = await fileSearch('/', 'hardlink-secret-marker', roots);
+  assert.equal(hits.length, 0);
 });
 
 test('Executor rejects direct SECRET mutations even if Core is bypassed', async () => {
