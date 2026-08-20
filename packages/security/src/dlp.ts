@@ -46,3 +46,58 @@ export function redactText(
   });
   return { text, redactionCount: count };
 }
+
+const structuredSecretKey = /(?:^|_)(?:token|secret|password|credential|passphrase|code_verifier)(?:$|_)/i;
+
+function collectStructuredSecrets(value: unknown, out: string[]) {
+  if (Array.isArray(value)) {
+    for (const item of value) collectStructuredSecrets(item, out);
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (key.toLowerCase() === 'env' && item && typeof item === 'object' && !Array.isArray(item)) {
+      for (const envValue of Object.values(item as Record<string, unknown>)) {
+        if (typeof envValue === 'string' && envValue.length >= 4) out.push(envValue);
+      }
+      continue;
+    }
+    if (structuredSecretKey.test(key) && typeof item === 'string' && item.length >= 4) {
+      out.push(item);
+      continue;
+    }
+    collectStructuredSecrets(item, out);
+  }
+}
+
+export function sanitizeStructuredSecrets(value: unknown): unknown {
+  const knownSecrets: string[] = [];
+  collectStructuredSecrets(value, knownSecrets);
+
+  const visit = (item: unknown, key?: string): unknown => {
+    if (Array.isArray(item)) return item.map((entry) => visit(entry));
+    if (!item || typeof item !== 'object') {
+      if (typeof item !== 'string') return item;
+      if (key === 'content' || (key && structuredSecretKey.test(key))) return '[REDACTED]';
+      return redactText(item, knownSecrets).text;
+    }
+    const result: Record<string, unknown> = {};
+    for (const [childKey, childValue] of Object.entries(item as Record<string, unknown>)) {
+      if (
+        childKey.toLowerCase() === 'env' &&
+        childValue &&
+        typeof childValue === 'object' &&
+        !Array.isArray(childValue)
+      ) {
+        result[childKey] = Object.fromEntries(
+          Object.keys(childValue as Record<string, unknown>).map((name) => [name, '[REDACTED]']),
+        );
+        continue;
+      }
+      result[childKey] = visit(childValue, childKey);
+    }
+    return result;
+  };
+
+  return visit(value);
+}
