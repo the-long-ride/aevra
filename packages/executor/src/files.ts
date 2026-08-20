@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
-import { readdir, readFile, stat, writeFile, mkdir, rename, rm, open } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { readdir, readFile, stat, writeFile, mkdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import type { CapabilityRoot } from '../../protocol/src/index.js';
 import { resolveCapabilityPath } from '../../security/src/path-policy.js';
 import {
@@ -10,14 +12,43 @@ import {
 } from '../../security/src/sensitive.js';
 
 export const MAX_FULL_FILE_BYTES = 16 * 1024 * 1024;
-export const MAX_RANGE_READ_BYTES = 1024 * 1024;
+export const MAX_RANGE_READ_CHARACTERS = 1024 * 1024;
+export const MAX_RANGE_READ_BYTES = MAX_RANGE_READ_CHARACTERS;
 
 export function sha256(data: Buffer | string) {
   return `sha256:${createHash('sha256').update(data).digest('hex')}` as const;
 }
 
-function rangeHash(data: Buffer) {
+function rangeHash(data: Buffer | string) {
   return createHash('sha256').update(data).digest('hex');
+}
+
+async function readUtf8Range(file: string, offset: number, requestedLength: number) {
+  const length = Math.min(requestedLength, MAX_RANGE_READ_CHARACTERS);
+  const decoder = new StringDecoder('utf8');
+  const parts: string[] = [];
+  let position = 0;
+
+  const consume = (text: string) => {
+    if (!text) return;
+    const localStart = Math.max(0, offset - position);
+    const localEnd = Math.min(text.length, offset + length - position);
+    if (localStart < localEnd) parts.push(text.slice(localStart, localEnd));
+    position += text.length;
+  };
+
+  for await (const chunk of createReadStream(file)) {
+    consume(decoder.write(Buffer.from(chunk)));
+  }
+  consume(decoder.end());
+
+  const content = parts.join('');
+  return {
+    content,
+    offset,
+    length: content.length,
+    totalLength: position,
+  };
 }
 
 export async function fileList(logicalPath: string, roots: CapabilityRoot[]) {
@@ -48,25 +79,14 @@ export async function fileRead(
     const offset = Math.max(0, Math.floor(Number(range?.offset ?? 0) || 0));
     const requestedLength = Math.max(
       0,
-      Math.floor(Number(range?.length ?? MAX_RANGE_READ_BYTES) || 0),
+      Math.floor(Number(range?.length ?? MAX_RANGE_READ_CHARACTERS) || 0),
     );
-    const length = Math.min(requestedLength, MAX_RANGE_READ_BYTES, Math.max(0, info.size - offset));
-    const buffer = Buffer.alloc(length);
-    const handle = await open(r.canonicalHostPath, 'r');
-    try {
-      const { bytesRead } = await handle.read(buffer, 0, length, offset);
-      const chunk = buffer.subarray(0, bytesRead);
-      return {
-        path: r.logicalPath,
-        hash: rangeHash(chunk),
-        content: chunk.toString('utf8'),
-        offset,
-        length: bytesRead,
-        totalLength: info.size,
-      };
-    } finally {
-      await handle.close();
-    }
+    const chunk = await readUtf8Range(r.canonicalHostPath, offset, requestedLength);
+    return {
+      path: r.logicalPath,
+      hash: rangeHash(chunk.content),
+      ...chunk,
+    };
   }
   if (info.size > MAX_FULL_FILE_BYTES) {
     throw new Error(
