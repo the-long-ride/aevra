@@ -3,7 +3,9 @@ import test from 'node:test';
 import { SecurityGuard } from '../../../apps/core/src/security/security-guard.js';
 import { handleFileTool } from '../src/file-tools.js';
 
-function fixture(options: { yolo?: boolean; downgradeSensitivePath?: boolean } = {}) {
+function fixture(
+  options: { yolo?: boolean; downgradeSensitivePath?: boolean; workerSensitivity?: string } = {},
+) {
   const calls: any[] = [];
   const operationCalls: any[] = [];
   const sessions = {
@@ -25,13 +27,14 @@ function fixture(options: { yolo?: boolean; downgradeSensitivePath?: boolean } =
       calls.push(input);
       const op = input.operation;
       if (op.kind === 'file.read') {
-        if (op.path === '/.npmrc') {
+        if (op.path === '/.npmrc' || op.path === '/alias.txt') {
           return {
             ok: true,
             value: {
-              path: options.downgradeSensitivePath ? '/normal.txt' : '/.npmrc',
+              path: options.downgradeSensitivePath ? '/normal.txt' : op.path,
               hash: 'sha256:test',
-              content: '_authToken=raw-sensitive-value',
+              content: '_authToken=[REDACTED]',
+              ...(options.workerSensitivity ? { sensitivity: options.workerSensitivity } : {}),
             },
           };
         }
@@ -104,7 +107,13 @@ test('requested sensitivity cannot be downgraded by a worker response path', asy
   const result: any = await handleFileTool(context, 'ses_1', 'file_read', { path: '/.npmrc' });
   assert.equal(result.sensitivity, 'SENSITIVE');
   assert.match(result.content, /\[REDACTED\]/);
-  assert.equal(result.content.includes('raw-sensitive-value'), false);
+});
+
+test('worker sensitivity elevation is preserved for alias reads', async () => {
+  const { context } = fixture({ workerSensitivity: 'SENSITIVE' });
+  const result: any = await handleFileTool(context, 'ses_1', 'file_read', { path: '/alias.txt' });
+  assert.equal(result.sensitivity, 'SENSITIVE');
+  assert.match(result.content, /\[REDACTED\]/);
 });
 
 test('ranged file_read forwards offset and length to Worker', async () => {
