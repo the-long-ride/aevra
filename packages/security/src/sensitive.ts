@@ -6,6 +6,21 @@ export interface SensitivityInput {
   userPatterns?: Array<{ pattern: RegExp; class: Sensitivity }>;
   mountPolicy?: Sensitivity;
 }
+
+const sensitivityRank: Record<Sensitivity, number> = {
+  NORMAL: 0,
+  SENSITIVE: 1,
+  SECRET: 2,
+};
+
+export function maxSensitivity(...values: Sensitivity[]): Sensitivity {
+  let result: Sensitivity = 'NORMAL';
+  for (const value of values) {
+    if (sensitivityRank[value] > sensitivityRank[result]) result = value;
+  }
+  return result;
+}
+
 export function classifySensitivity(input: SensitivityInput): Sensitivity {
   if (input.explicit) return input.explicit;
   for (const rule of input.userPatterns ?? []) if (rule.pattern.test(input.path)) return rule.class;
@@ -23,6 +38,14 @@ export function classifySensitivity(input: SensitivityInput): Sensitivity {
     return 'SENSITIVE';
   return 'NORMAL';
 }
+
+export function assertRemoteSecretAllowed(path: string) {
+  if (classifySensitivity({ path }) !== 'SECRET') return;
+  throw Object.assign(new Error(`Protected secret resource cannot be accessed remotely: ${path}`), {
+    code: 'CAPABILITY_REQUIRED',
+  });
+}
+
 export function maskSecretFile(path: string, content: string) {
   if (path.toLowerCase().split(/[\\/]/).pop()?.startsWith('.env'))
     return content
