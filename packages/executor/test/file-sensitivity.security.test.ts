@@ -3,7 +3,9 @@ import test from 'node:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileRead, fileSearch, MAX_FULL_FILE_BYTES } from '../src/files.js';
+import { fileRead, fileSearch } from '../src/files.js';
+
+const EXPECTED_MAX_FULL_FILE_BYTES = 16 * 1024 * 1024;
 
 function fixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), 'aevra-sensitive-files-'));
@@ -54,7 +56,10 @@ test('fileRead range reads only the requested chunk and reports total length', a
 
 test('full reads above the explicit safety limit require ranged access', async () => {
   const { root, roots } = fixture();
-  writeFileSync(path.join(root, 'too-large.txt'), Buffer.alloc(MAX_FULL_FILE_BYTES + 1, 0x61));
+  writeFileSync(
+    path.join(root, 'too-large.txt'),
+    Buffer.alloc(EXPECTED_MAX_FULL_FILE_BYTES + 1, 0x61),
+  );
   await assert.rejects(
     () => fileRead('/too-large.txt', roots),
     /full-read limit|offset\/length/i,
