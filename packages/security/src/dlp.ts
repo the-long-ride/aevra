@@ -85,7 +85,7 @@ export function sanitizeStructuredSecrets(value: unknown): unknown {
       }
       return redactText(item, knownSecrets).text;
     }
-    const result: Record<string, unknown> = {};
+    const result = Object.create(null) as Record<string, unknown>;
     for (const [childKey, childValue] of Object.entries(item as Record<string, unknown>)) {
       if (
         childKey.toLowerCase() === 'env' &&
