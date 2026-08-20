@@ -47,6 +47,7 @@ export type SessionIdentityResolver = (
 export class ApprovalService {
   private approvedHandler?: ApprovedHandler;
   private sessionIdentityResolver?: SessionIdentityResolver;
+  private volatilePayloads = new Map<string, unknown>();
   constructor(
     private repo: ApprovalRepository,
     private audit: AuditService,
@@ -84,7 +85,13 @@ export class ApprovalService {
       expiresAt: new Date(Date.now() + lifetime).toISOString(),
       createdAt: new Date().toISOString(),
     };
-    this.repo.put(t);
+    const stored = this.repo.put(t) as FrozenOperationTicket;
+    if (
+      input.payload !== undefined &&
+      JSON.stringify(stored.payload) !== JSON.stringify(input.payload)
+    ) {
+      this.volatilePayloads.set(t.id, input.payload);
+    }
     this.audit.append({
       actor: t.actor,
       sessionId: t.sessionId,
@@ -95,7 +102,7 @@ export class ApprovalService {
       result: 'pending',
       redactionCount: 0,
     });
-    const view = presentApproval(t),
+    const view = presentApproval(stored),
       parts = [view.action, view.target, view.preview].filter(Boolean);
     notifySystem(`Aevra: ${view.title}`, parts.join(' · '));
     if (this.config.fastWaitMs > 0) await new Promise((r) => setTimeout(r, this.config.fastWaitMs));
@@ -119,6 +126,7 @@ export class ApprovalService {
     if (t && ['PENDING', 'APPROVED'].includes(t.state) && Date.parse(t.expiresAt) <= Date.now()) {
       t.state = 'EXPIRED';
       this.repo.put(t);
+      this.volatilePayloads.delete(t.id);
       this.audit.append({
         actor: t.actor,
         sessionId: t.sessionId,
@@ -169,6 +177,7 @@ export class ApprovalService {
     if (t.state !== 'PENDING') throw new Error(`Cannot deny ${t.state}`);
     t.state = 'DENIED';
     this.repo.put(t);
+    this.volatilePayloads.delete(t.id);
     this.audit.append({
       actor: t.actor,
       sessionId: t.sessionId,
@@ -187,6 +196,7 @@ export class ApprovalService {
     t.state = 'CANCELLED';
     t.cancellationReason = reason;
     this.repo.put(t);
+    this.volatilePayloads.delete(t.id);
     this.audit.append({
       actor: t.actor,
       sessionId: t.sessionId,
@@ -205,6 +215,7 @@ export class ApprovalService {
         t.state = 'CANCELLED';
         t.cancellationReason = 'CANCELLED_RESTART';
         this.repo.put(t);
+        this.volatilePayloads.delete(t.id);
         this.audit.append({
           actor: t.actor,
           sessionId: t.sessionId,
@@ -216,6 +227,7 @@ export class ApprovalService {
           redactionCount: 0,
         });
       }
+    this.volatilePayloads.clear();
   }
 
   async resume<T>(
@@ -223,17 +235,19 @@ export class ApprovalService {
     revalidate: ResumeRevalidator,
     execute: (ticket: FrozenOperationTicket) => Promise<T>,
   ) {
-    const t = this.required(id);
-    if (t.state === 'EXPIRED')
+    const stored = this.required(id);
+    if (stored.state === 'EXPIRED')
       throw Object.assign(new Error('APPROVAL_TIMEOUT'), { code: 'APPROVAL_TIMEOUT' });
-    if (t.state !== 'APPROVED')
-      throw Object.assign(new Error(`Approval is ${t.state}`), {
-        code: t.state === 'DENIED' ? 'APPROVAL_DENIED' : 'APPROVAL_PENDING',
+    if (stored.state !== 'APPROVED')
+      throw Object.assign(new Error(`Approval is ${stored.state}`), {
+        code: stored.state === 'DENIED' ? 'APPROVAL_DENIED' : 'APPROVAL_PENDING',
       });
+    const t = this.withVolatilePayload(stored);
     const valid = await revalidate(t);
     if (!valid.ok) {
       t.state = 'CONTEXT_CHANGED';
       this.repo.put(t);
+      this.volatilePayloads.delete(t.id);
       this.audit.append({
         actor: t.actor,
         sessionId: t.sessionId,
@@ -262,6 +276,7 @@ export class ApprovalService {
       const result = await execute(t);
       t.state = 'SUCCEEDED';
       this.repo.put(t);
+      this.volatilePayloads.delete(t.id);
       this.audit.append({
         actor: t.actor,
         sessionId: t.sessionId,
@@ -276,6 +291,7 @@ export class ApprovalService {
     } catch (e) {
       t.state = 'FAILED';
       this.repo.put(t);
+      this.volatilePayloads.delete(t.id);
       this.audit.append({
         actor: t.actor,
         sessionId: t.sessionId,
@@ -288,6 +304,11 @@ export class ApprovalService {
       });
       throw e;
     }
+  }
+
+  private withVolatilePayload(ticket: FrozenOperationTicket): FrozenOperationTicket {
+    if (!this.volatilePayloads.has(ticket.id)) return ticket;
+    return { ...ticket, payload: this.volatilePayloads.get(ticket.id) };
   }
 
   private reusableConnectionRequest(
