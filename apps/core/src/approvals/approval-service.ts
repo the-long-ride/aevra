@@ -137,6 +137,8 @@ export class ApprovalService {
     if (t.state !== 'PENDING') throw new Error(`Cannot approve ${t.state}`);
     if (t.risk === 'CRITICAL' && scope !== 'once')
       throw new Error('Critical operations only support one-time local approval');
+    if ((t.payload as any)?.securityOnce === true && scope !== 'once')
+      throw new Error('Security-sensitive operations only support one-time local approval');
     if (t.operation.family === 'skills:read' && scope !== 'once')
       throw new Error(
         'This request is connection/session scoped and only supports one-time local approval',
