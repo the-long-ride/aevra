@@ -101,3 +101,39 @@ test('security-sensitive file content is not stored in approval rows', async () 
   assert.equal(String(stored.operationJson).includes(secretContent), false);
   db.close();
 });
+
+test('security-sensitive file patches are not stored in approval rows', async () => {
+  const { db, approvals } = make();
+  const patchSecret = 'short-secret-42';
+  const patch = `@@ -1 +1 @@\n-old\n+TOKEN=${patchSecret}`;
+  const request = await approvals.request({
+    actor: 'oauth:ChatGPT',
+    sessionId: 'ses_1',
+    workspaceId: 'ws_1',
+    operation: {
+      family: 'security:sensitive:file_patch',
+      capability: 'files.write',
+      risk: 'HIGH',
+      argsHash: 'hash',
+    },
+    payload: {
+      tool: 'capability_request',
+      securityOnce: true,
+      requestedCapability: 'files.write',
+      permissionMatcher: '*',
+      original: {
+        tool: 'file_patch',
+        args: { path: '/.npmrc', patch },
+      },
+    },
+    expectedState: { workspaceId: 'ws_1' },
+    risk: 'HIGH',
+  });
+  const stored = db
+    .raw()
+    .prepare('SELECT operation_json operationJson FROM pending_approvals WHERE id=?')
+    .get(request.requestId) as any;
+  assert.equal(String(stored.operationJson).includes(patchSecret), false);
+  assert.equal(String(stored.operationJson).includes(patch), false);
+  db.close();
+});
