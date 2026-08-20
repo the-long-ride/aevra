@@ -22,5 +22,4 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx tsc -p tsconfig.json --noCheck --noEmit false --outDir .test-dist
-      - run: node --test --test-name-pattern="immutable security approvals" .test-dist/apps/core/test/approval-service.unit.test.js
+      - run: node --experimental-strip-types --experimental-transform-types --loader ./scripts/ts-loader.mjs --test --test-name-pattern="immutable security approvals" apps/core/test/approval-service.unit.test.ts
