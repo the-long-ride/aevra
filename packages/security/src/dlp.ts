@@ -47,7 +47,9 @@ export function redactText(
   return { text, redactionCount: count };
 }
 
-const structuredSecretKey = /(?:^|_)(?:token|secret|password|credential|passphrase|code_verifier)(?:$|_)/i;
+const structuredSecretKey =
+  /(?:^|_)(?:token|secret|password|credential|passphrase|code_verifier)(?:$|_)/i;
+const opaquePayloadKey = new Set(['content', 'patch']);
 
 function collectStructuredSecrets(value: unknown, out: string[]) {
   if (Array.isArray(value)) {
@@ -78,7 +80,9 @@ export function sanitizeStructuredSecrets(value: unknown): unknown {
     if (Array.isArray(item)) return item.map((entry) => visit(entry));
     if (!item || typeof item !== 'object') {
       if (typeof item !== 'string') return item;
-      if (key === 'content' || (key && structuredSecretKey.test(key))) return '[REDACTED]';
+      if ((key && opaquePayloadKey.has(key)) || (key && structuredSecretKey.test(key))) {
+        return '[REDACTED]';
+      }
       return redactText(item, knownSecrets).text;
     }
     const result: Record<string, unknown> = {};
