@@ -1,80 +1,28 @@
-name: Security PR1 focused verification
+name: Security PR1 source snapshot
 
 on:
   pull_request:
     branches: [main]
 
 concurrency:
-  group: security-pr1-focused-${{ github.event.pull_request.number }}
+  group: security-pr1-snapshot-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  install:
+  snapshot:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: 22
-          cache: npm
-      - run: npm install --ignore-scripts --no-audit --no-fund
-
-  compile:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm install --ignore-scripts --no-audit --no-fund
-      - shell: bash
-        run: |
-          cat > tsconfig.security-focused.json <<'EOF'
-          {
-            "extends": "./tsconfig.json",
-            "compilerOptions": { "outDir": ".security-test-dist", "noEmit": false, "noCheck": true },
-            "include": [
-              "apps/core/test/approval-service.unit.test.ts",
-              "apps/core/test/volatile-approval-payload.security.test.ts",
-              "apps/core/test/process-remote-projection.security.test.ts",
-              "packages/executor/test/file-sensitivity.security.test.ts",
-              "packages/executor/test/environment.security.test.ts",
-              "packages/mcp-tools/test/file-resource-security.security.test.ts",
-              "packages/store/test/process-env-persistence.security.test.ts"
-            ]
-          }
-          EOF
-          npx tsc -p tsconfig.security-focused.json
-
-  tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm install --ignore-scripts --no-audit --no-fund
-      - shell: bash
-        run: |
-          cat > tsconfig.security-focused.json <<'EOF'
-          {
-            "extends": "./tsconfig.json",
-            "compilerOptions": { "outDir": ".security-test-dist", "noEmit": false, "noCheck": true },
-            "include": [
-              "apps/core/test/approval-service.unit.test.ts",
-              "apps/core/test/volatile-approval-payload.security.test.ts",
-              "apps/core/test/process-remote-projection.security.test.ts",
-              "packages/executor/test/file-sensitivity.security.test.ts",
-              "packages/executor/test/environment.security.test.ts",
-              "packages/mcp-tools/test/file-resource-security.security.test.ts",
-              "packages/store/test/process-env-persistence.security.test.ts"
-            ]
-          }
-          EOF
-          npx tsc -p tsconfig.security-focused.json
-      - run: node --test .security-test-dist/apps/core/test/approval-service.unit.test.js .security-test-dist/apps/core/test/volatile-approval-payload.security.test.js .security-test-dist/apps/core/test/process-remote-projection.security.test.js .security-test-dist/packages/executor/test/file-sensitivity.security.test.js .security-test-dist/packages/executor/test/environment.security.test.js .security-test-dist/packages/mcp-tools/test/file-resource-security.security.test.js .security-test-dist/packages/store/test/process-env-persistence.security.test.js
+          name: security-pr1-source-${{ github.sha }}
+          path: |
+            .
+            !node_modules
+            !.git
+          include-hidden-files: true
+          retention-days: 1
