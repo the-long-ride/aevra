@@ -12,9 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  immutable-approval:
+  install:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,17 +21,42 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Compile focused graph
-        shell: bash
+
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - shell: bash
         run: |
           cat > tsconfig.security-focused.json <<'EOF'
           {
             "extends": "./tsconfig.json",
-            "compilerOptions": {
-              "outDir": ".security-test-dist",
-              "noEmit": false,
-              "noCheck": true
-            },
+            "compilerOptions": { "outDir": ".security-test-dist", "noEmit": false, "noCheck": true },
+            "include": ["apps/core/test/approval-service.unit.test.ts"]
+          }
+          EOF
+          npx tsc -p tsconfig.security-focused.json
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - shell: bash
+        run: |
+          cat > tsconfig.security-focused.json <<'EOF'
+          {
+            "extends": "./tsconfig.json",
+            "compilerOptions": { "outDir": ".security-test-dist", "noEmit": false, "noCheck": true },
             "include": ["apps/core/test/approval-service.unit.test.ts"]
           }
           EOF
