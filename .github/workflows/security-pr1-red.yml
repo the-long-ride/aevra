@@ -1,51 +1,55 @@
-name: Security PR1 RED
+name: Security PR1 guard verification
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - security/01-secret-data-isolation
 
 concurrency:
-  group: security-pr1-red-${{ github.event.pull_request.number }}
+  group: security-pr1-guard-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  guard-red:
+  guard:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Run focused guard check
+      - name: Run focused guard verification
         shell: bash
         run: |
           set +e
-          : > guard-verification.log
-          npm ci >> guard-verification.log 2>&1
+          mkdir -p .verification
+          : > .verification/security-pr1-guard.log
+          npm ci >> .verification/security-pr1-guard.log 2>&1
           install_status=$?
-          echo "INSTALL_EXIT=$install_status" >> guard-verification.log
+          compile_status=99
+          test_status=99
           if [ "$install_status" -eq 0 ]; then
-            npx tsc -p tsconfig.json --noCheck --noEmit false --outDir .test-dist >> guard-verification.log 2>&1
+            npx tsc -p tsconfig.json --noCheck --noEmit false --outDir .test-dist >> .verification/security-pr1-guard.log 2>&1
             compile_status=$?
-            echo "COMPILE_EXIT=$compile_status" >> guard-verification.log
             if [ "$compile_status" -eq 0 ]; then
-              node --test .test-dist/apps/core/test/security-guard.unit.test.js >> guard-verification.log 2>&1
+              node --test .test-dist/apps/core/test/security-guard.unit.test.js >> .verification/security-pr1-guard.log 2>&1
               test_status=$?
-            else
-              test_status=99
             fi
-            echo "TEST_EXIT=$test_status" >> guard-verification.log
-          else
-            echo "COMPILE_EXIT=99" >> guard-verification.log
-            echo "TEST_EXIT=99" >> guard-verification.log
           fi
-          cat guard-verification.log
-      - uses: actions/upload-artifact@v4
-        with:
-          name: guard-verification
-          path: guard-verification.log
+          printf '{"commit":"%s","install":%s,"compile":%s,"test":%s}\n' "$GITHUB_SHA" "$install_status" "$compile_status" "$test_status" > .verification/security-pr1-guard.json
+      - name: Publish verification receipt
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .verification/security-pr1-guard.json .verification/security-pr1-guard.log
+          git commit -m "ci: record PR1 guard verification [skip ci]" || exit 0
+          git push origin HEAD:${GITHUB_REF_NAME}
