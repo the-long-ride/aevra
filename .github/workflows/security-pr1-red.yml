@@ -22,4 +22,5 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: node scripts/test.mjs unit
+      - run: npx tsc -p tsconfig.json --noCheck --noEmit false --outDir .test-dist
+      - run: node --test .test-dist/apps/core/test/security-guard.unit.test.js
