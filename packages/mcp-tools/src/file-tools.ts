@@ -68,6 +68,10 @@ function denySecret(path: string): never {
   );
 }
 
+function returnedSensitivity(value: unknown): Sensitivity {
+  return value === 'SECRET' || value === 'SENSITIVE' ? value : 'NORMAL';
+}
+
 async function mutationSecurityGate(
   context: McpRuntimeContext,
   sessionId: string,
@@ -296,6 +300,7 @@ async function readTool(
   const value = result.value as any;
   const sensitivity = maxSensitivity(
     requestedSensitivity,
+    returnedSensitivity(value.sensitivity),
     classifySensitivity({ path: String(value.path ?? args.path ?? '') }),
   );
   if (sensitivity === 'SECRET') denySecret(String(args.path ?? value.path ?? ''));
