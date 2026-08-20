@@ -12,7 +12,8 @@ import {
 import type { McpRuntimeContext } from './service-types.js';
 
 export type CapabilityGate =
-  { authorization: ReturnType<typeof authorizationContext> } | { response: any };
+  | { authorization: ReturnType<typeof authorizationContext> }
+  | { response: any };
 
 export async function workspaceSelect(context: McpRuntimeContext, sessionId: string, args: any) {
   const workspace = context.workspaces.getLocal(
@@ -77,6 +78,60 @@ export async function workspaceSelect(context: McpRuntimeContext, sessionId: str
       id: workspace.id,
       name: workspace.name,
       description: workspace.description,
+    },
+  };
+}
+
+export async function authorizeImmutableSecurityApproval(
+  context: McpRuntimeContext,
+  sessionId: string,
+  capability: Capability,
+  original: { tool: string; args: any },
+  family: string,
+  risk: RiskTier = 'HIGH',
+): Promise<CapabilityGate> {
+  const lease = requiredLease(context, sessionId);
+  const session = context.sessions.get(sessionId)!;
+  const authorization = authorizationContext(context, sessionId, capability, '*');
+
+  if (oneTimeAllowed(context, sessionId, capability, '*')) {
+    return { authorization };
+  }
+  if (!context.approvals) {
+    throw new AevraToolError('APPROVAL_PENDING', 'Local approval service unavailable');
+  }
+
+  const request = await context.approvals.request({
+    actor: session.actor,
+    sessionId,
+    workspaceId: lease.workspaceId,
+    operation: {
+      family,
+      capability,
+      risk,
+      argsHash: argsHash({ workspaceId: lease.workspaceId, family, original }),
+    },
+    payload: {
+      tool: 'capability_request',
+      requestedCapability: capability,
+      permissionMatcher: '*',
+      securityOnce: true,
+      original,
+    },
+    expectedState: { workspaceId: lease.workspaceId },
+    risk,
+  });
+  if (request.status === 'approved') {
+    return {
+      response: await resumeApproval(context, sessionId, request.requestId),
+    };
+  }
+  return {
+    response: {
+      ...request,
+      requiredCapability: capability,
+      permissionMatcher: '*',
+      securityApprovalScope: 'once',
     },
   };
 }

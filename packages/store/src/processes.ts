@@ -1,11 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { ManagedProcessStatus } from '../../protocol/src/index.js';
+import { sanitizeStructuredSecrets } from '../../security/src/dlp.js';
 
 export class ProcessRepository {
   constructor(private db: DatabaseSync) {}
 
   put(process: any) {
     const now = new Date().toISOString();
+    const command = sanitizeStructuredSecrets(process.command);
     this.db
       .prepare(
         `INSERT OR REPLACE INTO managed_processes(id,workspace_id,lifecycle,ownership,helper_pid,helper_started_at,marker,command_json,execution_mode,log_path,created_at,updated_at,state,exit_code,signal,finished_at,failure_message) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -18,7 +20,7 @@ export class ProcessRepository {
         process.helperPid ?? null,
         process.helperStartedAt ?? null,
         process.marker ?? null,
-        JSON.stringify(process.command),
+        JSON.stringify(command),
         process.executionMode,
         process.logPath ?? null,
         process.createdAt ?? now,
@@ -29,7 +31,7 @@ export class ProcessRepository {
         process.finishedAt ?? null,
         process.failureMessage ?? null,
       );
-    return process;
+    return { ...process, command };
   }
 
   list(workspaceId?: string) {

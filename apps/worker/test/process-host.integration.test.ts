@@ -68,6 +68,40 @@ test('keep-running uses a detached process-host with an ownership marker and red
   runtime.stop(value.processId);
 });
 
+test('keep-running child excludes unrelated parent secrets', async () => {
+  const previous = process.env.AEVRA_TEST_PARENT_SECRET;
+  process.env.AEVRA_TEST_PARENT_SECRET = 'synthetic-parent-secret';
+  const root = mkdtempSync(path.join(tmpdir(), 'aevra-proc-env-'));
+  const processHostEntry = fileURLToPath(new URL('../src/process-host.js', import.meta.url));
+  const runtime = new ManagedProcessRuntime({ processHostEntry, logDir: root });
+  try {
+    const value = runtime.start(
+      {
+        executable: process.execPath,
+        args: [
+          '-e',
+          "console.log(process.env.AEVRA_TEST_PARENT_SECRET === undefined ? 'missing' : 'leaked')",
+        ],
+        env: {},
+      },
+      process.cwd(),
+      'keep-running',
+    ) as { processId: string; logPath: string };
+    await until(() => {
+      try {
+        return /missing|leaked/.test(readFileSync(value.logPath, 'utf8'));
+      } catch {
+        return false;
+      }
+    });
+    assert.match(readFileSync(value.logPath, 'utf8'), /missing/);
+    assert.doesNotMatch(readFileSync(value.logPath, 'utf8'), /leaked/);
+  } finally {
+    if (previous === undefined) delete process.env.AEVRA_TEST_PARENT_SECRET;
+    else process.env.AEVRA_TEST_PARENT_SECRET = previous;
+  }
+});
+
 test('keep-running persists terminal state after helper exits', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'aevra-proc-result-'));
   const processHostEntry = fileURLToPath(new URL('../src/process-host.js', import.meta.url));

@@ -9,6 +9,7 @@ import type {
   ProcessLifecycle,
 } from '../../protocol/src/index.js';
 import { redactText } from '../../security/src/dlp.js';
+import { buildChildEnvironment } from './environment.js';
 
 const MAX_WAIT_MS = 30_000;
 
@@ -85,7 +86,7 @@ export class ManagedProcessRuntime {
     const id = `proc_${randomUUID()}`;
     const child = spawn(command.executable, command.args, {
       cwd,
-      env: { ...process.env, ...command.env },
+      env: buildChildEnvironment(command.env),
       shell: false,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -126,13 +127,12 @@ export class ManagedProcessRuntime {
     const child = spawn(process.execPath, [this.processHostEntry, '--aevra-marker', marker], {
       cwd,
       detached: true,
-      env: {
-        ...process.env,
+      env: buildChildEnvironment({
         AEVRA_PROCESS_COMMAND: encoded,
         AEVRA_PROCESS_LOG: logPath,
         AEVRA_PROCESS_RESULT: resultPath,
         AEVRA_PROCESS_MARKER: marker,
-      },
+      }),
       shell: false,
       windowsHide: true,
       stdio: 'ignore',

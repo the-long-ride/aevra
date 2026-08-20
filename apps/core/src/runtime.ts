@@ -13,6 +13,7 @@ import { ProcessRepository } from '../../../packages/store/src/processes.js';
 import { ConnectorRepository } from '../../../packages/store/src/connectors.js';
 import { OAuthRepository } from '../../../packages/store/src/oauth.js';
 import { SkillsService } from './skills/skills-service.js';
+import { SecurityGuard } from './security/security-guard.js';
 import { IpRateLimiter } from './mcp/rate-limit.js';
 import { createConnectorAdmission } from './mcp/connector-admission.js';
 import { McpActivityLog } from './mcp/activity-log.js';
@@ -51,9 +52,7 @@ import { CommandSecretStore } from '../../../packages/secrets/src/platform.js';
 import { EnvironmentService } from './secrets/environment-service.js';
 import { ensureLocalTls } from './tls/local-tls.js';
 import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
-
 export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
-
 export async function createCoreRuntime(
   config: CoreConfig,
   deps: RuntimeDependencies = {},
@@ -138,7 +137,8 @@ export async function createCoreRuntime(
           sessions = new SessionManager(sessionRepo, profiles, config.leaseIdleMs),
           audit = new AuditService(auditRepo),
           permissions = new PermissionEngine(permissionRepo),
-          reads = new ReadVersionCache();
+          reads = new ReadVersionCache(),
+          security = new SecurityGuard(sessions, workspaces);
         sessions.invalidateForRestart();
         oauthRepo.invalidateEphemeralForRestart();
         if (!safeMode) worker = await wm.start();
@@ -216,6 +216,7 @@ export async function createCoreRuntime(
           permissions,
           approvals,
           skills: new SkillsService(),
+          security,
           audit,
           connectorBindings,
           metrics,

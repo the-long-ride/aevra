@@ -27,7 +27,11 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
     const op = envelope.operation,
       roots = envelope.capabilityRoots;
     if (op.kind === 'file.list') return { ok: true, value: await fileList(op.path, roots) };
-    if (op.kind === 'file.read') return { ok: true, value: await fileRead(op.path, roots) };
+    if (op.kind === 'file.read')
+      return {
+        ok: true,
+        value: await fileRead(op.path, roots, { offset: op.offset, length: op.length }),
+      };
     if (op.kind === 'file.search')
       return { ok: true, value: await fileSearch(op.path, op.query, roots) };
     if (op.kind === 'file.create')

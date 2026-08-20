@@ -8,7 +8,7 @@ import type {
 } from './index.js';
 export type WorkerOperation =
   | { kind: 'file.list'; path: string }
-  | { kind: 'file.read'; path: string }
+  | { kind: 'file.read'; path: string; offset?: number; length?: number }
   | { kind: 'file.search'; path: string; query: string }
   | { kind: 'file.create'; path: string; content: string; encoding: 'utf8' | 'base64' }
   | { kind: 'file.write'; path: string; content: string; encoding: 'utf8' | 'base64' }

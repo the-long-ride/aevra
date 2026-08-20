@@ -1,8 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { sanitizeStructuredSecrets } from '../../security/src/dlp.js';
+
 export class ApprovalRepository {
   constructor(private db: DatabaseSync) {}
   put(t: any) {
     const now = new Date().toISOString();
+    const payload = sanitizeStructuredSecrets(t.payload ?? null);
     this.db
       .prepare(
         `INSERT OR REPLACE INTO pending_approvals(id,actor,session_id,workspace_id,operation_json,expected_state_json,risk,state,expires_at,cancellation_reason,decision_scope,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -12,7 +15,7 @@ export class ApprovalRepository {
         t.actor,
         t.sessionId,
         t.workspaceId,
-        JSON.stringify({ normalized: t.operation, payload: t.payload ?? null }),
+        JSON.stringify({ normalized: t.operation, payload }),
         JSON.stringify(t.expectedState ?? {}),
         t.risk,
         t.state,
@@ -22,7 +25,7 @@ export class ApprovalRepository {
         t.createdAt ?? now,
         now,
       );
-    return t;
+    return { ...t, payload };
   }
   get(id: string) {
     const r = this.db.prepare('SELECT * FROM pending_approvals WHERE id=?').get(id) as any;

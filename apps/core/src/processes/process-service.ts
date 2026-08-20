@@ -42,7 +42,7 @@ export class ProcessService {
       signal: child.signal,
       finishedAt: child.finishedAt,
     });
-    return child;
+    return this.remoteStatus(child);
   }
 
   listLocal() {
@@ -140,6 +140,7 @@ export class ProcessService {
         signal: child.signal,
         finishedAt: child.finishedAt,
       });
+      return { ...result, value: this.remoteStatus(child) };
     }
     return result;
   }
@@ -154,8 +155,9 @@ export class ProcessService {
       roots: this.workspaces.capabilityRoots(l.workspaceId),
       operation,
     });
-    if (result.ok) this.reconcileValue(result.value);
-    return result;
+    if (!result.ok) return result;
+    this.reconcileValue(result.value);
+    return { ...result, value: this.remoteStatus(result.value as ManagedProcessStatus) };
   }
 
   private reconcileValue(value: unknown) {
@@ -163,6 +165,11 @@ export class ProcessService {
     const status = value as Partial<ManagedProcessStatus>;
     if (!status.processId || !status.state) return;
     this.repo.updateStatus(status as ManagedProcessStatus);
+  }
+
+  private remoteStatus(status: ManagedProcessStatus): ManagedProcessStatus {
+    const { logPath: _logPath, resultPath: _resultPath, ...safe } = status;
+    return safe;
   }
 
   private remoteRecord(record: any): ManagedProcessStatus {
@@ -179,7 +186,6 @@ export class ProcessService {
       finishedAt,
       durationMs: finishedAt ? Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)) : null,
       ...(record.marker ? { marker: record.marker } : {}),
-      ...(record.log_path ? { logPath: record.log_path } : {}),
     };
   }
 

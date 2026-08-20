@@ -6,6 +6,7 @@ import type { SessionManager } from '../../../apps/core/src/sessions/session-man
 import type { WorkspaceService } from '../../../apps/core/src/workspaces/workspace-service.js';
 import type { ApprovalService } from '../../../apps/core/src/approvals/approval-service.js';
 import type { SkillsService } from '../../../apps/core/src/skills/skills-service.js';
+import type { SecurityGuard } from '../../../apps/core/src/security/security-guard.js';
 import type { MetricsService } from '../../../apps/core/src/metrics.js';
 import type { SettingsRepository } from '../../store/src/settings.js';
 import type { AuditService } from '../../../apps/core/src/audit/audit-service.js';
@@ -19,6 +20,7 @@ export interface McpDependencies {
   permissions?: PermissionEngine;
   approvals?: ApprovalService;
   skills?: SkillsService;
+  security?: SecurityGuard;
   audit?: AuditService;
   connectorBindings?: (subject: string) => {
     workspaceId?: string;
