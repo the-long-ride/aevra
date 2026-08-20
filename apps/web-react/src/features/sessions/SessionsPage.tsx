@@ -1,5 +1,6 @@
 import type { RemoteSessionSummary, WorkspaceSummary } from '@aevra/admin-contracts';
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
@@ -35,6 +36,7 @@ async function load(signal: AbortSignal): Promise<SessionData> {
 
 export function SessionsPage() {
   const resource = useApiResource(load);
+  const dialog = useDialog();
   const data = resource.data;
 
   const revokeRemote = async (id: string) => {
@@ -46,13 +48,17 @@ export function SessionsPage() {
   };
 
   const switchWorkspace = async (id: string) => {
-    const workspaceId = window.prompt(
-      `Workspace ID\n${data?.workspaces.map((item) => `${item.name}: ${item.id}`).join('\n') ?? ''}`,
-    );
-    if (!workspaceId) return;
+    const workspaceId = await dialog.prompt({
+      title: 'Switch workspace',
+      message: data?.workspaces.map((item) => `${item.name}: ${item.id}`).join('\n') ?? '',
+      label: 'Workspace ID',
+      confirmLabel: 'Switch',
+      required: true,
+    });
+    if (!workspaceId?.trim()) return;
     await requestJson(`/api/sessions/${encodeURIComponent(id)}/workspace`, {
       method: 'POST',
-      body: JSON.stringify({ workspaceId, timeoutMs: 60000 }),
+      body: JSON.stringify({ workspaceId: workspaceId.trim(), timeoutMs: 60000 }),
     });
     await resource.refresh();
   };
@@ -67,7 +73,12 @@ export function SessionsPage() {
 
   const revokeOthers = async () => {
     if (
-      !window.confirm('Revoke every non-connector MCP session and every other local admin session?')
+      !(await dialog.confirm({
+        title: 'Revoke other sessions',
+        message: 'Revoke every non-connector MCP session and every other local admin session?',
+        confirmLabel: 'Revoke',
+        confirmTone: 'danger',
+      }))
     ) {
       return;
     }

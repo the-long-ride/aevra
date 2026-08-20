@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is semantic.
 
+## [Unreleased]
+
+### Added
+
+- Durable managed-process terminal status with `process_status` and bounded `process_wait`, including exit code, signal, finish time, duration, and terminal metadata in process lists/logs.
+- Detached `keep-running` process completion sidecars so Aevra can observe the child's final result after the helper exits.
+- MCP `outputSchema` metadata for stable public tools plus closed input schemas for the stable tool surface.
+- Dedicated `skills.read`, `skills.write`, `instructions.read`, and `instructions.write` capabilities.
+- `skill_write` and `instructions_write` tools with bounded, path-contained targets rather than general filesystem write authority.
+- Shared OpenCode-style React switch control used by permission capability choices.
+
+### Changed
+
+- Built-in capability profiles refresh their built-in definitions on startup so upgrades receive new read capabilities without rewriting custom profiles.
+- Permission UI exposes skill/instruction read/write capabilities as switches.
+- Long-running command guidance now uses `process_start` → `process_wait`/`process_status`/`process_logs` instead of relying on one long MCP request.
+
 ## [0.5.0] — 2026-08-17
 
 Roadmap burn-down: every P0/P1 item and nearly all P2/P3 items, executed and verified in one pass.
@@ -46,4 +63,4 @@ The product formerly known as Linker ("chatgpt-opencode-linker") becomes **Aevra
 
 ## [0.3.0] — 2026-08-16
 
-Linker as a workspace-scoped remote MCP execution gateway for ChatGPT: Cloudflare Access admission, capability profiles, permission rules, approvals, journaled change sets with recovery, managed processes, DLP, hash-chained audit, safe mode, localhost Web UI control plane.
+Linker as a workspace-scoped remote MCP execution gateway for ChatGPT: Cloudflare Access admission, capability profiles, permission rules, approvals, journaled change sets with recovery, managed processes, DLP, hash-chained audit, safe mode, localhost Web UI control plane for workspace/mount registration, durable process control, and recovery.

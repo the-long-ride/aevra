@@ -14,25 +14,37 @@ export const ALL_CAPABILITIES: Capability[] = [
   'files.read',
   'files.search',
   'git.read',
+  'skills.read',
+  'instructions.read',
   'files.write',
   'files.delete',
   'commands.run',
   'git.commit',
   'git.push',
   'network',
+  'skills.write',
+  'instructions.write',
 ];
 
 export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
   {
     id: 'read-only',
     name: 'Read Only',
-    capabilities: ['files.read', 'files.search', 'git.read'],
+    capabilities: ['files.read', 'files.search', 'git.read', 'skills.read', 'instructions.read'],
     builtin: true,
   },
   {
     id: 'coding-session',
     name: 'Coding Session',
-    capabilities: ['files.read', 'files.search', 'git.read', 'files.write', 'commands.run'],
+    capabilities: [
+      'files.read',
+      'files.search',
+      'git.read',
+      'skills.read',
+      'instructions.read',
+      'files.write',
+      'commands.run',
+    ],
     builtin: true,
   },
   {
@@ -42,6 +54,8 @@ export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
       'files.read',
       'files.search',
       'git.read',
+      'skills.read',
+      'instructions.read',
       'files.write',
       'commands.run',
       'git.commit',
@@ -52,29 +66,23 @@ export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
   {
     id: 'full-workspace',
     name: 'Full Workspace',
-    capabilities: [
-      'files.read',
-      'files.search',
-      'git.read',
-      'files.write',
-      'files.delete',
-      'commands.run',
-      'git.commit',
-      'git.push',
-      'network',
-    ],
+    capabilities: [...ALL_CAPABILITIES],
     builtin: true,
   },
 ];
 
 export class CapabilityProfileService {
   constructor(private db: DatabaseSync) {
+    const upsertBuiltin = this.db.prepare(
+      `INSERT INTO capability_profiles(id,name,capabilities_json,builtin) VALUES(?,?,?,1)
+       ON CONFLICT(id) DO UPDATE SET
+         name=excluded.name,
+         capabilities_json=excluded.capabilities_json,
+         builtin=1
+       WHERE capability_profiles.builtin=1`,
+    );
     for (const p of BUILTIN_CAPABILITY_PROFILES)
-      this.db
-        .prepare(
-          'INSERT OR IGNORE INTO capability_profiles(id,name,capabilities_json,builtin) VALUES(?,?,?,1)',
-        )
-        .run(p.id, p.name, JSON.stringify(p.capabilities));
+      upsertBuiltin.run(p.id, p.name, JSON.stringify(p.capabilities));
   }
   get(id: string): CapabilityProfile | null {
     const r = this.db.prepare('SELECT * FROM capability_profiles WHERE id=?').get(id) as any;

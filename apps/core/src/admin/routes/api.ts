@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { handleAccessRoutes } from './access-routes.js';
+import { handleActivityRoutes } from './activity-routes.js';
 import { handleApprovalPermissionRoutes } from './approval-permission-routes.js';
 import { sendAdminResponse } from './http.js';
 import { handleOperationRoutes } from './operation-routes.js';
@@ -11,6 +12,7 @@ import { handleWorkspaceRoutes } from './workspace-routes.js';
 export type { AdminApiContext } from './types.js';
 
 const handlers: AdminRouteHandler[] = [
+  handleActivityRoutes,
   handleWorkspaceRoutes,
   handleApprovalPermissionRoutes,
   handleSessionConnectorRoutes,

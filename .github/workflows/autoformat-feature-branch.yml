@@ -1,0 +1,54 @@
+name: Autoformat feature branch
+
+on:
+  push:
+    branches:
+      - feat/mcp-long-running-processes-permissions-switches
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  format-once:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel older branch runs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          gh api --paginate "repos/$REPOSITORY/actions/runs?branch=$BRANCH&per_page=100" \
+            --jq '.workflow_runs[] | select(.status == "queued" or .status == "in_progress") | .id' \
+            | while read -r run_id; do
+                [ -z "$run_id" ] && continue
+                [ "$run_id" = "$CURRENT_RUN_ID" ] && continue
+                gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" || true
+              done
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Format changed source files
+        shell: bash
+        run: |
+          git fetch origin main --depth=1
+          git diff --name-only --diff-filter=ACMRT origin/main...HEAD \
+            | grep -E '\.(ts|tsx|js|mjs|json|md|css|ya?ml)$' \
+            | xargs -r npx prettier --write
+          rm -f .github/workflows/autoformat-feature-branch.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "style: format durable MCP feature branch"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi

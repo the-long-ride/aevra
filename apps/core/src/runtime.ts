@@ -15,6 +15,7 @@ import { OAuthRepository } from '../../../packages/store/src/oauth.js';
 import { SkillsService } from './skills/skills-service.js';
 import { IpRateLimiter } from './mcp/rate-limit.js';
 import { createConnectorAdmission } from './mcp/connector-admission.js';
+import { McpActivityLog } from './mcp/activity-log.js';
 import { AEVRA_VERSION } from './version.js';
 import { MetricsService } from './metrics.js';
 import { TunnelWatchdog } from './cloudflare/watchdog.js';
@@ -207,6 +208,7 @@ export async function createCoreRuntime(
             sessions.grantConnectionWorkspace(ticket.sessionId, ticket.workspaceId, 'read-only');
         });
         const metrics = new MetricsService();
+        const activity = new McpActivityLog();
         const tools = new McpToolService(sessions, workspaces, workerGateway, reads, approvals, {
           operations,
           processes,
@@ -214,6 +216,7 @@ export async function createCoreRuntime(
           permissions,
           approvals,
           skills: new SkillsService(),
+          audit,
           connectorBindings,
           metrics,
           settings,
@@ -283,6 +286,7 @@ export async function createCoreRuntime(
               database: databaseAdmin,
               connectors: connectorRepo,
               metrics,
+              activity,
               mcpDiagnostics: () => mcp?.diagnosticsSnapshot() ?? null,
               safeMode: () => safeMode,
             },
@@ -319,6 +323,7 @@ export async function createCoreRuntime(
             advertisedHost: 'localhost',
             plainMcpEnabled: accessReady,
             oauth,
+            activity,
           },
         );
         watchdog =

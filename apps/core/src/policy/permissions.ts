@@ -31,12 +31,16 @@ const capabilityOrder: Capability[] = [
   'files.read',
   'files.search',
   'git.read',
+  'skills.read',
+  'instructions.read',
   'files.write',
   'files.delete',
   'commands.run',
   'git.commit',
   'git.push',
   'network',
+  'skills.write',
+  'instructions.write',
 ];
 
 function matcherScore(m: string) {

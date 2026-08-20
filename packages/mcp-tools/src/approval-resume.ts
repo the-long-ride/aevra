@@ -7,6 +7,7 @@ import {
   oneTimeKey,
   requiredLease,
   workspaceResult,
+  workspaceRoot,
 } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
@@ -269,6 +270,26 @@ async function executeFrozen(
 
   if (payload.tool === 'process_start') {
     return context.processStart(sessionId, payload.args);
+  }
+
+  if (payload.tool === 'skill_write') {
+    const source = payload.args.source === 'workspace' ? 'workspace' : 'user';
+    return context.deps.skills!.write(
+      source,
+      String(payload.args.name ?? ''),
+      workspaceRoot(context, sessionId),
+      payload.args.file ? String(payload.args.file) : undefined,
+      String(payload.args.content ?? ''),
+    );
+  }
+
+  if (payload.tool === 'instructions_write') {
+    const source = payload.args.source === 'workspace' ? 'workspace' : 'user';
+    return context.deps.skills!.writeInstructions(
+      source,
+      workspaceRoot(context, sessionId),
+      String(payload.args.content ?? ''),
+    );
   }
 
   throw new AevraToolError('INVALID_REQUEST', 'Unsupported frozen operation');

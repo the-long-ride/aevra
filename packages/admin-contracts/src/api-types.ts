@@ -78,6 +78,22 @@ export interface CloudflareStatus {
   audience?: string;
 }
 
+export type McpActivityKind = 'tool' | 'rpc' | 'session';
+export type McpActivityState = 'running' | 'success' | 'error';
+
+export interface McpActivityEntry {
+  id: string;
+  startedAt: string;
+  updatedAt: string;
+  actor: string;
+  sessionId: string;
+  workspaceId?: string;
+  kind: McpActivityKind;
+  action: string;
+  state: McpActivityState;
+  durationMs?: number;
+}
+
 export interface McpDiagnosticSnapshot {
   state: 'listening' | 'stopped';
   startedAt: string | null;

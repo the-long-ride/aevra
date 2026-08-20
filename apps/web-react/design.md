@@ -61,18 +61,18 @@ surface-card       #292525
 ink                #fdfcfc
 ink-deep           #ffffff
 charcoal           #e8e5e5
-body               #d5d1d1
-mute               #aaa5a5
-stone              #908b8b
-ash                #747070
-hairline           rgba(253, 252, 252, 0.14)
-hairline-strong    #646262
-accent             #0a84ff
-accent-hover       #409cff
-accent-active      #0071e3
-warning            #ff9f0a
-danger             #ff453a
-success            #32d74b
+body                #d5d1d1
+mute                #aaa5a5
+stone               #908b8b
+ash                 #747070
+hairline            rgba(253, 252, 252, 0.14)
+hairline-strong     #646262
+accent              #0a84ff
+accent-hover        #409cff
+accent-active       #0071e3
+warning             #ff9f0a
+danger              #ff453a
+success             #32d74b
 ```
 
 Theme selection is stored locally. When no Aevra preference exists, follow `prefers-color-scheme`.
@@ -187,6 +187,25 @@ Select option menus must remain readable in both themes.
 
 Native host execution continues to show a warning that direct host access has no container isolation while Aevra permissions and approvals still apply.
 
+### Binary switches
+
+User-visible binary checkbox choices use the shared React `Switch` component rather than the browser's default checkbox appearance. The component retains a real checkbox input internally for forms, keyboard behavior, and assistive technology, and exposes `role="switch"` with `aria-checked`.
+
+```text
+track width       34px
+track height      20px
+track border      1px hairline-strong
+track radius      4px
+thumb             12px square / 2px radius
+off                neutral surface + muted thumb
+on                 restrained accent border/background + accent thumb
+focus              2px ink outline
+shadow             none
+gradient           none
+```
+
+The same component is used for capability choices and any future true/false form control. Do not hand-style individual native checkboxes in feature pages. Theme switching remains the compact text/ASCII action specified for the application header rather than being converted into this form switch.
+
 ## Buttons
 
 Primary:
@@ -265,6 +284,7 @@ Aevra ships one web UI implementation.
 - Use semantic buttons, labels, tables, headings, and details elements.
 - Preserve keyboard navigation.
 - Theme toggle exposes its current state and target action to assistive technology.
+- Binary switches retain a native checkbox input and expose `role="switch"` plus current checked state.
 - Focus is always visible without relying only on color.
 - Do not use ASCII decoration as the only accessible label.
 
@@ -273,6 +293,7 @@ Aevra ships one web UI implementation.
 - Keep the interface flat, mono, compact, and text-forward.
 - Use hairlines for structure.
 - Preserve horizontal navigation at all widths.
+- Use the shared `Switch` for binary form choices.
 - Keep status colors semantic and restrained.
 - Test every important flow in light and dark themes.
 - Test desktop, tablet, and mobile viewport behavior.
@@ -283,5 +304,6 @@ Aevra ships one web UI implementation.
 - Do not keep `/react/` as an alternate runtime path.
 - Do not add shadows, gradients, glass effects, or rounded card stacks.
 - Do not bundle Berkeley Mono.
+- Do not render feature-specific native checkbox controls instead of the shared switch.
 - Do not turn mobile page tabs into a vertical list or hamburger menu.
 - Do not let asynchronous Dashboard work control navigation.

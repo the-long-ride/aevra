@@ -43,9 +43,17 @@ test('keep-running uses a detached process-host with an ownership marker and red
     },
     process.cwd(),
     'keep-running',
-  ) as { processId: string; pid: number; startedAt: string; marker: string; logPath: string };
+  ) as {
+    processId: string;
+    pid: number;
+    startedAt: string;
+    marker: string;
+    logPath: string;
+    resultPath: string;
+  };
   assert.match(value.marker, /^aevra-proc-/);
   assert.equal(path.dirname(value.logPath), root);
+  assert.equal(path.dirname(value.resultPath), root);
   await until(() => {
     try {
       const t = readFileSync(value.logPath, 'utf8');
@@ -58,4 +66,28 @@ test('keep-running uses a detached process-host with an ownership marker and red
   assert.doesNotMatch(text, /super-secret-value/);
   assert.match(text, /REDACTED/);
   runtime.stop(value.processId);
+});
+
+test('keep-running persists terminal state after helper exits', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'aevra-proc-result-'));
+  const processHostEntry = fileURLToPath(new URL('../src/process-host.js', import.meta.url));
+  const runtime = new ManagedProcessRuntime({ processHostEntry, logDir: root });
+  const value = runtime.start(
+    {
+      executable: process.execPath,
+      args: ['-e', 'process.exit(7)'],
+      env: {},
+    },
+    process.cwd(),
+    'keep-running',
+  ) as { processId: string; resultPath: string };
+
+  const status = await runtime.wait(value.processId, 5000);
+  assert.equal(status.state, 'failed');
+  assert.equal(status.exitCode, 7);
+  assert.ok(status.finishedAt);
+
+  const persisted = JSON.parse(readFileSync(value.resultPath, 'utf8'));
+  assert.equal(persisted.state, 'failed');
+  assert.equal(persisted.exitCode, 7);
 });

@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test } from 'vitest';
+import { DialogProvider } from '../../components/Dialog';
 import { installApiFixtures } from '../../test/api-fixtures';
 import { DashboardPage } from './DashboardPage';
 
@@ -8,8 +9,16 @@ beforeEach(() => {
   installApiFixtures();
 });
 
+function renderDashboard() {
+  return render(
+    <DialogProvider>
+      <DashboardPage />
+    </DialogProvider>,
+  );
+}
+
 test('Remote Access is first inside incomplete Onboarding', async () => {
-  render(<DashboardPage />);
+  renderDashboard();
   const onboarding = await screen.findByText('Onboarding');
   const details = onboarding.closest('details');
   expect(details).not.toBeNull();
@@ -18,9 +27,18 @@ test('Remote Access is first inside incomplete Onboarding', async () => {
   expect(within(details as HTMLElement).getByText('Connect an AI')).toBeInTheDocument();
 });
 
+test('live MCP activity follows Runtime overview', async () => {
+  const { container } = renderDashboard();
+  await screen.findByText('Runtime overview');
+  const ids = [...container.querySelectorAll('[data-dashboard-section]')].map((section) =>
+    section.getAttribute('data-dashboard-section'),
+  );
+  expect(ids.indexOf('live-mcp-activity')).toBe(ids.indexOf('runtime-overview') + 1);
+});
+
 test('completed Onboarding is the final Dashboard section', async () => {
   installApiFixtures({ onboardingCompleted: true });
-  const { container } = render(<DashboardPage />);
+  const { container } = renderDashboard();
   await screen.findByText('Onboarding completed');
   const sections = container.querySelectorAll('[data-dashboard-section]');
   expect(sections[sections.length - 1]?.getAttribute('data-dashboard-section')).toBe('onboarding');
@@ -28,7 +46,7 @@ test('completed Onboarding is the final Dashboard section', async () => {
 
 test('collapsed Dashboard section remains collapsed after data refresh', async () => {
   const user = userEvent.setup();
-  render(<DashboardPage />);
+  renderDashboard();
   const summary = await screen.findByText('Runtime overview');
   const details = summary.closest('details');
   expect(details?.open).toBe(true);
@@ -40,7 +58,7 @@ test('collapsed Dashboard section remains collapsed after data refresh', async (
 
 test('connector creation presents the one-time token inside the React modal', async () => {
   const user = userEvent.setup();
-  render(<DashboardPage />);
+  renderDashboard();
   await screen.findByRole('heading', { name: 'Dashboard' });
 
   await user.click(screen.getByRole('button', { name: 'New connector' }));

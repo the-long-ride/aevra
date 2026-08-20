@@ -1,0 +1,31 @@
+name: Cancel stale branch runs
+
+on:
+  push:
+    branches:
+      - feat/mcp-long-running-processes-permissions-switches
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel-stale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel older queued or running workflows for this branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          CURRENT_SHA: ${{ github.sha }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          gh api --paginate "repos/$REPOSITORY/actions/runs?branch=$BRANCH&per_page=100" \
+            --jq '.workflow_runs[] | select((.status == "queued" or .status == "in_progress") and .head_sha != env.CURRENT_SHA) | .id' \
+            | while read -r run_id; do
+                [ -z "$run_id" ] && continue
+                [ "$run_id" = "$CURRENT_RUN_ID" ] && continue
+                gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" || true
+              done

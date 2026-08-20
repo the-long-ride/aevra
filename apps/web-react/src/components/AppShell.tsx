@@ -117,7 +117,7 @@ export function AppShell({
           </button>
         ))}
       </nav>
-      <main id="page" className="page" data-surface-id={`page:${page}`}>
+      <main id="page" className="page" data-page={page} data-surface-id={`page:${page}`}>
         {children}
       </main>
     </div>

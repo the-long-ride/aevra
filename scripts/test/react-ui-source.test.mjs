@@ -13,6 +13,7 @@ const requiredFiles = [
   'apps/web-react/src/app/hash-navigation.ts',
   'apps/web-react/src/app/use-hash-page.ts',
   'apps/web-react/src/components/AppShell.tsx',
+  'apps/web-react/src/components/Switch.tsx',
   'apps/web-react/src/services/api-client.ts',
   'apps/web-react/src/hooks/use-polling-resource.ts',
   'apps/web-react/src/hooks/use-runtime-status.ts',
@@ -123,4 +124,29 @@ test('React connector flow stays in-page and uses the Dashboard refresh owner', 
   assert.match(connector, /\/api\/connectors/);
   assert.match(connector, /Copy this token now\. It is shown once\./);
   assert.match(connector, /navigator\.clipboard\.writeText/);
+});
+
+test('React binary controls use the shared Switch component instead of raw feature checkboxes', () => {
+  const switchSource = readFileSync('apps/web-react/src/components/Switch.tsx', 'utf8');
+  assert.match(switchSource, /type="checkbox"/);
+  assert.match(switchSource, /role="switch"/);
+  for (const file of requiredFiles.filter(
+    (value) => value.endsWith('.tsx') && !value.endsWith('/Switch.tsx'),
+  )) {
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /type\s*=\s*["']checkbox["']/i, file);
+  }
+});
+
+test('React admin never falls back to browser-native dialogs', () => {
+  const files = requiredFiles.filter((value) => value.endsWith('.tsx'));
+  for (const file of files) {
+    assert.doesNotMatch(
+      readFileSync(file, 'utf8'),
+      /window\.(?:alert|confirm|prompt)\s*\(/,
+      `${file} must use the shared Dialog component`,
+    );
+  }
+  const dialog = readFileSync('apps/web-react/src/components/Dialog.tsx', 'utf8');
+  assert.match(dialog, /DialogProvider/);
+  assert.match(dialog, /useDialog/);
 });

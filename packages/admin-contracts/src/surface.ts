@@ -13,6 +13,7 @@ export const ADMIN_SURFACE = {
   dashboardSections: [
     'onboarding',
     'runtime-overview',
+    'live-mcp-activity',
     'active-connections',
     'tool-activity',
     'connections',

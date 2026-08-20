@@ -3,12 +3,15 @@ import path from 'node:path';
 import {
   closeSync,
   existsSync,
+  lstatSync,
+  mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
   readSync,
   realpathSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import { AevraToolError } from '../../../../packages/mcp-tools/src/errors.js';
 import {
@@ -27,6 +30,12 @@ export interface SkillReadResult {
   content: string;
   files: string[];
   sensitivity: 'SECRET' | 'NORMAL';
+}
+export interface SkillWriteResult {
+  source: 'user' | 'workspace';
+  name: string;
+  file: string;
+  sizeBytes: number;
 }
 export interface InstructionEntry {
   source: 'user' | 'workspace';
@@ -139,6 +148,23 @@ export class SkillsService {
       sensitivity,
     };
   }
+  write(
+    source: 'user' | 'workspace',
+    name: string,
+    workspaceRoot: string | null,
+    file: string | undefined,
+    content: string,
+  ): SkillWriteResult {
+    this.assertWriteSize(content);
+    const base = this.base(source, workspaceRoot);
+    if (!base) throw new AevraToolError('SKILL_NOT_FOUND', 'No workspace is active');
+    const found = this.scanSkills(base).find((s) => (s.fm.name?.trim() || s.dirName) === name);
+    if (!found) throw new AevraToolError('SKILL_NOT_FOUND', `Skill ${name} not found`);
+    const relative = file?.trim() || 'SKILL.md';
+    const target = this.safeWriteTarget(found.dir, relative);
+    writeFileSync(target, content, { encoding: 'utf8', mode: 0o600 });
+    return { source, name, file: relative.replaceAll('\\', '/'), sizeBytes: Buffer.byteLength(content) };
+  }
   instructions(workspaceRoot: string | null): { instructions: InstructionEntry[]; note?: string } {
     const out: InstructionEntry[] = [];
     const globalPath = path.join(this.userHome, '.agents', 'AGENTS.md');
@@ -164,6 +190,62 @@ export class SkillsService {
     return out.length
       ? { instructions: out }
       : { instructions: [], note: 'no instruction files found' };
+  }
+  writeInstructions(source: 'user' | 'workspace', workspaceRoot: string | null, content: string) {
+    this.assertWriteSize(content);
+    const base = source === 'user' ? path.join(this.userHome, '.agents') : workspaceRoot;
+    if (!base) throw new AevraToolError('SKILL_NOT_FOUND', 'No workspace is active');
+    this.ensureDirectory(base);
+    const target = this.safeWriteTarget(base, 'AGENTS.md');
+    writeFileSync(target, content, { encoding: 'utf8', mode: 0o600 });
+    return { source, file: 'AGENTS.md', sizeBytes: Buffer.byteLength(content) };
+  }
+  private safeWriteTarget(baseDir: string, relative: string): string {
+    if (!relative || path.isAbsolute(relative))
+      throw new AevraToolError('SKILL_PATH_ESCAPE', 'Skill write path must be relative');
+    const segments = relative.split(/[\\/]+/).filter(Boolean);
+    if (!segments.length || segments.some((segment) => segment === '..' || segment === '.'))
+      throw new AevraToolError('SKILL_PATH_ESCAPE', 'Skill write path escapes the skill directory');
+    const realBase = realpathSync(baseDir);
+    let parent = realBase;
+    for (const segment of segments.slice(0, -1)) {
+      const next = path.join(parent, segment);
+      if (existsSync(next)) {
+        const stat = lstatSync(next);
+        if (stat.isSymbolicLink() || !stat.isDirectory())
+          throw new AevraToolError('SKILL_PATH_ESCAPE', 'Skill write parent is not a safe directory');
+        const real = realpathSync(next);
+        if (real !== realBase && !real.startsWith(realBase + path.sep))
+          throw new AevraToolError('SKILL_PATH_ESCAPE', 'Skill write path escapes the skill directory');
+        parent = real;
+      } else {
+        mkdirSync(next, { mode: 0o700 });
+        parent = next;
+      }
+    }
+    const target = path.join(parent, segments.at(-1)!);
+    if (existsSync(target)) {
+      const stat = lstatSync(target);
+      if (stat.isSymbolicLink() || stat.isDirectory())
+        throw new AevraToolError('SKILL_PATH_ESCAPE', 'Skill write target is not a regular file');
+      const real = realpathSync(target);
+      if (real !== realBase && !real.startsWith(realBase + path.sep))
+        throw new AevraToolError('SKILL_PATH_ESCAPE', 'Skill write path escapes the skill directory');
+    }
+    return target;
+  }
+  private ensureDirectory(dir: string) {
+    if (existsSync(dir)) {
+      const stat = lstatSync(dir);
+      if (stat.isSymbolicLink() || !stat.isDirectory())
+        throw new AevraToolError('SKILL_PATH_ESCAPE', 'Instruction directory is not safe');
+      return;
+    }
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  private assertWriteSize(content: string) {
+    if (Buffer.byteLength(content) > FILE_CAP_BYTES)
+      throw new AevraToolError('SKILL_FILE_TOO_LARGE', `File exceeds ${FILE_CAP_BYTES} bytes`);
   }
   private readBounded(file: string): string {
     if (statSync(file).size > FILE_CAP_BYTES)

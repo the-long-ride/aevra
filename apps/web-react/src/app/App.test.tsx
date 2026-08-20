@@ -41,6 +41,15 @@ describe('React admin shell', () => {
     expect(window.location.hash).toBe('#/guide');
   });
 
+  test('marks the page container with the active tab id', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const page = document.querySelector('#page');
+    expect(page).toHaveAttribute('data-page', 'dashboard');
+    await user.click(await screen.findByRole('button', { name: 'Guide' }));
+    expect(page).toHaveAttribute('data-page', 'guide');
+  });
+
   test('places persistent theme control immediately before Requests without navigating', async () => {
     const user = userEvent.setup();
     render(<App />);

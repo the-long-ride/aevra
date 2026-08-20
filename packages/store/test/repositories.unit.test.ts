@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AevraDatabase } from '../src/database.js';
+import { ProcessRepository } from '../src/processes.js';
 import { WorkspaceRepository } from '../src/workspaces.js';
+
 test('remote workspace view omits hostRoot', () => {
   const db = AevraDatabase.open(':memory:');
   const repo = new WorkspaceRepository(db.raw());
@@ -9,5 +11,72 @@ test('remote workspace view omits hostRoot', () => {
   const view = repo.listRemote()[0]!;
   assert.equal('hostRoot' in view, false);
   assert.equal(view.name, 'Voxveil');
+  db.close();
+});
+
+test('managed process rows default old records to unknown terminal state', () => {
+  const db = AevraDatabase.open(':memory:');
+  const raw = db.raw();
+  raw
+    .prepare(
+      `INSERT INTO managed_processes(id,workspace_id,lifecycle,ownership,helper_pid,helper_started_at,marker,command_json,execution_mode,log_path,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+    )
+    .run(
+      'proc_old',
+      'ws',
+      'keep-running',
+      'owned',
+      123,
+      '2026-08-20T00:00:00.000Z',
+      'marker',
+      JSON.stringify({ executable: 'node', args: [], env: {} }),
+      'host',
+      '/tmp/proc.log',
+      '2026-08-20T00:00:00.000Z',
+      '2026-08-20T00:00:00.000Z',
+    );
+  const record = new ProcessRepository(raw).get('proc_old');
+  assert.equal(record.state, 'unknown');
+  assert.equal(record.exit_code, null);
+  assert.equal(record.finished_at, null);
+  db.close();
+});
+
+test('managed process status reconciliation preserves ownership and command metadata', () => {
+  const db = AevraDatabase.open(':memory:');
+  const repo = new ProcessRepository(db.raw());
+  repo.put({
+    id: 'proc_1',
+    workspaceId: 'ws',
+    lifecycle: 'stop-with-aevra',
+    ownership: 'owned',
+    helperPid: 42,
+    helperStartedAt: '2026-08-20T00:00:00.000Z',
+    marker: 'marker',
+    command: { executable: 'npm', args: ['test'], env: {} },
+    executionMode: 'host',
+    state: 'running',
+  });
+  repo.updateStatus({
+    processId: 'proc_1',
+    pid: 42,
+    lifecycle: 'stop-with-aevra',
+    startedAt: '2026-08-20T00:00:00.000Z',
+    state: 'completed',
+    exitCode: 0,
+    signal: null,
+    finishedAt: '2026-08-20T00:00:02.000Z',
+    durationMs: 2000,
+  });
+  const record = repo.get('proc_1');
+  assert.equal(record.state, 'completed');
+  assert.equal(record.exit_code, 0);
+  assert.equal(record.ownership, 'owned');
+  assert.deepEqual(JSON.parse(record.command_json), {
+    executable: 'npm',
+    args: ['test'],
+    env: {},
+  });
   db.close();
 });

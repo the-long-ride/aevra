@@ -30,6 +30,8 @@ export type WorkerOperation =
     }
   | { kind: 'process.start'; command: CommandInput; lifecycle: ProcessLifecycle }
   | { kind: 'process.list' }
+  | { kind: 'process.status'; processId: string }
+  | { kind: 'process.wait'; processId: string; timeoutMs?: number }
   | { kind: 'process.logs'; processId: string; cursor?: string }
   | { kind: 'process.stop'; processId: string }
   | { kind: 'process.restart'; processId: string }
@@ -76,6 +78,8 @@ const kinds = new Set([
   'command.run',
   'process.start',
   'process.list',
+  'process.status',
+  'process.wait',
   'process.logs',
   'process.stop',
   'process.restart',

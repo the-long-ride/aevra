@@ -1,6 +1,7 @@
 import { ADMIN_SURFACE, type AdminPageId } from '@aevra/admin-contracts';
 import { useState, type ComponentType } from 'react';
 import { AppShell } from '../components/AppShell';
+import { DialogProvider } from '../components/Dialog';
 import { AuditPage } from '../features/audit/AuditPage';
 import { ChangesPage } from '../features/changes/ChangesPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
@@ -40,7 +41,7 @@ export function App() {
   }
 
   return (
-    <>
+    <DialogProvider>
       <AppShell
         page={page}
         status={status}
@@ -58,6 +59,6 @@ export function App() {
         onClose={() => setRequestsOpen(false)}
         onPendingCountChange={setPendingCount}
       />
-    </>
+    </DialogProvider>
   );
 }

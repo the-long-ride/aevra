@@ -1,4 +1,5 @@
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
@@ -17,9 +18,16 @@ async function load(signal: AbortSignal) {
 
 export function ChangesPage() {
   const resource = useApiResource(load);
+  const dialog = useDialog();
 
   const rename = async (row: ChangeRow) => {
-    const name = window.prompt('Change-set name', row.name ?? '');
+    const name = await dialog.prompt({
+      title: 'Rename change set',
+      label: 'Change-set name',
+      initialValue: row.name ?? '',
+      confirmLabel: 'Rename',
+      required: true,
+    });
     if (!name?.trim()) return;
     await requestJson(`/api/changes/${encodeURIComponent(row.id)}`, {
       method: 'PATCH',
@@ -31,7 +39,12 @@ export function ChangesPage() {
   const mutate = async (row: ChangeRow, action: 'commit' | 'rollback') => {
     if (
       action === 'rollback' &&
-      !window.confirm('Rollback this change set? Conflicts will not overwrite newer work.')
+      !(await dialog.confirm({
+        title: 'Rollback change set',
+        message: 'Rollback this change set? Conflicts will not overwrite newer work.',
+        confirmLabel: 'Rollback',
+        confirmTone: 'danger',
+      }))
     ) {
       return;
     }

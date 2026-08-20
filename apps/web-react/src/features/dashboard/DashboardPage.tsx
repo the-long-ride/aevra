@@ -1,6 +1,7 @@
 import type { ConnectorSummary } from '@aevra/admin-contracts';
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
 import { usePollingResource } from '../../hooks/use-polling-resource';
 import { requestJson } from '../../services/api-client';
@@ -13,6 +14,7 @@ import {
   type DashboardData,
 } from './dashboard-service';
 import { DashboardSection } from './DashboardSection';
+import { McpActivityPanel } from './McpActivityPanel';
 import { McpDiagnosticsNotice } from './McpDiagnosticsNotice';
 import { RemoteAccessPanel } from './RemoteAccessPanel';
 
@@ -141,6 +143,7 @@ function Onboarding({ data, refresh }: { data: DashboardData; refresh(): Promise
 
 export function DashboardPage() {
   const resource = usePollingResource({ load: loadDashboard, intervalMs: 2000 });
+  const dialog = useDialog();
   const [connectorModalOpen, setConnectorModalOpen] = useState(false);
   const data = resource.data;
 
@@ -153,7 +156,16 @@ export function DashboardPage() {
   }
 
   const revokeConnector = async (connector: ConnectorSummary) => {
-    if (!window.confirm(`Revoke ${connector.name}?`)) return;
+    if (
+      !(await dialog.confirm({
+        title: 'Revoke connector',
+        message: `Revoke ${connector.name}?`,
+        confirmLabel: 'Revoke',
+        confirmTone: 'danger',
+      }))
+    ) {
+      return;
+    }
     await requestJson(`/api/connectors/${connector.id}`, { method: 'DELETE' });
     await resource.refresh();
   };
@@ -167,6 +179,11 @@ export function DashboardPage() {
     'runtime-overview': (
       <DashboardSection key="runtime" id="runtime-overview" title="Runtime overview">
         <RuntimeOverview data={data} />
+      </DashboardSection>
+    ),
+    'live-mcp-activity': (
+      <DashboardSection key="activity" id="live-mcp-activity" title="Live MCP activity">
+        <McpActivityPanel workspaces={data.workspaces} />
       </DashboardSection>
     ),
     'active-connections': (
@@ -260,7 +277,7 @@ export function DashboardPage() {
         </div>
       </DashboardSection>
     ),
-  };
+  } satisfies Record<string, React.ReactNode>;
 
   return (
     <>

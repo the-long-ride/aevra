@@ -8,6 +8,8 @@ import type { McpRuntimeContext } from './service-types.js';
 export const PROCESS_CHANGE_TOOL_NAMES = new Set([
   'process_start',
   'process_list',
+  'process_status',
+  'process_wait',
   'process_logs',
   'process_stop',
   'process_restart',
@@ -61,6 +63,14 @@ export async function processStart(context: McpRuntimeContext, sessionId: string
   );
 }
 
+async function unwrapProcessResult(result: any, name: string) {
+  if (!result) return unavailable(name);
+  if (!result.ok) {
+    throw new AevraToolError(result.error.code, result.error.message, result.error.details);
+  }
+  return result.value;
+}
+
 export async function handleProcessChangeTool(
   context: McpRuntimeContext,
   sessionId: string,
@@ -71,19 +81,33 @@ export async function handleProcessChangeTool(
   if (name === 'process_list') {
     return context.deps.processes?.list(sessionId) ?? unavailable(name);
   }
+  if (name === 'process_status') {
+    return unwrapProcessResult(
+      await context.deps.processes?.status(sessionId, String(args.processId)),
+      name,
+    );
+  }
+  if (name === 'process_wait') {
+    return unwrapProcessResult(
+      await context.deps.processes?.wait(
+        sessionId,
+        String(args.processId),
+        args.timeoutMs === undefined ? undefined : Number(args.timeoutMs),
+      ),
+      name,
+    );
+  }
   if (name === 'process_logs' || name === 'process_stop' || name === 'process_restart') {
     const kind = name.replace('_', '.') as 'process.logs' | 'process.stop' | 'process.restart';
-    const result = await context.deps.processes?.command(
-      sessionId,
-      kind,
-      String(args.processId),
-      args.cursor,
+    return unwrapProcessResult(
+      await context.deps.processes?.command(
+        sessionId,
+        kind,
+        String(args.processId),
+        args.cursor,
+      ),
+      name,
     );
-    if (!result) return unavailable(name);
-    if (!result.ok) {
-      throw new AevraToolError(result.error.code, result.error.message, result.error.details);
-    }
-    return result.value;
   }
 
   if (name === 'change_begin') {

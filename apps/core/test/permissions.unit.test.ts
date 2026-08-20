@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { PermissionRepository } from '../../../packages/store/src/permissions.js';
+import { CapabilityProfileService } from '../src/policy/capabilities.js';
 import { PermissionEngine } from '../src/policy/permissions.js';
 test('workspace allow beats global deny; equal specificity deny wins', () => {
   const db = AevraDatabase.open(':memory:');
@@ -57,5 +58,59 @@ test('critical persistent allow is ignored for step-up', () => {
     e.decide({ capability: 'commands.run', matcher: 'git:push', risk: 'CRITICAL' }).outcome,
     'approval',
   );
+  db.close();
+});
+test('skill and instruction capabilities are independent from file capabilities', () => {
+  const db = AevraDatabase.open(':memory:');
+  const r = new PermissionRepository(db.raw()),
+    e = new PermissionEngine(r);
+  r.upsert({
+    id: 'files',
+    effect: 'allow',
+    capability: 'files.write',
+    scope: 'workspace',
+    workspaceId: 'w',
+    matcher: '*',
+  });
+  r.upsert({
+    id: 'skills',
+    effect: 'allow',
+    capability: 'skills.read',
+    scope: 'workspace',
+    workspaceId: 'w',
+    matcher: '*',
+  });
+  r.upsert({
+    id: 'instructions',
+    effect: 'allow',
+    capability: 'instructions.write',
+    scope: 'workspace',
+    workspaceId: 'w',
+    matcher: '*',
+  });
+
+  const summary = e.summary({
+    workspaceId: 'w',
+    baselineCapabilities: [],
+  });
+  assert.equal(summary.effectiveCapabilities.includes('files.write'), true);
+  assert.equal(summary.effectiveCapabilities.includes('skills.read'), true);
+  assert.equal(summary.effectiveCapabilities.includes('instructions.write'), true);
+  assert.equal(summary.effectiveCapabilities.includes('skills.write'), false);
+  assert.equal(summary.effectiveCapabilities.includes('instructions.read'), false);
+  db.close();
+});
+test('built-in profiles refresh capability definitions on upgrade', () => {
+  const db = AevraDatabase.open(':memory:');
+  const raw = db.raw();
+  raw
+    .prepare(
+      'INSERT INTO capability_profiles(id,name,capabilities_json,builtin) VALUES(?,?,?,1)',
+    )
+    .run('read-only', 'Read Only', JSON.stringify(['files.read']));
+  const profiles = new CapabilityProfileService(raw);
+  const readOnly = profiles.get('read-only')!;
+  assert.equal(readOnly.capabilities.includes('skills.read'), true);
+  assert.equal(readOnly.capabilities.includes('instructions.read'), true);
   db.close();
 });

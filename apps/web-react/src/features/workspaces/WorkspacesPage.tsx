@@ -1,6 +1,7 @@
 import type { WorkspaceSummary } from '@aevra/admin-contracts';
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
@@ -41,13 +42,25 @@ async function load(signal: AbortSignal): Promise<WorkspaceRow[]> {
 
 export function WorkspacesPage() {
   const resource = useApiResource(load);
+  const dialog = useDialog();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = resource.data?.find((workspace) => workspace.id === selectedId) ?? null;
 
   const addWorkspace = async () => {
-    const name = window.prompt('Workspace name');
+    const name = await dialog.prompt({
+      title: 'Add workspace',
+      label: 'Workspace name',
+      confirmLabel: 'Next',
+      required: true,
+    });
     if (!name?.trim()) return;
-    const hostRoot = window.prompt('Absolute local project path');
+    const hostRoot = await dialog.prompt({
+      title: 'Add workspace',
+      message: name.trim(),
+      label: 'Absolute local project path',
+      confirmLabel: 'Add workspace',
+      required: true,
+    });
     if (!hostRoot?.trim()) return;
     await requestJson('/api/workspaces', {
       method: 'POST',
@@ -57,7 +70,16 @@ export function WorkspacesPage() {
   };
 
   const removeWorkspace = async (row: WorkspaceRow) => {
-    if (!window.confirm('Remove this workspace registration?')) return;
+    if (
+      !(await dialog.confirm({
+        title: 'Remove workspace',
+        message: `Remove ${row.name} from Aevra?`,
+        confirmLabel: 'Remove',
+        confirmTone: 'danger',
+      }))
+    ) {
+      return;
+    }
     await requestJson(`/api/workspaces/${encodeURIComponent(row.id)}`, {
       method: 'DELETE',
     });
@@ -81,7 +103,16 @@ export function WorkspacesPage() {
   };
 
   const removeMount = async (mountId: string) => {
-    if (!window.confirm('Remove this external mount?')) return;
+    if (
+      !(await dialog.confirm({
+        title: 'Remove external mount',
+        message: 'Remove this external mount registration?',
+        confirmLabel: 'Remove',
+        confirmTone: 'danger',
+      }))
+    ) {
+      return;
+    }
     await requestJson(`/api/mounts/${encodeURIComponent(mountId)}`, {
       method: 'DELETE',
     });

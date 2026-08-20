@@ -1,11 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
+import { DialogProvider } from '../../components/Dialog';
 import { installApiFixtures } from '../../test/api-fixtures';
 import { DashboardPage } from './DashboardPage';
 
 test('Runtime overview shows operational metrics without duplicating Version', async () => {
   installApiFixtures();
-  render(<DashboardPage />);
+  render(
+    <DialogProvider>
+      <DashboardPage />
+    </DialogProvider>,
+  );
 
   expect(await screen.findByText('Remote sessions')).toBeInTheDocument();
   expect(screen.getByText('Workspace leases')).toBeInTheDocument();

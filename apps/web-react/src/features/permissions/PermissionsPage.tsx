@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { PageState } from '../../components/PageState';
+import { Switch } from '../../components/Switch';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
 
@@ -12,6 +13,22 @@ interface PermissionRule extends Record<string, unknown> {
   actor?: string;
   matcher?: string;
 }
+
+const CAPABILITIES = [
+  'files.read',
+  'files.search',
+  'git.read',
+  'skills.read',
+  'instructions.read',
+  'files.write',
+  'files.delete',
+  'commands.run',
+  'git.commit',
+  'git.push',
+  'network',
+  'skills.write',
+  'instructions.write',
+] as const;
 
 async function load(signal: AbortSignal) {
   return requestJson<PermissionRule[]>('/api/permissions', { signal });
@@ -59,6 +76,7 @@ export function PermissionsPage() {
       }),
     });
     setAdding(false);
+    setCommandEnabled(false);
     await resource.refresh();
   };
 
@@ -110,33 +128,20 @@ export function PermissionsPage() {
             <section className="form-section wide">
               <h3>What can they do?</h3>
               <div className="choice-grid capability-grid">
-                {[
-                  'files.read',
-                  'files.search',
-                  'git.read',
-                  'files.write',
-                  'files.delete',
-                  'commands.run',
-                  'git.commit',
-                  'git.push',
-                  'network',
-                ].map((capability) => (
-                  <label className="choice-card" key={capability}>
-                    <input
-                      type="checkbox"
-                      name="capability"
-                      value={capability}
-                      defaultChecked={['files.read', 'files.search'].includes(capability)}
-                      onChange={
-                        capability === 'commands.run'
-                          ? (event) => setCommandEnabled(event.currentTarget.checked)
-                          : undefined
-                      }
-                    />
-                    <span>
-                      <code>{capability}</code>
-                    </span>
-                  </label>
+                {CAPABILITIES.map((capability) => (
+                  <Switch
+                    key={capability}
+                    containerClassName="choice-card"
+                    name="capability"
+                    value={capability}
+                    label={<code>{capability}</code>}
+                    defaultChecked={['files.read', 'files.search'].includes(capability)}
+                    onChange={
+                      capability === 'commands.run'
+                        ? (event) => setCommandEnabled(event.currentTarget.checked)
+                        : undefined
+                    }
+                  />
                 ))}
               </div>
             </section>

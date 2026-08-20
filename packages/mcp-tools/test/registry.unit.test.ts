@@ -12,12 +12,19 @@ const READ_ONLY_TOOLS = [
   'file_list',
   'file_read',
   'file_search',
+  'process_list',
+  'process_status',
+  'process_wait',
+  'process_logs',
 ] as const satisfies readonly StableToolName[];
 
 const MUTATING_TOOLS = [
   'file_write',
   'command_run',
   'shell_run',
+  'process_start',
+  'process_stop',
+  'process_restart',
   'git_push',
 ] as const satisfies readonly StableToolName[];
 
@@ -29,6 +36,8 @@ test('stable tool vocabulary includes read and policy tools but no root mutation
     'approval_wait',
     'change_rollback',
     'shell_run',
+    'process_status',
+    'process_wait',
   ] as const satisfies readonly StableToolName[]) {
     assert.ok(STABLE_TOOL_NAMES.includes(name));
   }
@@ -38,22 +47,14 @@ test('stable tool vocabulary includes read and policy tools but no root mutation
   }
 });
 
-test('workspace and file discovery tools are explicitly read-only for ChatGPT filtering', () => {
+test('workspace file and process inspection tools are explicitly read-only', () => {
   const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
 
   for (const name of READ_ONLY_TOOLS) {
     const tool = definitions.get(name);
     assert.ok(tool, `${name} descriptor missing`);
-    assert.equal(
-      tool.annotations?.readOnlyHint,
-      true,
-      `${name} must be discoverable in read-only MCP contexts`,
-    );
-    assert.equal(
-      tool.annotations?.openWorldHint,
-      false,
-      `${name} stays inside Aevra/local workspace state`,
-    );
+    assert.equal(tool.annotations?.readOnlyHint, true, `${name} must be read-only`);
+    assert.equal(tool.annotations?.openWorldHint, false, `${name} stays inside Aevra state`);
   }
 
   for (const name of MUTATING_TOOLS) {
@@ -76,6 +77,34 @@ test('workspace and file read tools publish concrete input schemas', () => {
   assert.ok(fileRead?.properties?.path, 'file_read.path schema missing');
   assert.equal(fileSearch?.required?.includes('query'), true, 'file_search.query must be required');
   assert.ok(fileSearch?.properties?.query, 'file_search.query schema missing');
+});
+
+test('process tools publish closed inputs and terminal output schemas', () => {
+  const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
+  for (const name of [
+    'process_start',
+    'process_list',
+    'process_status',
+    'process_wait',
+    'process_logs',
+    'process_stop',
+    'process_restart',
+  ] as const) {
+    const tool = definitions.get(name) as any;
+    assert.ok(tool, `${name} descriptor missing`);
+    assert.equal(tool.inputSchema.additionalProperties, false, `${name} input must be closed`);
+    assert.ok(tool.outputSchema, `${name} output schema missing`);
+  }
+
+  const status = definitions.get('process_status') as any;
+  assert.deepEqual(status.inputSchema.required, ['processId']);
+  assert.ok(status.outputSchema.properties.state);
+  assert.ok(status.outputSchema.properties.exitCode);
+  assert.ok(status.outputSchema.properties.finishedAt);
+
+  const wait = definitions.get('process_wait') as any;
+  assert.deepEqual(wait.inputSchema.required, ['processId']);
+  assert.equal(wait.inputSchema.properties.timeoutMs.maximum, 30000);
 });
 
 test('shell_run publishes a concrete high-control script schema', () => {
