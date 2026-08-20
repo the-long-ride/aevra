@@ -11,6 +11,20 @@ import type {
 } from '../../protocol/src/index.js';
 import type { SandboxBackend } from './sandbox.js';
 import { appendCommandOutput, sanitizeCommandOutput } from './commands.js';
+import { buildChildEnvironment } from './environment.js';
+
+const CONTAINER_CLI_ENV_KEYS = [
+  'DOCKER_HOST',
+  'DOCKER_CONTEXT',
+  'DOCKER_CONFIG',
+  'DOCKER_TLS_VERIFY',
+  'DOCKER_CERT_PATH',
+  'PODMAN_HOST',
+  'CONTAINER_HOST',
+  'CONTAINER_CONNECTION',
+  'XDG_RUNTIME_DIR',
+] as const;
+
 async function cmd(
   exe: string,
   args: string[],
@@ -27,7 +41,12 @@ async function cmd(
     const c = spawn(exe, args, {
       shell: false,
       windowsHide: true,
-      env: { ...process.env, ...options.env },
+      env: buildChildEnvironment(
+        options.env ?? {},
+        process.env,
+        process.platform,
+        CONTAINER_CLI_ENV_KEYS,
+      ),
     });
     let stdout = '',
       stderr = '',
@@ -64,6 +83,7 @@ async function cmd(
     });
   });
 }
+
 export class DockerBackend implements SandboxBackend {
   readonly id = 'docker' as const;
   protected executable = 'docker';
@@ -71,6 +91,7 @@ export class DockerBackend implements SandboxBackend {
     string,
     { input: SandboxPrepareInput; policy: NetworkPolicy; image: string }
   >();
+
   async available() {
     try {
       return (
@@ -80,6 +101,7 @@ export class DockerBackend implements SandboxBackend {
       return false;
     }
   }
+
   async prepare(input: SandboxPrepareInput) {
     const id = `sbx_${randomUUID()}`;
     this.prepared.set(id, {
@@ -89,11 +111,13 @@ export class DockerBackend implements SandboxBackend {
     });
     return { id, backend: this.id } as SandboxHandle;
   }
+
   async applyNetworkPolicy(h: SandboxHandle, p: NetworkPolicy) {
     const s = this.prepared.get(h.id);
     if (!s) throw new Error('sandbox not prepared');
     s.policy = { ...p, enforcement: p.mode === 'deny-all' ? 'backend' : 'advisory' };
   }
+
   async run(h: SandboxHandle, input: CommandInput): Promise<CommandResult> {
     const s = this.prepared.get(h.id);
     if (!s) throw new Error('sandbox not prepared');
@@ -112,9 +136,12 @@ export class DockerBackend implements SandboxBackend {
       input.executable,
       ...input.args,
     ];
-    const start = Date.now(),
-      r = await cmd(this.executable, args, { timeoutMs: input.timeoutMs, env: input.env }),
-      secrets = Object.values(input.env);
+    const start = Date.now();
+    const r = await cmd(this.executable, args, {
+      timeoutMs: input.timeoutMs,
+      env: input.env,
+    });
+    const secrets = Object.values(input.env);
     return {
       exitCode: r.code,
       signal: r.signal,
@@ -123,12 +150,15 @@ export class DockerBackend implements SandboxBackend {
       durationMs: Date.now() - start,
     };
   }
+
   async startProcess(): Promise<ManagedChild> {
     throw new Error('managed sandbox process requires process host');
   }
+
   async terminate(h: SandboxHandle) {
     this.prepared.delete(h.id);
   }
+
   async inspect(h: SandboxHandle): Promise<SandboxInspection> {
     const s = this.prepared.get(h.id);
     return {
