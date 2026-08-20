@@ -3,8 +3,6 @@ import {
   classifySensitivity,
   type Sensitivity,
 } from '../../../../packages/security/src/sensitive.js';
-import type { SessionManager } from '../sessions/session-manager.js';
-import type { WorkspaceService } from '../workspaces/workspace-service.js';
 
 export type ResourceSecurityDecision = 'allow' | 'approval-required' | 'deny';
 export type ResourceOperation = 'read' | 'search' | 'write' | 'patch' | 'move' | 'delete';
@@ -25,10 +23,19 @@ export interface ResourceAuthorizationResult {
   approvalScope?: 'once';
 }
 
+interface SecuritySessionReader {
+  get(sessionId: string): { actor: string; subject: string } | null;
+  activeLease(sessionId: string): { workspaceId: string } | null;
+}
+
+interface SecurityWorkspaceReader {
+  getLocal(workspaceId: string): unknown | null;
+}
+
 export class SecurityGuard {
   constructor(
-    private sessions: SessionManager,
-    private workspaces: WorkspaceService,
+    private sessions: SecuritySessionReader,
+    private workspaces: SecurityWorkspaceReader,
   ) {}
 
   authorizeResource(input: ResourceAuthorizationInput): ResourceAuthorizationResult {
