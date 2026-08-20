@@ -25,8 +25,13 @@ const WINDOWS_KEYS = new Set([
 export function safeBaseEnvironment(
   source: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
+  extraAllowedKeys: readonly string[] = [],
 ): Record<string, string> {
-  const allowed = platform === 'win32' ? new Set([...COMMON_KEYS, ...WINDOWS_KEYS]) : COMMON_KEYS;
+  const allowed = new Set(
+    platform === 'win32' ? [...COMMON_KEYS, ...WINDOWS_KEYS] : [...COMMON_KEYS],
+  );
+  for (const key of extraAllowedKeys) allowed.add(key.toUpperCase());
+
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(source)) {
     if (value === undefined || !allowed.has(key.toUpperCase())) continue;
@@ -39,6 +44,10 @@ export function buildChildEnvironment(
   explicit: Record<string, string> = {},
   source: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
+  extraAllowedKeys: readonly string[] = [],
 ): Record<string, string> {
-  return { ...safeBaseEnvironment(source, platform), ...explicit };
+  return {
+    ...safeBaseEnvironment(source, platform, extraAllowedKeys),
+    ...explicit,
+  };
 }
