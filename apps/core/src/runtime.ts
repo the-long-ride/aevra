@@ -52,9 +52,7 @@ import { CommandSecretStore } from '../../../packages/secrets/src/platform.js';
 import { EnvironmentService } from './secrets/environment-service.js';
 import { ensureLocalTls } from './tls/local-tls.js';
 import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
-
 export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
-
 export async function createCoreRuntime(
   config: CoreConfig,
   deps: RuntimeDependencies = {},
