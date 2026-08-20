@@ -34,3 +34,17 @@ export function maskSecretFile(path: string, content: string) {
       .join('\n');
   return '[REDACTED SECRET FILE]';
 }
+
+export function maskSensitiveFile(_path: string, content: string) {
+  return content
+    .split(/\r?\n/)
+    .map((line) => {
+      if (!line.trim()) return line;
+      const equals = line.indexOf('=');
+      if (equals > 0) return `${line.slice(0, equals)}=[REDACTED]`;
+      const jsonLike = line.match(/^(\s*["'][^"']+["']\s*:\s*)(.*?)(,?\s*)$/);
+      if (jsonLike) return `${jsonLike[1]}"[REDACTED]"${jsonLike[3]}`;
+      return '[REDACTED]';
+    })
+    .join('\n');
+}
