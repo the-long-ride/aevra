@@ -3,6 +3,7 @@ import type { WorkerOperation } from '../../protocol/src/worker.js';
 import {
   classifySensitivity,
   maskSensitiveFile,
+  maxSensitivity,
   type Sensitivity,
 } from '../../security/src/sensitive.js';
 import {
@@ -293,10 +294,15 @@ async function readTool(
   if (name !== 'file_read') return result.value;
 
   const value = result.value as any;
-  const sensitivity = classifySensitivity({ path: value.path }) || requestedSensitivity;
-  if (sensitivity === 'SECRET') denySecret(value.path);
+  const sensitivity = maxSensitivity(
+    requestedSensitivity,
+    classifySensitivity({ path: String(value.path ?? args.path ?? '') }),
+  );
+  if (sensitivity === 'SECRET') denySecret(String(args.path ?? value.path ?? ''));
   const content =
-    sensitivity === 'SENSITIVE' ? maskSensitiveFile(value.path, String(value.content ?? '')) : value.content;
+    sensitivity === 'SENSITIVE'
+      ? maskSensitiveFile(String(args.path ?? value.path ?? ''), String(value.content ?? ''))
+      : value.content;
   const ranged = args.offset !== undefined || args.length !== undefined;
   if (ranged) {
     return {
@@ -312,10 +318,10 @@ async function readTool(
   context.reads.put({
     sessionId,
     workspaceId: lease.workspaceId,
-    path: value.path,
+    path: String(args.path ?? value.path),
     hash: value.hash,
     content: value.content,
     storedAt: Date.now(),
   });
-  return { ...value, content, sensitivity };
+  return { ...value, path: String(args.path ?? value.path), content, sensitivity };
 }
