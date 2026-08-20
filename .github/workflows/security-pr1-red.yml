@@ -1,0 +1,25 @@
+name: Security PR1 RED
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: security-pr1-red-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  guard-red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test.mjs unit
