@@ -3,11 +3,18 @@ import test from 'node:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileRead, fileSearch } from '../src/files.js';
+import {
+  fileCreate,
+  fileDelete,
+  fileMove,
+  fileRead,
+  fileSearch,
+  fileWrite,
+} from '../src/files.js';
 
 const EXPECTED_MAX_FULL_FILE_BYTES = 16 * 1024 * 1024;
 
-function fixture() {
+function fixture(capabilities = ['files.read', 'files.search'] as const) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'aevra-sensitive-files-'));
   const roots = [
     {
@@ -15,7 +22,7 @@ function fixture() {
       kind: 'workspace' as const,
       logicalPrefix: '/',
       hostRoot: root,
-      capabilities: ['files.read' as const, 'files.search' as const],
+      capabilities: [...capabilities],
     },
   ];
   return { root, roots };
@@ -41,6 +48,29 @@ test('file_search masks SENSITIVE matching lines before return', async () => {
   assert.match(hits[0]!.text, /_authToken/);
   assert.match(hits[0]!.text, /\[REDACTED\]/);
   assert.equal(hits[0]!.text.includes('raw-sensitive-value'), false);
+});
+
+test('Executor rejects direct SECRET reads even if Core is bypassed', async () => {
+  const { root, roots } = fixture();
+  writeFileSync(path.join(root, '.env'), 'TOKEN=secret-value\n');
+  await assert.rejects(() => fileRead('/.env', roots), /secret|protected/i);
+});
+
+test('Executor rejects direct SECRET mutations even if Core is bypassed', async () => {
+  const { root, roots } = fixture([
+    'files.read',
+    'files.search',
+    'files.write',
+    'files.delete',
+  ] as const);
+  writeFileSync(path.join(root, '.env'), 'TOKEN=secret-value\n');
+  writeFileSync(path.join(root, 'normal.txt'), 'normal\n');
+
+  await assert.rejects(() => fileWrite('/.env', 'TOKEN=changed', roots), /secret|protected/i);
+  await assert.rejects(() => fileCreate('/.env.local', 'TOKEN=new', roots), /secret|protected/i);
+  await assert.rejects(() => fileDelete('/.env', false, roots), /secret|protected/i);
+  await assert.rejects(() => fileMove('/.env', '/renamed.env', roots), /secret|protected/i);
+  await assert.rejects(() => fileMove('/normal.txt', '/.env.production', roots), /secret|protected/i);
 });
 
 test('fileRead range reads only the requested chunk and reports total length', async () => {
