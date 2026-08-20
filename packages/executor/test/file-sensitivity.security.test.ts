@@ -67,14 +67,26 @@ test(
   },
 );
 
-test('Executor rejects hard-link aliases that could hide SECRET file identity', async () => {
+test('Executor rejects hard-link aliases when another in-workspace alias is SECRET', async () => {
   const { root, roots } = fixture();
   writeFileSync(path.join(root, '.env'), 'TOKEN=hardlink-secret-marker\n');
   linkSync(path.join(root, '.env'), path.join(root, 'alias.txt'));
 
-  await assert.rejects(() => fileRead('/alias.txt', roots), /hard.?link|protected/i);
+  await assert.rejects(() => fileRead('/alias.txt', roots), /hard.?link|secret|protected/i);
   const hits = await fileSearch('/', 'hardlink-secret-marker', roots);
   assert.equal(hits.length, 0);
+});
+
+test('normal hard-linked files remain readable and searchable', async () => {
+  const { root, roots } = fixture();
+  writeFileSync(path.join(root, 'source.txt'), 'normal-hardlink-marker\n');
+  linkSync(path.join(root, 'source.txt'), path.join(root, 'alias.txt'));
+
+  const read = await fileRead('/alias.txt', roots);
+  assert.match(read.content, /normal-hardlink-marker/);
+  const hits = await fileSearch('/', 'normal-hardlink-marker', roots);
+  assert.ok(hits.some((hit) => hit.path.endsWith('/source.txt')));
+  assert.ok(hits.some((hit) => hit.path.endsWith('/alias.txt')));
 });
 
 test('Executor rejects direct SECRET mutations even if Core is bypassed', async () => {
