@@ -81,6 +81,35 @@ test('critical approvals reject persistent scopes and allow once', async () => {
   assert.equal(approved.decisionScope, 'once');
   db.close();
 });
+test('immutable security approvals reject persistent scopes and allow once', async () => {
+  const { db, svc } = make();
+  const r = await svc.request({
+    actor: 'oauth:ChatGPT',
+    sessionId: 's',
+    workspaceId: 'w',
+    operation: {
+      family: 'security:sensitive:file-write',
+      capability: 'files.write',
+      risk: 'HIGH',
+      argsHash: 'h',
+    },
+    payload: {
+      tool: 'capability_request',
+      requestedCapability: 'files.write',
+      permissionMatcher: 'security:sensitive:file-write',
+      securityOnce: true,
+      original: { tool: 'file_write', args: { path: '/.npmrc', content: 'synthetic' } },
+    },
+    expectedState: { workspaceId: 'w' },
+    risk: 'HIGH',
+  });
+  assert.throws(() => svc.approve(r.requestId, 'workspace'), /one-time/i);
+  assert.equal(svc.status(r.requestId)?.state, 'PENDING');
+  const approved = svc.approve(r.requestId, 'once');
+  assert.equal(approved.state, 'APPROVED');
+  assert.equal(approved.decisionScope, 'once');
+  db.close();
+});
 test('default static connector workspace approval is normalized to read-only', async () => {
   const { db, svc } = make();
   const r = await svc.request({
