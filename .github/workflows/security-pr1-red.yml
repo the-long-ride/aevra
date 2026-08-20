@@ -1,55 +1,26 @@
-name: Security PR1 guard verification
+name: Security PR1 immutable approval
 
 on:
-  push:
-    branches:
-      - security/01-secret-data-isolation
+  pull_request:
+    branches: [main]
 
 concurrency:
-  group: security-pr1-guard-${{ github.ref }}
+  group: security-pr1-immutable-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  guard:
-    if: github.actor != 'github-actions[bot]'
+  immutable-approval:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Run focused guard verification
-        shell: bash
-        run: |
-          set +e
-          mkdir -p .verification
-          : > .verification/security-pr1-guard.log
-          npm ci >> .verification/security-pr1-guard.log 2>&1
-          install_status=$?
-          compile_status=99
-          test_status=99
-          if [ "$install_status" -eq 0 ]; then
-            npx tsc -p tsconfig.json --noCheck --noEmit false --outDir .test-dist >> .verification/security-pr1-guard.log 2>&1
-            compile_status=$?
-            if [ "$compile_status" -eq 0 ]; then
-              node --test .test-dist/apps/core/test/security-guard.unit.test.js >> .verification/security-pr1-guard.log 2>&1
-              test_status=$?
-            fi
-          fi
-          printf '{"commit":"%s","install":%s,"compile":%s,"test":%s}\n' "$GITHUB_SHA" "$install_status" "$compile_status" "$test_status" > .verification/security-pr1-guard.json
-      - name: Publish verification receipt
-        shell: bash
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .verification/security-pr1-guard.json .verification/security-pr1-guard.log
-          git commit -m "ci: record PR1 guard verification [skip ci]" || exit 0
-          git push origin HEAD:${GITHUB_REF_NAME}
+      - run: npm ci --ignore-scripts
+      - run: npx tsc -p tsconfig.json --noCheck --noEmit false --outDir .test-dist
+      - run: node --test --test-name-pattern="immutable security approvals" .test-dist/apps/core/test/approval-service.unit.test.js
