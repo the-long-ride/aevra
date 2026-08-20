@@ -68,11 +68,19 @@ test(
 );
 
 test('Executor rejects hard-link aliases when another in-workspace alias is SECRET', async () => {
-  const { root, roots } = fixture();
+  const { root, roots } = fixture([
+    'files.read',
+    'files.search',
+    'files.write',
+    'files.delete',
+  ] as const);
   writeFileSync(path.join(root, '.env'), 'TOKEN=hardlink-secret-marker\n');
   linkSync(path.join(root, '.env'), path.join(root, 'alias.txt'));
 
   await assert.rejects(() => fileRead('/alias.txt', roots), /hard.?link|secret|protected/i);
+  await assert.rejects(() => fileWrite('/alias.txt', 'TOKEN=changed', roots), /secret|protected/i);
+  await assert.rejects(() => fileDelete('/alias.txt', false, roots), /secret|protected/i);
+  await assert.rejects(() => fileMove('/alias.txt', '/moved.txt', roots), /secret|protected/i);
   const hits = await fileSearch('/', 'hardlink-secret-marker', roots);
   assert.equal(hits.length, 0);
 });
