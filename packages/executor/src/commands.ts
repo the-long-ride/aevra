@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { CommandInput, CommandResult } from '../../protocol/src/index.js';
 import { redactText } from '../../security/src/dlp.js';
+import { buildChildEnvironment } from './environment.js';
 export const COMMAND_OUTPUT_LIMIT = 1024 * 1024;
 const TRUNCATED = '\n...[output truncated by Aevra]';
 export function appendCommandOutput(current: string, chunk: unknown) {
@@ -22,7 +23,7 @@ export async function runCommand(input: CommandInput, cwd?: string): Promise<Com
   return await new Promise((resolve, reject) => {
     const child = spawn(input.executable, input.args, {
       cwd,
-      env: { ...process.env, ...input.env },
+      env: buildChildEnvironment(input.env),
       shell: false,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
