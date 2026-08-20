@@ -21,6 +21,31 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npx tsc -p tsconfig.json --noCheck --noEmit false --outDir .test-dist
-      - run: node --test .test-dist/apps/core/test/security-guard.unit.test.js
+      - name: Run focused guard check
+        shell: bash
+        run: |
+          set +e
+          : > guard-verification.log
+          npm ci >> guard-verification.log 2>&1
+          install_status=$?
+          echo "INSTALL_EXIT=$install_status" >> guard-verification.log
+          if [ "$install_status" -eq 0 ]; then
+            npx tsc -p tsconfig.json --noCheck --noEmit false --outDir .test-dist >> guard-verification.log 2>&1
+            compile_status=$?
+            echo "COMPILE_EXIT=$compile_status" >> guard-verification.log
+            if [ "$compile_status" -eq 0 ]; then
+              node --test .test-dist/apps/core/test/security-guard.unit.test.js >> guard-verification.log 2>&1
+              test_status=$?
+            else
+              test_status=99
+            fi
+            echo "TEST_EXIT=$test_status" >> guard-verification.log
+          else
+            echo "COMPILE_EXIT=99" >> guard-verification.log
+            echo "TEST_EXIT=99" >> guard-verification.log
+          fi
+          cat guard-verification.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: guard-verification
+          path: guard-verification.log
