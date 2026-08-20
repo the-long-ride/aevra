@@ -320,13 +320,15 @@ async function readTool(
     };
   }
 
-  context.reads.put({
-    sessionId,
-    workspaceId: lease.workspaceId,
-    path: String(args.path ?? value.path),
-    hash: value.hash,
-    content: value.content,
-    storedAt: Date.now(),
-  });
+  if (sensitivity === 'NORMAL') {
+    context.reads.put({
+      sessionId,
+      workspaceId: lease.workspaceId,
+      path: String(args.path ?? value.path),
+      hash: value.hash,
+      content: value.content,
+      storedAt: Date.now(),
+    });
+  }
   return { ...value, path: String(args.path ?? value.path), content, sensitivity };
 }
