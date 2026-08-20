@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { buildChildEnvironment } from '../../../packages/executor/src/environment.js';
 import { redactText } from '../../../packages/security/src/dlp.js';
 import type { ManagedProcessState } from '../../../packages/protocol/src/index.js';
 
@@ -20,11 +21,13 @@ const command = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) a
   env: Record<string, string>;
 };
 delete process.env.AEVRA_PROCESS_COMMAND;
+delete process.env.AEVRA_PROCESS_LOG;
+delete process.env.AEVRA_PROCESS_RESULT;
 delete process.env.AEVRA_PROCESS_MARKER;
 mkdirSync(path.dirname(logPath), { recursive: true });
 const child = spawn(command.executable, command.args, {
   cwd: command.cwd,
-  env: { ...process.env, ...command.env },
+  env: buildChildEnvironment(command.env),
   shell: false,
   windowsHide: true,
   stdio: ['ignore', 'pipe', 'pipe'],
