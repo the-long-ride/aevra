@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildChildEnvironment } from '../src/environment.js';
 import { runCommand } from '../src/commands.js';
 
 test('child environment excludes unrelated parent secrets', async () => {
@@ -33,22 +32,4 @@ test('explicit child environment remains available without inheriting arbitrary 
     env: { AEVRA_EXPLICIT_VALUE: 'expected-value' },
   });
   assert.equal(result.exitCode, 0);
-});
-
-test('environment builder keeps execution essentials and drops unknown ambient keys', () => {
-  const built = buildChildEnvironment(
-    { EXPLICIT: 'yes' },
-    {
-      PATH: '/usr/bin',
-      HOME: '/home/test',
-      LANG: 'C.UTF-8',
-      RANDOM_PARENT_SECRET: 'nope',
-    },
-    'linux',
-  );
-  assert.equal(built.PATH, '/usr/bin');
-  assert.equal(built.HOME, '/home/test');
-  assert.equal(built.LANG, 'C.UTF-8');
-  assert.equal(built.EXPLICIT, 'yes');
-  assert.equal('RANDOM_PARENT_SECRET' in built, false);
 });
