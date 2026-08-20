@@ -8,6 +8,7 @@ function fixture(
 ) {
   const calls: any[] = [];
   const operationCalls: any[] = [];
+  const readCacheWrites: any[] = [];
   const sessions = {
     get: () => ({ id: 'ses_1', actor: 'oauth:ChatGPT', subject: 'grant_1' }),
     activeLease: () => ({
@@ -71,7 +72,7 @@ function fixture(
     sessions,
     workspaces,
     worker,
-    reads: { put() {} },
+    reads: { put(value: any) { readCacheWrites.push(value); } },
     approvals,
     deps: {
       security: new SecurityGuard(sessions, workspaces),
@@ -82,7 +83,7 @@ function fixture(
     callInner: async () => null,
     processStart: async () => null,
   };
-  return { context, calls, operationCalls };
+  return { context, calls, operationCalls, readCacheWrites };
 }
 
 test('SECRET file_read is denied before Worker dispatch', async () => {
@@ -95,11 +96,12 @@ test('SECRET file_read is denied before Worker dispatch', async () => {
 });
 
 test('SENSITIVE file_read masks values before remote return', async () => {
-  const { context } = fixture();
+  const { context, readCacheWrites } = fixture();
   const result: any = await handleFileTool(context, 'ses_1', 'file_read', { path: '/.npmrc' });
   assert.match(result.content, /_authToken/);
   assert.match(result.content, /\[REDACTED\]/);
   assert.equal(result.content.includes('raw-sensitive-value'), false);
+  assert.equal(readCacheWrites.length, 0, 'masked SENSITIVE content must not become a merge base');
 });
 
 test('requested sensitivity cannot be downgraded by a worker response path', async () => {
@@ -110,10 +112,11 @@ test('requested sensitivity cannot be downgraded by a worker response path', asy
 });
 
 test('worker sensitivity elevation is preserved for alias reads', async () => {
-  const { context } = fixture({ workerSensitivity: 'SENSITIVE' });
+  const { context, readCacheWrites } = fixture({ workerSensitivity: 'SENSITIVE' });
   const result: any = await handleFileTool(context, 'ses_1', 'file_read', { path: '/alias.txt' });
   assert.equal(result.sensitivity, 'SENSITIVE');
   assert.match(result.content, /\[REDACTED\]/);
+  assert.equal(readCacheWrites.length, 0);
 });
 
 test('ranged file_read forwards offset and length to Worker', async () => {
