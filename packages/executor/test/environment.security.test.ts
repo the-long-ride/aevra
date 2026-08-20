@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { buildChildEnvironment } from '../src/environment.js';
 import { runCommand } from '../src/commands.js';
 import { ManagedProcessRuntime } from '../src/processes.js';
 
@@ -68,4 +69,23 @@ test('attached managed process excludes unrelated parent secrets', async () => {
     if (previous === undefined) delete process.env.AEVRA_TEST_PARENT_SECRET;
     else process.env.AEVRA_TEST_PARENT_SECRET = previous;
   }
+});
+
+test('tool child env may opt into execution-essential keys without ambient secret inheritance', () => {
+  const built = buildChildEnvironment(
+    { EXPLICIT: 'yes' },
+    {
+      PATH: '/usr/bin',
+      HOME: '/home/test',
+      DOCKER_HOST: 'unix:///run/user/1000/docker.sock',
+      RANDOM_PARENT_SECRET: 'nope',
+    },
+    'linux',
+    ['DOCKER_HOST'],
+  );
+  assert.equal(built.PATH, '/usr/bin');
+  assert.equal(built.HOME, '/home/test');
+  assert.equal(built.DOCKER_HOST, 'unix:///run/user/1000/docker.sock');
+  assert.equal(built.EXPLICIT, 'yes');
+  assert.equal('RANDOM_PARENT_SECRET' in built, false);
 });
