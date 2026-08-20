@@ -1,45 +1,46 @@
-# Current Work — Aevra security hardening PR1
-Last updated: 2026-08-20T15:15:00+07:00 · Status: blocked
+# Current Work — Aevra security hardening PR2
+Last updated: 2026-08-20T15:45:00+07:00 · Status: in-progress
+
 ## Goal
-Harden secret/data isolation without changing unrelated MCP behavior.
+Make privileged ID-addressed operations reconnect-safe by actor+subject+workspace ownership, add process host step-up, and prove YOLO revocation keeps the session alive.
+
 ## Checkpoints (done)
 - [x] Approved four-PR security-hardening architecture.
-- [x] Added central SecurityGuard resource boundary.
-- [x] Added SECRET denial and SENSITIVE masking/one-time mutation approval.
-- [x] Added Worker-side secret-file defense-in-depth.
-- [x] Added bounded ranged reads with existing JS string offset semantics.
-- [x] Isolated host, managed-process, Docker, and Podman child environments.
-- [x] Sanitized approval and managed-process persistence.
-- [x] Removed host process paths from remote process results.
-- [x] Codex diff review found canonical-path secret alias bypass.
-- [x] Worker now blocks symlink-to-SECRET paths.
-- [x] Worker now detects in-workspace SECRET hard-link aliases for read/search/write/delete/move without blanket-blocking normal hard links.
-- [x] Normal hard-linked files remain readable/searchable for compatibility.
-- [x] Ranged reads preserve prior JS string offsets for multibyte UTF-8.
-- [x] Worker sensitivity elevation is propagated through Core and cannot be downgraded by response paths.
-- [x] Masked SENSITIVE reads are excluded from the read-version merge cache.
-- [x] Structured approval persistence redacts content, patches, env values, and secret-looking fields.
-- [x] Structured sanitizer uses null-prototype records so __proto__ remains inert data.
-- [x] runtime.ts restored to the 350-line source-policy limit without logic compression.
-- [x] Temporary PR1 verification workflow removed after Actions infrastructure proved unusable.
-- [x] Local focused Executor file-security suite passed 10/10.
-- [x] Local focused MCP file-security suite passed 6/6.
-- [x] Local sanitizer prototype-safety regression passed 1/1.
-- [x] Local process remote-projection regression passed 2/2.
-- [x] Local process-env SQLite persistence regression passed 1/1.
-- [x] Local approval persistence sanitizer regression passed.
+- [x] PR1 secret/data isolation merged to main.
+- [x] PR1 added central SecurityGuard resource boundary.
+- [x] PR1 blocked SECRET file read/search/mutation including YOLO and alias variants.
+- [x] PR1 masked SENSITIVE reads/search and forced one-time mutation approval.
+- [x] PR1 isolated child environments and sanitized approval/process persistence.
+- [x] PR1 removed remote host process paths and bounded ranged reads.
+- [x] PR1 focused Executor file-security suite passed 10/10.
+- [x] PR1 focused MCP file-security suite passed 6/6.
+- [x] PR1 sanitizer/projection/persistence focused regressions passed.
+- [x] security/02-authorization-isolation fast-forwarded to merged main.
+
 ## Remaining Work
-- [ ] Obtain full repository format/lint/typecheck/test/coverage/build verification.
-- [ ] Finish PR1 only after acceptable full verification.
-- [ ] Merge PR1, then base PR2 on the merged PR1 state.
-- [ ] In PR2/PR4, close command/process/Git routes that can read secret content outside the file-tool security boundary.
+- [ ] Persist reconnect-safe owner actor+subject metadata for approval/change/process records.
+- [ ] Add SecurityGuard ownership tuple authorization.
+- [ ] Guard approval status/cancel/resume by owner tuple.
+- [ ] Guard change status/commit/rollback by owner tuple.
+- [ ] Guard process status/wait/log/stop/restart by owner tuple.
+- [ ] Add host-execution step-up for process_start.
+- [ ] Prove disabling YOLO restores baseline policy without changing session/lease IDs.
+- [ ] Audit denied ownership attempts without sensitive payloads.
+- [ ] Close command/process/Git secret-read paths identified during PR1 review.
+- [ ] Run focused exploit tests and available source-policy checks.
+- [ ] Merge PR2, then base PR3 on merged main.
+
 ## Blockers
-- GitHub Actions jobs fail before step 1; checkout-only jobs produce no steps and no retrievable log blob.
-- This execution sandbox has no GitHub network access and cannot clone the private repository, so full repository gates cannot be run locally here.
+- GitHub Actions jobs previously failed before step 1 and produced no job log blob.
+- Full private-repo clone is unavailable from the execution sandbox.
+
 ## Known Risks
-- Full format/lint/typecheck/test/coverage/build evidence is not currently available.
-- Command/process/Git execution remains a separate potential secret-read channel and is explicitly deferred to the authorization/regression hardening PRs.
-- Hard-link aliases outside registered capability roots cannot be provenance-classified; in-root aliases are covered.
+- Full format/lint/typecheck/test/coverage/build evidence may remain unavailable until GitHub Actions runner service recovers.
+- Command/process/Git execution can read workspace files independently of file-tool sensitivity checks and must be closed in PR2/PR4.
+
 ## Trade-offs
 - Preserve compatibility for LOW/MEDIUM issues unless a security bound makes the old behavior unsafe.
 - HIGH/CRITICAL security invariants override compatibility.
+
+## Resolved
+- PR1 full CI gate unavailable due Actions infrastructure; user explicitly requested merge-to-main and continuation.
