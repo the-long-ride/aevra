@@ -84,6 +84,17 @@ test('fileRead range reads only the requested chunk and reports total length', a
   assert.equal(value.totalLength, 2_000_000);
 });
 
+test('ranged read preserves existing JS string offset semantics for multibyte UTF-8', async () => {
+  const { root, roots } = fixture();
+  writeFileSync(path.join(root, 'unicode.txt'), 'aéb');
+
+  const value = await fileRead('/unicode.txt', roots, { offset: 1, length: 1 });
+  assert.equal(value.content, 'é');
+  assert.equal(value.offset, 1);
+  assert.equal(value.length, 1);
+  assert.equal(value.totalLength, 3);
+});
+
 test('full reads above the explicit safety limit require ranged access', async () => {
   const { root, roots } = fixture();
   writeFileSync(
