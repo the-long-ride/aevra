@@ -3,7 +3,7 @@ import test from 'node:test';
 import { SecurityGuard } from '../../../apps/core/src/security/security-guard.js';
 import { handleFileTool } from '../src/file-tools.js';
 
-function fixture(options: { yolo?: boolean } = {}) {
+function fixture(options: { yolo?: boolean; downgradeSensitivePath?: boolean } = {}) {
   const calls: any[] = [];
   const operationCalls: any[] = [];
   const sessions = {
@@ -29,7 +29,7 @@ function fixture(options: { yolo?: boolean } = {}) {
           return {
             ok: true,
             value: {
-              path: '/.npmrc',
+              path: options.downgradeSensitivePath ? '/normal.txt' : '/.npmrc',
               hash: 'sha256:test',
               content: '_authToken=raw-sensitive-value',
             },
@@ -95,6 +95,14 @@ test('SENSITIVE file_read masks values before remote return', async () => {
   const { context } = fixture();
   const result: any = await handleFileTool(context, 'ses_1', 'file_read', { path: '/.npmrc' });
   assert.match(result.content, /_authToken/);
+  assert.match(result.content, /\[REDACTED\]/);
+  assert.equal(result.content.includes('raw-sensitive-value'), false);
+});
+
+test('requested sensitivity cannot be downgraded by a worker response path', async () => {
+  const { context } = fixture({ downgradeSensitivePath: true });
+  const result: any = await handleFileTool(context, 'ses_1', 'file_read', { path: '/.npmrc' });
+  assert.equal(result.sensitivity, 'SENSITIVE');
   assert.match(result.content, /\[REDACTED\]/);
   assert.equal(result.content.includes('raw-sensitive-value'), false);
 });
