@@ -3,7 +3,11 @@ import { readdir, readFile, stat, writeFile, mkdir, rename, rm, open } from 'nod
 import path from 'node:path';
 import type { CapabilityRoot } from '../../protocol/src/index.js';
 import { resolveCapabilityPath } from '../../security/src/path-policy.js';
-import { classifySensitivity, maskSensitiveFile } from '../../security/src/sensitive.js';
+import {
+  assertRemoteSecretAllowed,
+  classifySensitivity,
+  maskSensitiveFile,
+} from '../../security/src/sensitive.js';
 
 export const MAX_FULL_FILE_BYTES = 16 * 1024 * 1024;
 export const MAX_RANGE_READ_BYTES = 1024 * 1024;
@@ -37,6 +41,7 @@ export async function fileRead(
   range?: { offset?: number; length?: number },
 ) {
   const r = await resolveCapabilityPath(logicalPath, roots, 'read');
+  assertRemoteSecretAllowed(r.logicalPath);
   const info = await stat(r.canonicalHostPath);
   const ranged = range?.offset !== undefined || range?.length !== undefined;
   if (ranged) {
@@ -118,6 +123,7 @@ export async function fileCreate(
   encoding: 'utf8' | 'base64' = 'utf8',
 ) {
   const r = await resolveCapabilityPath(logicalPath, roots, 'write');
+  assertRemoteSecretAllowed(r.logicalPath);
   await mkdir(path.dirname(r.canonicalHostPath), { recursive: true });
   await writeFile(
     r.canonicalHostPath,
@@ -127,6 +133,7 @@ export async function fileCreate(
   const b = await readFile(r.canonicalHostPath);
   return { path: r.logicalPath, hash: sha256(b) };
 }
+
 export async function fileWrite(
   logicalPath: string,
   content: string,
@@ -134,6 +141,7 @@ export async function fileWrite(
   encoding: 'utf8' | 'base64' = 'utf8',
 ) {
   const r = await resolveCapabilityPath(logicalPath, roots, 'write');
+  assertRemoteSecretAllowed(r.logicalPath);
   await mkdir(path.dirname(r.canonicalHostPath), { recursive: true });
   const tmp = `${r.canonicalHostPath}.aevra-${process.pid}-${Date.now()}.tmp`;
   await writeFile(tmp, encoding === 'base64' ? Buffer.from(content, 'base64') : content);
@@ -141,15 +149,20 @@ export async function fileWrite(
   const b = await readFile(r.canonicalHostPath);
   return { path: r.logicalPath, hash: sha256(b) };
 }
+
 export async function fileMove(from: string, to: string, roots: CapabilityRoot[]) {
   const a = await resolveCapabilityPath(from, roots, 'write'),
     b = await resolveCapabilityPath(to, roots, 'write');
+  assertRemoteSecretAllowed(a.logicalPath);
+  assertRemoteSecretAllowed(b.logicalPath);
   await mkdir(path.dirname(b.canonicalHostPath), { recursive: true });
   await rename(a.canonicalHostPath, b.canonicalHostPath);
   return { from: a.logicalPath, to: b.logicalPath };
 }
+
 export async function fileDelete(logicalPath: string, recursive: boolean, roots: CapabilityRoot[]) {
   const r = await resolveCapabilityPath(logicalPath, roots, 'write');
+  assertRemoteSecretAllowed(r.logicalPath);
   await rm(r.canonicalHostPath, { recursive, force: false });
   return { path: r.logicalPath, deleted: true };
 }
