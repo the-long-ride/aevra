@@ -74,6 +74,22 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
     return true;
   }
 
+  match = path.match(/^\/api\/sessions\/([^/]+)\/workspace\/([^/]+)$/);
+  if (match && method === 'DELETE') {
+    const sessionId = match[1]!;
+    const workspaceId = decodeURIComponent(match[2]!);
+    const session = context.sessions?.get?.(sessionId);
+    if (!session) {
+      sendAdminResponse(res, 404, {
+        error: { code: 'NOT_FOUND', message: 'Session not found' },
+      });
+      return true;
+    }
+    context.sessions?.revokeWorkspace?.(sessionId, workspaceId);
+    sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
+    return true;
+  }
+
   if (path === '/api/admin-sessions' && method === 'GET') {
     sendAdminResponse(res, 200, context.bootstrap?.listSessions?.() ?? []);
     return true;

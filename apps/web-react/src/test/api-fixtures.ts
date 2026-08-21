@@ -94,11 +94,17 @@ export function installApiFixtures(options: FixtureOptions = {}) {
         metrics: [{ tool: 'file_read', calls: 3, avgMs: 10, totalMs: 30 }],
         activeConnections: [
           {
+            id: 'ses-chatgpt',
             client: 'ChatGPT',
+            actor: 'oauth:ChatGPT',
+            provider: 'OAuth',
             authType: 'OAuth',
+            yolo: true,
             workspace: 'Aevra',
-            status: 'active',
+            workspaces: ['Aevra'],
+            workspaceIds: ['ws-1'],
             capabilities: ['files.read'],
+            status: 'active',
             lastActivityAt: '2026-08-19T00:00:00Z',
           },
         ],

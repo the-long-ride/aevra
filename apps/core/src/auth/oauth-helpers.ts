@@ -45,3 +45,23 @@ export function normalizeScope(value: string | undefined) {
   if (unsupported.length) throw new Error(`unsupported OAuth scope: ${unsupported.join(' ')}`);
   return unique.join(' ');
 }
+
+export function canonicalResource(value: string) {
+  return value.trim().replace(/\/+$/, '');
+}
+
+export function resourceMatches(requested: string | undefined, expected: string): boolean {
+  const wanted = canonicalResource(expected);
+  const value = String(requested ?? '').trim();
+  if (!value) return true;
+  const actual = canonicalResource(value);
+  if (actual === wanted) return true;
+  return actual === wanted.replace(/\/mcp$/, '');
+}
+
+export function resolvedResource(requested: string | undefined, expected: string): string {
+  if (!resourceMatches(requested, expected)) {
+    throw new Error('resource does not match this MCP server');
+  }
+  return expected;
+}

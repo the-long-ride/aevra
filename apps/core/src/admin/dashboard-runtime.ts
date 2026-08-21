@@ -87,17 +87,28 @@ export function buildDashboardRuntimeSnapshot(
   const toolCalls = metrics.reduce((sum: number, row: any) => sum + Number(row.calls || 0), 0),
     totalMs = metrics.reduce((sum: number, row: any) => sum + Number(row.totalMs || 0), 0);
   const activeConnections = sessions.map((session: any) => {
-    const lease = session.lease ?? null,
-      workspaceId = lease?.workspaceId ?? null;
+    const leases = Array.isArray(session.leases)
+      ? session.leases
+      : session.lease
+        ? [session.lease]
+        : [];
+    const workspaceIds = leases
+      .map((lease: any) => String(lease?.workspaceId ?? ''))
+      .filter(Boolean);
+    const workspaceLabels = workspaceIds.map((id: string) => workspaceNames.get(id) ?? id);
+    const capabilities = [...new Set(leases.flatMap((lease: any) => lease?.capabilities ?? []))];
     return {
       id: session.id,
       actor: session.actor,
       client: String(session.actor ?? '').replace(/^(oauth:|connector:)/, ''),
+      provider: authType(String(session.actor ?? '')),
       authType: authType(String(session.actor ?? '')),
       remoteIp: session.remoteIp ?? null,
-      workspaceId,
-      workspace: workspaceId ? (workspaceNames.get(String(workspaceId)) ?? workspaceId) : null,
-      capabilities: lease?.capabilities ?? [],
+      workspaceId: workspaceIds.length === 1 ? workspaceIds[0] : null,
+      workspace: workspaceLabels.join(', ') || null,
+      workspaces: workspaceLabels,
+      workspaceIds,
+      capabilities,
       yolo: session.yolo === true,
       connectedAt: session.createdAt,
       lastActivityAt: session.lastActivityAt,

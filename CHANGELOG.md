@@ -6,12 +6,19 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Connection detail modal with provider, YOLO badge, workspace grants, and revoke/session actions.
+- Guide chapter for Direct HTTPS, Caddy, Tailscale Funnel, FRP, reverse SSH, and ngrok managed/external tunnels.
 - Durable managed-process terminal status with `process_status` and bounded `process_wait`, including exit code, signal, finish time, duration, and terminal metadata in process lists/logs.
 - Detached `keep-running` process completion sidecars so Aevra can observe the child's final result after the helper exits.
 - MCP `outputSchema` metadata for stable public tools plus closed input schemas for the stable tool surface.
 - Dedicated `skills.read`, `skills.write`, `instructions.read`, and `instructions.write` capabilities.
 - `skill_write` and `instructions_write` tools with bounded, path-contained targets rather than general filesystem write authority.
 - Shared OpenCode-style React switch control used by permission capability choices.
+
+### Fixed
+
+- Missing `AEVRA_USERNAME`/`AEVRA_PASSWORD` now prints a friendly CLI message and exits instead of crashing with a stack trace.
+- ChatGPT OAuth handshake accepts omitted or origin-only `resource` values, CORS preflight on OAuth and `/mcp`, JSON token requests, and path-aware well-known metadata.
 
 ### Changed
 

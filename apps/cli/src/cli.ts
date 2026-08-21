@@ -123,89 +123,103 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     return 0;
   }
 
-  const config = loadCoreConfig();
+  if (command.command === 'completion') {
+    process.stdout.write(completionText(command.shell));
+    return 0;
+  }
+
+  let config;
+  try {
+    config = loadCoreConfig();
+  } catch (error) {
+    console.error(`[aevra] ${formatCliError(error)}`);
+    return 1;
+  }
+
   const admin = adminDependencies(config);
 
-  return dispatchCommand(command, {
-    help: async () => 0,
-    start: (current) =>
-      runStartCommand(config, current, {
-        run: (currentConfig, hooks) =>
-          runStart(currentConfig, {
-            signals: process,
-            createRuntime: createCoreRuntime,
-            onReady: hooks.onReady,
-          }),
-        readyLines,
-        openUi: async (currentConfig, destination) => {
-          const url = await createAuthenticatedUiUrl(currentConfig, admin, destination);
-          openBrowser(url);
-          console.error(`[aevra] Opening ${url}`);
-        },
-        error: console.error,
-        formatError: formatCliError,
-      }),
-    ui: (current) =>
-      runUiCommand(config, current, {
-        createUrl: (currentConfig) => createAuthenticatedUiUrl(currentConfig, admin),
-        revokeAll: (currentConfig) => revokeAllAdminSessions(currentConfig, admin),
-        openBrowser,
-        error: console.error,
-        formatError: formatCliError,
-      }),
-    setup: (current) =>
-      runSetupCommand(config, current, {
-        isInteractive: () => Boolean(process.stdin.isTTY),
-        prepare: setupResources,
-        needsAccess: cloudflareSetupNeedsAccess,
-        error: console.error,
-        formatError: formatCliError,
-      }),
-    service: (current) =>
-      runServiceCommand(
-        current,
-        createUserServiceAdapter(process.platform, process.execPath, process.argv[1]!),
-        {
+  try {
+    return await dispatchCommand(command, {
+      help: async () => 0,
+      start: (current) =>
+        runStartCommand(config, current, {
+          run: (currentConfig, hooks) =>
+            runStart(currentConfig, {
+              signals: process,
+              createRuntime: createCoreRuntime,
+              onReady: hooks.onReady,
+            }),
+          readyLines,
+          openUi: async (currentConfig, destination) => {
+            const url = await createAuthenticatedUiUrl(currentConfig, admin, destination);
+            openBrowser(url);
+            console.error(`[aevra] Opening ${url}`);
+          },
+          error: console.error,
+          formatError: formatCliError,
+        }),
+      ui: (current) =>
+        runUiCommand(config, current, {
+          createUrl: (currentConfig) => createAuthenticatedUiUrl(currentConfig, admin),
+          revokeAll: (currentConfig) => revokeAllAdminSessions(currentConfig, admin),
+          openBrowser,
+          error: console.error,
+          formatError: formatCliError,
+        }),
+      setup: (current) =>
+        runSetupCommand(config, current, {
+          isInteractive: () => Boolean(process.stdin.isTTY),
+          prepare: setupResources,
+          needsAccess: cloudflareSetupNeedsAccess,
+          error: console.error,
+          formatError: formatCliError,
+        }),
+      service: (current) =>
+        runServiceCommand(
+          current,
+          createUserServiceAdapter(process.platform, process.execPath, process.argv[1]!),
+          {
+            log: console.log,
+            error: console.error,
+            formatError: formatCliError,
+          },
+        ),
+      connectors: (current) =>
+        runConnectorsCommand(config, current, {
+          api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
           log: console.log,
           error: console.error,
           formatError: formatCliError,
-        },
-      ),
-    connectors: (current) =>
-      runConnectorsCommand(config, current, {
-        api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
-        log: console.log,
-        error: console.error,
-        formatError: formatCliError,
-      }),
-    status: (current) =>
-      runStatusCommand(config, current, {
-        fetch: (currentConfig, apiPath) =>
-          adminApi(currentConfig, apiPath, { method: 'GET' }, admin),
-        log: console.log,
-        error: console.error,
-        formatError: formatCliError,
-      }),
-    backup: (current) => runBackup(config, current),
-    audit: (current) =>
-      runMaintenanceCommand(config, current, {
-        api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
-        log: console.log,
-        error: console.error,
-        formatError: formatCliError,
-      }),
-    sessions: (current) =>
-      runMaintenanceCommand(config, current, {
-        api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
-        log: console.log,
-        error: console.error,
-        formatError: formatCliError,
-      }),
-    completion: async (current) => {
-      process.stdout.write(completionText(current.shell));
-      return 0;
-    },
-  });
+        }),
+      status: (current) =>
+        runStatusCommand(config, current, {
+          fetch: (currentConfig, apiPath) =>
+            adminApi(currentConfig, apiPath, { method: 'GET' }, admin),
+          log: console.log,
+          error: console.error,
+          formatError: formatCliError,
+        }),
+      backup: (current) => runBackup(config, current),
+      audit: (current) =>
+        runMaintenanceCommand(config, current, {
+          api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
+          log: console.log,
+          error: console.error,
+          formatError: formatCliError,
+        }),
+      sessions: (current) =>
+        runMaintenanceCommand(config, current, {
+          api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
+          log: console.log,
+          error: console.error,
+          formatError: formatCliError,
+        }),
+      completion: async () => 0,
+    });
+  } catch (error) {
+    console.error(`[aevra] ${formatCliError(error)}`);
+    return 1;
+  }
 }
 
 function isDirectCliEntry(moduleUrl: string, entryPath: string | undefined) {
@@ -218,7 +232,12 @@ function isDirectCliEntry(moduleUrl: string, entryPath: string | undefined) {
 }
 
 if (isDirectCliEntry(import.meta.url, process.argv[1])) {
-  void main().then((code) => {
-    process.exitCode = code;
-  });
+  void main()
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((error) => {
+      console.error(`[aevra] ${formatCliError(error)}`);
+      process.exitCode = 1;
+    });
 }

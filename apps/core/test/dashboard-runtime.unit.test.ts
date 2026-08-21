@@ -73,7 +73,9 @@ test('dashboard snapshot aggregates runtime state and active connections', () =>
   assert.equal(snapshot.stats.connectors, 2);
   assert.equal(snapshot.uptimeSeconds, 600);
   assert.equal(snapshot.activeConnections[0].authType, 'OAuth');
+  assert.equal(snapshot.activeConnections[0].provider, 'OAuth');
   assert.equal(snapshot.activeConnections[0].workspace, 'Aevra');
+  assert.deepEqual(snapshot.activeConnections[0].workspaces, ['Aevra']);
   assert.equal(snapshot.activeConnections[0].yolo, true);
   assert.equal(snapshot.activeConnections[1].authType, 'Bearer connector');
   assert.deepEqual(snapshot.connectors, [

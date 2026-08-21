@@ -329,3 +329,47 @@
     grid-template-columns: 1fr;
   }
 }
+
+.connection-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.connection-detail .details-grid > div span {
+  color: var(--mute);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.connection-workspaces {
+  display: grid;
+  gap: 8px;
+}
+
+.connection-workspaces h3 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.connection-workspaces ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-workspaces li,
+.connection-grant {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.connection-grant {
+  align-items: stretch;
+}

@@ -3,6 +3,7 @@ import { DataTable } from '../../components/DataTable';
 import { PageState } from '../../components/PageState';
 import { usePollingResource } from '../../hooks/use-polling-resource';
 import { ConnectorModal } from './ConnectorModal';
+import { ConnectionDetailModal, type ActiveConnection } from './ConnectionDetailModal';
 import { dashboardOrder } from './dashboard-order';
 import {
   completeOnboarding,
@@ -117,7 +118,12 @@ export function DashboardPage() {
   const resource = usePollingResource({ load: loadDashboard, intervalMs: 2000 });
   const [connectorModalOpen, setConnectorModalOpen] = useState(false);
   const [runtimeModal, setRuntimeModal] = useState<RuntimeModalKind | null>(null);
+  const [selectedConnection, setSelectedConnection] = useState<ActiveConnection | null>(null);
   const data = resource.data;
+  const selectedLive = selectedConnection?.id
+    ? ((data?.snapshot.activeConnections.find((row: any) => row.id === selectedConnection.id) as
+        ActiveConnection | undefined) ?? null)
+    : null;
 
   if (!data) {
     return (
@@ -183,6 +189,21 @@ export function DashboardPage() {
             { key: 'workspace', label: 'Workspace' },
             { key: 'capabilities', label: 'Capabilities' },
             { key: 'lastActivityAt', label: 'Last activity', dateTime: true },
+            {
+              key: 'actions',
+              label: '',
+              sortable: false,
+              search: false,
+              render: (row: any) => (
+                <button
+                  type="button"
+                  data-surface-id="connections:details"
+                  onClick={() => setSelectedConnection(row)}
+                >
+                  Details
+                </button>
+              ),
+            },
           ]}
           emptyText="No active remote connections."
         />
@@ -213,6 +234,12 @@ export function DashboardPage() {
         open={connectorModalOpen}
         onClose={() => setConnectorModalOpen(false)}
         onCreated={resource.refresh}
+      />
+      <ConnectionDetailModal
+        connection={selectedLive}
+        workspaces={data.workspaces}
+        onClose={() => setSelectedConnection(null)}
+        onChanged={resource.refresh}
       />
     </>
   );

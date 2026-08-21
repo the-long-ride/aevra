@@ -16,3 +16,5 @@
 14. [Security and authentication](13-security-authentication.md)
 15. [Troubleshooting](14-troubleshooting.md)
 16. [Explore Aevra](15-explore.md)
+17. [Safe command matchers](16-safe-command-matchers.md)
+18. [Tunnels and public HTTPS](17-tunnels.md)

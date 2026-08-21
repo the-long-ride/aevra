@@ -193,3 +193,73 @@ test('static connector Bearer works on /mcp while legacy path remains compatible
   await f.server.close();
   f.db.close();
 });
+
+test('ChatGPT discovery advertises CORS and completes token exchange without a resource parameter', async () => {
+  const f = await fixture();
+  const preflight = await fetch(`${f.base}/.well-known/oauth-authorization-server`, {
+    method: 'OPTIONS',
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get('access-control-allow-origin'), '*');
+  const mcpPreflight = await fetch(`${f.base}/mcp`, { method: 'OPTIONS' });
+  assert.equal(mcpPreflight.status, 204);
+  assert.equal(mcpPreflight.headers.get('access-control-allow-origin'), '*');
+  const unauthorized = await fetch(`${f.base}/mcp`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: '{}',
+  });
+  assert.equal(unauthorized.status, 401);
+  assert.equal(
+    unauthorized.headers.get('access-control-expose-headers'),
+    'WWW-Authenticate, MCP-Session-Id',
+  );
+  const pathAware = await fetch(`${f.base}/mcp/.well-known/oauth-protected-resource`);
+  assert.equal(pathAware.status, 200);
+  assert.equal(pathAware.headers.get('access-control-allow-origin'), '*');
+  assert.equal(((await pathAware.json()) as any).resource, 'https://mcp.example.com/mcp');
+
+  const registration = await fetch(`${f.base}/oauth/register`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify({
+      client_name: 'ChatGPT',
+      redirect_uris: ['https://chatgpt.com/connector_platform_oauth_redirect'],
+      token_endpoint_auth_method: 'none',
+    }),
+  });
+  assert.equal(registration.status, 201);
+  const client = (await registration.json()) as any;
+  const authorize = new URL(`${f.base}/oauth/authorize`);
+  authorize.searchParams.set('client_id', client.client_id);
+  authorize.searchParams.set('redirect_uri', client.redirect_uris[0]);
+  authorize.searchParams.set('response_type', 'code');
+  authorize.searchParams.set('scope', 'mcp offline_access');
+  authorize.searchParams.set('code_challenge', challenge);
+  authorize.searchParams.set('code_challenge_method', 'S256');
+  const authPage = await fetch(authorize);
+  assert.equal(authPage.status, 200);
+  const requestId = (await authPage.text()).match(/data-request-id="([^"]+)"/)?.[1];
+  assert.ok(requestId);
+  f.oauth.approveAuthorization(requestId);
+  const continued = await fetch(
+    `${f.base}/oauth/authorize/continue?request_id=${encodeURIComponent(requestId)}`,
+    { redirect: 'manual' },
+  );
+  const code = new URL(continued.headers.get('location')!).searchParams.get('code');
+  const tokenResponse = await fetch(`${f.base}/oauth/token`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      client_id: client.client_id,
+      code,
+      redirect_uri: client.redirect_uris[0],
+      code_verifier: verifier,
+    }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  assert.ok(((await tokenResponse.json()) as any).access_token);
+  await f.server.close();
+  f.db.close();
+});

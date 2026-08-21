@@ -24,3 +24,5 @@ Authentication is **OAuth**. Do not place an Admin password or connector secret 
 8. Complete the OAuth flow in ChatGPT.
 
 After connection, register or select a workspace before asking the client to access local files or run tools.
+
+If ChatGPT shows **Something went wrong with setting up the connection**, confirm Remote Access is ready, the MCP URL uses the effective public host with `/mcp`, and Aevra's OAuth metadata lists that same HTTPS origin. Then retry the connector setup and approve the pairing request in Aevra.

@@ -20,21 +20,26 @@ export async function runStartCommand<Config>(
   command: StartCommand,
   dependencies: StartCommandDependencies<Config>,
 ): Promise<number> {
-  return dependencies.run(config, {
-    async onReady(info) {
-      for (const line of dependencies.readyLines(info)) {
-        dependencies.error(line);
-      }
+  try {
+    return await dependencies.run(config, {
+      async onReady(info) {
+        for (const line of dependencies.readyLines(info)) {
+          dependencies.error(line);
+        }
 
-      if (!command.uiDestination) {
-        return;
-      }
+        if (!command.uiDestination) {
+          return;
+        }
 
-      try {
-        await dependencies.openUi(config, command.uiDestination);
-      } catch (error) {
-        dependencies.error(`[aevra] UI launch failed: ${dependencies.formatError(error)}`);
-      }
-    },
-  });
+        try {
+          await dependencies.openUi(config, command.uiDestination);
+        } catch (error) {
+          dependencies.error(`[aevra] UI launch failed: ${dependencies.formatError(error)}`);
+        }
+      },
+    });
+  } catch (error) {
+    dependencies.error(`[aevra] ${dependencies.formatError(error)}`);
+    return 1;
+  }
 }

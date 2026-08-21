@@ -18,7 +18,15 @@ export function usageText(): string {
 }
 
 export function formatCliError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (!(error instanceof Error)) return String(error);
+  const code = (error as Error & { code?: string }).code;
+  if (code === 'ADMIN_CREDENTIALS_REQUIRED') {
+    return [
+      error.message,
+      'Set both AEVRA_USERNAME and AEVRA_PASSWORD in the environment of the process that starts Aevra, then retry.',
+    ].join('\n');
+  }
+  return error.message;
 }
 
 export function readyLines(info: { adminUrl: string; mcpUrl: string }): string[] {
