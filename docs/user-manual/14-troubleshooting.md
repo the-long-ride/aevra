@@ -2,7 +2,7 @@
 
 ## Aevra refuses to start with ADMIN_CREDENTIALS_REQUIRED
 
-Set both `AEVRA_USERNAME` and `AEVRA_PASSWORD` in the environment of the process that starts Aevra. The username cannot be blank or whitespace-only, and an empty password is rejected.
+Set both `AEVRA_USERNAME` and `AEVRA_PASSWORD` in the environment of the process that starts Aevra, then retry. Aevra prints that message and exits; it does not dump a stack trace for this configuration error. The username cannot be blank or whitespace-only, and an empty password is rejected.
 
 ## The Web UI asks me to sign in again after restart
 

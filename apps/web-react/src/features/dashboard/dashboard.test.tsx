@@ -146,3 +146,19 @@ test('runtime overview opens process change tool and connector management modals
   expect(container.querySelector('[data-dashboard-section="tool-activity"]')).toBeNull();
   expect(container.querySelector('[data-dashboard-section="connections"]')).toBeNull();
 });
+
+test('active connections expose provider, YOLO badge, and a detail modal with session actions', async () => {
+  const user = userEvent.setup();
+  renderDashboard();
+  await screen.findByRole('heading', { name: 'Dashboard' });
+  const heading = await screen.findByText('Active connections');
+  const section = heading.closest('details');
+  expect(section).not.toBeNull();
+  expect(within(section as HTMLElement).getByText('YOLO')).toBeInTheDocument();
+  expect(within(section as HTMLElement).getAllByText('OAuth').length).toBeGreaterThan(0);
+  await user.click(within(section as HTMLElement).getByRole('button', { name: 'Details' }));
+  const dialog = await screen.findByRole('dialog', { name: 'ChatGPT' });
+  expect(within(dialog).getByText('YOLO')).toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: 'Disable YOLO' })).toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: 'Revoke session' })).toBeInTheDocument();
+});

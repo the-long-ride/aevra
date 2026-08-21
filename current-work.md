@@ -121,3 +121,19 @@ Harden secret/data isolation without changing unrelated MCP behavior.
 - [x] Remote Access settings and Dashboard status are provider-neutral, including custom tunnel guidance for Caddy, Tailscale Funnel, FRP, reverse SSH, and another ngrok process.
 - [x] Add Workspace uses one responsive modal with name and server path together, debounced server-side directory browsing, parent/child navigation, and a host-native `Browse on server` picker with inline fallback.
 - [x] Workspace registration canonicalizes the selected server path again; directory browsing and native picker routes remain authenticated Admin-only operations and are not exposed through MCP.
+
+## 2026-08-22 Checkpoint — remaining Tasks 10–16
+
+- [x] ADMIN_CREDENTIALS_REQUIRED now prints a friendly CLI/Core message and exits 1 instead of dumping a stack trace.
+- [x] Worker security fixture supplies AEVRA_USERNAME and AEVRA_PASSWORD.
+- [x] ChatGPT OAuth handshake: CORS/OPTIONS, path-aware well-known metadata, JSON token requests, omitted/origin-only resource aliases.
+- [x] Active connections expose YOLO badges, a detail modal, session revoke/YOLO, and extra workspace grants.
+- [x] Tunnel guide documents Direct, Caddy, Tailscale Funnel, FRP, reverse SSH, and ngrok managed/external modes.
+- [x] Security manual records session isolation, OS-local Worker IPC, and DLP/hash secret handling.
+
+## 2026-08-22 Checkpoint — Tasks 17-18
+
+- [x] ChatGPT CORS preflight now covers `/mcp` and exposes `WWW-Authenticate` to browser clients.
+- [x] OAuth HTML escaping restored so pairing codes cannot break out of the authorization page.
+- [x] Full verification previously passed (`lint`, `typecheck`, `npm test`, `build`, `git diff --check`); focused OAuth/credentials regressions re-run after the handshake fix.
+- [x] GitHub delivery: branch `feat/provider-neutral-access-auth-hardening`, commit, push, and open PR.

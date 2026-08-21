@@ -10,7 +10,7 @@ import { handleJsonRpc } from '../../../../packages/mcp-tools/src/register.js';
 import type { McpActivityLog } from './activity-log.js';
 import { McpActivityRecorder } from './activity-recorder.js';
 import { McpDiagnostics } from './diagnostics.js';
-import { bearerToken, readJson, remoteIp, sendJson } from './http-response.js';
+import { bearerToken, applyOAuthCors, readJson, remoteIp, sendJson } from './http-response.js';
 import { handleOAuthRoute } from './oauth-routes.js';
 import { aevraServerInfo } from './server-info.js';
 
@@ -332,8 +332,8 @@ export class McpIngressServer {
     if (!this.connectors) return { kind: 'denied' };
     return this.connectors.verify(token, remoteIp(req));
   }
-
   private unauthorized(res: ServerResponse) {
+    applyOAuthCors(res);
     if (this.options.oauth) {
       const metadata = `${this.options.oauth.issuer}/.well-known/oauth-protected-resource/mcp`;
       res.setHeader('www-authenticate', `Bearer resource_metadata="${metadata}", scope="mcp"`);

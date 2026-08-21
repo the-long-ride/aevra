@@ -9,6 +9,7 @@ import {
   SUPPORTED_SCOPES,
   base64urlSha256,
   normalizeScope,
+  resolvedResource,
   safeEqualText,
   validateRedirectUri,
 } from './oauth-helpers.js';
@@ -49,14 +50,14 @@ export interface AuthorizationCodeExchangeInput {
   code: string;
   redirect_uri: string;
   code_verifier: string;
-  resource: string;
+  resource?: string;
 }
 
 export interface RefreshTokenExchangeInput {
   grant_type: 'refresh_token';
   client_id: string;
   refresh_token: string;
-  resource: string;
+  resource?: string;
   scope?: string;
 }
 
@@ -191,8 +192,7 @@ export class AevraOAuthService {
     if (input.response_type !== 'code') throw new Error('response_type must be code');
     if (!client.redirectUris.includes(input.redirect_uri))
       throw new Error('redirect_uri does not exactly match the registered client');
-    if (input.resource !== this.resource)
-      throw new Error('resource does not match this MCP server');
+    const resource = resolvedResource(input.resource, this.resource);
     if (input.code_challenge_method !== 'S256')
       throw new Error('PKCE code_challenge_method must be S256');
     if (!input.code_challenge || input.code_challenge.length < 43)
@@ -203,7 +203,7 @@ export class AevraOAuthService {
         clientId: client.clientId,
         redirectUri: input.redirect_uri,
         scope,
-        resource: this.resource,
+        resource,
         codeChallenge: input.code_challenge,
         codeChallengeMethod: 'S256',
         state: input.state,
@@ -249,14 +249,13 @@ export class AevraOAuthService {
 
   exchangeAuthorizationCode(input: AuthorizationCodeExchangeInput): OAuthTokenResponse {
     if (input.grant_type !== 'authorization_code') throw new Error('unsupported grant_type');
-    if (input.resource !== this.resource)
-      throw new Error('resource does not match this MCP server');
+    const resource = resolvedResource(input.resource, this.resource);
     const code = this.repo.consumeAuthorizationCode(input.code);
     if (!code) throw new Error('invalid authorization code');
     if (
       code.clientId !== input.client_id ||
       code.redirectUri !== input.redirect_uri ||
-      code.resource !== input.resource
+      code.resource !== resource
     )
       throw new Error('authorization code binding mismatch');
     if (!input.code_verifier || input.code_verifier.length < 43)
@@ -268,10 +267,9 @@ export class AevraOAuthService {
 
   exchangeRefreshToken(input: RefreshTokenExchangeInput): OAuthTokenResponse {
     if (input.grant_type !== 'refresh_token') throw new Error('unsupported grant_type');
-    if (input.resource !== this.resource)
-      throw new Error('resource does not match this MCP server');
+    const resource = resolvedResource(input.resource, this.resource);
     const current = this.repo.findRefreshToken(input.refresh_token);
-    if (!current || current.clientId !== input.client_id || current.resource !== this.resource)
+    if (!current || current.clientId !== input.client_id || current.resource !== resource)
       throw new Error('invalid refresh token');
     const requestedScope = input.scope ? normalizeScope(input.scope) : current.scope;
     const currentScopes = new Set(current.scope.split(/\s+/));

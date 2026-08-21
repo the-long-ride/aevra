@@ -71,3 +71,25 @@ test('start keeps running when automatic UI launch fails', async () => {
   assert.equal(code, 4);
   assert.match(state.errors.at(-1)!, /UI launch failed: browser unavailable/);
 });
+
+test('start prints a friendly runtime error instead of crashing', async () => {
+  const state = fixture();
+  state.dependencies.run = async () => {
+    throw Object.assign(
+      new Error(
+        'ADMIN_CREDENTIALS_REQUIRED: AEVRA_USERNAME and AEVRA_PASSWORD must both be configured',
+      ),
+      { code: 'ADMIN_CREDENTIALS_REQUIRED' },
+    );
+  };
+  const code = await runStartCommand(
+    {},
+    { command: 'start', uiDestination: null },
+    state.dependencies,
+  );
+  assert.equal(code, 1);
+  assert.equal(
+    state.errors[0],
+    '[aevra] ADMIN_CREDENTIALS_REQUIRED: AEVRA_USERNAME and AEVRA_PASSWORD must both be configured',
+  );
+});

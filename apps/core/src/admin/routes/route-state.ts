@@ -34,6 +34,7 @@ export const GUIDE_CHAPTERS = [
     title: 'Safe command matchers',
     file: '16-safe-command-matchers.md',
   },
+  { slug: 'tunnels', title: 'Tunnels and public HTTPS', file: '17-tunnels.md' },
 ] as const;
 
 export const DEFAULT_ONBOARDING = {

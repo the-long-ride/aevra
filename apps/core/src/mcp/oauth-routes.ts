@@ -1,9 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AevraOAuthService } from '../auth/oauth.js';
 import {
+  applyOAuthCors,
   htmlEscape,
   readJson,
-  readText,
+  readOAuthParams,
   remoteIp,
   sendHtml,
   sendOAuthJson,
@@ -105,6 +106,30 @@ function oauthErrorPage(title: string, error: unknown) {
   return `<!doctype html><meta charset="utf-8"><title>Aevra authorization</title><body style="font-family:system-ui;background:#0a0a0a;color:#fff;padding:32px"><h1>${title}</h1><p>${message}</p></body>`;
 }
 
+function isProtectedResourceMetadata(path: string) {
+  return (
+    path === '/.well-known/oauth-protected-resource' ||
+    path === '/.well-known/oauth-protected-resource/mcp' ||
+    path === '/mcp/.well-known/oauth-protected-resource'
+  );
+}
+
+function isAuthorizationServerMetadata(path: string) {
+  return (
+    path === '/.well-known/oauth-authorization-server' ||
+    path === '/.well-known/oauth-authorization-server/mcp' ||
+    path === '/mcp/.well-known/oauth-authorization-server'
+  );
+}
+
+function isOAuthSurface(path: string) {
+  return (
+    path.startsWith('/oauth/') ||
+    path.startsWith('/.well-known/oauth-') ||
+    path.startsWith('/mcp/.well-known/oauth-')
+  );
+}
+
 export async function handleOAuthRoute(
   req: IncomingMessage,
   res: ServerResponse,
@@ -116,19 +141,21 @@ export async function handleOAuthRoute(
   const method = req.method ?? 'GET';
 
   if (
-    (path === '/.well-known/oauth-protected-resource' ||
-      path === '/.well-known/oauth-protected-resource/mcp') &&
-    method === 'GET'
+    method === 'OPTIONS' &&
+    (isOAuthSurface(path) || path === '/mcp' || path.startsWith('/mcp/'))
   ) {
+    applyOAuthCors(res);
+    res.statusCode = 204;
+    res.end();
+    return true;
+  }
+
+  if (isProtectedResourceMetadata(path) && method === 'GET') {
     sendOAuthJson(res, 200, oauth.protectedResourceMetadata());
     return true;
   }
 
-  if (
-    (path === '/.well-known/oauth-authorization-server' ||
-      path === '/.well-known/oauth-authorization-server/mcp') &&
-    method === 'GET'
-  ) {
+  if (isAuthorizationServerMetadata(path) && method === 'GET') {
     sendOAuthJson(res, 200, oauth.authorizationServerMetadata());
     return true;
   }
@@ -189,7 +216,7 @@ export async function handleOAuthRoute(
 
   if (path === '/oauth/token' && method === 'POST') {
     try {
-      const form = new URLSearchParams(await readText(req));
+      const form = await readOAuthParams(req);
       const grant = form.get('grant_type');
       let result;
       if (grant === 'authorization_code') {
@@ -199,14 +226,14 @@ export async function handleOAuthRoute(
           code: form.get('code') ?? '',
           redirect_uri: form.get('redirect_uri') ?? '',
           code_verifier: form.get('code_verifier') ?? '',
-          resource: form.get('resource') ?? '',
+          resource: form.get('resource') ?? undefined,
         });
       } else if (grant === 'refresh_token') {
         result = oauth.exchangeRefreshToken({
           grant_type: 'refresh_token',
           client_id: form.get('client_id') ?? '',
           refresh_token: form.get('refresh_token') ?? '',
-          resource: form.get('resource') ?? '',
+          resource: form.get('resource') ?? undefined,
           scope: form.get('scope') ?? undefined,
         });
       } else {
@@ -223,15 +250,17 @@ export async function handleOAuthRoute(
   }
 
   if (path === '/oauth/revoke' && method === 'POST') {
-    const form = new URLSearchParams(await readText(req));
+    const form = await readOAuthParams(req);
     oauth.revoke(form.get('token') ?? '');
+    applyOAuthCors(res);
     res.statusCode = 200;
     res.setHeader('cache-control', 'no-store');
     res.end();
     return true;
   }
 
-  if (path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-')) {
+  if (isOAuthSurface(path)) {
+    applyOAuthCors(res);
     res.statusCode = 404;
     res.setHeader('cache-control', 'no-store');
     res.end('Not Found');

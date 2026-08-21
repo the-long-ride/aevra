@@ -12,6 +12,8 @@ Aevra exposes one HTTPS Public Gateway for the Web UI, Admin API, MCP, OAuth, an
 
 Open **Settings > Remote Access** or the Remote Access section in Onboarding, choose the provider, save, then use **Test endpoint**. Aevra displays both the local gateway URL and the effective public URL when one exists.
 
+See [Tunnels and public HTTPS](17-tunnels.md) for Direct exposure, Caddy, Tailscale Funnel, FRP, reverse SSH, and ngrok managed/external examples.
+
 External / Custom mode does not automatically widen Aevra's bind address. If a reverse proxy runs on another machine, deliberately configure an appropriate network bind and trusted TLS rather than relying on forwarded headers from arbitrary clients.
 
 ## Transport boundary

@@ -35,3 +35,15 @@ Cloudflare Access is optional and may be layered in front of `/mcp` for deployme
 ## TLS and proxies
 
 Aevra rejects browser credential submission over plain HTTP. Direct HTTPS terminates TLS at Aevra. When a tunnel or reverse proxy terminates the public TLS connection, that provider is part of the transport trust boundary even though the origin connection to Aevra remains HTTPS.
+
+## Session isolation
+
+MCP sessions are keyed by actor and subject. An OAuth reconnect restores remembered workspace grants for that connection subject only. Revoking a session does not reveal another client's tokens, workspaces, or YOLO state.
+
+## Worker IPC
+
+The Execution Worker is reached only over a Unix domain socket or a Windows named pipe on the Aevra host. It is never exposed on TCP and is not reachable through the Public Gateway.
+
+## Secret handling
+
+Admin passwords stay in process environment and in-memory verifiers. Connector tokens, OAuth access tokens, and refresh tokens are stored as hashes. DLP redacts known secrets from remote command output before it leaves the Worker.
