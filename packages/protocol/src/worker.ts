@@ -6,10 +6,35 @@ import type {
   NetworkPolicy,
   ProcessLifecycle,
 } from './index.js';
+
+export type SearchQueryMode = 'text' | 'regex' | 'files';
+export interface NativeSearchQuery {
+  value: string;
+  mode: SearchQueryMode;
+  path: string;
+}
+
 export type WorkerOperation =
   | { kind: 'file.list'; path: string }
   | { kind: 'file.read'; path: string; offset?: number; length?: number }
   | { kind: 'file.search'; path: string; query: string }
+  | {
+      kind: 'search.multi';
+      queries: NativeSearchQuery[];
+      maxResultsPerQuery: number;
+    }
+  | {
+      kind: 'hook.run';
+      event: string;
+      hookKind: string;
+      executable: string;
+      args: string[];
+      env: Record<string, string>;
+      timeoutMs: number;
+      execution: 'run' | 'launch';
+      context: Record<string, unknown>;
+      payload: unknown;
+    }
   | { kind: 'file.create'; path: string; content: string; encoding: 'utf8' | 'base64' }
   | { kind: 'file.write'; path: string; content: string; encoding: 'utf8' | 'base64' }
   | { kind: 'file.patch'; path: string; patch: string }
@@ -38,6 +63,7 @@ export type WorkerOperation =
   | { kind: 'recovery.snapshot'; path: string; destination: string }
   | { kind: 'recovery.restore'; snapshot: string; path: string }
   | { kind: 'sandbox.inspect' };
+
 export interface OperationEnvelope {
   version: 1;
   daemonInstanceId: string;
@@ -53,6 +79,7 @@ export interface OperationEnvelope {
   expectedState?: Record<string, string>;
   mac: string;
 }
+
 export type VerifiedEnvelope = OperationEnvelope & { verifiedAt: string };
 export type WorkerResult =
   | { ok: true; value: unknown; observedState?: Record<string, string> }
@@ -60,10 +87,13 @@ export type WorkerResult =
       ok: false;
       error: { code: AevraErrorCode; message: string; details?: Record<string, unknown> };
     };
+
 const kinds = new Set([
   'file.list',
   'file.read',
   'file.search',
+  'search.multi',
+  'hook.run',
   'file.create',
   'file.write',
   'file.patch',
@@ -87,10 +117,12 @@ const kinds = new Set([
   'recovery.restore',
   'sandbox.inspect',
 ]);
+
 function obj(v: unknown): Record<string, unknown> {
   if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('Expected object');
   return v as Record<string, unknown>;
 }
+
 export function parseOperationEnvelope(value: unknown): OperationEnvelope {
   const r = obj(value);
   if (r.version !== 1) throw new Error('Unsupported envelope version');
@@ -105,10 +137,12 @@ export function parseOperationEnvelope(value: unknown): OperationEnvelope {
     'expiresAt',
     'nonce',
     'mac',
-  ])
+  ]) {
     if (typeof r[k] !== 'string' || !(r[k] as string).length) throw new Error(`Invalid ${k}`);
-  if (r.executionMode !== 'sandbox' && r.executionMode !== 'host')
+  }
+  if (r.executionMode !== 'sandbox' && r.executionMode !== 'host') {
     throw new Error('Invalid executionMode');
+  }
   if (!Array.isArray(r.capabilityRoots)) throw new Error('Invalid capabilityRoots');
   return r as unknown as OperationEnvelope;
 }

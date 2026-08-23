@@ -1,12 +1,28 @@
 import type { ExposureStatus, WorkspaceSummary } from '@aevra/admin-contracts';
 import { requestJson } from '../../services/api-client';
 
+export interface HookSetting {
+  id: string;
+  name: string;
+  event: string;
+  enabled: boolean;
+  kind: string;
+  execution: 'run' | 'launch';
+  executable: string;
+  args: string[];
+  env?: Record<string, string>;
+  permissions: string[];
+  timeoutMs: number;
+  failurePolicy: 'continue' | 'block';
+}
+
 export interface SettingsData {
   adminSettings: Record<string, unknown>;
   exposure: ExposureStatus;
   commandFamilies: Record<string, string>;
   networkRules: Array<Record<string, unknown>>;
   execution: Record<string, unknown>;
+  hooks: HookSetting[];
   profiles: Array<Record<string, unknown>>;
   secretRefs: Array<Record<string, unknown> | string>;
   workspaces: WorkspaceSummary[];
@@ -20,6 +36,7 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
     commandFamilies,
     networkRules,
     execution,
+    hooks,
     profiles,
     secretRefs,
     workspaces,
@@ -29,6 +46,7 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
     requestJson<Record<string, string>>('/api/policy/command-families', options),
     requestJson<Array<Record<string, unknown>>>('/api/policy/network-rules', options),
     requestJson<Record<string, unknown>>('/api/execution-settings', options),
+    requestJson<HookSetting[]>('/api/hooks', options),
     requestJson<Array<Record<string, unknown>>>('/api/environment-profiles', options),
     requestJson<Array<Record<string, unknown> | string>>('/api/secret-references', options),
     requestJson<WorkspaceSummary[]>('/api/workspaces', options),
@@ -39,6 +57,7 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
     commandFamilies,
     networkRules,
     execution,
+    hooks,
     profiles,
     secretRefs,
     workspaces,

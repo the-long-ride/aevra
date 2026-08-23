@@ -89,6 +89,13 @@ export class SessionManager {
     this.restoreConnectionWorkspaces(session);
     return session;
   }
+  getOrCreateForIdentity(identity: VerifiedRemoteIdentity, remoteIp?: string) {
+    const existing = [...this.sessions.values()].find(
+      (session) => session.actor === identity.actor && session.subject === identity.subject,
+    );
+    if (existing) return { session: existing, created: false };
+    return { session: this.create(identity, remoteIp), created: true };
+  }
   get(id: string) {
     return this.sessions.get(id) ?? null;
   }

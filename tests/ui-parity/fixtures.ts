@@ -106,6 +106,7 @@ export async function installAdminApi(page: Page, options: FixtureOptions = {}) 
     ],
     ['/api/environment-profiles', []],
     ['/api/secret-references', []],
+    ['/api/hooks', []],
     [
       '/api/guide',
       [

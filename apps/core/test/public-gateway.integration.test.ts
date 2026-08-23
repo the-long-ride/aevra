@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import https, { type Server } from 'node:https';
+import type { IncomingHttpHeaders } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -9,7 +10,7 @@ import { ensureLocalTls } from '../src/tls/local-tls.js';
 
 interface ResponseResult {
   status: number;
-  headers: https.IncomingHttpHeaders;
+  headers: IncomingHttpHeaders;
   body: string;
 }
 

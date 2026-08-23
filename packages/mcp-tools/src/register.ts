@@ -1,12 +1,20 @@
 import { toolDefinitions } from './registry.js';
 import { asToolError } from './errors.js';
 import type { McpToolService } from './service.js';
-function structuredContent(value: any) {
+
+function structuredContent(value: any, protocolVersion?: string) {
+  if (protocolVersion === '2026-07-28') return value;
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value
     : { result: value };
 }
-export async function handleJsonRpc(service: McpToolService, sessionId: string, body: any) {
+
+export async function handleJsonRpc(
+  service: McpToolService,
+  sessionId: string,
+  body: any,
+  protocolVersion?: string,
+) {
   const id = body?.id ?? null;
   try {
     if (body?.method === 'tools/list')
@@ -86,7 +94,7 @@ export async function handleJsonRpc(service: McpToolService, sessionId: string, 
         id,
         result: {
           content: [{ type: 'text', text: JSON.stringify(data) }],
-          structuredContent: structuredContent(data),
+          structuredContent: structuredContent(data, protocolVersion),
         },
       };
     }

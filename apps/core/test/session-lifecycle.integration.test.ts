@@ -19,6 +19,6 @@ test('restart invalidates sessions and leases', () => {
   m.admitWorkspace(s.id, 'w');
   m.invalidateForRestart();
   assert.equal(m.get(s.id), null);
-  assert.equal(db.raw().prepare('SELECT valid FROM sessions WHERE id=?').get(s.id).valid, 0);
+  assert.equal(db.raw().prepare('SELECT valid FROM sessions WHERE id=?').get(s.id)!.valid, 0);
   db.close();
 });

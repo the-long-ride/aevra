@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import https from 'node:https';
+import type { IncomingHttpHeaders } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -15,7 +16,7 @@ function request(
   server: AdminServer,
   pathname: string,
   options: { method?: string; headers?: Record<string, string>; body?: string } = {},
-): Promise<{ status: number; headers: https.IncomingHttpHeaders; body: string }> {
+): Promise<{ status: number; headers: IncomingHttpHeaders; body: string }> {
   const target = new URL(pathname, server.url());
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -43,7 +44,7 @@ function request(
   });
 }
 
-function cookie(response: { headers: https.IncomingHttpHeaders }) {
+function cookie(response: { headers: IncomingHttpHeaders }) {
   const raw = response.headers['set-cookie'];
   return (Array.isArray(raw) ? raw[0] : (raw ?? '')).split(';')[0];
 }

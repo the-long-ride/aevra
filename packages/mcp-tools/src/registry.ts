@@ -1,4 +1,5 @@
 import { emptySchema, inputSchemas, type JsonSchema } from './registry-input-schemas.js';
+import { searchInputSchema } from './search-tool.js';
 
 export const STABLE_TOOL_NAMES = [
   'aevra_status',
@@ -8,6 +9,7 @@ export const STABLE_TOOL_NAMES = [
   'file_list',
   'file_read',
   'file_search',
+  'search',
   'file_create',
   'file_write',
   'file_patch',
@@ -137,6 +139,7 @@ const readOnly = new Set<AevraToolName>([
   'file_list',
   'file_read',
   'file_search',
+  'search',
   'process_list',
   'process_status',
   'process_wait',
@@ -167,10 +170,11 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
   workspace_current: 'Show the workspace currently selected for this MCP session.',
   file_list: 'List files and directories under a logical path in the active workspace.',
   file_read: 'Read a file from the active workspace, with optional partial-read offsets.',
-  file_search: 'Search for text inside files in the active workspace.',
+  file_search: 'Search for one text value inside files in the active workspace.',
+  search:
+    'Search the codebase for multiple text, regex, or file-name values in parallel using native search tooling.',
   file_create: 'Create a file in the active workspace.',
-  file_write:
-    'Replace file content in the active workspace with optional expected-hash protection.',
+  file_write: 'Replace file content in the active workspace with optional expected-hash protection.',
   file_patch: 'Apply a patch to a file in the active workspace with optional conflict protection.',
   file_move: 'Move or rename a path inside the active workspace.',
   file_delete: 'Delete a file or directory inside the active workspace.',
@@ -183,8 +187,7 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
   process_status: 'Read durable state and exit information for one managed process.',
   process_wait:
     'Wait for one managed process for a bounded interval, returning terminal state immediately when it finishes.',
-  process_logs:
-    'Read logs and terminal state from a managed process owned by the active workspace.',
+  process_logs: 'Read logs and terminal state from a managed process owned by the active workspace.',
   process_stop: 'Stop one managed process owned by the active workspace.',
   process_restart: 'Restart one managed process owned by the active workspace.',
   git_status: 'Read Git status for the active workspace.',
@@ -213,7 +216,7 @@ export function toolDefinitions(): ToolDescriptor[] {
     description:
       descriptions[name] ??
       `Aevra ${name.startsWith('aevra_') ? name.slice('aevra_'.length) : name.replaceAll('_', ' ')}`,
-    inputSchema: inputSchemas[name] ?? emptySchema,
+    inputSchema: name === 'search' ? searchInputSchema : (inputSchemas[name] ?? emptySchema),
     outputSchema: outputSchemas[name] ?? anyObjectSchema,
     annotations: {
       readOnlyHint: readOnly.has(name),

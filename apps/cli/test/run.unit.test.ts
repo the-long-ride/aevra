@@ -30,6 +30,8 @@ test('readiness callback is awaited once before signal wait', async () => {
         return {
           adminUrl: 'https://localhost:1',
           mcpUrl: 'https://localhost:2',
+          gatewayUrl: 'http://127.0.0.1:3',
+          publicUrl: undefined,
           async start() {},
           async close() {},
         };
@@ -71,6 +73,8 @@ test('SIGINT closes runtime once', async () => {
         return {
           adminUrl: 'a',
           mcpUrl: 'm',
+          gatewayUrl: 'g',
+          publicUrl: undefined,
           async start() {},
           async close() {
             closes += 1;

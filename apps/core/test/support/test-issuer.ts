@@ -4,8 +4,8 @@ export function createTestIssuer(
   audience = 'aud-test',
 ) {
   const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  const jwk = publicKey.export({ format: 'jwk' }) as JsonWebKey;
-  jwk.kid = 'k1';
+  const jwk = publicKey.export({ format: 'jwk' });
+  jwk['kid'] = 'k1';
   const provider = {
     async get() {
       return { keys: [jwk] };

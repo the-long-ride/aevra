@@ -3,11 +3,22 @@ import test from 'node:test';
 import { linkSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { Capability } from '../../protocol/src/index.js';
 import { fileCreate, fileDelete, fileMove, fileRead, fileSearch, fileWrite } from '../src/files.js';
 
 const EXPECTED_MAX_FULL_FILE_BYTES = 16 * 1024 * 1024;
 
-function fixture(capabilities = ['files.read', 'files.search'] as const) {
+// fileRead returns a union across full/ranged reads; these tests only inspect
+// the ranged variant, which always carries offset/length/totalLength.
+type RangedFileRead = Awaited<ReturnType<typeof fileRead>> & {
+  offset: number;
+  length: number;
+  totalLength: number;
+};
+const asRanged = (read: Awaited<ReturnType<typeof fileRead>>): RangedFileRead =>
+  read as RangedFileRead;
+
+function fixture(capabilities: Capability[] = ['files.read', 'files.search']) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'aevra-sensitive-files-'));
   const roots = [
     {
@@ -73,12 +84,7 @@ test(
 );
 
 test('Executor rejects hard-link aliases when another in-workspace alias is SECRET', async () => {
-  const { root, roots } = fixture([
-    'files.read',
-    'files.search',
-    'files.write',
-    'files.delete',
-  ] as const);
+  const { root, roots } = fixture(['files.read', 'files.search', 'files.write', 'files.delete']);
   writeFileSync(path.join(root, '.env'), 'TOKEN=hardlink-secret-marker\n');
   linkSync(path.join(root, '.env'), path.join(root, 'alias.txt'));
 
@@ -103,12 +109,7 @@ test('normal hard-linked files remain readable and searchable', async () => {
 });
 
 test('Executor rejects direct SECRET mutations even if Core is bypassed', async () => {
-  const { root, roots } = fixture([
-    'files.read',
-    'files.search',
-    'files.write',
-    'files.delete',
-  ] as const);
+  const { root, roots } = fixture(['files.read', 'files.search', 'files.write', 'files.delete']);
   writeFileSync(path.join(root, '.env'), 'TOKEN=secret-value\n');
   writeFileSync(path.join(root, 'normal.txt'), 'normal\n');
 
@@ -126,7 +127,7 @@ test('fileRead range reads only the requested chunk and reports total length', a
   const { root, roots } = fixture();
   writeFileSync(path.join(root, 'large.txt'), '0123456789'.repeat(200_000));
 
-  const value = await fileRead('/large.txt', roots, { offset: 100, length: 32 });
+  const value = asRanged(await fileRead('/large.txt', roots, { offset: 100, length: 32 }));
   assert.equal(value.offset, 100);
   assert.equal(value.length, 32);
   assert.equal(value.content.length, 32);
@@ -137,7 +138,7 @@ test('ranged read preserves existing JS string offset semantics for multibyte UT
   const { root, roots } = fixture();
   writeFileSync(path.join(root, 'unicode.txt'), 'aéb');
 
-  const value = await fileRead('/unicode.txt', roots, { offset: 1, length: 1 });
+  const value = asRanged(await fileRead('/unicode.txt', roots, { offset: 1, length: 1 }));
   assert.equal(value.content, 'é');
   assert.equal(value.offset, 1);
   assert.equal(value.length, 1);

@@ -6,7 +6,7 @@ type Ownership = 'managed' | 'external';
 
 type CloudflareAuthMode = 'connector' | 'access';
 
-interface CloudflareSetupInput {
+export interface CloudflareSetupInput {
   hostname: string;
   tunnelId?: string;
   authMode: CloudflareAuthMode;

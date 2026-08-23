@@ -21,6 +21,14 @@ export function sanitizeCommandOutput(
 export async function runCommand(input: CommandInput, cwd?: string): Promise<CommandResult> {
   const started = Date.now();
   return await new Promise((resolve, reject) => {
+    let settled = false;
+    let timedOut = false;
+    let stdout = '',
+      stderr = '',
+      stdoutTruncated = false,
+      stderrTruncated = false;
+    // Resolve on 'close', never on 'exit': 'exit' can fire before the stdio
+    // pipes have flushed, which silently truncated command output.
     const child = spawn(input.executable, input.args, {
       cwd,
       env: buildChildEnvironment(input.env),
@@ -28,11 +36,6 @@ export async function runCommand(input: CommandInput, cwd?: string): Promise<Com
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    let stdout = '',
-      stderr = '',
-      stdoutTruncated = false,
-      stderrTruncated = false,
-      timedOut = false;
     const timer = input.timeoutMs
       ? setTimeout(() => {
           timedOut = true;
@@ -49,15 +52,22 @@ export async function runCommand(input: CommandInput, cwd?: string): Promise<Com
       stderr = next.value;
       stderrTruncated = stderrTruncated || next.truncated;
     });
-    child.once('error', reject);
-    child.once('exit', (code, signal) => {
+    child.once('error', (error) => {
+      // Failed spawns never emit 'exit'; clear the pending timeout here.
       if (timer) clearTimeout(timer);
-      const secrets = Object.values(input.env);
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
+    child.once('close', (code, signal) => {
+      if (timer) clearTimeout(timer);
+      if (settled) return;
+      settled = true;
       resolve({
         exitCode: code,
         signal: signal ?? (timedOut ? 'SIGTERM' : null),
-        stdout: sanitizeCommandOutput(stdout, secrets, stdoutTruncated),
-        stderr: sanitizeCommandOutput(stderr, secrets, stderrTruncated),
+        stdout: sanitizeCommandOutput(stdout, Object.values(input.env), stdoutTruncated),
+        stderr: sanitizeCommandOutput(stderr, Object.values(input.env), stderrTruncated),
         durationMs: Date.now() - started,
       });
     });

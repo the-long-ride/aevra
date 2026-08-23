@@ -3,7 +3,7 @@ name: Cancel stale branch runs
 on:
   push:
     branches:
-      - feat/mcp-long-running-processes-permissions-switches
+      - feat/mcp-2.0-migration
 
 permissions:
   actions: write

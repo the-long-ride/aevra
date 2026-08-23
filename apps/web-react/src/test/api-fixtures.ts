@@ -146,6 +146,7 @@ export function installApiFixtures(options: FixtureOptions = {}) {
         workspaceDrainMs: 60000,
       },
     ],
+    ['/api/hooks', []],
     ['/api/environment-profiles', []],
     ['/api/secret-references', []],
     [

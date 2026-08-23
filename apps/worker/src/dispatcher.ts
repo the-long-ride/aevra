@@ -9,6 +9,8 @@ import {
   fileDelete,
 } from '../../../packages/executor/src/files.js';
 import { runCommand } from '../../../packages/executor/src/commands.js';
+import { nativeMultiSearch } from '../../../packages/executor/src/native-search.js';
+import { runHookProcess } from '../../../packages/executor/src/hook-process.js';
 import {
   gitStatus,
   gitDiff,
@@ -22,47 +24,64 @@ import { snapshotFile, restoreFile } from '../../../packages/executor/src/recove
 import { processRuntime } from './process-runtime.js';
 import { DockerBackend } from '../../../packages/executor/src/docker.js';
 import { PodmanBackend } from '../../../packages/executor/src/podman.js';
+
 export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promise<WorkerResult> {
   try {
-    const op = envelope.operation,
-      roots = envelope.capabilityRoots;
+    const op = envelope.operation;
+    const roots = envelope.capabilityRoots;
     if (op.kind === 'file.list') return { ok: true, value: await fileList(op.path, roots) };
-    if (op.kind === 'file.read')
+    if (op.kind === 'file.read') {
       return {
         ok: true,
         value: await fileRead(op.path, roots, { offset: op.offset, length: op.length }),
       };
-    if (op.kind === 'file.search')
+    }
+    if (op.kind === 'file.search') {
       return { ok: true, value: await fileSearch(op.path, op.query, roots) };
-    if (op.kind === 'file.create')
+    }
+    if (op.kind === 'search.multi') {
+      return {
+        ok: true,
+        value: await nativeMultiSearch(op.queries, roots, op.maxResultsPerQuery),
+      };
+    }
+    if (op.kind === 'hook.run') return { ok: true, value: await runHookProcess(op) };
+    if (op.kind === 'file.create') {
       return { ok: true, value: await fileCreate(op.path, op.content, roots, op.encoding) };
-    if (op.kind === 'file.write')
+    }
+    if (op.kind === 'file.write') {
       return { ok: true, value: await fileWrite(op.path, op.content, roots, op.encoding) };
+    }
     if (op.kind === 'file.move') return { ok: true, value: await fileMove(op.from, op.to, roots) };
-    if (op.kind === 'file.delete')
+    if (op.kind === 'file.delete') {
       return { ok: true, value: await fileDelete(op.path, op.recursive, roots) };
-    if (op.kind === 'sandbox.inspect')
+    }
+    if (op.kind === 'sandbox.inspect') {
       return { ok: true, value: { ready: true, backend: 'worker' } };
+    }
     if (op.kind === 'process.list') return { ok: true, value: processRuntime.list() };
-    if (op.kind === 'process.status')
-      return { ok: true, value: processRuntime.status(op.processId) };
-    if (op.kind === 'process.wait')
+    if (op.kind === 'process.status') return { ok: true, value: processRuntime.status(op.processId) };
+    if (op.kind === 'process.wait') {
       return { ok: true, value: await processRuntime.wait(op.processId, op.timeoutMs) };
-    if (op.kind === 'process.logs')
+    }
+    if (op.kind === 'process.logs') {
       return { ok: true, value: processRuntime.logs(op.processId, Number(op.cursor ?? 0)) };
+    }
     if (op.kind === 'process.stop') return { ok: true, value: processRuntime.stop(op.processId) };
-    if (op.kind === 'process.restart')
+    if (op.kind === 'process.restart') {
       return { ok: true, value: processRuntime.restart(op.processId) };
+    }
+
     const cwd = (await resolveCapabilityPath('/', roots, 'command')).canonicalHostPath;
     if (op.kind === 'command.run') {
       if (envelope.executionMode === 'sandbox') {
-        const all = [new DockerBackend(), new PodmanBackend()],
-          backends =
-            op.sandboxBackend === 'docker'
-              ? [all[0]!]
-              : op.sandboxBackend === 'podman'
-                ? [all[1]!]
-                : all;
+        const all = [new DockerBackend(), new PodmanBackend()];
+        const backends =
+          op.sandboxBackend === 'docker'
+            ? [all[0]!]
+            : op.sandboxBackend === 'podman'
+              ? [all[1]!]
+              : all;
         for (const backend of backends) {
           if (await backend.available()) {
             const handle = await backend.prepare({
@@ -92,20 +111,25 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
       }
       return { ok: true, value: await runCommand(op.command, cwd) };
     }
-    if (op.kind === 'process.start')
+    if (op.kind === 'process.start') {
       return { ok: true, value: processRuntime.start(op.command, cwd, op.lifecycle) };
+    }
     if (op.kind === 'git.status') return { ok: true, value: await gitStatus(cwd) };
     if (op.kind === 'git.diff') return { ok: true, value: await gitDiff(cwd, op.args) };
     if (op.kind === 'git.log') return { ok: true, value: await gitLog(cwd, op.args) };
     if (op.kind === 'git.branch') return { ok: true, value: await gitBranch(cwd, op.args) };
-    if (op.kind === 'git.commit')
+    if (op.kind === 'git.commit') {
       return { ok: true, value: await gitCommit(cwd, op.message, op.args) };
-    if (op.kind === 'git.push')
+    }
+    if (op.kind === 'git.push') {
       return { ok: true, value: await gitPush(cwd, op.remote, op.branch, op.args) };
-    if (op.kind === 'recovery.snapshot')
+    }
+    if (op.kind === 'recovery.snapshot') {
       return { ok: true, value: await snapshotFile(op.path, op.destination, roots) };
-    if (op.kind === 'recovery.restore')
+    }
+    if (op.kind === 'recovery.restore') {
       return { ok: true, value: await restoreFile(op.snapshot, op.path, roots) };
+    }
     return {
       ok: false,
       error: { code: 'CAPABILITY_REQUIRED', message: `Operation ${op.kind} is not enabled yet` },

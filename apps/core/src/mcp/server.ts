@@ -1,16 +1,19 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https, { type ServerOptions as HttpsServerOptions } from 'node:https';
-import {
-  RejectingIdentityVerifier,
-  type RemoteIdentityVerifier,
-  type VerifiedRemoteIdentity,
-} from '../auth/cloudflare.js';
+import type { RemoteIdentityVerifier, VerifiedRemoteIdentity } from '../auth/cloudflare.js';
 import type { AevraOAuthService } from '../auth/oauth.js';
 import { handleJsonRpc } from '../../../../packages/mcp-tools/src/register.js';
 import type { McpActivityLog } from './activity-log.js';
 import { McpActivityRecorder } from './activity-recorder.js';
 import { McpDiagnostics } from './diagnostics.js';
-import { bearerToken, applyOAuthCors, readJson, remoteIp, sendJson } from './http-response.js';
+import { readJson, remoteIp, sendJson } from './http-response.js';
+import {
+  resolveMcpIdentity,
+  type ConnectorAdmission,
+  type ConnectorAdmissionOutcome,
+} from './identity-resolver.js';
+import { handleModernRuntimeRequest, type McpHookEmitter } from './modern-runtime.js';
+import { MODERN_PROTOCOL_VERSION, isModernRequest } from './modern-protocol.js';
 import { handleOAuthRoute } from './oauth-routes.js';
 import { aevraServerInfo } from './server-info.js';
 
@@ -25,14 +28,8 @@ export interface McpSessionRuntime {
   service: any;
 }
 
-export type ConnectorAdmissionOutcome =
-  | { kind: 'admitted'; identity: VerifiedRemoteIdentity }
-  | { kind: 'denied' }
-  | { kind: 'rate-limited' };
-
-export interface ConnectorAdmission {
-  verify(token: string, ip: string): Promise<ConnectorAdmissionOutcome>;
-}
+export type { ConnectorAdmissionOutcome };
+export type { ConnectorAdmission };
 
 export interface McpIngressServerOptions {
   tls?: HttpsServerOptions;
@@ -40,10 +37,10 @@ export interface McpIngressServerOptions {
   plainMcpEnabled?: boolean;
   oauth?: AevraOAuthService;
   activity?: McpActivityLog;
+  hooks?: McpHookEmitter;
 }
 
 const LEGACY_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] as const;
-const MODERN_PROTOCOL_VERSION = '2026-07-28';
 
 function protocolHeader(req: IncomingMessage) {
   const value = req.headers['mcp-protocol-version'];
@@ -69,9 +66,12 @@ function unsupportedProtocol(res: ServerResponse, id: unknown, requested: string
     jsonrpc: '2.0',
     id: id ?? null,
     error: {
-      code: -32602,
+      code: -32022,
       message: 'Unsupported protocol version',
-      data: { supported: [...LEGACY_PROTOCOL_VERSIONS], requested },
+      data: {
+        supported: [MODERN_PROTOCOL_VERSION, ...LEGACY_PROTOCOL_VERSIONS],
+        requested,
+      },
     },
   });
 }
@@ -84,7 +84,7 @@ export class McpIngressServer {
   constructor(
     private host: string,
     private port: number,
-    private verifier: RemoteIdentityVerifier = new RejectingIdentityVerifier(),
+    private verifier?: RemoteIdentityVerifier,
     private handler?: McpRequestHandler,
     private safeMode: () => boolean = () => false,
     private runtime?: McpSessionRuntime,
@@ -156,26 +156,13 @@ export class McpIngressServer {
       return;
     }
 
-    let identity: VerifiedRemoteIdentity;
-    if (connectorMatch) {
-      const outcome = await this.verifyConnector(connectorMatch[1]!, req);
-      if (outcome.kind === 'rate-limited') {
-        sendJson(res, 429, { error: 'rate_limited' });
-        return;
-      }
-      if (outcome.kind !== 'admitted') {
-        this.unauthorized(res);
-        return;
-      }
-      identity = outcome.identity;
-    } else {
-      const resolved = await this.resolvePlainIdentity(req);
-      if (!resolved) {
-        this.unauthorized(res);
-        return;
-      }
-      identity = resolved;
-    }
+    const identity = await resolveMcpIdentity(req, res, connectorMatch?.[1], {
+      verifier: this.verifier,
+      connectors: this.connectors,
+      oauth: this.options.oauth,
+      plainMcpEnabled: this.options.plainMcpEnabled,
+    });
+    if (!identity) return;
 
     if (this.handler) {
       await this.handler(req, res, identity);
@@ -204,22 +191,9 @@ export class McpIngressServer {
     const sessionId = typeof sessionHeader === 'string' ? sessionHeader : undefined;
 
     if (req.method === 'DELETE') {
-      if (!sessionId) {
-        sendJson(res, 400, { error: 'MCP session id required' });
-        return;
-      }
-      if (!this.sameIdentity(sessionId, identity)) {
-        sendJson(res, 404, { error: 'MCP session not found' });
-        return;
-      }
-      this.diagnostics.recordIdentity(identity.actor, sessionId);
-      this.activity.session(identity.actor, sessionId, 'disconnect');
-      this.runtime!.sessions.disconnect(sessionId);
-      res.statusCode = 204;
-      res.end();
+      this.disconnectLegacySession(res, sessionId, identity);
       return;
     }
-
     if (req.method !== 'POST') {
       sendJson(res, 405, { error: 'method not allowed' });
       return;
@@ -227,37 +201,25 @@ export class McpIngressServer {
 
     const body = await readJson(req);
     this.diagnostics.recordMethod(body?.method);
-    const protocol = requestedProtocol(req, body);
-    if (protocol === MODERN_PROTOCOL_VERSION) {
-      unsupportedProtocol(res, body?.id, protocol);
-      return;
-    }
-    if (body?.method === 'server/discover') {
-      unsupportedProtocol(res, body?.id, protocol || MODERN_PROTOCOL_VERSION);
-      return;
-    }
-
-    if (body?.method === 'initialize') {
-      const session = this.runtime!.sessions.create(identity, remoteIp(req));
-      this.diagnostics.recordIdentity(identity.actor, session.id);
-      this.activity.session(identity.actor, session.id, 'initialize');
-      res.setHeader('mcp-session-id', session.id);
-      sendJson(res, 200, {
-        jsonrpc: '2.0',
-        id: body.id ?? null,
-        result: {
-          protocolVersion: legacyProtocol(body.params?.protocolVersion),
-          capabilities: {
-            tools: { listChanged: false },
-            resources: { listChanged: false },
-            prompts: { listChanged: false },
-          },
-          serverInfo: aevraServerInfo(),
-        },
+    if (isModernRequest(req, body)) {
+      await handleModernRuntimeRequest(req, res, identity, body, {
+        runtime: this.runtime!,
+        diagnostics: this.diagnostics,
+        activity: this.activity,
+        hooks: this.options.hooks,
       });
       return;
     }
 
+    const protocol = requestedProtocol(req, body);
+    if (protocol && !LEGACY_PROTOCOL_VERSIONS.includes(protocol as any)) {
+      unsupportedProtocol(res, body?.id, protocol);
+      return;
+    }
+    if (body?.method === 'initialize') {
+      this.initializeLegacySession(req, res, identity, body);
+      return;
+    }
     if (!sessionId) {
       sendJson(res, 400, { error: 'MCP session id required' });
       return;
@@ -269,21 +231,71 @@ export class McpIngressServer {
 
     this.diagnostics.recordIdentity(identity.actor, sessionId);
     this.runtime!.sessions.touch(sessionId);
-    if (
-      body?.id === undefined &&
-      typeof body?.method === 'string' &&
-      body.method.startsWith('notifications/')
-    ) {
+    if (body?.id === undefined && String(body?.method ?? '').startsWith('notifications/')) {
       res.statusCode = 202;
       res.setHeader('cache-control', 'no-store');
       res.end();
       return;
     }
+    await this.dispatchLegacyRpc(res, identity.actor, sessionId, body);
+  }
+
+  private initializeLegacySession(
+    req: IncomingMessage,
+    res: ServerResponse,
+    identity: VerifiedRemoteIdentity,
+    body: any,
+  ) {
+    const session = this.runtime!.sessions.create(identity, remoteIp(req));
+    this.diagnostics.recordIdentity(identity.actor, session.id);
+    this.activity.session(identity.actor, session.id, 'initialize');
+    res.setHeader('mcp-session-id', session.id);
+    sendJson(res, 200, {
+      jsonrpc: '2.0',
+      id: body.id ?? null,
+      result: {
+        protocolVersion: legacyProtocol(body.params?.protocolVersion),
+        capabilities: {
+          tools: { listChanged: false },
+          resources: { listChanged: false },
+          prompts: { listChanged: false },
+        },
+        serverInfo: aevraServerInfo(),
+      },
+    });
+  }
+
+  private disconnectLegacySession(
+    res: ServerResponse,
+    sessionId: string | undefined,
+    identity: VerifiedRemoteIdentity,
+  ) {
+    if (!sessionId) {
+      sendJson(res, 400, { error: 'MCP session id required' });
+      return;
+    }
+    if (!this.sameIdentity(sessionId, identity)) {
+      sendJson(res, 404, { error: 'MCP session not found' });
+      return;
+    }
+    this.diagnostics.recordIdentity(identity.actor, sessionId);
+    this.activity.session(identity.actor, sessionId, 'disconnect');
+    this.runtime!.sessions.disconnect(sessionId);
+    res.statusCode = 204;
+    res.end();
+  }
+
+  private async dispatchLegacyRpc(
+    res: ServerResponse,
+    actor: string,
+    sessionId: string,
+    body: any,
+  ) {
     if (body?.method === 'tools/call') {
       this.diagnostics.recordToolCall(body?.params?.name, sessionId);
     }
     const activity = this.activity.begin(
-      identity.actor,
+      actor,
       sessionId,
       body?.method,
       body?.params?.name,
@@ -297,48 +309,6 @@ export class McpIngressServer {
       this.activity.fail(activity, error);
       throw error;
     }
-  }
-
-  private async resolvePlainIdentity(req: IncomingMessage) {
-    const token = bearerToken(req);
-    if (token) return this.verifyBearerToken(token, req);
-    if (this.options.plainMcpEnabled === false) return null;
-    try {
-      return await this.verifier.verifyRequest(req);
-    } catch {
-      return null;
-    }
-  }
-
-  private async verifyBearerToken(
-    token: string,
-    req: IncomingMessage,
-  ): Promise<VerifiedRemoteIdentity | null> {
-    if (this.options.oauth) {
-      try {
-        return this.options.oauth.verifyAccessToken(token);
-      } catch {
-        // Fall through to static connector verification.
-      }
-    }
-    const connector = await this.verifyConnector(token, req);
-    return connector.kind === 'admitted' ? connector.identity : null;
-  }
-
-  private async verifyConnector(
-    token: string,
-    req: IncomingMessage,
-  ): Promise<ConnectorAdmissionOutcome> {
-    if (!this.connectors) return { kind: 'denied' };
-    return this.connectors.verify(token, remoteIp(req));
-  }
-  private unauthorized(res: ServerResponse) {
-    applyOAuthCors(res);
-    if (this.options.oauth) {
-      const metadata = `${this.options.oauth.issuer}/.well-known/oauth-protected-resource/mcp`;
-      res.setHeader('www-authenticate', `Bearer resource_metadata="${metadata}", scope="mcp"`);
-    }
-    sendJson(res, 401, { error: 'unauthorized' });
   }
 
   private sameIdentity(sessionId: string, identity: VerifiedRemoteIdentity) {

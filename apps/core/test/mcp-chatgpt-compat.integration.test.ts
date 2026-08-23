@@ -24,6 +24,9 @@ function runtimeFixture() {
         get(id: string) {
           return sessions.get(id);
         },
+        list() {
+          return [...sessions.values()];
+        },
         touch() {},
         disconnect(id: string) {
           sessions.delete(id);
@@ -126,7 +129,7 @@ test('OAuth discovery responses are explicitly non-cacheable', async () => {
   }
 });
 
-test('post-OAuth modern MCP probe does not masquerade as an authentication failure', async () => {
+test('post-OAuth modern MCP discovery succeeds without a protocol session', async () => {
   const { runtime } = runtimeFixture();
   const server = new McpIngressServer(
     '127.0.0.1',
@@ -155,19 +158,16 @@ test('post-OAuth modern MCP probe does not masquerade as an authentication failu
           _meta: {
             'io.modelcontextprotocol/protocolVersion': '2026-07-28',
             'io.modelcontextprotocol/clientInfo': { name: 'ChatGPT', version: '1' },
+            'io.modelcontextprotocol/clientCapabilities': {},
           },
         },
       }),
     });
-    assert.equal(
-      response.status,
-      400,
-      'unsupported modern MCP must negotiate/fallback, not trigger OAuth reauthentication',
-    );
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('mcp-session-id'), null);
     const value = (await response.json()) as any;
-    assert.equal(value?.error?.code, -32602);
-    assert.equal(value?.error?.data?.requested, '2026-07-28');
-    assert.ok(value?.error?.data?.supported?.includes('2025-11-25'));
+    assert.deepEqual(value?.result?.supportedVersions, ['2026-07-28']);
+    assert.equal(value?.result?._meta?.['io.modelcontextprotocol/serverInfo']?.name, 'Aevra');
   } finally {
     await server.close();
   }

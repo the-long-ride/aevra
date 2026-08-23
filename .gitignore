@@ -10,3 +10,4 @@ docs/superpowers/
 .coverage-dist/
 test-results/
 playwright-report/
+coverage/

@@ -14,17 +14,20 @@ import { commandTool, shellTool } from './command-tools.js';
 import { AevraToolError } from './errors.js';
 import { FILE_TOOL_NAMES, handleFileTool } from './file-tools.js';
 import { GIT_TOOL_NAMES, gitTool } from './git-tools.js';
+import { HookService } from './hook-service.js';
 import {
   handleProcessChangeTool,
   processStart,
   PROCESS_CHANGE_TOOL_NAMES,
 } from './process-change-tools.js';
+import { searchTool } from './search-tool.js';
 import { resolveWorkspaceLease } from './service-helpers.js';
 import type { McpRuntimeContext, McpToolDependencies, WorkerGateway } from './service-types.js';
 
 const TARGETED_WORKSPACE_TOOLS = new Set([
   ...FILE_TOOL_NAMES,
   ...GIT_TOOL_NAMES,
+  'search',
   'command_run',
   'shell_run',
   'process_start',
@@ -44,6 +47,26 @@ function needsWorkspaceTarget(name: string, args: any) {
   return false;
 }
 
+function transformedToolCall(payload: unknown, fallbackName: string, fallbackArgs: any) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new AevraToolError('INVALID_REQUEST', 'Hook tool transformation must return an object payload');
+  }
+  const value = payload as Record<string, unknown>;
+  const name = String(value.name ?? fallbackName).trim();
+  const args = Object.prototype.hasOwnProperty.call(value, 'args') ? value.args : fallbackArgs;
+  if (!name) throw new AevraToolError('INVALID_REQUEST', 'Hook tool transformation requires a tool name');
+  if (!args || typeof args !== 'object' || Array.isArray(args)) {
+    throw new AevraToolError('INVALID_REQUEST', 'Hook tool transformation requires object arguments');
+  }
+  return { name, args };
+}
+
+function transformedToolResult(payload: unknown, fallback: unknown) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return fallback;
+  const value = payload as Record<string, unknown>;
+  return Object.prototype.hasOwnProperty.call(value, 'result') ? value.result : fallback;
+}
+
 export type {
   McpToolDependencies,
   MetricsSink,
@@ -53,6 +76,7 @@ export type {
 
 export class McpToolService {
   private readonly oneTimeCapabilities = new Set<string>();
+  readonly hooks?: HookService;
 
   constructor(
     private readonly sessions: SessionManager,
@@ -61,12 +85,40 @@ export class McpToolService {
     private readonly reads: ReadVersionCache,
     private readonly approvals?: ApprovalService,
     private readonly deps: McpToolDependencies = {},
-  ) {}
+  ) {
+    if (deps.settings) this.hooks = new HookService(deps.settings, worker);
+  }
 
   async call(sessionId: string, name: string, args: any = {}) {
     const startedAt = Date.now();
+    const session = this.sessions.get(sessionId);
+    const hookContext = {
+      sessionId,
+      actor: session?.actor,
+      subject: session?.subject,
+      tool: name,
+    };
     try {
-      return await this.callInner(sessionId, name, args);
+      const before = await this.hooks?.emit('before_tool_call', hookContext, { name, args });
+      if (before?.blocked) {
+        throw new AevraToolError('INVALID_REQUEST', before.reason ?? `Hook blocked ${name}`);
+      }
+      const effective = before
+        ? transformedToolCall(before.payload, name, args)
+        : { name, args };
+      const result = await this.callInner(sessionId, effective.name, effective.args);
+      const after = await this.hooks?.emit(
+        'after_tool_call',
+        { ...hookContext, tool: effective.name },
+        { name: effective.name, result },
+      );
+      return after ? transformedToolResult(after.payload, result) : result;
+    } catch (error) {
+      await this.hooks?.emit('after_tool_call', hookContext, {
+        name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     } finally {
       this.deps.metrics?.record(name, Date.now() - startedAt);
     }
@@ -89,9 +141,7 @@ export class McpToolService {
 
   private async callInner(sessionId: string, name: string, args: any = {}) {
     const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new AevraToolError('UNAUTHORIZED', 'Unknown Aevra session');
-    }
+    if (!session) throw new AevraToolError('UNAUTHORIZED', 'Unknown Aevra session');
     const baseContext = this.context();
     const workspaceLease = needsWorkspaceTarget(name, args)
       ? resolveWorkspaceLease(baseContext, sessionId, args)
@@ -99,25 +149,15 @@ export class McpToolService {
     this.sessions.touch(sessionId, workspaceLease?.workspaceId);
     const context = this.context(workspaceLease?.workspaceId);
 
-    if (BASIC_TOOL_NAMES.has(name)) {
-      return handleBasicTool(context, sessionId, name, args);
-    }
-    if (FILE_TOOL_NAMES.has(name)) {
-      return handleFileTool(context, sessionId, name, args);
-    }
-    if (name === 'command_run') {
-      return commandTool(context, sessionId, args);
-    }
-    if (name === 'shell_run') {
-      return shellTool(context, sessionId, args);
-    }
-    if (GIT_TOOL_NAMES.has(name)) {
-      return gitTool(context, sessionId, name, args);
-    }
+    if (BASIC_TOOL_NAMES.has(name)) return handleBasicTool(context, sessionId, name, args);
+    if (FILE_TOOL_NAMES.has(name)) return handleFileTool(context, sessionId, name, args);
+    if (name === 'search') return searchTool(context, sessionId, args);
+    if (name === 'command_run') return commandTool(context, sessionId, args);
+    if (name === 'shell_run') return shellTool(context, sessionId, args);
+    if (GIT_TOOL_NAMES.has(name)) return gitTool(context, sessionId, name, args);
     if (PROCESS_CHANGE_TOOL_NAMES.has(name)) {
       return handleProcessChangeTool(context, sessionId, name, args);
     }
-
     throw new AevraToolError('CAPABILITY_REQUIRED', `Tool ${name} is not enabled`);
   }
 
@@ -134,6 +174,13 @@ export class McpToolService {
   }
 
   async promptGet(sessionId: string) {
-    return promptGet(this.context(), sessionId);
+    const session = this.sessions.get(sessionId);
+    const context = { sessionId, actor: session?.actor, subject: session?.subject };
+    const prompt = await promptGet(this.context(), sessionId);
+    const transformed = await this.hooks?.emit('prompt_received', context, prompt);
+    if (transformed?.blocked) {
+      throw new AevraToolError('INVALID_REQUEST', transformed.reason ?? 'Hook blocked prompt request');
+    }
+    return transformed ? transformed.payload : prompt;
   }
 }

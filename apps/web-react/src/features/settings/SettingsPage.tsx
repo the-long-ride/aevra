@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { Dropdown } from '../../components/Dropdown';
 import { PageState } from '../../components/PageState';
+import { HooksSettings } from './HooksSettings';
 import { RemoteAccessSettings } from './RemoteAccessSettings';
 import {
   deleteResource,
@@ -43,6 +44,7 @@ export function SettingsPage() {
     await patchJson('/api/execution-settings', {
       ...value,
       workspaceDrainMs: Number(value.workspaceDrainMs),
+      searchMaxQueries: Number(value.searchMaxQueries),
     });
     await refresh();
   };
@@ -142,6 +144,16 @@ export function SettingsPage() {
                 defaultValue={Number(data.execution.workspaceDrainMs ?? 60000)}
               />
             </label>
+            <label className="field">
+              <span>Parallel search values (N)</span>
+              <input
+                type="number"
+                name="searchMaxQueries"
+                min={1}
+                max={32}
+                defaultValue={Number(data.execution.searchMaxQueries ?? 8)}
+              />
+            </label>
             <button className="primary" data-surface-id="settings:save-execution">
               Save
             </button>
@@ -161,6 +173,7 @@ export function SettingsPage() {
           </div>
           <pre>{JSON.stringify(data.adminSettings, null, 2)}</pre>
         </section>
+        <HooksSettings hooks={data.hooks} onChanged={refresh} />
         <section className="panel wide">
           <div className="panel-head">
             <h3>Command-family overrides</h3>
@@ -191,10 +204,7 @@ export function SettingsPage() {
           </form>
           <DataTable
             id="react-command-families"
-            rows={Object.entries(data.commandFamilies).map(([family, effect]) => ({
-              family,
-              effect,
-            }))}
+            rows={Object.entries(data.commandFamilies).map(([family, effect]) => ({ family, effect }))}
             columns={[
               { key: 'family', label: 'Family' },
               { key: 'effect', label: 'Effect' },
@@ -288,9 +298,7 @@ export function SettingsPage() {
                     type="button"
                     data-surface-id="settings:remove-network-rule"
                     onClick={() =>
-                      void deleteResource(`/api/policy/network-rules/${String(row.id)}`).then(
-                        refresh,
-                      )
+                      void deleteResource(`/api/policy/network-rules/${String(row.id)}`).then(refresh)
                     }
                   >
                     Remove
@@ -366,9 +374,7 @@ export function SettingsPage() {
                     type="button"
                     data-surface-id="settings:remove-secret"
                     onClick={() =>
-                      void deleteResource(
-                        `/api/secret-references/${encodeURIComponent(row.ref)}`,
-                      ).then(refresh)
+                      void deleteResource(`/api/secret-references/${encodeURIComponent(row.ref)}`).then(refresh)
                     }
                   >
                     Delete

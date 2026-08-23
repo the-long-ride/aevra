@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { McpToolService } from '../src/service.js';
 
-function service(options: { known?: boolean } = {}) {
+function service(options: { known?: boolean; hookControl?: Record<string, unknown> } = {}) {
   const records: Array<[string, number]> = [];
   const lease = {
     workspaceId: 'w1',
@@ -24,7 +24,18 @@ function service(options: { known?: boolean } = {}) {
     }),
   } as any;
   const worker = {
-    execute: async () => ({ ok: true, value: {} }),
+    execute: async (input: any) => {
+      if (input.operation?.kind === 'hook.run') {
+        return {
+          ok: true,
+          value: {
+            exitCode: 0,
+            stdout: options.hookControl ? JSON.stringify(options.hookControl) : '',
+          },
+        };
+      }
+      return { ok: true, value: {} };
+    },
   } as any;
   const reads = { put() {} } as any;
   const instance = new McpToolService(sessions, workspaces, worker, reads, undefined, {
@@ -34,6 +45,30 @@ function service(options: { known?: boolean } = {}) {
         commandMatchers: ['git:status'],
       }),
     } as any,
+    ...(options.hookControl
+      ? {
+          settings: {
+            get: (key: string, fallback: unknown) =>
+              key === 'hooks.config'
+                ? [
+                    {
+                      id: 'rewrite',
+                      name: 'rewrite',
+                      event: 'before_tool_call',
+                      enabled: true,
+                      kind: 'command',
+                      execution: 'run',
+                      executable: 'node',
+                      args: [],
+                      permissions: ['observe', 'modifyToolInput'],
+                      timeoutMs: 1000,
+                      failurePolicy: 'continue',
+                    },
+                  ]
+                : fallback,
+          } as any,
+        }
+      : {}),
     metrics: {
       record: (name, ms) => records.push([name, ms]),
     },
@@ -61,4 +96,18 @@ test('status dispatch preserves effective capability summary', async () => {
   assert.deepEqual(result.commandMatchers, ['git:status']);
   assert.equal(result.workspace.id, 'w1');
   assert.equal(records.length, 1);
+});
+
+test('transformed tool input is dispatched through normal authorization again', async () => {
+  const { instance } = service({
+    hookControl: { action: 'modify', payload: { name: 'missing_tool', args: {} } },
+  });
+  await assert.rejects(
+    () => instance.call('s1', 'aevra_status'),
+    (error: any) => {
+      assert.equal(error.code, 'CAPABILITY_REQUIRED');
+      assert.match(error.message, /missing_tool/);
+      return true;
+    },
+  );
 });

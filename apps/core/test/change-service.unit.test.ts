@@ -32,7 +32,7 @@ test('change set creates bounded recovery manifest and never replays incomplete 
   assert.equal(set.state, 'OPEN');
   await c.reconcileIncompleteOperations();
   assert.equal(
-    db.raw().prepare('SELECT state FROM operations WHERE id=?').get('op').state,
+    db.raw().prepare('SELECT state FROM operations WHERE id=?').get('op')!.state,
     'INTERRUPTED',
   );
   db.close();

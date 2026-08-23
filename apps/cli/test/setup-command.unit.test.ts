@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { runSetupCommand } from '../src/commands/setup-command.js';
+import type { ExposureConfig } from '../../core/src/exposure/types.js';
+import { runSetupCommand, type CloudflareSetupInput } from '../src/commands/setup-command.js';
 
 function resources(answers: string[], options: { found?: boolean } = {}) {
   const prompts: string[] = [];
-  const configs: Array<Record<string, unknown>> = [];
-  const cloudflareSetups: Array<Record<string, unknown>> = [];
+  const configs: unknown[] = [];
+  const cloudflareSetups: CloudflareSetupInput[] = [];
   let closed = 0;
   let cloudflareDetections = 0;
   const queue = [...answers];
@@ -26,7 +27,7 @@ function resources(answers: string[], options: { found?: boolean } = {}) {
           return queue.shift() ?? '';
         },
       },
-      configure(config: Record<string, unknown>) {
+      configure(config: ExposureConfig) {
         configs.push(config);
       },
       cloudflare: {
@@ -35,7 +36,7 @@ function resources(answers: string[], options: { found?: boolean } = {}) {
           return { found: options.found ?? true, version: '2026.5.2' };
         },
         authenticate: async () => ({ code: 0, stderr: '' }),
-        setup: async (input: Record<string, unknown>) => {
+        setup: async (input: CloudflareSetupInput) => {
           cloudflareSetups.push(input);
           return {
             ...input,
