@@ -96,3 +96,16 @@ test('web shell uses the canonical repo logo and favicon assets', () => {
   assert.match(index, /href=["']\/favicon\/favicon-32x32\.png["']/);
   assert.match(index, /href=["']\/favicon\/apple-touch-icon\.png["']/);
 });
+
+test('feature binary controls use the shared Switch instead of raw checkboxes', () => {
+  const hooks = readFileSync('apps/web-react/src/features/settings/HooksSettings.tsx', 'utf8');
+  const hookModal = readFileSync(
+    'apps/web-react/src/features/settings/HookCreateModal.tsx',
+    'utf8',
+  );
+  assert.doesNotMatch(`${hooks}\n${hookModal}`, /type=["']checkbox["']/);
+  assert.match(
+    hookModal,
+    /import\s+\{\s*Switch\s*\}\s+from\s+['"]\.\.\/\.\.\/components\/Switch['"]/,
+  );
+});

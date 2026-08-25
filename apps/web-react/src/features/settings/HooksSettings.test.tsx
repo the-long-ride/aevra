@@ -61,24 +61,54 @@ function renderHooks(hooks: HookSetting[], onChanged = vi.fn(async () => undefin
   return onChanged;
 }
 
-test('adding a hook posts the parsed form payload with selected mutation permissions', async () => {
+test('hook creation fields open in a modal and use shared switches', async () => {
+  const user = userEvent.setup();
+  renderHooks([]);
+
+  expect(screen.queryByRole('dialog', { name: 'Create lifecycle hook' })).toBeNull();
+  expect(screen.queryByRole('switch', { name: 'Block' })).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Add hook' }));
+
+  const dialog = screen.getByRole('dialog', { name: 'Create lifecycle hook' });
+  expect(within(dialog).getByRole('switch', { name: 'Block' })).toBeInTheDocument();
+  expect(within(dialog).getByRole('switch', { name: 'Modify prompt' })).toBeInTheDocument();
+  expect(within(dialog).getByRole('switch', { name: 'Enabled' })).toBeChecked();
+  expect(dialog.querySelector('.hook-form-main')).not.toBeNull();
+  expect(dialog.querySelector('.hook-permission-grid')).not.toBeNull();
+});
+
+test('hook creation modal closes with Escape and resets fields when reopened', async () => {
+  const user = userEvent.setup();
+  renderHooks([]);
+
+  await user.click(screen.getByRole('button', { name: 'Add hook' }));
+  await user.type(screen.getByLabelText('Name'), 'Temporary hook');
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Create lifecycle hook' })).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Add hook' }));
+  expect(screen.getByLabelText('Name')).toHaveValue('');
+});
+
+test('adding a hook posts the parsed modal payload with selected mutation permissions', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures();
   const onChanged = vi.fn(async () => undefined);
   renderHooks([], onChanged);
 
+  await user.click(screen.getByRole('button', { name: 'Add hook' }));
   await user.type(screen.getByLabelText('Name'), 'Guard writes');
   await user.type(screen.getByLabelText('Executable / app'), 'guard.exe');
-  // JSON payloads contain characters the keyboard parser reserves, so set them directly.
   fireEvent.change(screen.getByLabelText('Arguments JSON'), {
     target: { value: '["--strict"]' },
   });
   fireEvent.change(screen.getByLabelText('Environment JSON'), {
     target: { value: '{"MODE":"safe"}' },
   });
-  await user.click(screen.getByRole('checkbox', { name: 'Modify prompt' }));
-  await user.click(screen.getByRole('checkbox', { name: 'Block' }));
-  await user.click(screen.getByRole('button', { name: 'Add hook' }));
+  await user.click(screen.getByRole('switch', { name: 'Modify prompt' }));
+  await user.click(screen.getByRole('switch', { name: 'Block' }));
+  await user.click(screen.getByRole('button', { name: 'Create hook' }));
 
   await waitFor(() => expect(mutationCall(fetchMock, '/api/hooks', 'POST')).toBeTruthy());
   const call = mutationCall(fetchMock, '/api/hooks', 'POST');
@@ -96,7 +126,74 @@ test('adding a hook posts the parsed form payload with selected mutation permiss
     enabled: true,
   });
   expect(onChanged).toHaveBeenCalledTimes(1);
-  expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('');
+  expect(screen.queryByRole('dialog', { name: 'Create lifecycle hook' })).toBeNull();
+});
+
+test('invalid hook JSON stays in the modal and shows a validation error', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures();
+  renderHooks([]);
+
+  await user.click(screen.getByRole('button', { name: 'Add hook' }));
+  await user.type(screen.getByLabelText('Name'), 'Bad hook');
+  await user.type(screen.getByLabelText('Executable / app'), 'bad.exe');
+  fireEvent.change(screen.getByLabelText('Arguments JSON'), { target: { value: '[' } });
+  await user.click(screen.getByRole('button', { name: 'Create hook' }));
+
+  expect(
+    await screen.findByText('Hook arguments/environment must be valid JSON'),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Create lifecycle hook' })).toBeInTheDocument();
+  expect(mutationCall(fetchMock, '/api/hooks', 'POST')).toBeUndefined();
+});
+
+test('hook creation cannot be dismissed while the create request is pending', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures();
+  let resolveRequest!: (value: Response) => void;
+  fetchMock.mockImplementationOnce(
+    () =>
+      new Promise<Response>((resolve) => {
+        resolveRequest = resolve;
+      }),
+  );
+  renderHooks([]);
+
+  await user.click(screen.getByRole('button', { name: 'Add hook' }));
+  await user.type(screen.getByLabelText('Name'), 'Slow hook');
+  await user.type(screen.getByLabelText('Executable / app'), 'slow.exe');
+  await user.click(screen.getByRole('button', { name: 'Create hook' }));
+
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(screen.getByRole('dialog', { name: 'Create lifecycle hook' })).toBeInTheDocument();
+
+  resolveRequest(
+    new Response(JSON.stringify({ ok: true }), {
+      status: 201,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Create lifecycle hook' })).toBeNull(),
+  );
+});
+
+test('refresh failure after successful hook creation does not leave a duplicate-submit form open', async () => {
+  const user = userEvent.setup();
+  installApiFixtures();
+  renderHooks(
+    [],
+    vi.fn(async () => Promise.reject(new Error('refresh failed'))),
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Add hook' }));
+  await user.type(screen.getByLabelText('Name'), 'Created hook');
+  await user.type(screen.getByLabelText('Executable / app'), 'created.exe');
+  await user.click(screen.getByRole('button', { name: 'Create hook' }));
+
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Create lifecycle hook' })).toBeNull(),
+  );
 });
 
 test('hook table enables disables and deletes hooks through mutations', async () => {

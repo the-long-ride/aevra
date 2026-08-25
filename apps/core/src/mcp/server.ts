@@ -207,6 +207,7 @@ export class McpIngressServer {
         diagnostics: this.diagnostics,
         activity: this.activity,
         hooks: this.options.hooks,
+        oauth: this.options.oauth,
       });
       return;
     }
@@ -260,7 +261,7 @@ export class McpIngressServer {
           resources: { listChanged: false },
           prompts: { listChanged: false },
         },
-        serverInfo: aevraServerInfo(),
+        serverInfo: aevraServerInfo(this.options.oauth?.issuer),
       },
     });
   }

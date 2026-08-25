@@ -40,6 +40,11 @@ export interface ExposureStatus {
     oauth?: string;
     tls?: string;
   };
+  tunnelHealth?: {
+    reachable: boolean | null;
+    checkedAt: string | null;
+    message: string | null;
+  };
 }
 
 export interface OnboardingStatus {

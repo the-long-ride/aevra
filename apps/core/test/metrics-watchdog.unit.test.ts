@@ -34,3 +34,23 @@ test('tunnel watchdog records status and signals drops', async () => {
   assert.equal(drops.length >= 1, true);
   wd.stop();
 });
+
+test('tunnel watchdog coalesces concurrent checks into one probe', async () => {
+  let probes = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const wd = new TunnelWatchdog(async () => {
+    probes++;
+    await gate;
+    return { reachable: true, message: 'ok' };
+  }, 60_000);
+
+  const first = wd.checkNow();
+  const second = wd.checkNow();
+  assert.equal(probes, 1);
+  release();
+  assert.deepEqual(await first, await second);
+  assert.equal(probes, 1);
+});

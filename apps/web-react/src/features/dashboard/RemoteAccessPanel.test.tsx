@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import type { ExposureStatus } from '@aevra/admin-contracts';
@@ -90,7 +90,49 @@ test('falls back to placeholder copy for unconfigured local exposure with restar
   expect(screen.queryByLabelText('Exposure health')).not.toBeInTheDocument();
 });
 
-test('successful endpoint tests report reachability and refresh the panel', async () => {
+test('remote access URL rows copy their exact values with icon-only accessible buttons', async () => {
+  const user = userEvent.setup();
+  installApiFixtures();
+  renderPanel(exposure());
+  const writeText = vi.mocked(navigator.clipboard.writeText);
+
+  const cases = [
+    ['Local gateway', 'https://127.0.0.1:47830', 'Copy Local gateway URL'],
+    ['Effective public URL', 'https://aevra.example.com', 'Copy Effective public URL'],
+    ['OAuth MCP resource', 'https://aevra.example.com/mcp', 'Copy OAuth MCP resource URL'],
+  ] as const;
+
+  for (const [label, value, copyLabel] of cases) {
+    const button = screen.getByRole('button', { name: copyLabel });
+    expect(button).toHaveAttribute('title', copyLabel);
+    expect(button.textContent).toBe('');
+    expect(button.querySelector('svg')).not.toBeNull();
+
+    await user.click(button);
+    expect(writeText).toHaveBeenLastCalledWith(value);
+    expect(await screen.findByRole('status', { name: 'Copy succeeded' })).toHaveTextContent(
+      `Copied ${label}`,
+    );
+  }
+});
+
+test('remote access URL copy buttons are disabled when their URL is unavailable', () => {
+  installApiFixtures();
+  renderPanel(
+    exposure({
+      provider: 'local',
+      state: 'ready',
+      localGatewayUrl: undefined,
+      publicUrl: undefined,
+      oauth: undefined,
+    }),
+  );
+
+  expect(screen.getByRole('button', { name: 'Copy Local gateway URL' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Copy Effective public URL' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Copy OAuth MCP resource URL' })).toBeDisabled();
+});
+test('successful endpoint tests report reachability in a bottom-right success toast and refresh the panel', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({
     mutationResponses: {
@@ -100,11 +142,66 @@ test('successful endpoint tests report reachability and refresh the panel', asyn
   const onChanged = renderPanel(exposure());
 
   await user.click(screen.getByRole('button', { name: 'Test endpoint' }));
-  expect(await screen.findByText('Endpoint reachable · https://aevra.example.com')).toHaveClass(
-    'inline-result',
-  );
+  const toast = await screen.findByRole('status', { name: 'Endpoint test succeeded' });
+  expect(toast).toHaveClass('toast', 'success');
+  expect(toast).toHaveTextContent('Endpoint reachable · https://aevra.example.com');
+  expect(toast.parentElement).toHaveClass('toast-stack');
+  expect(
+    screen.queryByText('Endpoint reachable · https://aevra.example.com', { selector: 'p' }),
+  ).toBeNull();
   await waitFor(() => expect(mutationCall(fetchMock, '/api/exposure/test')).toBeTruthy());
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+});
+
+test('successful endpoint toast dismisses automatically', async () => {
+  const timerSpy = vi.spyOn(window, 'setTimeout');
+  try {
+    const user = userEvent.setup();
+    installApiFixtures({
+      mutationResponses: {
+        'POST /api/exposure/test': { reachable: true, publicUrl: 'https://aevra.example.com' },
+      },
+    });
+    renderPanel(exposure());
+
+    await user.click(screen.getByRole('button', { name: 'Test endpoint' }));
+    expect(
+      await screen.findByRole('status', { name: 'Endpoint test succeeded' }),
+    ).toBeInTheDocument();
+
+    const dismissTimer = timerSpy.mock.calls.find(([, delay]) => delay === 4000);
+    expect(dismissTimer).toBeDefined();
+    const handler = dismissTimer?.[0];
+    expect(typeof handler).toBe('function');
+    act(() => (handler as () => void)());
+    expect(screen.queryByRole('status', { name: 'Endpoint test succeeded' })).toBeNull();
+  } finally {
+    timerSpy.mockRestore();
+  }
+});
+
+test('repeated identical endpoint success restarts the toast lifetime', async () => {
+  const timerSpy = vi.spyOn(window, 'setTimeout');
+  try {
+    const user = userEvent.setup();
+    installApiFixtures({
+      mutationResponses: {
+        'POST /api/exposure/test': { reachable: true, publicUrl: 'https://aevra.example.com' },
+      },
+    });
+    renderPanel(exposure());
+
+    await user.click(screen.getByRole('button', { name: 'Test endpoint' }));
+    await screen.findByRole('status', { name: 'Endpoint test succeeded' });
+    const firstCount = timerSpy.mock.calls.filter(([, delay]) => delay === 4000).length;
+
+    await user.click(screen.getByRole('button', { name: 'Test endpoint' }));
+    await waitFor(() =>
+      expect(timerSpy.mock.calls.filter(([, delay]) => delay === 4000).length).toBe(firstCount + 1),
+    );
+  } finally {
+    timerSpy.mockRestore();
+  }
 });
 
 test('unreachable endpoints explain the reported reason', async () => {

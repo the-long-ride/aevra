@@ -40,6 +40,7 @@ test('admin static server exposes one React build from the root', async () => {
   mkdirSync(path.join(dir, 'assets'), { recursive: true });
   writeFileSync(path.join(dir, 'index.html'), 'react');
   writeFileSync(path.join(dir, 'assets', 'app.js'), 'export default 1;');
+  writeFileSync(path.join(dir, 'aevra-logo.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
     staticDir: dir,
@@ -57,6 +58,10 @@ test('admin static server exposes one React build from the root', async () => {
     assert.equal(asset.status, 200);
     assert.equal(asset.headers.get('content-type'), 'text/javascript');
     assert.equal(await asset.text(), 'export default 1;');
+
+    const logo = await fetch(`${server.url()}/aevra-logo.png`);
+    assert.equal(logo.status, 200);
+    assert.equal(logo.headers.get('content-type'), 'image/png');
   } finally {
     await server.close();
     rmSync(dir, { recursive: true, force: true });

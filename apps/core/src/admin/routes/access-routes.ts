@@ -7,14 +7,22 @@ function exposureStatus(context: any) {
   const localGatewayUrl = String(status.localGatewayUrl ?? '');
   const publicUrl = String(status.publicUrl ?? '');
   const oauthReady = Boolean(status.oauth?.issuer && status.oauth?.resource);
+  const tunnelHealth = status.tunnelHealth as
+    { reachable?: boolean | null; checkedAt?: string | null; message?: string | null } | undefined;
   return {
     ...status,
-    checkedAt: new Date().toISOString(),
+    ...(tunnelHealth?.checkedAt ? { checkedAt: tunnelHealth.checkedAt } : {}),
     health: {
       ...(status.health ?? {}),
       providerProcess: String(status.state ?? 'unknown'),
       gateway: localGatewayUrl ? 'reachable' : 'stopped',
-      publicHttps: publicUrl ? 'configured' : 'not exposed',
+      publicHttps: publicUrl
+        ? tunnelHealth?.reachable === true
+          ? 'reachable'
+          : tunnelHealth?.reachable === false
+            ? 'unreachable'
+            : 'checking'
+        : 'not exposed',
       admin: 'reachable',
       mcp: diagnostics?.state === 'listening' ? 'reachable' : (diagnostics?.state ?? 'unknown'),
       oauth: oauthReady ? 'healthy' : 'unavailable',

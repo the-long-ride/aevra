@@ -39,6 +39,7 @@ async function call(pathname: string, method: string, context: any, value?: unkn
 }
 
 test('exposure status includes provider-neutral runtime health', async () => {
+  const checkedAt = '2026-08-26T00:00:00.000Z';
   const result = await call('/api/exposure/status', 'GET', {
     exposure: {
       status: () => ({
@@ -46,6 +47,7 @@ test('exposure status includes provider-neutral runtime health', async () => {
         state: 'ready',
         localGatewayUrl: 'https://127.0.0.1:47830',
         publicUrl: 'https://aevra.ngrok.app',
+        tunnelHealth: { reachable: false, checkedAt, message: 'upstream unavailable' },
         oauth: {
           issuer: 'https://aevra.ngrok.app',
           resource: 'https://aevra.ngrok.app/mcp',
@@ -59,12 +61,12 @@ test('exposure status includes provider-neutral runtime health', async () => {
   assert.equal(result.value.provider, 'ngrok');
   assert.equal(result.value.health.providerProcess, 'ready');
   assert.equal(result.value.health.gateway, 'reachable');
-  assert.equal(result.value.health.publicHttps, 'configured');
+  assert.equal(result.value.health.publicHttps, 'unreachable');
   assert.equal(result.value.health.admin, 'reachable');
   assert.equal(result.value.health.mcp, 'reachable');
   assert.equal(result.value.health.oauth, 'healthy');
   assert.equal(result.value.health.tls, 'ready');
-  assert.match(result.value.checkedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(result.value.checkedAt, checkedAt);
 });
 
 test('exposure config delegates validated lifecycle changes to the controller', async () => {

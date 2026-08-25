@@ -23,6 +23,7 @@ import { MetricsService } from './metrics.js';
 import { SettingsRepository } from '../../../packages/store/src/settings.js';
 import { WorkerManager } from './worker/worker-manager.js';
 import { AdminServer } from './admin/server.js';
+import { buildRuntimeHealth } from './admin/runtime-health.js';
 import { McpIngressServer } from './mcp/server.js';
 import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
 import { LocalFilesystemService } from './admin/local-filesystem.js';
@@ -253,16 +254,16 @@ export async function createCoreRuntime(
         admin = new AdminServer(
           config.adminHost,
           config.adminPort,
-          () => ({
-            version: AEVRA_VERSION,
-            core: 'running',
-            worker: worker ? 'running' : 'unavailable',
-            mcp: mcp ? 'running' : 'starting',
-            mcpDiagnostics: mcp?.diagnosticsSnapshot() ?? null,
-            exposure: exposureWiring?.status() ?? null,
-            safeMode,
-            connectorFailedAttempts: connectorLimiter.totalFailures(),
-          }),
+          () =>
+            buildRuntimeHealth({
+              version: AEVRA_VERSION,
+              workerRunning: Boolean(worker),
+              mcpRunning: Boolean(mcp),
+              mcpDiagnostics: mcp?.diagnosticsSnapshot() ?? null,
+              exposure: exposureWiring?.status() ?? null,
+              safeMode,
+              connectorFailedAttempts: connectorLimiter.totalFailures(),
+            }),
           {
             bootstrap,
             credentialVerifier: adminCredentialVerifier,

@@ -122,6 +122,7 @@ test('public gateway routes Admin and MCP surfaces while preserving protocol hea
     assert.equal(admin.requests.filter((entry) => entry.path === '/api/echo').length, 1);
 
     for (const pathname of [
+      '/health',
       '/mcp?transport=streamable',
       '/mcp/connector-token',
       '/oauth/token',
@@ -135,6 +136,10 @@ test('public gateway routes Admin and MCP surfaces while preserving protocol hea
       assert.equal(JSON.parse(response.body).requestMcpSessionId, 'request-session');
       assert.equal(JSON.parse(response.body).path, pathname);
     }
+
+    const logo = await request(gateway, '/aevra-logo.png');
+    assert.equal(logo.headers['x-origin'], 'admin');
+    assert.equal(JSON.parse(logo.body).path, '/aevra-logo.png');
 
     const fallback = await request(gateway, '/not-a-special-route');
     assert.equal(fallback.headers['x-origin'], 'admin');

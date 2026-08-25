@@ -27,14 +27,23 @@ function body(method: string, params: Record<string, any> = {}) {
   };
 }
 
-test('modern discovery advertises MCP 2026-07-28', () => {
-  const result = modernDiscoverResult();
+const publicBaseUrl = 'https://aevra.example.com';
+const expectedIcon = [
+  {
+    src: `${publicBaseUrl}/aevra-logo.png`,
+    mimeType: 'image/png',
+  },
+];
+
+test('modern discovery advertises MCP 2026-07-28 with Aevra branding', () => {
+  const result = modernDiscoverResult(publicBaseUrl);
   assert.deepEqual(result.supportedVersions, [MODERN_PROTOCOL_VERSION]);
   assert.equal(result.resultType, 'complete');
   assert.ok(result.capabilities.tools);
   assert.equal(result.cacheScope, 'public');
   assert.ok(result.ttlMs > 0);
   assert.equal(result._meta['io.modelcontextprotocol/serverInfo'].name, 'Aevra');
+  assert.deepEqual(result._meta['io.modelcontextprotocol/serverInfo'].icons, expectedIcon);
 });
 
 test('modern request requires matching method and protocol headers', () => {
@@ -75,6 +84,7 @@ test('modern list results get deterministic order, cache hints and server info',
   const response = decorateModernResult(
     { jsonrpc: '2.0', id: 1, result: { tools: [{ name: 'z' }, { name: 'a' }] } },
     'tools/list',
+    publicBaseUrl,
   );
   assert.deepEqual(
     response.result.tools.map((tool: any) => tool.name),
@@ -83,4 +93,5 @@ test('modern list results get deterministic order, cache hints and server info',
   assert.equal(response.result.cacheScope, 'private');
   assert.ok(response.result.ttlMs > 0);
   assert.equal(response.result._meta['io.modelcontextprotocol/serverInfo'].name, 'Aevra');
+  assert.deepEqual(response.result._meta['io.modelcontextprotocol/serverInfo'].icons, expectedIcon);
 });

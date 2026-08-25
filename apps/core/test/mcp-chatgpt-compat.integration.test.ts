@@ -168,6 +168,9 @@ test('post-OAuth modern MCP discovery succeeds without a protocol session', asyn
     const value = (await response.json()) as any;
     assert.deepEqual(value?.result?.supportedVersions, ['2026-07-28']);
     assert.equal(value?.result?._meta?.['io.modelcontextprotocol/serverInfo']?.name, 'Aevra');
+    assert.deepEqual(value?.result?._meta?.['io.modelcontextprotocol/serverInfo']?.icons, [
+      { src: 'https://mcp.example.com/aevra-logo.png', mimeType: 'image/png' },
+    ]);
   } finally {
     await server.close();
   }
@@ -246,6 +249,10 @@ test('OAuth bearer remains valid through initialize and tools/list discovery', a
       }),
     });
     assert.equal(init.status, 200);
+    const initResult = (await init.json()) as any;
+    assert.deepEqual(initResult?.result?.serverInfo?.icons, [
+      { src: 'https://mcp.example.com/aevra-logo.png', mimeType: 'image/png' },
+    ]);
     const sid = init.headers.get('mcp-session-id');
     assert.ok(sid);
     const tools = await fetch(`${server.url()}/mcp`, {

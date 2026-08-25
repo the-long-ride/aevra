@@ -45,6 +45,7 @@ function staticContentType(file: string) {
   if (file.endsWith('.css')) return 'text/css';
   if (file.endsWith('.json')) return 'application/json';
   if (file.endsWith('.svg')) return 'image/svg+xml';
+  if (file.endsWith('.png')) return 'image/png';
   return 'text/html';
 }
 
