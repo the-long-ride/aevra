@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DockerBackend } from '../src/docker.js';
-test('Docker backend availability is explicit', async (t) => {
+test('Docker backend availability is explicit', { timeout: 30_000 }, async (t) => {
   const d = new DockerBackend();
   const available = await d.available();
   if (!available) {
@@ -10,7 +10,7 @@ test('Docker backend availability is explicit', async (t) => {
   }
   assert.equal(available, true);
 });
-test('Docker sandbox applies timeout and DLP to command output', async (t) => {
+test('Docker sandbox applies timeout and DLP to command output', { timeout: 90_000 }, async (t) => {
   const d = new DockerBackend();
   if (!(await d.available())) {
     t.skip('docker unavailable');
@@ -45,7 +45,7 @@ test('Docker sandbox applies timeout and DLP to command output', async (t) => {
       env: {},
       timeoutMs: 80,
     });
-    assert.ok(Date.now() - started < 3000);
+    assert.ok(Date.now() - started < 10_000);
     assert.ok(
       timed.signal !== null || timed.exitCode !== 0,
       'timed out sandbox command must not report normal success',

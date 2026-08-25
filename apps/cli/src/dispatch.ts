@@ -8,6 +8,7 @@ type Handler<Name extends AevraCommand['command']> = (
 
 export interface CliDispatchHandlers {
   help: Handler<'help'>;
+  version: Handler<'version'>;
   start: Handler<'start'>;
   ui: Handler<'ui'>;
   setup: Handler<'setup'>;
@@ -27,6 +28,8 @@ export async function dispatchCommand(
   switch (command.command) {
     case 'help':
       return handlers.help(command);
+    case 'version':
+      return handlers.version(command);
     case 'start':
       return handlers.start(command);
     case 'ui':

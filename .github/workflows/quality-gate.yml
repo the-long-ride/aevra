@@ -31,5 +31,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Pre-pull sandbox image
+        if: runner.os == 'Linux'
+        run: docker pull node:22-alpine
+      - name: Install Podman
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq podman
       - run: npx playwright install --with-deps chromium
       - run: npm run test:gate

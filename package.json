@@ -1,6 +1,6 @@
 {
   "name": "@the-long-ride/aevra",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "workspaces": [
     "apps/web-react"
@@ -32,7 +32,6 @@
     "prepare": "npm run build",
     "test:gate": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:coverage && npm run test:ui-parity"
   },
-  "dependencies": {},
   "devDependencies": {
     "@playwright/test": "^1.55.0",
     "@types/node": "^22.0.0",
@@ -45,6 +44,15 @@
     "vitest": "^3.0.0"
   },
   "description": "Workspace-scoped local MCP execution gateway for AI web interfaces with policy, recovery, and audit controls.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/the-long-ride/aevra.git"
+  },
+  "bugs": {
+    "url": "https://github.com/the-long-ride/aevra/issues"
+  },
+  "homepage": "https://github.com/the-long-ride/aevra#readme",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -73,8 +81,7 @@
     "dist/apps/cli/src",
     "dist/apps/core/src",
     "dist/apps/worker/src",
-    "dist/apps/web/src",
-    "dist/apps/web-react/dist",
+    "dist/apps/web",
     "dist/packages/admin-contracts/src",
     "dist/packages/executor/src",
     "dist/packages/ipc/src",

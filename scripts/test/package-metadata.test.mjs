@@ -7,6 +7,10 @@ async function readJson(file) {
 test('package metadata exposes only gateway runtime assets', async () => {
   const pkg = await readJson('package.json');
   assert.equal(pkg.name, '@the-long-ride/aevra');
+  assert.equal(pkg.license, 'MIT');
+  assert.equal(pkg.repository?.url, 'git+https://github.com/the-long-ride/aevra.git');
+  assert.equal(pkg.bugs?.url, 'https://github.com/the-long-ride/aevra/issues');
+  assert.equal(pkg.homepage, 'https://github.com/the-long-ride/aevra#readme');
   assert.equal(pkg.bin?.aevra, 'dist/apps/cli/src/cli.js');
   assert.equal(pkg.scripts?.prepare, 'npm run build');
 

@@ -2,6 +2,7 @@ export type AdminUiDestination = '/';
 
 export type AevraCommand =
   | { command: 'help' }
+  | { command: 'version' }
   | { command: 'start'; uiDestination: AdminUiDestination | null }
   | { command: 'ui'; logoutAll: boolean }
   | { command: 'setup' }
@@ -29,6 +30,10 @@ export type AevraCommand =
 export function parseAevraArgs(argv: string[]): AevraCommand {
   if (argv.length === 0 || ['help', '--help', '-h', '-help'].includes(argv[0]!)) {
     return { command: 'help' };
+  }
+
+  if (['version', '--version', '-v', '-version'].includes(argv[0]!)) {
+    return { command: 'version' };
   }
 
   const [command, ...rest] = argv;

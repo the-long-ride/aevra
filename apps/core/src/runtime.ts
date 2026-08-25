@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { CoreConfig } from './config.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { WorkspaceRepository } from '../../../packages/store/src/workspaces.js';
@@ -242,7 +243,7 @@ export async function createCoreRuntime(
           environment = new EnvironmentService(raw, secretStore),
           configExport = new ConfigExportService(raw),
           backup = new BackupService(db, path.join(config.stateDir, 'backups'));
-        const staticDir = path.resolve('dist/apps/web');
+        const staticDir = fileURLToPath(new URL('../../web', import.meta.url));
         const databaseAdmin = {
           configExport: (portable: boolean) => configExport.export(portable),
           configPreview: (v: any) => configExport.previewImport(v),

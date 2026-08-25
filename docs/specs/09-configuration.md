@@ -1,6 +1,6 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every knob in one place · **Verified against:** `0.1.0`
+**Audience:** engineers & AI agents · **Scope:** every knob in one place · **Verified against:** `0.1.1`
 
 ## Ports and listeners (fixed hosts)
 
@@ -37,7 +37,8 @@ aevra connectors list|create|revoke <id> manage admission connector tokens
 aevra backup verify|restore <file>       verify or restore database backup
 aevra service install|start|stop|restart|status
 aevra completion bash|zsh|powershell     shell autocompletion
-aevra --help
+aevra --version / aevra -v               display version
+aevra --help / aevra -h                  display help and usage
 ```
 
 ## Local TLS

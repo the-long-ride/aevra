@@ -1,6 +1,6 @@
 # 03 — MCP Protocol
 
-**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `0.1.0`
+**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `0.1.1`
 
 ## Transport
 
@@ -10,7 +10,7 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 
 ## Session lifecycle
 
-1. `initialize` → server creates a session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"0.1.0"}`.
+1. `initialize` → server creates a session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"0.1.1"}`.
 2. Every subsequent `POST` carries that header; `DELETE` disconnects. The session's admission identity (actor + subject) must match on every call — sessions cannot be hijacked across identities.
 3. Reconnects always create **fresh** sessions; clients re-select their workspace. Managed process records belong to the workspace, not to one outstanding HTTP request.
 
