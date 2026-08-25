@@ -94,9 +94,8 @@ export class DockerBackend implements SandboxBackend {
 
   async available() {
     try {
-      return (
-        (await cmd(this.executable, ['version', '--format', '{{.Server.Version}}'])).code === 0
-      );
+      const info = await cmd(this.executable, ['info', '--format', '{{.OSType}}']);
+      return info.code === 0 && info.stdout.trim().toLowerCase() === 'linux';
     } catch {
       return false;
     }
@@ -107,7 +106,7 @@ export class DockerBackend implements SandboxBackend {
     this.prepared.set(id, {
       input,
       policy: { mode: 'deny-all', destinations: [], enforcement: 'backend' },
-      image: 'node:22-bookworm-slim',
+      image: 'node:22-alpine',
     });
     return { id, backend: this.id } as SandboxHandle;
   }

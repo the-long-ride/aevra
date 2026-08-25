@@ -8,6 +8,12 @@ test('help aliases parse', () => {
   }
 });
 
+test('version aliases parse', () => {
+  for (const arg of ['version', '--version', '-v', '-version']) {
+    assert.deepEqual(parseAevraArgs([arg]), { command: 'version' });
+  }
+});
+
 test('start selects no UI or the single React admin UI', () => {
   assert.deepEqual(parseAevraArgs(['start']), {
     command: 'start',

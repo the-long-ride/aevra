@@ -64,6 +64,43 @@
   font-weight: 400;
 }
 
+.version-update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 1px 5px;
+  background: var(--surface-card);
+  border: 1px solid var(--warning);
+  border-radius: 4px;
+  color: var(--warning);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1.3;
+  vertical-align: baseline;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
+}
+
+.version-update-btn:hover {
+  background: var(--surface-soft);
+  opacity: 0.9;
+}
+
+.version-update-btn code {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.version-update-btn .copied-tag {
+  color: var(--success);
+  font-weight: 600;
+}
+
 .topbar-actions,
 .health-cluster,
 .health-chip {

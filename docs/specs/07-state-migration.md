@@ -1,6 +1,6 @@
 # 07 — State & Schema
 
-**Audience:** engineers & AI agents · **Scope:** on-disk state and schema evolution · **Verified against:** `0.1.0`
+**Audience:** engineers & AI agents · **Scope:** on-disk state and schema evolution · **Verified against:** `0.1.1`
 
 ## State directory
 

@@ -1,6 +1,6 @@
 # Aevra Roadmap & Weak-Points Map
 
-**Date:** 2026-08-25 · **Baseline:** Aevra `0.1.0` · **Derived from:** the rename/connectors/skills build, two whole-branch reviews, deferred review findings, and a fresh code audit.
+**Date:** 2026-08-25 · **Baseline:** Aevra `0.1.1` · **Derived from:** the rename/connectors/skills build, two whole-branch reviews, deferred review findings, and a fresh code audit.
 
 This is the working map: honest cons first, then the prioritized TODO list (P0 → P3, ordered). Items are checkboxes so progress is trackable. Effort: **S** ≤ half a day · **M** ≤ 3 days · **L** larger.
 

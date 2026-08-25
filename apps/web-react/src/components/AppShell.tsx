@@ -1,7 +1,24 @@
 import type { AdminPageId, RuntimeHealthStatus } from '@aevra/admin-contracts';
 import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import type { Theme } from '../hooks/theme-state';
+
+export function isVersionOutdated(current?: string, latest?: string): boolean {
+  if (!current || !latest) return false;
+  const clean = (v: string) =>
+    v
+      .replace(/^v/, '')
+      .trim()
+      .split('.')
+      .map((x) => parseInt(x, 10) || 0);
+  const [cMaj = 0, cMin = 0, cPatch = 0] = clean(current);
+  const [lMaj = 0, lMin = 0, lPatch = 0] = clean(latest);
+  if (lMaj > cMaj) return true;
+  if (lMaj === cMaj && lMin > cMin) return true;
+  if (lMaj === cMaj && lMin === cMin && lPatch > cPatch) return true;
+  return false;
+}
 
 interface AppShellProps {
   page: AdminPageId;
@@ -56,6 +73,43 @@ export function AppShell({
   onOpenRequests,
   children,
 }: AppShellProps) {
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!status.version) return;
+    const controller = new AbortController();
+    fetch('https://registry.npmjs.org/@the-long-ride/aevra/latest', {
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.version === 'string') {
+          setLatestVersion(data.version);
+        }
+      })
+      .catch(() => {
+        // Silently ignore network errors / offline state
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [status.version]);
+
+  const isOutdated = isVersionOutdated(status.version, latestVersion ?? undefined);
+  const updateCommand = 'npm i -g @the-long-ride/aevra@latest';
+
+  const handleCopyUpdate = async () => {
+    try {
+      await navigator.clipboard.writeText(updateCommand);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback
+    }
+  };
+
   const version = status.version
     ? String(status.version).startsWith('v')
       ? String(status.version)
@@ -71,6 +125,18 @@ export function AppShell({
           <div>
             <strong>
               Aevra <span className="app-version">{version}</span>
+              {isOutdated ? (
+                <button
+                  type="button"
+                  className="version-update-btn"
+                  title="Click to copy update command"
+                  aria-label="Click to copy update command"
+                  onClick={handleCopyUpdate}
+                >
+                  <code>{updateCommand}</code>
+                  {copied ? <span className="copied-tag">[copied]</span> : null}
+                </button>
+              ) : null}
             </strong>
             <small>Local MCP control plane</small>
           </div>

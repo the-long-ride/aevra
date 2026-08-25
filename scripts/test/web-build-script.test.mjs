@@ -46,8 +46,9 @@ test('web contracts are React-only', () => {
 });
 
 test('web coverage requires 85 percent for every global metric', () => {
-  assert.match(pkg.scripts['test:coverage'], /test-coverage-node\.mjs/);
+  assert.match(pkg.scripts['test:coverage'], /test:coverage:node/);
   assert.match(pkg.scripts['test:coverage'], /test:coverage:web/);
+  assert.match(pkg.scripts['test:coverage:node'], /test-coverage-node\.mjs/);
   const vite = readFileSync('apps/web-react/vite.config.ts', 'utf8');
   const thresholds = { lines: 85, statements: 85, functions: 85, branches: 85 };
   for (const [metric, threshold] of Object.entries(thresholds)) {
@@ -59,7 +60,8 @@ test('React workspace participates in typecheck and browser regressions', () => 
   assert.deepEqual(pkg.workspaces, ['apps/web-react']);
   assert.match(pkg.scripts.typecheck, /tsconfig\.typecheck\.json/);
   assert.match(pkg.scripts.typecheck, /apps\/web-react/);
-  assert.match(pkg.scripts['test:ui-parity'], /playwright test/);
+  assert.match(pkg.scripts['test:ui-parity'], /test:ui-parity:only/);
+  assert.match(pkg.scripts['test:ui-parity:only'], /playwright test/);
   assert.ok(pkg.devDependencies['@playwright/test']);
   for (const file of browserSpecs) {
     assert.equal(existsSync(file), true, `${file} must exist`);

@@ -21,16 +21,18 @@ const suffixes = {
   security: '.security.test.ts',
 };
 const ts = [];
-for (const root of ['apps/cli', 'apps/core', 'apps/worker', 'packages', 'tests'])
-  ts.push(
-    ...collect(root, (f) => {
-      if (!f.endsWith('.test.ts')) return false;
-      if (suite === 'all') return true;
-      const s = suffixes[suite];
-      if (f.endsWith(s)) return true;
-      return suite === 'unit' && !Object.values(suffixes).some((x) => f.endsWith(x));
-    }),
-  );
+if (suite !== 'scripts') {
+  for (const root of ['apps/cli', 'apps/core', 'apps/worker', 'packages', 'tests'])
+    ts.push(
+      ...collect(root, (f) => {
+        if (!f.endsWith('.test.ts')) return false;
+        if (suite === 'all' || suite === 'product') return true;
+        const s = suffixes[suite];
+        if (s && f.endsWith(s)) return true;
+        return suite === 'unit' && !Object.values(suffixes).some((x) => f.endsWith(x));
+      }),
+    );
+}
 if (ts.length) {
   const out = '.test-dist';
   rmSync(out, { recursive: true, force: true });
@@ -44,7 +46,7 @@ if (ts.length) {
   const r = spawnSync(process.execPath, ['--test', ...mapped], { stdio: 'inherit' });
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
-if (suite === 'all' || suite === 'unit') {
+if (suite === 'all' || suite === 'scripts') {
   const js = collect('scripts/test', (f) => f.endsWith('.test.mjs'));
   if (js.length) {
     const r = spawnSync(process.execPath, ['--test', ...js], { stdio: 'inherit' });

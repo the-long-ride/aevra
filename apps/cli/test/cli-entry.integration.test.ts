@@ -16,6 +16,18 @@ test('CLI executes when launched through a linked package path', () => {
     const result = spawnSync(process.execPath, [cliPath, '--help'], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Usage:/);
+
+    const shortHelpResult = spawnSync(process.execPath, [cliPath, '-h'], { encoding: 'utf8' });
+    assert.equal(shortHelpResult.status, 0, shortHelpResult.stderr);
+    assert.match(shortHelpResult.stdout, /Usage:/);
+
+    const versionResult = spawnSync(process.execPath, [cliPath, '--version'], { encoding: 'utf8' });
+    assert.equal(versionResult.status, 0, versionResult.stderr);
+    assert.equal(versionResult.stdout.trim(), '0.1.1');
+
+    const shortVersionResult = spawnSync(process.execPath, [cliPath, '-v'], { encoding: 'utf8' });
+    assert.equal(shortVersionResult.status, 0, shortVersionResult.stderr);
+    assert.equal(shortVersionResult.stdout.trim(), '0.1.1');
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

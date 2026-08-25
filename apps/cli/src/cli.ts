@@ -12,6 +12,7 @@ import { loadAdminCredentials } from '../../core/src/admin/admin-credentials.js'
 import { loadCoreConfig } from '../../core/src/config.js';
 import { createCoreRuntime } from '../../core/src/runtime.js';
 import { createUserServiceAdapter } from '../../core/src/service/service-manager.js';
+import { AEVRA_VERSION } from '../../core/src/version.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { SettingsRepository } from '../../../packages/store/src/settings.js';
 import {
@@ -123,6 +124,11 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     return 0;
   }
 
+  if (command.command === 'version') {
+    console.log(AEVRA_VERSION);
+    return 0;
+  }
+
   if (command.command === 'completion') {
     process.stdout.write(completionText(command.shell));
     return 0;
@@ -141,6 +147,10 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   try {
     return await dispatchCommand(command, {
       help: async () => 0,
+      version: async () => {
+        console.log(AEVRA_VERSION);
+        return 0;
+      },
       start: (current) =>
         runStartCommand(config, current, {
           run: (currentConfig, hooks) =>

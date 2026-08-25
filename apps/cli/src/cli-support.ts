@@ -13,6 +13,7 @@ export function usageText(): string {
     '  aevra status [--json]',
     '  aevra backup verify <file>|restore <file> [--yes]',
     '  aevra completion bash|zsh|powershell',
+    '  aevra --version',
     '  aevra --help',
   ].join('\n');
 }
@@ -57,7 +58,10 @@ export function completionText(shell: 'bash' | 'zsh' | 'powershell'): string {
     'status',
     'backup',
     'completion',
+    '--version',
+    '-v',
     '--help',
+    '-h',
   ];
   const startOptions = '--ui';
 
@@ -96,7 +100,7 @@ _aevra "$@"
     @('--ui') | Where-Object { $_ -like "$wordToComplete*" }
     return
   }
-  @('start','ui','setup','service','connectors','sessions','audit','status','backup','completion') | Where-Object { $_ -like "$wordToComplete*" }
+  @('start','ui','setup','service','connectors','sessions','audit','status','backup','completion','--version','-v','--help','-h') | Where-Object { $_ -like "$wordToComplete*" }
 }
 `;
 }

@@ -5,6 +5,7 @@ import { dispatchCommand, type CliDispatchHandlers } from '../src/dispatch.js';
 
 const commands: Array<[keyof CliDispatchHandlers, AevraCommand]> = [
   ['help', { command: 'help' }],
+  ['version', { command: 'version' }],
   ['start', { command: 'start', uiDestination: null }],
   ['ui', { command: 'ui', logoutAll: false }],
   ['setup', { command: 'setup' }],
