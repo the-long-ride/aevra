@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { resolveCapabilityPath } from '../src/path-policy.js';
 test('resolves inside root and blocks dot-dot', async () => {
   const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-path-'));
+  const canonicalRoot = await realpath(d);
   writeFileSync(path.join(d, 'a.txt'), 'x');
   const roots = [
     {
@@ -21,7 +23,7 @@ test('resolves inside root and blocks dot-dot', async () => {
     (await resolveCapabilityPath('/a.txt', roots, 'write')).canonicalHostPath,
     /a\.txt$/,
   );
-  assert.match(
+  assert.equal(
     (
       await resolveCapabilityPath(
         '/',
@@ -37,7 +39,7 @@ test('resolves inside root and blocks dot-dot', async () => {
         'command',
       )
     ).canonicalHostPath,
-    new RegExp(d.replace(/\\/g, '\\\\')),
+    canonicalRoot,
   );
   await assert.rejects(() => resolveCapabilityPath('/../secret', roots, 'write'), /escapes/);
   await assert.rejects(() => resolveCapabilityPath('/sub/../../outside', roots, 'read'), /escapes/);

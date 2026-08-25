@@ -14,15 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Full gate (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
+  static-checks:
+    name: Static and repository checks
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -30,12 +24,66 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:scripts
+
+  node-coverage:
+    name: Node coverage (85%)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
       - name: Pre-pull sandbox image
-        if: runner.os == 'Linux'
         run: docker pull node:22-alpine
       - name: Install Podman
-        if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq podman
+      - run: npm run test:coverage:node
+
+  web-coverage:
+    name: Web coverage (85%)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:coverage:web
+
+  browser-parity:
+    name: Build and browser parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:gate
+      - run: npm run build
+      - run: npm run test:ui-parity:only
+
+  windows-portability:
+    name: Windows portability
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:portability

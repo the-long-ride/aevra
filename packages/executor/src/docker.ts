@@ -94,9 +94,8 @@ export class DockerBackend implements SandboxBackend {
 
   async available() {
     try {
-      return (
-        (await cmd(this.executable, ['version', '--format', '{{.Server.Version}}'])).code === 0
-      );
+      const info = await cmd(this.executable, ['info', '--format', '{{.OSType}}']);
+      return info.code === 0 && info.stdout.trim().toLowerCase() === 'linux';
     } catch {
       return false;
     }

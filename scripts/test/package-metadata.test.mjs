@@ -12,7 +12,9 @@ test('package metadata exposes only gateway runtime assets', async () => {
   assert.equal(pkg.bugs?.url, 'https://github.com/the-long-ride/aevra/issues');
   assert.equal(pkg.homepage, 'https://github.com/the-long-ride/aevra#readme');
   assert.equal(pkg.bin?.aevra, 'dist/apps/cli/src/cli.js');
-  assert.equal(pkg.scripts?.prepare, 'npm run build');
+  assert.equal(pkg.scripts?.prepack, 'npm run build');
+  assert.equal(pkg.scripts?.prepare, undefined);
+  assert.equal(pkg.scripts?.prepublishOnly, undefined);
 
   const runtimePaths = [
     'dist/apps/cli/src',

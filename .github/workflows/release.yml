@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -30,6 +31,27 @@ jobs:
         with:
           ref: ${{ inputs.tag != '' && inputs.tag || github.ref }}
 
+      - name: Verify exact commit passed quality gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_SHA="$(git rev-parse HEAD)"
+          echo "Release SHA: $RELEASE_SHA"
+          SUCCESSFUL_RUNS="$(
+            gh api \
+              --method GET \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/quality-gate.yml/runs" \
+              -f head_sha="$RELEASE_SHA" \
+              -f status=completed \
+              -f per_page=100 \
+              --jq '[.workflow_runs[] | select(.conclusion == "success" and .event == "push")] | length'
+          )"
+          if [ "$SUCCESSFUL_RUNS" -lt 1 ]; then
+            echo "::error::Release commit $RELEASE_SHA has no successful push-triggered Quality gate run."
+            exit 1
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -38,16 +60,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run quality gate
-        run: npm run test:gate
-
-      - name: Build package
-        run: npm run build
+        run: npm ci --ignore-scripts
 
       - name: Publish to npm (Trusted Publishing / Provenance)
         run: npm publish --provenance --access public
