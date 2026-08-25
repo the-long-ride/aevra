@@ -45,6 +45,27 @@
     "vitest": "^3.0.0"
   },
   "description": "Workspace-scoped local MCP execution gateway for AI web interfaces with policy, recovery, and audit controls.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "ai-gateway",
+    "ai-agent",
+    "chatgpt",
+    "claude",
+    "grok",
+    "automation",
+    "gateway",
+    "security",
+    "zero-trust",
+    "audit",
+    "local",
+    "workspace",
+    "cli",
+    "cross-platform",
+    "oauth",
+    "hooks"
+  ],
   "bin": {
     "aevra": "dist/apps/cli/src/cli.js"
   },
