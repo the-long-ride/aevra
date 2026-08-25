@@ -2,6 +2,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  margin-top: 16px;
 }
 
 .settings-grid > .wide,
@@ -11,6 +12,56 @@
 
 .execution-panel {
   align-self: start;
+}
+
+.hooks-panel .panel-head p {
+  max-width: 920px;
+  margin: 4px 0 0;
+  color: var(--mute);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.hook-form {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.hook-form-main,
+.hook-form-runtime {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+.hook-form-runtime {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.hook-json-field input {
+  font-family: inherit;
+}
+
+.hook-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 190px);
+  align-items: start;
+  gap: 20px;
+  border-block: 1px solid var(--hairline);
+  padding: 12px 0;
+}
+
+.hook-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  align-items: center;
+  gap: 6px 16px;
+}
+
+.hook-state-field {
+  min-width: 0;
 }
 
 .guide-mobile-picker {
@@ -272,6 +323,15 @@
     grid-column: auto;
   }
 
+  .hook-form-main,
+  .hook-form-runtime {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hook-controls {
+    grid-template-columns: 1fr;
+  }
+
   .guide-mobile-picker {
     position: sticky;
     z-index: 12;
@@ -309,10 +369,20 @@
 @media (max-width: 640px) {
   .settings-grid {
     gap: 12px;
+    margin-top: 12px;
   }
 
   .panel.remote-card {
     padding: 12px;
+  }
+
+  .hook-form-main,
+  .hook-form-runtime {
+    grid-template-columns: 1fr;
+  }
+
+  .hook-permission-grid {
+    grid-template-columns: 1fr;
   }
 
   .guide-mobile-picker {

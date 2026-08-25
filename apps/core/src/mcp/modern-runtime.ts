@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { VerifiedRemoteIdentity } from '../auth/cloudflare.js';
+import type { AevraOAuthService } from '../auth/oauth.js';
 import { handleJsonRpc } from '../../../../packages/mcp-tools/src/register.js';
 import type { McpActivityRecorder } from './activity-recorder.js';
 import type { McpDiagnostics } from './diagnostics.js';
@@ -26,6 +27,7 @@ interface ModernRuntimeDependencies {
   diagnostics: McpDiagnostics;
   activity: McpActivityRecorder;
   hooks?: McpHookEmitter;
+  oauth?: AevraOAuthService;
 }
 
 function runtimeHooks(deps: ModernRuntimeDependencies): McpHookEmitter | undefined {
@@ -100,7 +102,7 @@ export async function handleModernRuntimeRequest(
     await sendHookedResponse(res, hooks, context, 200, {
       jsonrpc: '2.0',
       id: body.id ?? null,
-      result: modernDiscoverResult(),
+      result: modernDiscoverResult(deps.oauth?.issuer),
     });
     return;
   }
@@ -134,7 +136,7 @@ export async function handleModernRuntimeRequest(
       body,
       MODERN_PROTOCOL_VERSION,
     );
-    const result = decorateModernResult(raw, body?.method);
+    const result = decorateModernResult(raw, body?.method, deps.oauth?.issuer);
     deps.activity.finish(activity, result);
     await sendHookedResponse(res, hooks, context, 200, result);
   } catch (error) {

@@ -78,6 +78,7 @@ function responseHeaders(headers: IncomingHttpHeaders): IncomingHttpHeaders {
 
 function usesMcpOrigin(pathname: string): boolean {
   return (
+    pathname === '/health' ||
     pathname === '/mcp' ||
     pathname.startsWith('/mcp/') ||
     pathname === '/oauth' ||

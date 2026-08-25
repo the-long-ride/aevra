@@ -3,43 +3,67 @@ export interface TunnelHealth {
   checkedAt: string | null;
   message: string | null;
 }
+
 export class TunnelWatchdog {
   status: TunnelHealth = { reachable: null, checkedAt: null, message: null };
   private timer?: NodeJS.Timeout;
+  private inFlight?: Promise<TunnelHealth>;
+  private stopped = true;
   private wasReachable = false;
+
   constructor(
     private probe: () => Promise<{ reachable: boolean; message: string }>,
     private intervalMs: number = 60_000,
     private onDrop?: (message: string) => void,
   ) {}
+
   start() {
-    void this.tick();
-    this.timer = setInterval(() => void this.tick(), this.intervalMs);
-    this.timer.unref?.();
+    this.stopped = false;
+    void this.runLoop();
     return this;
   }
+
   stop() {
-    if (this.timer) clearInterval(this.timer);
+    this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
   }
-  private async tick() {
+
+  checkNow(): Promise<TunnelHealth> {
+    if (this.inFlight) return this.inFlight;
+    this.inFlight = this.tick().finally(() => {
+      this.inFlight = undefined;
+    });
+    return this.inFlight;
+  }
+
+  private async runLoop() {
+    await this.checkNow();
+    if (this.stopped) return;
+    this.timer = setTimeout(() => void this.runLoop(), this.intervalMs);
+    this.timer.unref?.();
+  }
+
+  private async tick(): Promise<TunnelHealth> {
     try {
-      const r = await this.probe();
+      const result = await this.probe();
       this.status = {
-        reachable: r.reachable,
+        reachable: result.reachable,
         checkedAt: new Date().toISOString(),
-        message: r.message,
+        message: result.message,
       };
-      if (this.wasReachable && !r.reachable && this.onDrop)
-        this.onDrop(r.message || 'tunnel unreachable');
-      this.wasReachable = r.reachable;
-    } catch (e) {
+      if (this.wasReachable && !result.reachable && this.onDrop) {
+        this.onDrop(result.message || 'tunnel unreachable');
+      }
+      this.wasReachable = result.reachable;
+    } catch (error) {
       this.status = {
         reachable: false,
         checkedAt: new Date().toISOString(),
-        message: e instanceof Error ? e.message : String(e),
+        message: error instanceof Error ? error.message : String(error),
       };
       this.wasReachable = false;
     }
+    return this.status;
   }
 }

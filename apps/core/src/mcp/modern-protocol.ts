@@ -86,14 +86,14 @@ export function validateModernRequest(req: IncomingMessage, body: any) {
   }
 }
 
-function serverMeta(existing?: Record<string, unknown>) {
+function serverMeta(baseUrl?: string, existing?: Record<string, unknown>) {
   return {
     ...(existing ?? {}),
-    'io.modelcontextprotocol/serverInfo': aevraServerInfo(),
+    'io.modelcontextprotocol/serverInfo': aevraServerInfo(baseUrl),
   };
 }
 
-export function modernDiscoverResult() {
+export function modernDiscoverResult(baseUrl?: string) {
   return {
     resultType: 'complete',
     supportedVersions: [MODERN_PROTOCOL_VERSION],
@@ -102,10 +102,10 @@ export function modernDiscoverResult() {
       resources: { listChanged: false },
       prompts: { listChanged: false },
     },
-    instructions: aevraServerInfo().description,
+    instructions: aevraServerInfo(baseUrl).description,
     ttlMs: CACHE_TTL_MS,
     cacheScope: 'public',
-    _meta: serverMeta(),
+    _meta: serverMeta(baseUrl),
   };
 }
 
@@ -115,11 +115,11 @@ function compareOrdinal(left: unknown, right: unknown) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-export function decorateModernResult(response: any, method?: string) {
+export function decorateModernResult(response: any, method?: string, baseUrl?: string) {
   if (!response?.result || response?.error) return response;
   const result = { ...response.result };
   result.resultType ??= 'complete';
-  result._meta = serverMeta(result._meta);
+  result._meta = serverMeta(baseUrl, result._meta);
   if (CACHEABLE_METHODS.has(method ?? '')) {
     result.ttlMs ??= CACHE_TTL_MS;
     result.cacheScope ??= 'private';

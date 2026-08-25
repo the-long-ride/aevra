@@ -115,9 +115,9 @@ for (const item of cases) {
 
     try {
       await runtime.start();
-      const gatewayUrl = (runtime as any).gatewayUrl as string;
+      const gatewayUrl = runtime.gatewayUrl;
       assert.match(gatewayUrl, /^https:\/\//);
-      assert.equal((runtime as any).publicUrl, item.publicUrl);
+      assert.equal(runtime.publicUrl, item.publicUrl);
       const metadata = await getJson(`${gatewayUrl}/.well-known/oauth-protected-resource/mcp`);
       assert.equal(metadata.resource, `${item.publicUrl}/mcp`);
       assert.deepEqual(metadata.authorization_servers, [item.publicUrl]);
@@ -154,6 +154,72 @@ test('direct exposure rejects the managed localhost certificate before opening t
   });
   try {
     await assert.rejects(runtime.start(), /Direct exposure requires trusted TLS/i);
+  } finally {
+    await runtime.close();
+    rmSync(stateDir, { recursive: true, force: true });
+  }
+});
+
+test('runtime health exposes live tunnel reachability for configured remote exposure', async () => {
+  const stateDir = mkdtempSync(path.join(os.tmpdir(), 'aevra-live-tunnel-health-'));
+  const config = {
+    ...loadCoreConfig({
+      AEVRA_STATE_DIR: stateDir,
+      AEVRA_USERNAME: 'admin',
+      AEVRA_PASSWORD: 'secret',
+    }),
+    publicPort: 0,
+    adminPort: 0,
+    mcpPort: 0,
+  };
+  const database = AevraDatabase.open(config.databasePath);
+  new SettingsRepository(database.raw()).set('exposure.config', {
+    provider: 'cloudflare',
+    publicUrl: 'https://cloudflare.example.com',
+    cloudflare: {
+      ownership: 'external',
+      authMode: 'oauth',
+      hostname: 'cloudflare.example.com',
+    },
+  } satisfies ExposureConfig);
+  database.close();
+
+  let checks = 0;
+  const cloudflare: any = {
+    start: async () => ({ publicUrl: 'https://cloudflare.example.com' }),
+    stop: async () => {},
+    status: async () => ({ state: 'ready' }),
+    ownership: () => 'external',
+    detectCloudflared: async () => ({ found: true }),
+    authenticationStatus: async () => ({ authenticated: true, message: 'ok' }),
+    authenticate: async () => ({ code: 0, stdout: '', stderr: '' }),
+    setup: async () => {
+      throw new Error('unused');
+    },
+    startManagedTunnel: async () => {},
+    stopManagedTunnel: async () => {},
+    checkReachability: async () => {
+      checks++;
+      return { reachable: true, message: 'reachable' };
+    },
+  };
+  const runtime = await createCoreRuntime(config, {
+    worker: worker(),
+    cloudflare,
+    ensureTls: (current) => ensureLocalTls(current.stateDir, { trust: false }),
+  });
+
+  try {
+    await runtime.start();
+    let health: any;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      health = await getJson(`${runtime.gatewayUrl}/api/health`);
+      if (health.tunnelReachable === true) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(health.tunnel, 'configured');
+    assert.equal(health.tunnelReachable, true);
+    assert.equal(checks >= 1, true);
   } finally {
     await runtime.close();
     rmSync(stateDir, { recursive: true, force: true });
