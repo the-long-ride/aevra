@@ -6,6 +6,7 @@ import { handleConnectionRoutes } from './connection-routes.js';
 import { sendAdminResponse } from './http.js';
 import { handleLocalFilesystemRoutes } from './local-filesystem-routes.js';
 import { handleOperationRoutes } from './operation-routes.js';
+import { handlePowerRoutes } from './power-routes.js';
 import { handleSessionConnectorRoutes } from './session-connector-routes.js';
 import { handleSettingsRoutes } from './settings-routes.js';
 import type { AdminApiContext, AdminRouteHandler } from './types.js';
@@ -21,6 +22,7 @@ const handlers: AdminRouteHandler[] = [
   handleConnectionRoutes,
   handleSessionConnectorRoutes,
   handleOperationRoutes,
+  handlePowerRoutes,
   handleSettingsRoutes,
   handleAccessRoutes,
 ];

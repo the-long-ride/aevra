@@ -40,8 +40,42 @@ test('asks for credentials when no session exists and reports invalid logins', a
   expect(await screen.findByTestId('admin-login')).toBeInTheDocument();
   await submitCredentials();
   const alert = await screen.findByRole('alert');
-  expect(alert).toHaveTextContent('Invalid credentials');
+  expect(alert).toHaveTextContent('Invalid username or password');
   expect(screen.queryByText('Secured content')).not.toBeInTheDocument();
+});
+
+test.each([
+  [
+    403,
+    {
+      error: {
+        code: 'CSRF_REJECTED',
+        message: 'State-changing admin requests must be same-origin',
+      },
+    },
+    'Login origin is not trusted',
+  ],
+  [
+    400,
+    { error: { code: 'HTTPS_REQUIRED', message: 'Admin login requires HTTPS' } },
+    'Admin login requires HTTPS',
+  ],
+  [503, { error: 'Admin authentication unavailable' }, 'Admin authentication unavailable'],
+])('shows a safe login error for HTTP %s', async (status, body, expected) => {
+  installApiFixtures({
+    routes: { '/api/auth/session': { authenticated: false } },
+    mutationResponses: {
+      'POST /api/auth/login': new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      }),
+    },
+  });
+  renderGate();
+
+  await screen.findByTestId('admin-login');
+  await submitCredentials();
+  expect(await screen.findByRole('alert')).toHaveTextContent(expected);
 });
 
 test('explains rate limiting when login attempts are throttled', async () => {

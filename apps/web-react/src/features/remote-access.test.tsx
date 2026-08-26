@@ -36,7 +36,7 @@ test('Remote Access settings exposes all providers and keeps Cloudflare Access f
   }
 
   await user.click(screen.getByRole('option', { name: 'External / Custom' }));
-  expect(screen.getByLabelText('Public HTTPS URL')).toBeInTheDocument();
+  expect(screen.getByLabelText('Public MCP HTTPS URL')).toBeInTheDocument();
   expect(screen.queryByLabelText('Access issuer')).not.toBeInTheDocument();
   const hints = screen.getByTestId('external-provider-hints');
   for (const text of ['Caddy', 'Tailscale Funnel', 'FRP', 'reverse SSH', 'another ngrok process']) {

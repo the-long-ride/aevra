@@ -61,3 +61,44 @@ test('Active connections marks YOLO sessions and explains immutable approvals', 
     screen.getByText('YOLO enabled — immutable security approvals still require confirmation'),
   ).toBeInTheDocument();
 });
+
+test('Runtime overview shows sleep inhibition state and reason', async () => {
+  installApiFixtures({
+    routes: {
+      '/api/dashboard/runtime': {
+        status: { version: '0.1.0' },
+        uptimeSeconds: 100,
+        pending: { total: 0 },
+        stats: {
+          sessions: 1,
+          workspaceLeases: 1,
+          processes: 0,
+          openChanges: 0,
+          toolCalls: 0,
+          avgToolLatencyMs: null,
+          connectors: 0,
+        },
+        power: {
+          mode: 'remote-connections',
+          active: true,
+          supported: true,
+          platform: 'win32',
+          reason: '1 remote connection',
+          remoteConnections: 1,
+          managedProcesses: 0,
+        },
+        metrics: [],
+        activeConnections: [],
+        connectors: [],
+      },
+    },
+  });
+  render(
+    <DialogProvider>
+      <DashboardPage />
+    </DialogProvider>,
+  );
+
+  expect(await screen.findByText('Sleep inhibition')).toBeInTheDocument();
+  expect(screen.getByText('Active · 1 remote connection')).toBeInTheDocument();
+});

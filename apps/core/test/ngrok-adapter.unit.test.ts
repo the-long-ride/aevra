@@ -66,3 +66,50 @@ test('managed ngrok surfaces executable startup errors instead of inventing a pu
   await assert.rejects(() => adapter.start('https://localhost:47830'), /ENOENT/);
   assert.equal((await adapter.status()).state, 'error');
 });
+
+test('managed ngrok stable domain uses --url and requires discovery to match', async () => {
+  const child = childProcessDouble();
+  const calls: Array<{ executable: string; args: string[] }> = [];
+  const adapter = new NgrokAdapter({
+    spawn(executable, args) {
+      calls.push({ executable, args: [...args] });
+      return child as any;
+    },
+    async fetchJson() {
+      return { tunnels: [{ public_url: 'https://stable.example.ngrok.app' }] };
+    },
+    async sleep() {},
+  });
+
+  assert.deepEqual(
+    await adapter.start('https://localhost:47830', 'https://stable.example.ngrok.app'),
+    { publicUrl: 'https://stable.example.ngrok.app' },
+  );
+  assert.deepEqual(calls[0]?.args, [
+    'http',
+    'https://localhost:47830',
+    '--url',
+    'https://stable.example.ngrok.app',
+    '--log=stdout',
+    '--log-format=json',
+  ]);
+});
+
+test('managed ngrok stable domain rejects a discovered URL mismatch', async () => {
+  const child = childProcessDouble();
+  const adapter = new NgrokAdapter({
+    spawn() {
+      return child as any;
+    },
+    async fetchJson() {
+      return { tunnels: [{ public_url: 'https://other.example.ngrok.app' }] };
+    },
+    async sleep() {},
+  });
+
+  await assert.rejects(
+    () => adapter.start('https://localhost:47830', 'https://stable.example.ngrok.app'),
+    /stable URL mismatch/i,
+  );
+  assert.equal(child.killed, true);
+});

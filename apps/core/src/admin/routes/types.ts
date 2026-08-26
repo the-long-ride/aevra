@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { KeepAwakeService } from '../../power/keep-awake-service.js';
 
 export interface AdminApiContext {
   workspaces?: any;
@@ -22,6 +23,7 @@ export interface AdminApiContext {
   vault?: any;
   database?: any;
   activity?: any;
+  power?: Pick<KeepAwakeService, 'status' | 'configure'>;
   mcpDiagnostics?: () => unknown;
   safeMode?: () => boolean;
 }

@@ -16,7 +16,7 @@ async function load(signal: AbortSignal) {
   return requestJson<ChangeRow[]>('/api/changes', { signal });
 }
 
-export function ChangesPanel() {
+export function ChangesPanel({ contained = false }: { contained?: boolean }) {
   const resource = useApiResource(load);
   const dialog = useDialog();
 
@@ -62,6 +62,8 @@ export function ChangesPanel() {
         rows={resource.data ?? []}
         pageSize={25}
         searchPlaceholder="Search change sets…"
+        paginationPosition={contained ? 'toolbar' : 'footer'}
+        fillAvailableHeight={contained}
         filters={[{ key: 'state', label: 'State' }]}
         columns={[
           { key: 'name', label: 'Change set', value: (row) => row.name ?? row.id },

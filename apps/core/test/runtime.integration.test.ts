@@ -121,6 +121,45 @@ test('runtime starts configured managed Cloudflare through the provider-neutral 
   assert.equal(stops, 1);
 });
 
+test('runtime starts and closes keep-awake service from persisted policy', async () => {
+  const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-core-keep-awake-'));
+  const c = {
+    ...loadCoreConfig({
+      AEVRA_STATE_DIR: d,
+      AEVRA_USERNAME: 'admin',
+      AEVRA_PASSWORD: 'secret',
+    }),
+    publicPort: 0,
+    adminPort: 0,
+    mcpPort: 0,
+  };
+  const db = AevraDatabase.open(c.databasePath);
+  new SettingsRepository(db.raw()).set('power.keepAwake', { mode: 'always' });
+  db.close();
+
+  let acquireCalls = 0;
+  let releaseCalls = 0;
+  const sleepInhibitor = {
+    async acquire() {
+      acquireCalls++;
+    },
+    async release() {
+      releaseCalls++;
+    },
+    supported: () => true,
+    message: () => undefined,
+  };
+  const r = await createCoreRuntime(c, {
+    worker: workerStub(),
+    sleepInhibitor,
+    ensureTls: (config) => ensureLocalTls(config.stateDir, { trust: false }),
+  });
+
+  await r.start();
+  assert.equal(acquireCalls, 1);
+  await r.close();
+  assert.ok(releaseCalls >= 1);
+});
 test('runtime cleans partially started worker when public gateway startup fails', async () => {
   const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-core-start-fail-'));
   const blocker = createServer();

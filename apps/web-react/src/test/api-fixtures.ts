@@ -91,6 +91,15 @@ export function installApiFixtures(options: FixtureOptions = {}) {
           avgToolLatencyMs: 10,
           connectors: 2,
         },
+        power: {
+          mode: 'remote-connections',
+          active: true,
+          supported: true,
+          platform: 'win32',
+          reason: '1 remote connection',
+          remoteConnections: 1,
+          managedProcesses: 0,
+        },
         metrics: [{ tool: 'file_read', calls: 3, avgMs: 10, totalMs: 30 }],
         activeConnections: [
           {
@@ -136,6 +145,18 @@ export function installApiFixtures(options: FixtureOptions = {}) {
     ['/api/audit/verify', { valid: true }],
     ['/api/audit/export?format=json', []],
     ['/api/settings', {}],
+    [
+      '/api/power/keep-awake',
+      {
+        mode: 'remote-connections',
+        active: false,
+        supported: true,
+        platform: 'win32',
+        reason: 'No matching activity',
+        remoteConnections: 0,
+        managedProcesses: 0,
+      },
+    ],
     ['/api/policy/command-families', {}],
     ['/api/policy/network-rules', []],
     [

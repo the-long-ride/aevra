@@ -1,0 +1,133 @@
+.remote-config {
+  display: grid;
+  gap: 12px;
+}
+
+.remote-config-grid {
+  display: grid;
+  grid-template-columns: 2fr 1.3fr 1fr;
+  gap: 10px;
+}
+
+.remote-config-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  background: var(--canvas);
+}
+
+.remote-config-section-head h4,
+.remote-config-section-head p {
+  margin: 0;
+}
+
+.remote-config-section-head h4 {
+  font-size: 13px;
+}
+
+.remote-config-section-head p,
+.field-help,
+.trusted-origin-empty {
+  color: var(--mute);
+  font-size: 10px;
+}
+
+.remote-config-section-head p {
+  margin-top: 4px;
+}
+
+.remote-admin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.remote-admin-url-control,
+.remote-trusted-origins {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.remote-admin-label-row,
+.remote-admin-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.remote-admin-label-row label,
+.remote-trusted-origins > span {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.remote-origin-badge,
+.remote-admin-probe {
+  flex: none;
+  border: 1px solid var(--hairline);
+  padding: 2px 6px;
+  font-size: 9px;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.remote-admin-probe.success {
+  color: var(--success);
+}
+
+.remote-admin-probe.warning,
+.remote-admin-probe.error {
+  color: var(--warning);
+}
+
+.remote-admin-url-row,
+.trusted-origin-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.remote-admin-url-row input,
+.trusted-origin-add input {
+  min-width: 0;
+}
+
+.trusted-origin-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  align-items: center;
+}
+
+.trusted-origin-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  border: 1px solid var(--hairline);
+  padding: 3px 4px 3px 7px;
+  background: var(--surface-soft);
+}
+
+.trusted-origin-row code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trusted-origin-remove {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 17px;
+  line-height: 1;
+}

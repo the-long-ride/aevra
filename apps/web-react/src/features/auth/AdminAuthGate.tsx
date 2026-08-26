@@ -20,6 +20,32 @@ async function readSession(): Promise<boolean> {
   return value.authenticated === true;
 }
 
+async function loginErrorMessage(response: Response): Promise<string> {
+  if (response.status === 401) return 'Invalid username or password';
+  if (response.status === 429) return 'Too many login attempts. Try again later.';
+  if (response.status === 503) return 'Admin authentication unavailable';
+
+  let code = '';
+  try {
+    const body = (await response.json()) as {
+      error?: string | { code?: unknown; message?: unknown };
+    };
+    if (body.error && typeof body.error === 'object' && typeof body.error.code === 'string') {
+      code = body.error.code;
+    }
+  } catch {
+    // Fall through to a safe generic message.
+  }
+
+  if (response.status === 403 && code === 'CSRF_REJECTED') {
+    return 'Login origin is not trusted';
+  }
+  if (response.status === 400 && code === 'HTTPS_REQUIRED') {
+    return 'Admin login requires HTTPS';
+  }
+  return 'Invalid credentials';
+}
+
 export function AdminAuthGate({ children, theme, onToggleTheme }: AdminAuthGateProps) {
   const [state, setState] = useState<AuthState>('checking');
   const [busy, setBusy] = useState(false);
@@ -44,11 +70,7 @@ export function AdminAuthGate({ children, theme, onToggleTheme }: AdminAuthGateP
         body: JSON.stringify(credentials),
       });
       if (!response.ok) {
-        setError(
-          response.status === 429
-            ? 'Too many login attempts. Try again later.'
-            : 'Invalid credentials',
-        );
+        setError(await loginErrorMessage(response));
         return;
       }
       if (await readSession()) {

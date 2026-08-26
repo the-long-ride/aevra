@@ -6,6 +6,8 @@ export type ExposureProvider = 'local' | 'direct' | 'cloudflare' | 'ngrok' | 'ex
 export interface ExposureConfig {
   provider: ExposureProvider;
   publicUrl?: string;
+  adminPublicUrl?: string;
+  trustedAdminOrigins?: string[];
   direct?: { host: string };
   cloudflare?: {
     tunnelId?: string;
@@ -15,7 +17,7 @@ export interface ExposureConfig {
     issuer?: string;
     audience?: string;
   };
-  ngrok?: { ownership: 'managed' | 'external' };
+  ngrok?: { ownership: 'managed' | 'external'; domainMode?: 'automatic' | 'stable' };
 }
 
 export interface ExposureStatus {
@@ -23,6 +25,8 @@ export interface ExposureStatus {
   state: 'stopped' | 'ready' | 'error' | string;
   localGatewayUrl?: string;
   publicUrl?: string;
+  adminPublicUrl?: string;
+  trustedAdminOrigins?: string[];
   message?: string;
   restartRequired?: boolean;
   checkedAt?: string;
@@ -170,6 +174,18 @@ export interface RuntimeHealthStatus {
   safeMode?: boolean;
 }
 
+export type KeepAwakeMode = 'off' | 'remote-connections' | 'managed-processes' | 'always';
+
+export interface KeepAwakeStatus {
+  mode: KeepAwakeMode;
+  active: boolean;
+  supported: boolean;
+  platform: string;
+  reason: string;
+  remoteConnections: number;
+  managedProcesses: number;
+  message?: string;
+}
 export interface DashboardRuntimeSnapshot {
   status: RuntimeHealthStatus;
   uptimeSeconds: number;
@@ -185,6 +201,7 @@ export interface DashboardRuntimeSnapshot {
     avgToolLatencyMs: number | null;
     connectors: number;
   };
+  power?: KeepAwakeStatus | null;
   metrics: Array<Record<string, unknown>>;
   activeConnections: Array<Record<string, unknown>>;
   connectors: ConnectorSummary[];

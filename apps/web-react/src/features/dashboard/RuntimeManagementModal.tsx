@@ -49,12 +49,14 @@ export function RuntimeManagementModal({
 
   return (
     <ManagementModal open title={titles[kind]} onClose={onClose}>
-      {kind === 'processes' ? <ProcessesPanel /> : null}
-      {kind === 'changes' ? <ChangesPanel /> : null}
+      {kind === 'processes' ? <ProcessesPanel contained /> : null}
+      {kind === 'changes' ? <ChangesPanel contained /> : null}
       {kind === 'tools' ? (
         <DataTable
           id="react-dashboard-tools"
           rows={data.snapshot.metrics}
+          paginationPosition="toolbar"
+          fillAvailableHeight
           columns={[
             { key: 'tool', label: 'Tool' },
             { key: 'calls', label: 'Calls' },
@@ -79,6 +81,8 @@ export function RuntimeManagementModal({
           <DataTable
             id="react-dashboard-connectors"
             rows={data.snapshot.connectors}
+            paginationPosition="toolbar"
+            fillAvailableHeight
             columns={[
               { key: 'name', label: 'Connector' },
               { key: 'authType', label: 'Auth' },

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import https from 'node:https';
+import type { IncomingHttpHeaders } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -43,6 +44,36 @@ function getJson(url: string): Promise<any> {
         });
       })
       .once('error', reject);
+  });
+}
+
+function postJson(
+  url: string,
+  body: unknown,
+  headers: Record<string, string>,
+): Promise<{ status: number; headers: IncomingHttpHeaders; body: string }> {
+  return new Promise((resolve, reject) => {
+    const request = https.request(
+      url,
+      {
+        method: 'POST',
+        rejectUnauthorized: false,
+        headers: { 'content-type': 'application/json', ...headers },
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        response.on('end', () => {
+          resolve({
+            status: response.statusCode ?? 0,
+            headers: response.headers,
+            body: Buffer.concat(chunks).toString('utf8'),
+          });
+        });
+      },
+    );
+    request.once('error', reject);
+    request.end(JSON.stringify(body));
   });
 }
 
@@ -89,7 +120,7 @@ const cases: Array<{ name: string; config: ExposureConfig; publicUrl: string }> 
 ];
 
 for (const item of cases) {
-  test(`runtime OAuth metadata follows ${item.name} effective public URL`, async () => {
+  test(`runtime OAuth metadata uses ${item.name} MCP URL while Admin login uses its separate Admin URL`, async () => {
     const stateDir = mkdtempSync(path.join(os.tmpdir(), `aevra-exposure-${item.name}-`));
     const config = {
       ...loadCoreConfig({
@@ -102,7 +133,11 @@ for (const item of cases) {
       mcpPort: 0,
     };
     const database = AevraDatabase.open(config.databasePath);
-    new SettingsRepository(database.raw()).set('exposure.config', item.config);
+    const adminPublicUrl = `https://admin-${item.name}.example.com`;
+    new SettingsRepository(database.raw()).set('exposure.config', {
+      ...item.config,
+      adminPublicUrl,
+    });
     database.close();
 
     const runtime = await createCoreRuntime(config, {
@@ -121,6 +156,21 @@ for (const item of cases) {
       const metadata = await getJson(`${gatewayUrl}/.well-known/oauth-protected-resource/mcp`);
       assert.equal(metadata.resource, `${item.publicUrl}/mcp`);
       assert.deepEqual(metadata.authorization_servers, [item.publicUrl]);
+
+      const login = await postJson(
+        `${gatewayUrl}/api/auth/login`,
+        { username: 'admin', password: 'secret' },
+        { origin: adminPublicUrl, 'sec-fetch-site': 'same-origin' },
+      );
+      assert.equal(login.status, 200);
+      assert.match(String(login.headers['set-cookie'] ?? ''), /aevra_admin=/);
+
+      const rejectedMcpOrigin = await postJson(
+        `${gatewayUrl}/api/auth/login`,
+        { username: 'admin', password: 'secret' },
+        { origin: item.publicUrl, 'sec-fetch-site': 'same-origin' },
+      );
+      assert.equal(rejectedMcpOrigin.status, 403);
     } finally {
       await runtime.close();
       rmSync(stateDir, { recursive: true, force: true });

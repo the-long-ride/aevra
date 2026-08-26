@@ -3,6 +3,7 @@ import type { AevraDatabase } from '../../../packages/store/src/database.js';
 import type { WorkerClient } from '../../../packages/ipc/src/client.js';
 import type { CloudflareManager } from './cloudflare/manager.js';
 import type { LocalTlsMaterial } from './tls/local-tls.js';
+import type { SleepInhibitor } from './power/platform-sleep-inhibitor.js';
 
 export interface CoreRuntime {
   readonly adminUrl: string;
@@ -23,4 +24,5 @@ export interface RuntimeDependencies {
   tls?: LocalTlsMaterial;
   ensureTls?: (config: CoreConfig) => Promise<LocalTlsMaterial>;
   cloudflare?: CloudflareManager;
+  sleepInhibitor?: SleepInhibitor;
 }

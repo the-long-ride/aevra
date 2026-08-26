@@ -10,11 +10,9 @@ import { PermissionsPage } from './permissions/PermissionsPage';
 import { ProcessesPanel } from './processes/ProcessesPanel';
 import { SessionsPage } from './sessions/SessionsPage';
 import { WorkspacesPage } from './workspaces/WorkspacesPage';
-
 function renderPage(page: ReactElement) {
   return render(<DialogProvider>{page}</DialogProvider>);
 }
-
 function mutationCall(
   fetchMock: ReturnType<typeof installApiFixtures>,
   path: string,
@@ -30,7 +28,6 @@ function mutationCall(
     return url === path && String(init?.method ?? 'GET').toUpperCase() === method;
   });
 }
-
 test('Permissions creates normalized command rules and revokes remembered rules', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({
@@ -48,7 +45,6 @@ test('Permissions creates normalized command rules and revokes remembered rules'
     },
   });
   renderPage(<PermissionsPage />);
-
   expect(await screen.findByRole('heading', { name: 'Permissions' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Add rules' }));
   await user.type(screen.getByLabelText('Connector actors'), 'connector:Claude');
@@ -63,7 +59,6 @@ test('Permissions creates normalized command rules and revokes remembered rules'
   expect(matchers).not.toBeNull();
   fireEvent.change(matchers!, { target: { value: 'git:status\nnpm:test' } });
   await user.click(screen.getByRole('button', { name: 'Create rules' }));
-
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/permissions/bulk', 'POST')).toBeTruthy(),
   );
@@ -73,17 +68,23 @@ test('Permissions creates normalized command rules and revokes remembered rules'
     workspaceIds: ['ws-1'],
     commandMatchers: ['git:status', 'npm:test'],
   });
-
   await user.click(await screen.findByRole('button', { name: 'Revoke' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/permissions/rule-1', 'DELETE')).toBeTruthy(),
   );
 });
-
 test('Workspaces adds and removes mounts, saves admission, and can register another root', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({
     routes: {
+      '/api/workspaces': [
+        {
+          id: 'ws-1',
+          name: 'Aevra',
+          description: 'Local gateway workspace',
+          hostRoot: '/repo',
+        },
+      ],
       '/api/workspaces/ws-1/mounts': [
         {
           id: 'mount-1',
@@ -113,11 +114,27 @@ test('Workspaces adds and removes mounts, saves admission, and can register anot
     },
   });
   renderPage(<WorkspacesPage />);
-
   expect(await screen.findByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Details' }));
   expect(await screen.findByText('/external/shared')).toBeInTheDocument();
-
+  const detailsDialog = screen.getByRole('dialog', { name: 'Aevra' });
+  const detailsWorkspaceName = within(detailsDialog).getByLabelText('Workspace name');
+  const workspaceDescription = within(detailsDialog).getByLabelText('Description');
+  expect(detailsWorkspaceName).toHaveValue('Aevra');
+  expect(workspaceDescription).toHaveValue('Local gateway workspace');
+  await user.clear(detailsWorkspaceName);
+  await user.type(detailsWorkspaceName, 'Aevra Local');
+  await user.clear(workspaceDescription);
+  await user.type(workspaceDescription, 'Updated description');
+  await user.click(within(detailsDialog).getByRole('button', { name: 'Save changes' }));
+  await waitFor(() =>
+    expect(mutationCall(fetchMock, '/api/workspaces/ws-1', 'PATCH')).toBeTruthy(),
+  );
+  const workspaceUpdate = mutationCall(fetchMock, '/api/workspaces/ws-1', 'PATCH');
+  expect(JSON.parse(String(workspaceUpdate?.[1]?.body))).toEqual({
+    name: 'Aevra Local',
+    description: 'Updated description',
+  });
   const removeMount = document.querySelector<HTMLButtonElement>(
     '[data-surface-id="workspaces:remove-mount"]',
   );
@@ -128,7 +145,6 @@ test('Workspaces adds and removes mounts, saves admission, and can register anot
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/mounts/mount-1', 'DELETE')).toBeTruthy(),
   );
-
   const addMountButton = screen.getByRole('button', { name: 'Add mount' });
   const mountForm = addMountButton.closest('form');
   expect(mountForm).not.toBeNull();
@@ -139,7 +155,6 @@ test('Workspaces adds and removes mounts, saves admission, and can register anot
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/workspaces/ws-1/mounts', 'POST')).toBeTruthy(),
   );
-
   const saveAdmissionButton = screen.getByRole('button', { name: 'Save admission' });
   const admissionFormElement = saveAdmissionButton.closest('form');
   expect(admissionFormElement).not.toBeNull();
@@ -153,7 +168,6 @@ test('Workspaces adds and removes mounts, saves admission, and can register anot
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/workspaces/ws-1/admission', 'POST')).toBeTruthy(),
   );
-
   await user.click(screen.getByRole('button', { name: 'Add workspace' }));
   dialog = screen.getByRole('dialog', { name: 'Add workspace' });
   const workspaceName = within(dialog).getByLabelText('Workspace name');
@@ -190,7 +204,6 @@ test('Workspaces adds and removes mounts, saves admission, and can register anot
     hostRoot: '/picked',
   });
 });
-
 test('Add Workspace keeps inline browsing available when the native picker is unavailable', async () => {
   const user = userEvent.setup();
   installApiFixtures({
@@ -218,7 +231,6 @@ test('Add Workspace keeps inline browsing available when the native picker is un
   ).toBeInTheDocument();
   expect(within(dialog).getByLabelText('Server path')).toBeInTheDocument();
 });
-
 test('Sessions switches workspace and revokes remote, local, and other sessions', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({
@@ -236,7 +248,6 @@ test('Sessions switches workspace and revokes remote, local, and other sessions'
     },
   });
   renderPage(<SessionsPage />);
-
   expect(await screen.findByRole('heading', { name: 'Sessions' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Switch' }));
   let dialog = screen.getByRole('dialog', { name: 'Switch workspace' });
@@ -245,7 +256,6 @@ test('Sessions switches workspace and revokes remote, local, and other sessions'
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/sessions/session-1/workspace', 'POST')).toBeTruthy(),
   );
-
   const remoteTable = document.querySelector<HTMLElement>(
     '[data-table-id="react-remote-sessions"]',
   );
@@ -254,14 +264,12 @@ test('Sessions switches workspace and revokes remote, local, and other sessions'
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/sessions/session-1/revoke', 'POST')).toBeTruthy(),
   );
-
   const localTable = document.querySelector<HTMLElement>('[data-table-id="react-local-sessions"]');
   expect(localTable).not.toBeNull();
   await user.click(within(localTable!).getByRole('button', { name: 'Revoke' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/admin-sessions/admin-1/revoke', 'POST')).toBeTruthy(),
   );
-
   await user.click(screen.getByRole('button', { name: 'Revoke all others' }));
   dialog = screen.getByRole('dialog', { name: 'Revoke other sessions' });
   await user.click(within(dialog).getByRole('button', { name: 'Revoke' }));
@@ -269,7 +277,6 @@ test('Sessions switches workspace and revokes remote, local, and other sessions'
     expect(mutationCall(fetchMock, '/api/sessions/revoke-others', 'POST')).toBeTruthy(),
   );
 });
-
 test('Processes exposes stop restart and forget mutations', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({
@@ -290,7 +297,6 @@ test('Processes exposes stop restart and forget mutations', async () => {
     },
   });
   renderPage(<ProcessesPanel />);
-
   expect(await screen.findByText('Test runner')).toBeInTheDocument();
   expect(screen.getByText('Aevra')).toBeInTheDocument();
   for (const [label, action] of [
@@ -304,7 +310,6 @@ test('Processes exposes stop restart and forget mutations', async () => {
     );
   }
 });
-
 test('Changes renames, keeps, and rolls back an open change set', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({
@@ -313,7 +318,6 @@ test('Changes renames, keeps, and rolls back an open change set', async () => {
     },
   });
   renderPage(<ChangesPanel />);
-
   expect(await screen.findByText('Work')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Rename' }));
   let dialog = screen.getByRole('dialog', { name: 'Rename change set' });
@@ -326,12 +330,10 @@ test('Changes renames, keeps, and rolls back an open change set', async () => {
   );
   const rename = mutationCall(fetchMock, '/api/changes/change-1', 'PATCH');
   expect(JSON.parse(String(rename?.[1]?.body))).toEqual({ name: 'Renamed work' });
-
   await user.click(screen.getByRole('button', { name: 'Keep' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/changes/change-1/commit', 'POST')).toBeTruthy(),
   );
-
   await user.click(screen.getByRole('button', { name: 'Rollback' }));
   dialog = screen.getByRole('dialog', { name: 'Rollback change set' });
   await user.click(within(dialog).getByRole('button', { name: 'Rollback' }));
@@ -339,7 +341,6 @@ test('Changes renames, keeps, and rolls back an open change set', async () => {
     expect(mutationCall(fetchMock, '/api/changes/change-1/rollback', 'POST')).toBeTruthy(),
   );
 });
-
 test('Audit renders exported events and clears history only through the mutation endpoint', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({
@@ -358,7 +359,6 @@ test('Audit renders exported events and clears history only through the mutation
     },
   });
   renderPage(<AuditPage />);
-
   expect(await screen.findByRole('heading', { name: 'Audit' })).toBeInTheDocument();
   expect(await screen.findByText('workspace.select')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Clear history' }));
@@ -366,12 +366,10 @@ test('Audit renders exported events and clears history only through the mutation
   await user.click(within(dialog).getByRole('button', { name: 'Clear history' }));
   await waitFor(() => expect(mutationCall(fetchMock, '/api/audit', 'DELETE')).toBeTruthy());
 });
-
 test('Workspaces copies a workspace ID from its table row', async () => {
   const user = userEvent.setup();
   installApiFixtures();
   renderPage(<WorkspacesPage />);
-
   expect(await screen.findByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Copy ID' }));
   expect(navigator.clipboard.writeText).toHaveBeenCalledWith('ws-1');
@@ -381,7 +379,6 @@ test('Permissions opens Add rules in a dismissible modal', async () => {
   const user = userEvent.setup();
   installApiFixtures();
   renderPage(<PermissionsPage />);
-
   await user.click(await screen.findByRole('button', { name: 'Add rules' }));
   const dialog = screen.getByRole('dialog', { name: 'Add permission rules' });
   expect(within(dialog).getByLabelText('Connector actors')).toBeInTheDocument();

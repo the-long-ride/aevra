@@ -1,9 +1,12 @@
+import type { KeepAwakeStatus } from '../power/keep-awake-service.js';
+
 export interface DashboardRuntimeSnapshot {
   generatedAt: string;
   startedAt: string;
   uptimeSeconds: number;
   status: any;
   metrics: any[];
+  power: KeepAwakeStatus | null;
   pending: { approvals: number; oauth: number; total: number };
   stats: {
     sessions: number;
@@ -145,6 +148,7 @@ export function buildDashboardRuntimeSnapshot(
     uptimeSeconds: Math.max(0, Math.floor((now.getTime() - Date.parse(startedAt)) / 1000)),
     status,
     metrics,
+    power: context.power?.status?.() ?? null,
     pending: {
       approvals: approvals.length,
       oauth: oauth.length,

@@ -253,3 +253,36 @@ test('Guide provides searchable responsive navigation and structured manual cont
   expect(pull).not.toBeNull();
   expect(pull).toHaveTextContent(/mutat/i);
 });
+
+test('Settings configures keep awake policy without changing screen lock behavior', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures({
+    routes: {
+      '/api/power/keep-awake': {
+        mode: 'remote-connections',
+        active: true,
+        supported: true,
+        platform: 'win32',
+        reason: '1 remote connection',
+        remoteConnections: 1,
+        managedProcesses: 0,
+      },
+    },
+  });
+  render(<SettingsPage />);
+  await waitForSettings();
+
+  expect(screen.getByRole('heading', { name: 'Keep awake' })).toBeInTheDocument();
+  expect(screen.getByText('Active · 1 remote connection')).toBeInTheDocument();
+  expect(screen.getByText(/screen lock and display timeout remain unchanged/i)).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Prevent system sleep' }));
+  await user.click(screen.getByRole('option', { name: 'While Aevra is running' }));
+  await user.click(screen.getByRole('button', { name: 'Save keep awake' }));
+
+  await waitFor(() => {
+    const call = mutationCall(fetchMock, '/api/power/keep-awake', 'PATCH');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ mode: 'always' });
+  });
+});

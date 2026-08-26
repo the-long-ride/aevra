@@ -99,6 +99,14 @@ export const handleAccessRoutes: AdminRouteHandler = async (req, res, url, conte
     return true;
   }
 
+  if (path === '/api/exposure/admin/test' && method === 'POST') {
+    if (!context.exposure?.testAdmin) {
+      throw Object.assign(new Error('Admin exposure test unavailable'), { status: 503 });
+    }
+    const candidate = await readAdminBody(req);
+    sendAdminResponse(res, 200, await context.exposure.testAdmin(candidate));
+    return true;
+  }
   if (path === '/api/cloudflare/status' && method === 'GET') {
     const detected = await context.cloudflare?.detectCloudflared?.();
     const auth = await context.cloudflare?.authenticationStatus?.();

@@ -58,7 +58,10 @@ export class NgrokAdapter {
 
   constructor(private readonly dependencies: NgrokDependencies = defaultDependencies) {}
 
-  async start(localGatewayUrl: string): Promise<{ publicUrl?: string }> {
+  async start(
+    localGatewayUrl: string,
+    requestedPublicUrl?: string,
+  ): Promise<{ publicUrl?: string }> {
     if (!isLoopbackHttps(localGatewayUrl)) {
       throw new Error('Managed ngrok requires a loopback HTTPS Aevra gateway origin');
     }
@@ -67,11 +70,14 @@ export class NgrokAdapter {
     this.stateValue = 'starting';
     this.message = undefined;
 
-    const child = this.dependencies.spawn(
-      'ngrok',
-      ['http', localGatewayUrl, '--log=stdout', '--log-format=json'],
-      { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
-    );
+    const args = ['http', localGatewayUrl];
+    if (requestedPublicUrl) args.push('--url', requestedPublicUrl);
+    args.push('--log=stdout', '--log-format=json');
+    const child = this.dependencies.spawn('ngrok', args, {
+      shell: false,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     this.child = child;
     let startupError: Error | undefined;
     child.once('error', (error: unknown) => {
@@ -105,6 +111,14 @@ export class NgrokAdapter {
               typeof candidate === 'string' && candidate.startsWith('https://'),
           );
         if (publicUrl) {
+          if (
+            requestedPublicUrl &&
+            new URL(publicUrl).origin !== new URL(requestedPublicUrl).origin
+          ) {
+            throw new Error(
+              `ngrok stable URL mismatch: expected ${new URL(requestedPublicUrl).origin}, discovered ${new URL(publicUrl).origin}`,
+            );
+          }
           this.stateValue = 'ready';
           this.message = undefined;
           return { publicUrl };

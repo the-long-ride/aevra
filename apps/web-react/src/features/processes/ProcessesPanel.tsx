@@ -38,7 +38,7 @@ function processName(row: ProcessRow) {
   return row.id;
 }
 
-export function ProcessesPanel() {
+export function ProcessesPanel({ contained = false }: { contained?: boolean }) {
   const resource = useApiResource(load);
 
   const mutate = async (id: string, action: 'stop' | 'restart' | 'forget') => {
@@ -56,6 +56,8 @@ export function ProcessesPanel() {
         rows={resource.data ?? []}
         pageSize={25}
         searchPlaceholder="Search processes…"
+        paginationPosition={contained ? 'toolbar' : 'footer'}
+        fillAvailableHeight={contained}
         filters={[
           { key: 'state', label: 'State' },
           { key: 'ownership', label: 'Ownership' },

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test } from 'vitest';
 import { DialogProvider } from '../../components/Dialog';
@@ -140,6 +140,9 @@ test('runtime overview opens process change tool and connector management modals
     await user.click(screen.getByRole('button', { name: new RegExp(name, 'i') }));
     const dialog = await screen.findByRole('dialog', { name });
     expect(dialog).toBeInTheDocument();
+    await waitFor(() => expect(dialog.querySelector('.data-table-fill-height')).not.toBeNull());
+    expect(dialog.querySelector('.dt-toolbar .dt-pagination')).not.toBeNull();
+    expect(dialog.querySelector('.dt-footer')).toBeNull();
     await user.click(within(dialog).getByRole('button', { name: 'Close' }));
   }
 

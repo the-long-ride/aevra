@@ -3,6 +3,7 @@ import { DataTable } from '../../components/DataTable';
 import { Dropdown } from '../../components/Dropdown';
 import { PageState } from '../../components/PageState';
 import { HooksSettings } from './HooksSettings';
+import { KeepAwakeSettings } from './KeepAwakeSettings';
 import { RemoteAccessSettings } from './RemoteAccessSettings';
 import {
   deleteResource,
@@ -11,7 +12,6 @@ import {
   postJson,
   type SettingsData,
 } from './settings-service';
-
 export function SettingsPage() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -26,18 +26,15 @@ export function SettingsPage() {
       setError(cause instanceof Error ? cause : new Error(String(cause)));
     }
   }, []);
-
   useEffect(() => {
     void refresh();
   }, [refresh]);
-
   if (!data)
     return (
       <PageState loading={!error} error={error}>
         Settings
       </PageState>
     );
-
   const submitExecution = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = Object.fromEntries(new FormData(event.currentTarget));
@@ -97,6 +94,10 @@ export function SettingsPage() {
       </section>
       <RemoteAccessSettings status={data.exposure} onChanged={refresh} />
       <div className="settings-grid">
+        <KeepAwakeSettings
+          status={data.power}
+          onSave={(mode) => patchJson('/api/power/keep-awake', { mode }).then(refresh)}
+        />
         <section className="panel execution-panel">
           <div className="panel-head">
             <h3>Execution</h3>

@@ -1,4 +1,5 @@
 import type { SettingsRepository } from '../../../../packages/store/src/settings.js';
+import { normalizeAdminPublicUrl, normalizeTrustedAdminOrigins } from './admin-origin.js';
 import { EXPOSURE_PROVIDERS, type ExposureConfig } from './types.js';
 
 type SettingsLike = Pick<SettingsRepository, 'get' | 'set'>;
@@ -34,6 +35,15 @@ function validateCloudflare(config: ExposureConfig) {
   }
 }
 
+function adminFields(input: ExposureConfig) {
+  const adminPublicUrl = normalizeAdminPublicUrl(input.adminPublicUrl);
+  const trustedAdminOrigins = normalizeTrustedAdminOrigins(input.trustedAdminOrigins);
+  return {
+    ...(adminPublicUrl ? { adminPublicUrl } : {}),
+    ...(trustedAdminOrigins.length ? { trustedAdminOrigins } : {}),
+  };
+}
+
 export function validateExposureConfig(input: ExposureConfig): ExposureConfig {
   if (!(EXPOSURE_PROVIDERS as readonly string[]).includes(input.provider)) {
     throw new Error(`Unsupported exposure provider: ${String(input.provider)}`);
@@ -42,10 +52,14 @@ export function validateExposureConfig(input: ExposureConfig): ExposureConfig {
   const config: ExposureConfig = {
     ...input,
     publicUrl: normalizePublicUrl(input.publicUrl),
+    ...adminFields(input),
   };
+  if (!config.publicUrl) delete config.publicUrl;
+  if (!config.adminPublicUrl) delete config.adminPublicUrl;
+  if (!config.trustedAdminOrigins?.length) delete config.trustedAdminOrigins;
 
   if (input.provider === 'local') {
-    return { provider: 'local' };
+    return { provider: 'local', ...adminFields(config) };
   }
 
   if (input.provider === 'direct') {
@@ -57,7 +71,11 @@ export function validateExposureConfig(input: ExposureConfig): ExposureConfig {
 
   if (input.provider === 'external') {
     if (!config.publicUrl) throw new Error('External exposure requires a public URL');
-    return { provider: 'external', publicUrl: config.publicUrl };
+    return {
+      provider: 'external',
+      publicUrl: config.publicUrl,
+      ...adminFields(config),
+    };
   }
 
   if (input.provider === 'cloudflare') {
@@ -68,9 +86,20 @@ export function validateExposureConfig(input: ExposureConfig): ExposureConfig {
   if (!input.ngrok || !['managed', 'external'].includes(input.ngrok.ownership)) {
     throw new Error('ngrok ownership must be managed or external');
   }
+  const domainMode = input.ngrok.domainMode;
+  if (domainMode && !['automatic', 'stable'].includes(domainMode)) {
+    throw new Error('ngrok domain mode must be automatic or stable');
+  }
   if (input.ngrok.ownership === 'external' && !config.publicUrl) {
     throw new Error('External ngrok exposure requires a public URL');
   }
+  if (input.ngrok.ownership === 'managed' && domainMode === 'stable' && !config.publicUrl) {
+    throw new Error('Managed ngrok stable domain requires a public URL');
+  }
+  config.ngrok = {
+    ownership: input.ngrok.ownership,
+    ...(domainMode ? { domainMode } : {}),
+  };
   return config;
 }
 

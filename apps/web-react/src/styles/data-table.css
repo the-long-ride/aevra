@@ -4,6 +4,7 @@
 
 .dt-toolbar,
 .dt-footer,
+.dt-pagination,
 .dt-pages,
 .dt-filters {
   display: flex;
@@ -46,11 +47,45 @@
   min-width: 72px;
 }
 
+.dt-pagination {
+  justify-content: space-between;
+  min-width: 0;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.dt-toolbar > .dt-pagination {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.dt-footer > .dt-pagination {
+  width: 100%;
+}
+
 .dt-scroll,
 .table-scroll {
   max-width: 100%;
   overflow: auto;
   border: 1px solid var(--hairline);
+}
+
+.data-table-fill-height {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.data-table-fill-height .dt-toolbar {
+  flex: 0 0 auto;
+}
+
+.data-table-fill-height .dt-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .data-table,
@@ -115,4 +150,11 @@
   padding: 24px !important;
   color: var(--mute);
   text-align: center !important;
+}
+
+@media (max-width: 760px) {
+  .dt-toolbar > .dt-pagination {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
 }

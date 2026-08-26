@@ -192,6 +192,130 @@ test('touching one workspace lease does not extend sibling leases', () => {
   db.close();
 });
 
+test('general session activity refreshes every active workspace lease', () => {
+  const { db, profiles } = fixture();
+  let now = new Date('2026-01-01T00:00:00Z');
+  const manager = new SessionManager(new SessionRepository(db.raw()), profiles, 30 * 60_000, {
+    now: () => now,
+  });
+  const session = manager.create({
+    subject: 'oauth_grant_one',
+    actor: 'oauth:ChatGPT',
+    issuer: 'i',
+    audience: 'x',
+    expiresAt: 'x',
+  });
+  manager.admitWorkspace(session.id, 'w', 'read-only');
+  manager.admitWorkspace(session.id, 'w2', 'read-only');
+
+  now = new Date(now.getTime() + 29 * 60_000);
+  manager.touch(session.id);
+  now = new Date(now.getTime() + 2 * 60_000);
+
+  const leases = manager.leases(session.id);
+  assert.deepEqual(leases.map((lease) => lease.workspaceId).sort(), ['w', 'w2']);
+  assert.ok(leases.every((lease) => Date.parse(lease.expiresAt) > now.getTime()));
+  db.close();
+});
+
+test('general session activity does not revive an expired session-only workspace lease', () => {
+  const { db, profiles } = fixture();
+  let now = new Date('2026-01-01T00:00:00Z');
+  const manager = new SessionManager(new SessionRepository(db.raw()), profiles, 30 * 60_000, {
+    now: () => now,
+  });
+  const session = manager.create({
+    subject: 'oauth_grant_one',
+    actor: 'oauth:ChatGPT',
+    issuer: 'i',
+    audience: 'x',
+    expiresAt: 'x',
+  });
+  manager.admitWorkspace(session.id, 'w', 'read-only');
+
+  now = new Date(now.getTime() + 31 * 60_000);
+  manager.touch(session.id);
+
+  assert.equal(manager.leases(session.id).length, 0);
+  db.close();
+});
+test('existing OAuth session repairs expired remembered workspace leases without reapproval', () => {
+  const { db, profiles } = fixture();
+  let now = new Date('2026-01-01T00:00:00Z');
+  const manager = new SessionManager(new SessionRepository(db.raw()), profiles, 30 * 60_000, {
+    now: () => now,
+  });
+  const identity = {
+    subject: 'oauth_grant_one',
+    actor: 'oauth:ChatGPT',
+    issuer: 'i',
+    audience: 'x',
+    expiresAt: 'x',
+  };
+  const session = manager.create(identity);
+  manager.grantConnectionWorkspace(session.id, 'w', 'read-only');
+  manager.grantConnectionWorkspace(session.id, 'w2', 'read-only');
+
+  now = new Date(now.getTime() + 31 * 60_000);
+  assert.equal(manager.leases(session.id).length, 0);
+
+  const resolved = manager.getOrCreateForIdentity(identity);
+  assert.equal(resolved.session.id, session.id);
+  assert.equal(resolved.mode, 'existing');
+  assert.deepEqual(
+    manager
+      .leases(session.id)
+      .map((lease) => lease.workspaceId)
+      .sort(),
+    ['w', 'w2'],
+  );
+  db.close();
+});
+test('explicit OAuth workspace removal clears the remembered grant and is not auto-restored', () => {
+  const { db, manager } = fixture();
+  const identity = {
+    subject: 'oauth_grant_one',
+    actor: 'oauth:ChatGPT',
+    issuer: 'i',
+    audience: 'x',
+    expiresAt: 'x',
+  };
+  const session = manager.create(identity);
+  manager.grantConnectionWorkspace(session.id, 'w', 'read-only');
+  manager.grantConnectionWorkspace(session.id, 'w2', 'read-only');
+
+  manager.revokeWorkspace(session.id, 'w');
+  manager.getOrCreateForIdentity(identity);
+  assert.equal(manager.leaseForWorkspace(session.id, 'w'), null);
+  assert.equal(manager.leaseForWorkspace(session.id, 'w2')?.workspaceId, 'w2');
+
+  manager.disconnect(session.id);
+  const reconnected = manager.create(identity);
+  assert.equal(manager.leaseForWorkspace(reconnected.id, 'w'), null);
+  assert.equal(manager.leaseForWorkspace(reconnected.id, 'w2')?.workspaceId, 'w2');
+  db.close();
+});
+test('OAuth workspace removal revokes that connection grant from every live session', () => {
+  const { db, manager } = fixture();
+  const identity = {
+    subject: 'oauth_grant_shared',
+    actor: 'oauth:ChatGPT',
+    issuer: 'i',
+    audience: 'x',
+    expiresAt: 'x',
+  };
+  const first = manager.create(identity);
+  const second = manager.create(identity);
+  manager.grantConnectionWorkspace(first.id, 'w', 'read-only');
+  assert.equal(manager.leaseForWorkspace(first.id, 'w')?.workspaceId, 'w');
+  assert.equal(manager.leaseForWorkspace(second.id, 'w')?.workspaceId, 'w');
+
+  manager.revokeWorkspace(first.id, 'w');
+
+  assert.equal(manager.leaseForWorkspace(first.id, 'w'), null);
+  assert.equal(manager.leaseForWorkspace(second.id, 'w'), null);
+  db.close();
+});
 test('revoking one workspace lease leaves sibling lease active', () => {
   const { db, manager } = fixture();
   const session = manager.create({

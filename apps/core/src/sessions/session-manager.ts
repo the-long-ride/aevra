@@ -6,17 +6,17 @@ import { ALL_CAPABILITIES, type CapabilityProfileService } from '../policy/capab
 import type { ConnectionStateStore } from './connection-state.js';
 import {
   detachedSessionIds,
+  grantRememberedWorkspaceAcrossSessions,
+  isConnectorSessionActor,
+  revokeConnectionSessions,
   rebindDetachedLeases,
   restoreRememberedWorkspaces,
+  revokeWorkspaceAccess,
 } from './session-lease-continuity.js';
 import type { SecuritySession, SessionResolution, WorkspaceLease } from './session-types.js';
 export type { SecuritySession, SessionResolution, WorkspaceLease } from './session-types.js';
 
 const systemClock: Clock = { now: () => new Date() };
-
-function isConnectorSessionActor(actor: string) {
-  return actor.startsWith('connector:') || actor.startsWith('oauth:');
-}
 
 export class SessionManager {
   private sessions = new Map<string, SecuritySession>();
@@ -104,9 +104,7 @@ export class SessionManager {
     this.sessions.set(session.id, session);
     this.repo.create(session);
     this.connections?.attach(session.id, identity);
-    restoreRememberedWorkspaces(this.repo, session, (workspaceId, profileId) =>
-      this.admitWorkspace(session.id, workspaceId, profileId),
-    );
+    this.restoreMissingRememberedWorkspaces(session);
     return session;
   }
   getOrCreateForIdentity(identity: VerifiedRemoteIdentity, remoteIp?: string): SessionResolution {
@@ -117,7 +115,11 @@ export class SessionManager {
         session.subject === identity.subject &&
         session.connectionId === identity.connectionId,
     );
-    if (existing) return { session: existing, mode: 'existing' };
+    if (existing) {
+      this.touch(existing.id);
+      this.restoreMissingRememberedWorkspaces(existing);
+      return { session: existing, mode: 'existing' };
+    }
     const mode = this.connections?.resolutionMode(identity) ?? 'created';
     const detachedIds =
       mode === 'resumed' ? detachedSessionIds(this.disconnectedIdentities, identity) : [];
@@ -162,27 +164,26 @@ export class SessionManager {
     this.repo.revoke?.(id);
   }
   revokeConnection(connectionId: string, reason = 'ADMIN_REVOKE') {
-    const ids = new Set<string>();
-    for (const session of this.sessions.values()) {
-      if (session.connectionId === connectionId) ids.add(session.id);
-    }
-    for (const [sessionId, identity] of this.disconnectedIdentities) {
-      if (identity.connectionId === connectionId) ids.add(sessionId);
-    }
-    for (const sessionId of ids) {
-      this.disconnectImmediate(sessionId, false);
-      this.repo.revoke?.(sessionId);
-    }
+    revokeConnectionSessions({
+      connectionId,
+      sessions: this.sessions.values(),
+      disconnectedIdentities: this.disconnectedIdentities,
+      disconnect: (id) => this.disconnectImmediate(id, false),
+      revokeSession: (id) => this.repo.revoke?.(id),
+    });
     this.connections?.revoke(connectionId, reason);
   }
   touch(id: string, workspaceId?: string) {
     const session = this.sessions.get(id);
     if (!session) throw new Error('session not found');
-    session.lastActivityAt = this.clock.now().toISOString();
-    const lease = workspaceId ? this.leaseForWorkspace(id, workspaceId) : this.activeLease(id);
-    if (lease) {
-      const raw = this.leaseRows.get(lease.id);
-      if (raw) raw.expiresAt = new Date(this.clock.now().getTime() + this.idleMs).toISOString();
+    const now = this.clock.now();
+    session.lastActivityAt = now.toISOString();
+    const expiresAt = new Date(now.getTime() + this.idleMs).toISOString();
+    for (const lease of this.leaseRows.values()) {
+      if (lease.sessionId !== id) continue;
+      if (workspaceId && lease.workspaceId !== workspaceId) continue;
+      if (Date.parse(lease.expiresAt) <= now.getTime()) continue;
+      lease.expiresAt = expiresAt;
     }
     return session;
   }
@@ -209,16 +210,14 @@ export class SessionManager {
     const source = this.sessions.get(sessionId) ?? this.disconnectedIdentities.get(sessionId);
     if (!source) throw new Error('session identity not found');
     if (!source.actor.startsWith('oauth:')) return null;
-    this.repo.rememberWorkspaceGrant(source.subject, workspaceId, profileId);
-    let granted: WorkspaceLease | null = null;
-    for (const session of this.sessions.values()) {
-      if (session.subject !== source.subject || session.actor !== source.actor) continue;
-      const admitted = this.admitWorkspace(session.id, workspaceId, profileId);
-      if (admitted.status !== 'admitted')
-        throw new Error('connection workspace grant could not be admitted');
-      if (session.id === sessionId || !granted) granted = admitted.lease;
-    }
-    return granted;
+    return grantRememberedWorkspaceAcrossSessions({
+      repo: this.repo,
+      sessions: this.sessions.values(),
+      source,
+      workspaceId,
+      profileId,
+      admitWorkspace: (id, target, profile) => this.admitWorkspace(id, target, profile),
+    });
   }
 
   admitWorkspace(
@@ -239,7 +238,6 @@ export class SessionManager {
     if (!profileId) return { status: 'approval-required' };
     const profile = this.profiles.get(profileId);
     if (!profile) throw new Error('profile not found');
-
     const existing = this.leaseForWorkspace(sessionId, workspaceId);
     if (existing) this.revokeLease(existing.id);
     const lease: WorkspaceLease = {
@@ -262,12 +260,21 @@ export class SessionManager {
     }
     return { status: 'admitted', lease: this.leaseForWorkspace(session.id, workspaceId) ?? lease };
   }
-
+  private restoreMissingRememberedWorkspaces(session: SecuritySession) {
+    restoreRememberedWorkspaces(this.repo, session, (workspaceId, profileId) => {
+      if (this.leaseForWorkspace(session.id, workspaceId)) return null;
+      return this.admitWorkspace(session.id, workspaceId, profileId);
+    });
+  }
   revokeWorkspace(sessionId: string, workspaceId: string) {
-    const lease = this.leaseForWorkspace(sessionId, workspaceId);
-    if (!lease) return false;
-    this.revokeLease(lease.id);
-    return true;
+    return revokeWorkspaceAccess({
+      repo: this.repo,
+      sessions: this.sessions,
+      sessionId,
+      workspaceId,
+      leaseForWorkspace: (id, target) => this.leaseForWorkspace(id, target),
+      revokeLease: (id) => this.revokeLease(id),
+    });
   }
   revokeLease(id: string) {
     const lease = this.leaseRows.get(id);
@@ -313,7 +320,6 @@ export class SessionManager {
     this.connections?.invalidateForRestart();
     this.repo.invalidateAll();
   }
-
   private connectionIdForSession(sessionId: string) {
     return (
       this.sessions.get(sessionId)?.connectionId ??
@@ -322,7 +328,6 @@ export class SessionManager {
       null
     );
   }
-
   private disconnectImmediate(sessionId: string, rememberIdentity: boolean) {
     const session = this.sessions.get(sessionId);
     if (rememberIdentity && session) {

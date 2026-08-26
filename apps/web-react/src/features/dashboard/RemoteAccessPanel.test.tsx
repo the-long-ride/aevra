@@ -68,7 +68,7 @@ test('renders the ready Cloudflare status with endpoints and health rows', () =>
   expect(screen.getByText('2026-08-21T10:00:00.000Z')).toBeInTheDocument();
 });
 
-test('falls back to placeholder copy for unconfigured local exposure with restart required', () => {
+test('falls back to placeholders for unconfigured local exposure with restart required', () => {
   installApiFixtures();
   renderPanel(
     exposure({
@@ -90,7 +90,7 @@ test('falls back to placeholder copy for unconfigured local exposure with restar
   expect(screen.queryByLabelText('Exposure health')).not.toBeInTheDocument();
 });
 
-test('remote access URL rows copy their exact values with icon-only accessible buttons', async () => {
+test('remote access URLs copy their exact values when clicked', async () => {
   const user = userEvent.setup();
   installApiFixtures();
   renderPanel(exposure());
@@ -103,20 +103,36 @@ test('remote access URL rows copy their exact values with icon-only accessible b
   ] as const;
 
   for (const [label, value, copyLabel] of cases) {
-    const button = screen.getByRole('button', { name: copyLabel });
-    expect(button).toHaveAttribute('title', copyLabel);
-    expect(button.textContent).toBe('');
-    expect(button.querySelector('svg')).not.toBeNull();
+    const url = screen.getByRole('button', { name: copyLabel });
+    expect(url).toHaveClass('remote-copy-value');
+    expect(url).toHaveAttribute('title', copyLabel);
+    expect(url).toHaveTextContent(value);
+    expect(url.querySelector('svg')).toBeNull();
 
-    await user.click(button);
+    await user.click(url);
     expect(writeText).toHaveBeenLastCalledWith(value);
-    expect(await screen.findByRole('status', { name: 'Copy succeeded' })).toHaveTextContent(
-      `Copied ${label}`,
-    );
+    const toast = await screen.findByRole('status', { name: 'Copy succeeded' });
+    expect(toast).toHaveClass('toast', 'success');
+    expect(toast).toHaveTextContent(`Copied ${label}`);
   }
 });
 
-test('remote access URL copy buttons are disabled when their URL is unavailable', () => {
+test('copy failures show a bottom-right error toast', async () => {
+  const user = userEvent.setup();
+  installApiFixtures();
+  renderPanel(exposure());
+  vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(new Error('Clipboard denied'));
+
+  await user.click(screen.getByRole('button', { name: 'Copy Local gateway URL' }));
+
+  const toast = await screen.findByRole('alert', { name: 'Copy failed' });
+  expect(toast).toHaveClass('toast', 'error');
+  expect(toast).toHaveTextContent('Clipboard denied');
+  expect(toast.parentElement).toHaveClass('toast-stack');
+  expect(screen.queryByText('Clipboard denied', { selector: 'p' })).toBeNull();
+});
+
+test('unavailable remote access URLs are not copy targets', () => {
   installApiFixtures();
   renderPanel(
     exposure({
@@ -128,10 +144,11 @@ test('remote access URL copy buttons are disabled when their URL is unavailable'
     }),
   );
 
-  expect(screen.getByRole('button', { name: 'Copy Local gateway URL' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Copy Effective public URL' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Copy OAuth MCP resource URL' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Copy Local gateway URL' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Copy Effective public URL' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Copy OAuth MCP resource URL' })).toBeNull();
 });
+
 test('successful endpoint tests report reachability in a bottom-right success toast and refresh the panel', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({

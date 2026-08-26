@@ -75,6 +75,20 @@ export function WorkspacesPage() {
     await resource.refresh();
   };
 
+  const saveWorkspaceDetails = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selected) return;
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    await requestJson(`/api/workspaces/${encodeURIComponent(selected.id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: String(data.name ?? '').trim(),
+        description: String(data.description ?? '').trim(),
+      }),
+    });
+    await resource.refresh();
+  };
+
   const addMount = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selected) return;
@@ -186,112 +200,153 @@ export function WorkspacesPage() {
         <AddWorkspaceModal onClose={() => setAdding(false)} onCreated={() => resource.refresh()} />
       ) : null}
       {selected ? (
-        <section className="panel">
-          <div className="panel-head">
-            <h3>{selected.name}</h3>
-            <button type="button" onClick={() => setSelectedId(null)}>
-              Close
-            </button>
-          </div>
-          <div className="details-grid">
-            <div>
-              <span>Local root</span>
-              <strong>{selected.hostRoot ?? '—'}</strong>
-            </div>
-            <div>
-              <span>External mounts</span>
-              <strong>{selected.mountCount}</strong>
-            </div>
-          </div>
-          <section className="form-section">
-            <h3>External mounts</h3>
-            <form className="form-row" onSubmit={addMount}>
-              <label className="field">
-                <span>Logical path</span>
-                <input name="logicalPath" required />
-              </label>
-              <label className="field">
-                <span>Local mount root</span>
-                <input name="hostRoot" required />
-              </label>
-              <button className="primary" data-surface-id="workspaces:add-mount">
-                Add mount
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setSelectedId(null);
+          }}
+        >
+          <section
+            className="modal workspace-details-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workspace-details-title"
+          >
+            <div className="modal-head">
+              <h3 id="workspace-details-title">{selected.name}</h3>
+              <button type="button" onClick={() => setSelectedId(null)}>
+                Close
               </button>
-            </form>
-            <DataTable
-              id="react-workspace-mounts"
-              rows={selected.mounts}
-              columns={[
-                { key: 'logicalPath', label: 'Logical path' },
-                { key: 'hostRoot', label: 'Local root' },
-                {
-                  key: 'capabilities',
-                  label: 'Capabilities',
-                  value: (row) => (row.capabilities ?? []).join(', '),
-                },
-                {
-                  key: 'sensitivityPolicyId',
-                  label: 'Sensitivity',
-                  value: (row) => row.sensitivityPolicyId ?? 'Default',
-                },
-                {
-                  key: 'actions',
-                  label: '',
-                  sortable: false,
-                  search: false,
-                  render: (row) => (
-                    <button
-                      type="button"
-                      data-surface-id="workspaces:remove-mount"
-                      onClick={() => void removeMount(row.id)}
-                    >
-                      Remove
+            </div>
+            <div className="modal-body workspace-details-body">
+              <section className="form-section">
+                <h3>Workspace details</h3>
+                <form
+                  className="workspace-details-form"
+                  key={selected.id}
+                  onSubmit={saveWorkspaceDetails}
+                >
+                  <label className="field">
+                    <span>Workspace name</span>
+                    <input name="name" defaultValue={selected.name} required />
+                  </label>
+                  <label className="field workspace-description-field">
+                    <span>Description</span>
+                    <textarea
+                      name="description"
+                      defaultValue={selected.description ?? ''}
+                      placeholder="Describe this workspace"
+                      rows={3}
+                    />
+                  </label>
+                  <div className="workspace-details-actions">
+                    <button className="primary" data-surface-id="workspaces:save-details">
+                      Save changes
                     </button>
-                  ),
-                },
-              ]}
-              rowKey={(row) => row.id}
-              emptyText="No external mounts."
-            />
-          </section>
-          <section className="form-section">
-            <h3>Actor admission</h3>
-            <form className="form-row" onSubmit={saveAdmission}>
-              <label className="field">
-                <span>Actor</span>
-                <input name="actor" placeholder="connector:ChatGPT" required />
-              </label>
-              <label className="field">
-                <span>Profile</span>
-                <Dropdown
-                  name="profileId"
-                  ariaLabel="Profile"
-                  defaultValue="developer"
-                  options={[
-                    { value: 'read-only', label: 'Read Only' },
-                    { value: 'developer', label: 'Developer' },
-                    { value: 'full-workspace', label: 'Full Workspace' },
+                  </div>
+                </form>
+              </section>
+              <div className="details-grid">
+                <div>
+                  <span>Local root</span>
+                  <strong>{selected.hostRoot ?? '—'}</strong>
+                </div>
+                <div>
+                  <span>External mounts</span>
+                  <strong>{selected.mountCount}</strong>
+                </div>
+              </div>
+              <section className="form-section">
+                <h3>External mounts</h3>
+                <form className="form-row" onSubmit={addMount}>
+                  <label className="field">
+                    <span>Logical path</span>
+                    <input name="logicalPath" required />
+                  </label>
+                  <label className="field">
+                    <span>Local mount root</span>
+                    <input name="hostRoot" required />
+                  </label>
+                  <button className="primary" data-surface-id="workspaces:add-mount">
+                    Add mount
+                  </button>
+                </form>
+                <DataTable
+                  id="react-workspace-mounts"
+                  rows={selected.mounts}
+                  columns={[
+                    { key: 'logicalPath', label: 'Logical path' },
+                    { key: 'hostRoot', label: 'Local root' },
+                    {
+                      key: 'capabilities',
+                      label: 'Capabilities',
+                      value: (row) => (row.capabilities ?? []).join(', '),
+                    },
+                    {
+                      key: 'sensitivityPolicyId',
+                      label: 'Sensitivity',
+                      value: (row) => row.sensitivityPolicyId ?? 'Default',
+                    },
+                    {
+                      key: 'actions',
+                      label: '',
+                      sortable: false,
+                      search: false,
+                      render: (row) => (
+                        <button
+                          type="button"
+                          data-surface-id="workspaces:remove-mount"
+                          onClick={() => void removeMount(row.id)}
+                        >
+                          Remove
+                        </button>
+                      ),
+                    },
                   ]}
+                  rowKey={(row) => row.id}
+                  emptyText="No external mounts."
                 />
-              </label>
-              <label className="field">
-                <span>Admission</span>
-                <Dropdown
-                  name="admission"
-                  ariaLabel="Admission"
-                  defaultValue="auto"
-                  options={[
-                    { value: 'auto', label: 'Auto-admit' },
-                    { value: 'ask', label: 'Ask every time' },
-                  ]}
-                />
-              </label>
-              <button className="primary" data-surface-id="workspaces:save-admission">
-                Save admission
-              </button>
-            </form>
+              </section>
+              <section className="form-section">
+                <h3>Actor admission</h3>
+                <form className="form-row" onSubmit={saveAdmission}>
+                  <label className="field">
+                    <span>Actor</span>
+                    <input name="actor" placeholder="connector:ChatGPT" required />
+                  </label>
+                  <label className="field">
+                    <span>Profile</span>
+                    <Dropdown
+                      name="profileId"
+                      ariaLabel="Profile"
+                      defaultValue="developer"
+                      options={[
+                        { value: 'read-only', label: 'Read Only' },
+                        { value: 'developer', label: 'Developer' },
+                        { value: 'full-workspace', label: 'Full Workspace' },
+                      ]}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Admission</span>
+                    <Dropdown
+                      name="admission"
+                      ariaLabel="Admission"
+                      defaultValue="auto"
+                      options={[
+                        { value: 'auto', label: 'Auto-admit' },
+                        { value: 'ask', label: 'Ask every time' },
+                      ]}
+                    />
+                  </label>
+                  <button className="primary" data-surface-id="workspaces:save-admission">
+                    Save admission
+                  </button>
+                </form>
+              </section>
+            </div>
           </section>
-        </section>
+        </div>
       ) : null}
     </PageState>
   );

@@ -2,6 +2,7 @@ import type { OAuthRepository } from '../../../../packages/store/src/oauth.js';
 import type { SettingsRepository } from '../../../../packages/store/src/settings.js';
 import type { CoreConfig } from '../config.js';
 import type { LocalTlsMaterial } from '../tls/local-tls.js';
+import { normalizeAdminPublicUrl, normalizeTrustedAdminOrigins } from './admin-origin.js';
 import {
   CloudflareAccessVerifier,
   RejectingIdentityVerifier,
@@ -118,9 +119,24 @@ export class RuntimeExposureWiring {
     return this.controller.status().publicUrl;
   }
 
+  adminPublicUrl(): string | undefined {
+    return this.controller.currentConfig().adminPublicUrl ?? this.config.adminPublicUrl;
+  }
+
+  trustedAdminOrigins(): string[] {
+    const config = this.controller.currentConfig();
+    return normalizeTrustedAdminOrigins([
+      ...(this.adminPublicUrl() ? [this.adminPublicUrl()!] : []),
+      ...(config.trustedAdminOrigins ?? []),
+      ...(this.config.trustedAdminOrigins ?? []),
+    ]);
+  }
+
   status() {
     return {
       ...this.controller.status(),
+      ...(this.adminPublicUrl() ? { adminPublicUrl: this.adminPublicUrl() } : {}),
+      trustedAdminOrigins: this.trustedAdminOrigins(),
       tunnelHealth: this.watchdog?.status ?? { reachable: null, checkedAt: null, message: null },
     };
   }
@@ -133,6 +149,66 @@ export class RuntimeExposureWiring {
     }
   }
 
+  async testAdmin(candidate?: { publicUrl?: string; trustedOrigins?: string[] }) {
+    const publicUrl = candidate
+      ? normalizeAdminPublicUrl(candidate.publicUrl)
+      : this.adminPublicUrl();
+    if (!publicUrl) {
+      return {
+        configured: false,
+        trusted: false,
+        reachable: false,
+        message: 'Admin public URL is not configured',
+      };
+    }
+    const trustedOrigins = candidate
+      ? normalizeTrustedAdminOrigins([
+          publicUrl,
+          ...(candidate.trustedOrigins ?? []),
+          ...(this.config.trustedAdminOrigins ?? []),
+        ])
+      : this.trustedAdminOrigins();
+    const trusted = trustedOrigins.includes(new URL(publicUrl).origin);
+    const healthBase = new URL(publicUrl);
+    if (!healthBase.pathname.endsWith('/')) healthBase.pathname += '/';
+    try {
+      const response = await fetch(new URL('api/health', healthBase), {
+        method: 'GET',
+        headers: { accept: 'application/json' },
+        redirect: 'error',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) {
+        return {
+          configured: true,
+          trusted,
+          reachable: false,
+          publicUrl,
+          message: `Admin endpoint returned HTTP ${response.status}`,
+        };
+      }
+      const body = (await response.json()) as { core?: unknown };
+      if (body?.core !== 'running') {
+        return {
+          configured: true,
+          trusted,
+          reachable: false,
+          publicUrl,
+          message: 'Endpoint did not return Aevra Admin health',
+        };
+      }
+      return { configured: true, trusted, reachable: true, publicUrl };
+    } catch (error) {
+      return {
+        configured: true,
+        trusted,
+        reachable: false,
+        publicUrl,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
   async test() {
     const status = this.controller.status();
     if (status.provider === 'local') return this.controller.test();

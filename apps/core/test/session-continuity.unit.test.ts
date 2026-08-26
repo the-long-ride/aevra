@@ -135,6 +135,24 @@ test('restart keeps OAuth connection YOLO and remembered grants but invalidates 
   db.close();
 });
 
+test('remembered workspace authorization survives reconnect after grace expires', () => {
+  const { db, sessionRepo, identity, createManager, advance } = fixture();
+  const workspaceId = addWorkspace(db, 'long-gap-workspace');
+  sessionRepo.rememberWorkspaceGrant(identity.subject, workspaceId, 'read-only');
+  const manager = createManager();
+  const first = manager.getOrCreateForIdentity(identity).session;
+  assert.ok(manager.leaseForWorkspace(first.id, workspaceId));
+
+  manager.detach(first.id);
+  advance(16 * 60_000);
+  manager.expireGraceConnections();
+  const reconnected = manager.getOrCreateForIdentity(identity);
+
+  assert.equal(reconnected.mode, 'created');
+  assert.notEqual(reconnected.session.id, first.id);
+  assert.ok(manager.leaseForWorkspace(reconnected.session.id, workspaceId));
+  db.close();
+});
 test('connection state becomes OFFLINE after reconnect grace expires without a new session', () => {
   const { db, oauthRepo, identity, clock, advance } = fixture();
   const state = new ConnectionStateStore(oauthRepo, clock);

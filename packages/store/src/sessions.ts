@@ -42,6 +42,13 @@ export class SessionRepository {
       )
       .run(subject, workspaceId, profileId, now, now);
   }
+  forgetWorkspaceGrant(subject: string, workspaceId: string) {
+    return (
+      this.db
+        .prepare('DELETE FROM oauth_workspace_grants WHERE subject=? AND workspace_id=?')
+        .run(subject, workspaceId).changes > 0
+    );
+  }
   listRememberedWorkspaceGrants(subject: string) {
     return this.db
       .prepare(

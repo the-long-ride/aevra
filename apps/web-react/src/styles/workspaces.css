@@ -104,3 +104,48 @@
     flex: 1 1 0;
   }
 }
+
+.workspace-details-modal {
+  width: min(980px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+}
+
+.workspace-details-body {
+  display: grid;
+  gap: 16px;
+  overflow: auto;
+}
+
+@media (max-width: 640px) {
+  .workspace-details-modal {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+}
+
+.workspace-details-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.6fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.workspace-description-field textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.workspace-details-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+@media (max-width: 760px) {
+  .workspace-details-form {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-details-actions button {
+    width: 100%;
+  }
+}

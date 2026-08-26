@@ -1,6 +1,7 @@
 import type { McpActivityEntry, WorkspaceSummary } from '@aevra/admin-contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
+import { JsonDetailView } from '../../components/JsonDetailView';
 import { useDialog } from '../../components/Dialog';
 
 type StreamState = 'connecting' | 'live' | 'reconnecting' | 'unsupported';
@@ -75,14 +76,15 @@ export function McpActivityPanel({ workspaces }: { workspaces: WorkspaceSummary[
           </div>
           <section>
             <b>Input</b>
-            <pre>{entry.input ?? 'No input recorded.'}</pre>
+            <JsonDetailView label="Input" value={entry.input} emptyText="No input recorded." />
           </section>
           <section>
             <b>Output</b>
-            <pre>
-              {entry.output ??
-                (entry.state === 'running' ? 'Still running.' : 'No output recorded.')}
-            </pre>
+            <JsonDetailView
+              label="Output"
+              value={entry.output}
+              emptyText={entry.state === 'running' ? 'Still running.' : 'No output recorded.'}
+            />
           </section>
         </div>
       ),

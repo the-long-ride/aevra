@@ -180,27 +180,32 @@
   white-space: nowrap;
 }
 
-.remote-endpoint code {
+.remote-endpoint > code,
+.remote-copy-value {
   flex: 1 1 auto;
+  min-width: 0;
 }
 
-.remote-copy-button {
-  display: inline-grid;
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  padding: 5px;
+.remote-copy-value {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: copy;
 }
 
-.remote-copy-button svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.4;
+.remote-copy-value code {
+  display: block;
+  width: 100%;
+}
+
+.remote-copy-value:hover code,
+.remote-copy-value:focus-visible code {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .remote-access {
@@ -271,19 +276,14 @@
   overflow-wrap: anywhere;
 }
 
-.remote-config {
-  display: grid;
-  gap: 10px;
-}
-
-.remote-config-grid {
-  display: grid;
-  grid-template-columns: 2fr 1.3fr 1fr;
-  gap: 10px;
-}
-
 .remote-actions {
   align-items: end;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 10px 0 0;
+  background: var(--canvas);
+  border-top: 1px solid var(--hairline);
 }
 
 .inline-result {
@@ -299,7 +299,8 @@
 @media (max-width: 1023px) {
   .onboarding-body,
   .client-grid,
-  .remote-config-grid {
+  .remote-config-grid,
+  .remote-admin-layout {
     grid-template-columns: 1fr;
   }
 
@@ -335,6 +336,21 @@
     width: 100%;
   }
 
+  .remote-admin-url-row,
+  .trusted-origin-add {
+    grid-template-columns: 1fr;
+  }
+
+  .remote-admin-url-row button,
+  .trusted-origin-add button {
+    width: 100%;
+  }
+
+  .remote-admin-meta {
+    display: grid;
+    justify-items: start;
+  }
+
   .endpoint {
     display: grid;
     align-items: start;
@@ -345,16 +361,11 @@
   }
 
   .remote-endpoint {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .remote-endpoint > span {
     grid-column: 1 / -1;
-  }
-
-  .remote-copy-button {
-    grid-row: 2;
-    grid-column: 2;
   }
 }
 

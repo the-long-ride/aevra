@@ -30,6 +30,8 @@ export interface DataTableProps<T> {
   searchPlaceholder?: string;
   emptyText?: string;
   rowKey?(row: T, index: number): string;
+  paginationPosition?: 'toolbar' | 'footer';
+  fillAvailableHeight?: boolean;
 }
 
 function rawValue<T>(row: T, column: Column<T>): unknown {
@@ -66,6 +68,8 @@ export function DataTable<T>({
   searchPlaceholder = 'Search…',
   emptyText = 'No data',
   rowKey = (_, index) => String(index),
+  paginationPosition = 'footer',
+  fillAvailableHeight = false,
 }: DataTableProps<T>) {
   const [query, setQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({});
@@ -130,8 +134,42 @@ export function DataTable<T>({
       ),
     ].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
 
+  const pagination = (
+    <div className="dt-pagination">
+      <span>{filtered.length ? `${start + 1}–${end} of ${filtered.length}` : '0 rows'}</span>
+      <div className="dt-pages">
+        <button type="button" disabled={safePage <= 1} onClick={() => setPage(1)}>
+          «
+        </button>
+        <button
+          type="button"
+          disabled={safePage <= 1}
+          onClick={() => setPage(Math.max(1, safePage - 1))}
+        >
+          ‹
+        </button>
+        <span>
+          Page {safePage} / {pageCount}
+        </span>
+        <button
+          type="button"
+          disabled={safePage >= pageCount}
+          onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+        >
+          ›
+        </button>
+        <button type="button" disabled={safePage >= pageCount} onClick={() => setPage(pageCount)}>
+          »
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="data-table-host" data-table-id={id}>
+    <div
+      className={`data-table-host${fillAvailableHeight ? ' data-table-fill-height' : ''}`}
+      data-table-id={id}
+    >
       <div className="dt-toolbar">
         <label className="dt-search">
           <span className="sr-only">Search</span>
@@ -185,6 +223,7 @@ export function DataTable<T>({
             }))}
           />
         </label>
+        {paginationPosition === 'toolbar' ? pagination : null}
       </div>
       <div className="dt-scroll">
         <table className="data-table">
@@ -241,34 +280,7 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
-      <div className="dt-footer">
-        <span>{filtered.length ? `${start + 1}–${end} of ${filtered.length}` : '0 rows'}</span>
-        <div className="dt-pages">
-          <button type="button" disabled={safePage <= 1} onClick={() => setPage(1)}>
-            «
-          </button>
-          <button
-            type="button"
-            disabled={safePage <= 1}
-            onClick={() => setPage(Math.max(1, safePage - 1))}
-          >
-            ‹
-          </button>
-          <span>
-            Page {safePage} / {pageCount}
-          </span>
-          <button
-            type="button"
-            disabled={safePage >= pageCount}
-            onClick={() => setPage(Math.min(pageCount, safePage + 1))}
-          >
-            ›
-          </button>
-          <button type="button" disabled={safePage >= pageCount} onClick={() => setPage(pageCount)}>
-            »
-          </button>
-        </div>
-      </div>
+      {paginationPosition === 'footer' ? <div className="dt-footer">{pagination}</div> : null}
     </div>
   );
 }

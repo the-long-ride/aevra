@@ -47,3 +47,18 @@ test('config rejects startup without mandatory admin credentials', () => {
     /ADMIN_CREDENTIALS_REQUIRED/,
   );
 });
+
+test('admin public URL and trusted origins can bootstrap from environment', () => {
+  const c = loadCoreConfig({
+    AEVRA_STATE_DIR: '/tmp/aevra-state',
+    AEVRA_USERNAME: 'admin',
+    AEVRA_PASSWORD: 'secret',
+    AEVRA_ADMIN_PUBLIC_URL: 'https://bootstrap.example.com/',
+    AEVRA_TRUSTED_ADMIN_ORIGINS: 'https://ops.example.com, https://backup.example.com/path',
+  });
+  assert.equal(c.adminPublicUrl, 'https://bootstrap.example.com');
+  assert.deepEqual(c.trustedAdminOrigins, [
+    'https://ops.example.com',
+    'https://backup.example.com',
+  ]);
+});

@@ -21,7 +21,6 @@ import { McpActivityLog } from './mcp/activity-log.js';
 import { AEVRA_VERSION } from './version.js';
 import { MetricsService } from './metrics.js';
 import { SettingsRepository } from '../../../packages/store/src/settings.js';
-import { WorkerManager } from './worker/worker-manager.js';
 import { AdminServer } from './admin/server.js';
 import { ConnectionAdminService } from './admin/connection-admin.js';
 import { buildRuntimeHealth } from './admin/runtime-health.js';
@@ -42,7 +41,11 @@ import { OperationService } from './operations/operation-service.js';
 import { ChangeSetService } from './changes/change-service.js';
 import { ProcessService } from './processes/process-service.js';
 import { McpToolService } from '../../../packages/mcp-tools/src/service.js';
-import { unavailableWorkerGateway } from './runtime-support.js';
+import {
+  createRuntimeWorkerManager,
+  resolveRuntimeTls,
+  runtimeWorkerGateway,
+} from './runtime-support.js';
 import { SessionSkillAccessGate } from '../../../packages/mcp-tools/src/skill-access-gate.js';
 import type { CloudflareManager } from './cloudflare/manager.js';
 import { BackupService } from './backup/backup-service.js';
@@ -50,9 +53,10 @@ import { ConfigExportService } from './config/export-service.js';
 import { EncryptedVault } from '../../../packages/secrets/src/vault.js';
 import { CommandSecretStore } from '../../../packages/secrets/src/platform.js';
 import { EnvironmentService } from './secrets/environment-service.js';
-import { ensureLocalTls } from './tls/local-tls.js';
 import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
 import { RuntimeExposureWiring } from './exposure/runtime-wiring.js';
+import type { KeepAwakeService } from './power/keep-awake-service.js';
+import { createRuntimeKeepAwakeService } from './power/runtime-keep-awake.js';
 export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
 export async function createCoreRuntime(
   config: CoreConfig,
@@ -63,12 +67,11 @@ export async function createCoreRuntime(
     admin: AdminServer | undefined,
     mcp: McpIngressServer | undefined,
     cloudflare: CloudflareManager | undefined,
-    exposureWiring: RuntimeExposureWiring | undefined;
+    exposureWiring: RuntimeExposureWiring | undefined,
+    keepAwake: KeepAwakeService | undefined;
   let safeMode = false,
     started = false;
-  const wm: any =
-    deps.worker ??
-    new WorkerManager(config.workerSocketPath, path.join(config.stateDir, 'process-logs'));
+  const wm = createRuntimeWorkerManager(config, deps);
   const cleanup = async () => {
     const safe = async (fn: () => Promise<unknown>) => {
       try {
@@ -77,6 +80,8 @@ export async function createCoreRuntime(
         /* Preserve the original startup/shutdown error. */
       }
     };
+    if (keepAwake) await safe(() => keepAwake!.close());
+    keepAwake = undefined;
     if (exposureWiring) await safe(() => exposureWiring!.close());
     exposureWiring = undefined;
     if (mcp) await safe(() => mcp!.close());
@@ -111,17 +116,7 @@ export async function createCoreRuntime(
       try {
         await mkdir(config.stateDir, { recursive: true, mode: 0o700 });
         await mkdir(config.recoveryDir, { recursive: true, mode: 0o700 });
-        const tls =
-          deps.tls ??
-          (await (
-            deps.ensureTls ??
-            (async (c: CoreConfig) =>
-              ensureLocalTls(c.stateDir, {
-                certificatePath: c.tlsCertPath,
-                keyPath: c.tlsKeyPath,
-                caPath: c.tlsCaPath,
-              }))
-          )(config));
+        const tls = await resolveRuntimeTls(config, deps);
         const adminCredentialVerifier = await config.createAdminCredentialVerifier();
         db = (deps.databaseOpen ?? AevraDatabase.open)(config.databasePath);
         safeMode = !db.integrityCheck().ok;
@@ -166,8 +161,7 @@ export async function createCoreRuntime(
         sessions.invalidateForRestart();
         oauthRepo.invalidateEphemeralForRestart();
         if (!safeMode) worker = await wm.start();
-        const workerGateway =
-          !safeMode && typeof wm.execute === 'function' ? wm : unavailableWorkerGateway();
+        const workerGateway = runtimeWorkerGateway(wm, safeMode);
         const changes = new ChangeSetService(
             changeRepo,
             operationRepo,
@@ -184,6 +178,12 @@ export async function createCoreRuntime(
             reads,
           ),
           processes = new ProcessService(sessions, workspaces, workerGateway, processRepo);
+        keepAwake = createRuntimeKeepAwakeService(
+          settings,
+          connections,
+          processes,
+          deps.sleepInhibitor,
+        );
         operations.attachChangeService(changes);
         operations.setCommandEffectResolver((family, defaultEffect) => {
           const overrides = settings.get<Record<string, string>>('command.family.overrides', {});
@@ -281,6 +281,8 @@ export async function createCoreRuntime(
             staticDir,
             tls: tls.serverOptions,
             advertisedHost: 'localhost',
+            trustedOrigins: () =>
+              exposureWiring?.trustedAdminOrigins() ?? config.trustedAdminOrigins,
             api: {
               workspaces,
               approvals,
@@ -303,6 +305,7 @@ export async function createCoreRuntime(
               connectors: connectorRepo,
               metrics,
               activity,
+              power: keepAwake,
               mcpDiagnostics: () => mcp?.diagnosticsSnapshot() ?? null,
               safeMode: () => safeMode,
             },
@@ -331,6 +334,7 @@ export async function createCoreRuntime(
         await mcp.start();
         await exposureWiring.startGateway(admin.url(), mcp.url());
         await exposureWiring.startProvider();
+        await keepAwake.start();
         started = true;
       } catch (error) {
         await cleanup();

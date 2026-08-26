@@ -10,18 +10,10 @@ const PROVIDER_LABELS: Record<ExposureStatus['provider'], string> = {
   external: 'External / Custom',
 };
 
-interface SuccessToast {
+interface Toast {
   message: string;
   ariaLabel: string;
-}
-
-function CopyIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      <path d="M6 5.5A1.5 1.5 0 0 1 7.5 4h5A1.5 1.5 0 0 1 14 5.5v5a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 6 10.5v-5Z" />
-      <path d="M10 4V3.5A1.5 1.5 0 0 0 8.5 2h-5A1.5 1.5 0 0 0 2 3.5v5A1.5 1.5 0 0 0 3.5 10H4" />
-    </svg>
-  );
+  tone: 'success' | 'error';
 }
 
 function RemoteEndpoint({
@@ -39,17 +31,19 @@ function RemoteEndpoint({
   return (
     <div className="endpoint remote-endpoint">
       <span>{label}</span>
-      <code>{value ?? fallback}</code>
-      <button
-        type="button"
-        className="remote-copy-button"
-        aria-label={copyLabel}
-        title={copyLabel}
-        disabled={!value}
-        onClick={() => value && void onCopy(label, value)}
-      >
-        <CopyIcon />
-      </button>
+      {value ? (
+        <button
+          type="button"
+          className="remote-copy-value"
+          aria-label={copyLabel}
+          title={copyLabel}
+          onClick={() => void onCopy(label, value)}
+        >
+          <code>{value}</code>
+        </button>
+      ) : (
+        <code>{fallback}</code>
+      )}
     </div>
   );
 }
@@ -62,13 +56,13 @@ export function RemoteAccessPanel({
   onChanged(): Promise<void>;
 }) {
   const [message, setMessage] = useState('');
-  const [successToast, setSuccessToast] = useState<SuccessToast | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
 
   useEffect(() => {
-    if (!successToast) return undefined;
-    const timer = window.setTimeout(() => setSuccessToast(null), 4000);
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 4000);
     return () => window.clearTimeout(timer);
-  }, [successToast]);
+  }, [toast]);
 
   const health = status.health;
   const healthRows = health
@@ -87,10 +81,14 @@ export function RemoteAccessPanel({
     try {
       await navigator.clipboard.writeText(value);
       setMessage('');
-      setSuccessToast({ message: `Copied ${label}`, ariaLabel: 'Copy succeeded' });
+      setToast({ message: `Copied ${label}`, ariaLabel: 'Copy succeeded', tone: 'success' });
     } catch (error) {
-      setSuccessToast(null);
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage('');
+      setToast({
+        message: error instanceof Error ? error.message : String(error),
+        ariaLabel: 'Copy failed',
+        tone: 'error',
+      });
     }
   };
 
@@ -104,17 +102,18 @@ export function RemoteAccessPanel({
       }>('/api/exposure/test', { method: 'POST', body: '{}' });
       if (result.reachable) {
         setMessage('');
-        setSuccessToast({
+        setToast({
           message: `Endpoint reachable${result.publicUrl ? ` · ${result.publicUrl}` : ''}`,
           ariaLabel: 'Endpoint test succeeded',
+          tone: 'success',
         });
       } else {
-        setSuccessToast(null);
+        setToast(null);
         setMessage(`Not reachable: ${result.message ?? result.state ?? 'Unknown error'}`);
       }
       await onChanged();
     } catch (error) {
-      setSuccessToast(null);
+      setToast(null);
       setMessage(error instanceof Error ? error.message : String(error));
     }
   };
@@ -182,10 +181,14 @@ export function RemoteAccessPanel({
         </p>
       ) : null}
       {message ? <p className="inline-result">{message}</p> : null}
-      {successToast ? (
+      {toast ? (
         <div className="toast-stack">
-          <div className="toast success" role="status" aria-label={successToast.ariaLabel}>
-            {successToast.message}
+          <div
+            className={`toast ${toast.tone}`}
+            role={toast.tone === 'error' ? 'alert' : 'status'}
+            aria-label={toast.ariaLabel}
+          >
+            {toast.message}
           </div>
         </div>
       ) : null}

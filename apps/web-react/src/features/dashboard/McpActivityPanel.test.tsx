@@ -1,6 +1,6 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { DialogProvider } from '../../components/Dialog';
 import { McpActivityPanel } from './McpActivityPanel';
 
@@ -174,7 +174,43 @@ test('live MCP activity supports search filters and page size', async () => {
   expect(screen.getByRole('button', { name: 'Rows per page' })).toHaveTextContent('25');
 });
 
-test('live MCP activity detail action shows sanitized input and output', async () => {
+test('live MCP activity detail action shows sanitized input and output as JSON viewers', async () => {
+  const user = userEvent.setup();
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  });
+  globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
+  renderPanel();
+  const source = FakeEventSource.instances[0]!;
+  const input = '{\n  "path": "README.md"\n}';
+  const output = '{\n  "content": "[REDACTED]"\n}';
+
+  act(() =>
+    source.emit(
+      'activity',
+      activity({
+        state: 'success',
+        durationMs: 12,
+        input,
+        output,
+      }),
+    ),
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Details' }));
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByText('MCP activity details')).toBeInTheDocument();
+  expect(within(dialog).getAllByTestId('json-detail-tree')).toHaveLength(2);
+  expect(within(dialog).getByText('README.md')).toBeInTheDocument();
+  expect(within(dialog).getByText('[REDACTED]')).toBeInTheDocument();
+
+  await user.click(within(dialog).getByRole('button', { name: 'Copy Output JSON' }));
+  expect(writeText).toHaveBeenCalledWith(output);
+});
+
+test('live MCP activity detail preserves readable non-JSON output', async () => {
   const user = userEvent.setup();
   globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
   renderPanel();
@@ -184,17 +220,19 @@ test('live MCP activity detail action shows sanitized input and output', async (
     source.emit(
       'activity',
       activity({
-        state: 'success',
+        state: 'error',
         durationMs: 12,
-        input: '{\n  "path": "README.md"\n}',
-        output: '{\n  "content": "[REDACTED]"\n}',
+        output: 'plain failure text',
       }),
     ),
   );
 
   await user.click(screen.getByRole('button', { name: 'Details' }));
   const dialog = screen.getByRole('dialog');
-  expect(within(dialog).getByText('MCP activity details')).toBeInTheDocument();
-  expect(within(dialog).getByText(/README\.md/)).toBeInTheDocument();
-  expect(within(dialog).getByText(/\[REDACTED\]/)).toBeInTheDocument();
+  const outputView = dialog.querySelector('[data-json-label="Output"]');
+  expect(outputView).not.toBeNull();
+  expect(within(outputView as HTMLElement).getByText('TEXT')).toBeInTheDocument();
+  expect(within(outputView as HTMLElement).getByTestId('json-detail-raw')).toHaveTextContent(
+    'plain failure text',
+  );
 });

@@ -250,3 +250,35 @@ test('secret environment vault and config routes cover defaults and mutations', 
   });
   assert.equal((await call('/api/not-access', 'GET')).handled, false);
 });
+
+test('Admin exposure test route requires and delegates to the Admin probe service', async () => {
+  await assert.rejects(
+    () => call('/api/exposure/admin/test', 'POST', {}),
+    (e: any) => e.status === 503,
+  );
+  let candidate: unknown;
+  const tested = await call(
+    '/api/exposure/admin/test',
+    'POST',
+    {
+      exposure: {
+        testAdmin: async (input: unknown) => {
+          candidate = input;
+          return {
+            configured: true,
+            trusted: true,
+            reachable: true,
+            publicUrl: 'https://admin.example.com',
+          };
+        },
+      },
+    },
+    { publicUrl: 'https://admin.example.com/control', trustedOrigins: ['https://ops.example.com'] },
+  );
+  assert.deepEqual(candidate, {
+    publicUrl: 'https://admin.example.com/control',
+    trustedOrigins: ['https://ops.example.com'],
+  });
+  assert.equal(tested.value.reachable, true);
+  assert.equal(tested.value.trusted, true);
+});

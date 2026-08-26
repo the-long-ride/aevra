@@ -6,8 +6,8 @@ import type { ExposureAdapter } from '../src/exposure/types.js';
 function fakeAdapter(options: { publicUrl?: string; fail?: Error } = {}) {
   const calls: string[] = [];
   const value: ExposureAdapter = {
-    async start(localGatewayUrl) {
-      calls.push(`start:${localGatewayUrl}`);
+    async start(localGatewayUrl, requestedPublicUrl) {
+      calls.push('start:' + localGatewayUrl + (requestedPublicUrl ? ':' + requestedPublicUrl : ''));
       if (options.fail) throw options.fail;
       return { publicUrl: options.publicUrl };
     },
@@ -76,4 +76,19 @@ test('closing exposure stops the active managed provider', async () => {
   await service.close();
   assert.deepEqual(cloudflare.calls, ['start:https://localhost:47830', 'stop']);
   assert.equal(service.status().state, 'stopped');
+});
+
+test('managed stable ngrok passes its configured public URL to the adapter', async () => {
+  const ngrok = fakeAdapter({ publicUrl: 'https://stable.example.ngrok.app' });
+  const service = new ExposureService({ ngrok: ngrok.value });
+  const status = await service.start(
+    {
+      provider: 'ngrok',
+      publicUrl: 'https://stable.example.ngrok.app',
+      ngrok: { ownership: 'managed', domainMode: 'stable' },
+    },
+    'https://localhost:47830',
+  );
+  assert.equal(status.publicUrl, 'https://stable.example.ngrok.app');
+  assert.deepEqual(ngrok.calls, ['start:https://localhost:47830:https://stable.example.ngrok.app']);
 });

@@ -30,14 +30,21 @@ function isMutation(req: IncomingMessage) {
   return !['GET', 'HEAD', 'OPTIONS'].includes(req.method ?? 'GET');
 }
 
-function sameOrigin(req: IncomingMessage, url: URL) {
+function sameOrigin(req: IncomingMessage, url: URL, trustedOrigins: string[] = []) {
   if (!isMutation(req)) return true;
   const fetchSite = req.headers['sec-fetch-site'];
   if (typeof fetchSite === 'string' && !['same-origin', 'none'].includes(fetchSite)) {
     return false;
   }
   const origin = req.headers.origin;
-  return typeof origin !== 'string' || origin === url.origin;
+  if (typeof origin !== 'string') return true;
+  let requestOrigin: string;
+  try {
+    requestOrigin = new URL(origin).origin;
+  } catch {
+    return false;
+  }
+  return requestOrigin === url.origin || trustedOrigins.includes(requestOrigin);
 }
 
 function staticContentType(file: string) {
@@ -58,6 +65,7 @@ export interface AdminServerOptions {
   api?: AdminApiContext;
   tls?: HttpsServerOptions;
   advertisedHost?: string;
+  trustedOrigins?: () => string[];
 }
 
 export class AdminServer {
@@ -111,6 +119,7 @@ export class AdminServer {
 
   private async handle(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', this.url());
+    const trustedOrigins = this.options.trustedOrigins?.() ?? [];
 
     if (url.pathname === '/api/health') {
       json(res, 200, this.health());
@@ -139,7 +148,7 @@ export class AdminServer {
         loginLimiter: this.loginLimiter,
         sessionId: this.adminSession(req),
         secure: (req.socket as { encrypted?: boolean }).encrypted === true,
-        sameOrigin: sameOrigin(req, url),
+        sameOrigin: sameOrigin(req, url, trustedOrigins),
         clientIp: req.socket.remoteAddress ?? 'unknown',
       });
       if (handled) return;
@@ -150,7 +159,7 @@ export class AdminServer {
       return;
     }
 
-    if (url.pathname.startsWith('/api/') && !sameOrigin(req, url)) {
+    if (url.pathname.startsWith('/api/') && !sameOrigin(req, url, trustedOrigins)) {
       json(res, 403, {
         error: {
           code: 'CSRF_REJECTED',

@@ -87,6 +87,112 @@
   font-size: 11px;
 }
 
+.json-detail-view {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+}
+
+.json-detail-toolbar,
+.json-detail-toolbar-actions,
+.json-detail-row {
+  display: flex;
+  align-items: center;
+}
+
+.json-detail-toolbar {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-card);
+}
+
+.json-detail-format {
+  color: var(--mute);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.json-detail-toolbar-actions {
+  gap: 8px;
+  color: var(--mute);
+  font-size: 10px;
+}
+
+.json-copy-failed {
+  color: var(--danger);
+}
+
+.json-detail-tree,
+.json-detail-raw {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  padding: 8px 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.json-detail-raw {
+  padding: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.json-detail-row {
+  min-height: 24px;
+  gap: 5px;
+  padding-right: 10px;
+  padding-left: calc(8px + var(--json-depth, 0) * 16px);
+  white-space: nowrap;
+}
+
+.json-detail-row:hover {
+  background: var(--surface-card);
+}
+
+.json-detail-toggle {
+  width: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--mute);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.json-detail-key {
+  color: var(--body);
+  font-weight: 600;
+}
+
+.json-detail-separator,
+.json-detail-summary,
+.json-detail-value.null {
+  color: var(--mute);
+}
+
+.json-detail-value.string {
+  color: var(--ink);
+}
+
+.json-detail-value.number {
+  color: var(--accent);
+}
+
+.json-detail-value.boolean {
+  color: var(--warning);
+}
 @media (max-width: 640px) {
   .live-activity-head {
     display: grid;

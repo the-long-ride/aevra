@@ -410,3 +410,33 @@ pre {
     max-height: calc(100dvh - 12px);
   }
 }
+
+/* Runtime management modals keep controls fixed while only table rows scroll. */
+.management-modal {
+  display: flex;
+  flex-direction: column;
+  height: min(90dvh, 900px);
+}
+
+.management-modal > .modal-head {
+  flex: 0 0 auto;
+}
+
+.management-modal-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  max-height: none;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.management-modal-body > .panel-toolbar {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .management-modal {
+    height: calc(100dvh - 12px);
+  }
+}

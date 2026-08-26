@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { AdminCredentialVerifier, loadAdminCredentials } from './admin/admin-credentials.js';
+import { normalizeAdminPublicUrl, normalizeTrustedAdminOrigins } from './exposure/admin-origin.js';
 
 export interface CoreConfig {
   publicHost: '127.0.0.1';
@@ -17,6 +18,8 @@ export interface CoreConfig {
   oauthAccessTokenTtlMs: number;
   oauthRefreshTokenTtlMs: number;
   connectionReconnectGraceMs: number;
+  adminPublicUrl?: string;
+  trustedAdminOrigins: string[];
   approvalFastWaitMs: number;
   approvalLifetimeMs: number;
   tlsCertPath?: string;
@@ -87,6 +90,10 @@ export function loadCoreConfig(env: NodeJS.ProcessEnv = process.env): CoreConfig
     15 * 60_000,
     true,
   );
+  const adminPublicUrl = normalizeAdminPublicUrl(env.AEVRA_ADMIN_PUBLIC_URL);
+  const trustedAdminOrigins = normalizeTrustedAdminOrigins(
+    env.AEVRA_TRUSTED_ADMIN_ORIGINS?.split(','),
+  );
   return {
     publicHost: '127.0.0.1',
     publicPort: port(env, 'AEVRA_PUBLIC_PORT', 47830),
@@ -102,6 +109,8 @@ export function loadCoreConfig(env: NodeJS.ProcessEnv = process.env): CoreConfig
     oauthAccessTokenTtlMs,
     oauthRefreshTokenTtlMs,
     connectionReconnectGraceMs,
+    adminPublicUrl,
+    trustedAdminOrigins,
     approvalFastWaitMs: 20_000,
     approvalLifetimeMs: 5 * 60_000,
     tlsCertPath,

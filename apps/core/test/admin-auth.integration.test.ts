@@ -56,7 +56,7 @@ function firstCookie(response: ResponseResult) {
   return (value ?? '').split(';')[0];
 }
 
-async function createHttpsAdmin(loginLimiter?: IpRateLimiter) {
+async function createHttpsAdmin(loginLimiter?: IpRateLimiter, trustedOrigins?: () => string[]) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'aevra-admin-auth-'));
   const tls = await ensureLocalTls(dir, { trust: false });
   const db = AevraDatabase.open(':memory:');
@@ -69,6 +69,7 @@ async function createHttpsAdmin(loginLimiter?: IpRateLimiter) {
     controlSecret: 'local-control',
     tls: tls.serverOptions,
     advertisedHost: '127.0.0.1',
+    trustedOrigins,
   });
   await server.start();
   return {
@@ -82,6 +83,76 @@ async function createHttpsAdmin(loginLimiter?: IpRateLimiter) {
   };
 }
 
+test('admin login accepts configured Admin and additional trusted origins', async () => {
+  const fixture = await createHttpsAdmin(undefined, () => [
+    'https://admin.example.com',
+    'https://ops.example.com',
+  ]);
+  try {
+    const response = await request(fixture.server, '/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://admin.example.com',
+        'sec-fetch-site': 'same-origin',
+      },
+      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(firstCookie(response), /^aevra_admin=/);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('admin login rejects unknown origins even when forwarded headers name the public host', async () => {
+  const fixture = await createHttpsAdmin(undefined, () => [
+    'https://admin.example.com',
+    'https://ops.example.com',
+  ]);
+  try {
+    const response = await request(fixture.server, '/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://evil.example',
+        'sec-fetch-site': 'same-origin',
+        'x-forwarded-host': 'admin.example.com',
+        'x-forwarded-proto': 'https',
+      },
+      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+    });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(JSON.parse(response.body), {
+      error: {
+        code: 'CSRF_REJECTED',
+        message: 'State-changing admin requests must be same-origin',
+      },
+    });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('MCP public origin is not implicitly trusted for Admin login', async () => {
+  const fixture = await createHttpsAdmin(undefined, () => ['https://admin.example.com']);
+  try {
+    const response = await request(fixture.server, '/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://mcp.example.com',
+        'sec-fetch-site': 'same-origin',
+      },
+      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+    });
+    assert.equal(response.status, 403);
+  } finally {
+    await fixture.close();
+  }
+});
 test('admin sessions can be issued and revoked independently of bootstrap tokens', async () => {
   const db = AevraDatabase.open(':memory:');
   const service = new AdminBootstrapService(db.raw());
@@ -212,6 +283,7 @@ test('admin login returns 429 when the dedicated IP limiter is exhausted', async
     await fixture.close();
   }
 });
+
 test('admin login rejects credential submission over plain HTTP', async () => {
   const db = AevraDatabase.open(':memory:');
   const bootstrap = new AdminBootstrapService(db.raw());

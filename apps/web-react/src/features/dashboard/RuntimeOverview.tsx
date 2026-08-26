@@ -11,10 +11,17 @@ export function RuntimeOverview({
   onOpen(kind: RuntimeModalKind): void;
 }) {
   const snapshot = data.snapshot;
+  const power = snapshot.power;
+  const powerValue = power
+    ? power.supported
+      ? `${power.active ? 'Active' : 'Idle'} \u00b7 ${power.reason}`
+      : `Unavailable${power.message ? ` \u00b7 ${power.message}` : ''}`
+    : 'Unavailable';
   const rows: Array<{ label: string; value: unknown; modal?: RuntimeModalKind }> = [
     { label: 'Remote sessions', value: snapshot.stats.sessions },
     { label: 'Workspace leases', value: snapshot.stats.workspaceLeases },
     { label: 'Pending requests', value: snapshot.pending.total },
+    { label: 'Sleep inhibition', value: powerValue },
     { label: 'Managed processes', value: snapshot.stats.processes, modal: 'processes' },
     { label: 'Open changes', value: snapshot.stats.openChanges, modal: 'changes' },
     { label: 'Tool calls', value: snapshot.stats.toolCalls, modal: 'tools' },

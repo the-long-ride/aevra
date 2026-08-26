@@ -36,7 +36,11 @@ export class ExposureService {
     }
 
     try {
-      const started = await adapter.start(localGatewayUrl);
+      const requestedPublicUrl =
+        config.provider === 'ngrok' && config.ngrok?.domainMode === 'stable'
+          ? config.publicUrl
+          : undefined;
+      const started = await adapter.start(localGatewayUrl, requestedPublicUrl);
       const publicUrl =
         started.publicUrl ??
         config.publicUrl ??

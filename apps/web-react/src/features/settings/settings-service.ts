@@ -1,4 +1,4 @@
-import type { ExposureStatus, WorkspaceSummary } from '@aevra/admin-contracts';
+import type { ExposureStatus, KeepAwakeStatus, WorkspaceSummary } from '@aevra/admin-contracts';
 import { requestJson } from '../../services/api-client';
 
 export interface HookSetting {
@@ -19,6 +19,7 @@ export interface HookSetting {
 export interface SettingsData {
   adminSettings: Record<string, unknown>;
   exposure: ExposureStatus;
+  power: KeepAwakeStatus;
   commandFamilies: Record<string, string>;
   networkRules: Array<Record<string, unknown>>;
   execution: Record<string, unknown>;
@@ -33,6 +34,7 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
   const [
     adminSettings,
     exposure,
+    power,
     commandFamilies,
     networkRules,
     execution,
@@ -43,6 +45,7 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
   ] = await Promise.all([
     requestJson<Record<string, unknown>>('/api/settings', options),
     requestJson<ExposureStatus>('/api/exposure/status', options),
+    requestJson<KeepAwakeStatus>('/api/power/keep-awake', options),
     requestJson<Record<string, string>>('/api/policy/command-families', options),
     requestJson<Array<Record<string, unknown>>>('/api/policy/network-rules', options),
     requestJson<Record<string, unknown>>('/api/execution-settings', options),
@@ -54,6 +57,7 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
   return {
     adminSettings,
     exposure,
+    power,
     commandFamilies,
     networkRules,
     execution,

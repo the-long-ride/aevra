@@ -112,3 +112,54 @@ test('direct exposure requires an HTTPS public URL', () => {
     },
   );
 });
+
+test('admin public URL and trusted origins are normalized independently of MCP URL', () => {
+  assert.deepEqual(
+    validateExposureConfig({
+      provider: 'cloudflare',
+      publicUrl: 'https://mcp.example.com',
+      adminPublicUrl: 'https://admin.example.com/settings?x=1#y',
+      trustedAdminOrigins: ['https://other.example.com/path', 'https://other.example.com/'],
+      cloudflare: { ownership: 'external', authMode: 'oauth', hostname: 'mcp.example.com' },
+    } as any),
+    {
+      provider: 'cloudflare',
+      publicUrl: 'https://mcp.example.com',
+      adminPublicUrl: 'https://admin.example.com/settings',
+      trustedAdminOrigins: ['https://other.example.com'],
+      cloudflare: { ownership: 'external', authMode: 'oauth', hostname: 'mcp.example.com' },
+    },
+  );
+});
+
+test('admin trusted origins reject insecure wildcard credential and malformed URLs', () => {
+  for (const value of [
+    'http://remote.example.com',
+    'https://user:pass@admin.example.com',
+    'https://*.example.com',
+    'not-a-url',
+  ]) {
+    assert.throws(
+      () => validateExposureConfig({ provider: 'local', trustedAdminOrigins: [value] } as any),
+      /Admin|HTTPS|valid|wildcard|credentials/i,
+    );
+  }
+});
+
+test('managed ngrok stable domain requires a public URL while automatic mode remains optional', () => {
+  assert.throws(
+    () =>
+      validateExposureConfig({
+        provider: 'ngrok',
+        ngrok: { ownership: 'managed', domainMode: 'stable' },
+      } as any),
+    /public URL/i,
+  );
+  assert.deepEqual(
+    validateExposureConfig({
+      provider: 'ngrok',
+      ngrok: { ownership: 'managed', domainMode: 'automatic' },
+    } as any),
+    { provider: 'ngrok', ngrok: { ownership: 'managed', domainMode: 'automatic' } },
+  );
+});

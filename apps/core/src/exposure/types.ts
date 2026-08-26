@@ -5,6 +5,8 @@ export type ExposureProvider = (typeof EXPOSURE_PROVIDERS)[number];
 export interface ExposureConfig {
   provider: ExposureProvider;
   publicUrl?: string;
+  adminPublicUrl?: string;
+  trustedAdminOrigins?: string[];
   direct?: {
     host: string;
   };
@@ -18,11 +20,12 @@ export interface ExposureConfig {
   };
   ngrok?: {
     ownership: 'managed' | 'external';
+    domainMode?: 'automatic' | 'stable';
   };
 }
 
 export interface ExposureAdapter {
-  start(localGatewayUrl: string): Promise<{ publicUrl?: string }>;
+  start(localGatewayUrl: string, requestedPublicUrl?: string): Promise<{ publicUrl?: string }>;
   stop(): Promise<void>;
   status(): Promise<{ state: string; message?: string }>;
 }
@@ -32,5 +35,7 @@ export interface ExposureStatus {
   state: 'stopped' | 'ready' | 'error';
   localGatewayUrl?: string;
   publicUrl?: string;
+  adminPublicUrl?: string;
+  trustedAdminOrigins?: string[];
   message?: string;
 }
