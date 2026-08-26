@@ -76,6 +76,7 @@ export async function handleModernRuntimeRequest(
   const context: Record<string, unknown> = {
     actor: identity.actor,
     subject: identity.subject,
+    ...(identity.connectionId ? { connectionId: identity.connectionId } : {}),
     protocolVersion: MODERN_PROTOCOL_VERSION,
     method: body?.method,
   };
@@ -109,12 +110,19 @@ export async function handleModernRuntimeRequest(
 
   const resolution = deps.runtime.sessions.getOrCreateForIdentity?.(identity, remoteIp(req));
   const session = resolution?.session ?? deps.runtime.sessions.create(identity, remoteIp(req));
+  const mode =
+    resolution?.mode ??
+    (resolution ? (resolution.created === true ? 'created' : 'existing') : 'created');
   context.sessionId = session.id;
-  if (resolution?.created) {
-    await emitHook(hooks, 'session_start', context, { sessionId: session.id });
-    await emitHook(hooks, 'session_connect', context, { sessionId: session.id });
-  } else if (resolution && !resolution.created) {
-    await emitHook(hooks, 'session_reconnect', context, { sessionId: session.id });
+  const hookPayload = {
+    sessionId: session.id,
+    ...(identity.connectionId ? { connectionId: identity.connectionId } : {}),
+  };
+  if (mode === 'created') {
+    await emitHook(hooks, 'session_start', context, hookPayload);
+    await emitHook(hooks, 'session_connect', context, hookPayload);
+  } else {
+    await emitHook(hooks, 'session_reconnect', context, hookPayload);
   }
 
   deps.runtime.sessions.touch?.(session.id);

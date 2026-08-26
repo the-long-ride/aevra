@@ -12,9 +12,25 @@ The local bootstrap/control secret does not authenticate a browser session and c
 
 Aevra's canonical MCP endpoint is `/mcp`. OAuth-capable clients discover Aevra's protected-resource and authorization-server metadata automatically from the effective public HTTPS base URL.
 
-Aevra uses Authorization Code with PKCE S256. Redirect URIs are validated exactly. Authorization codes are short-lived and single-use. Access and refresh credentials are stored as hashes rather than raw bearer secrets. Refresh tokens rotate when used.
+Aevra uses Authorization Code with PKCE S256. Redirect URIs are validated exactly. Authorization codes are short-lived and single-use. Access and refresh credentials are stored as hashes rather than raw bearer secrets. Refresh tokens rotate when used, and spent refresh-token hashes are retained until family expiry so replay can be detected. Reusing a spent refresh token revokes the whole refresh family, active access credentials for the connection, and connection YOLO.
 
 OAuth authorization requires **Admin approval** in the Aevra Web UI before a code is released to the remote client.
+
+### Connection continuity
+
+Aevra cannot guarantee one physical HTTP/MCP transport remains open. Continuity is achieved by re-authenticating with a short-lived access token or rotating a refresh token and reattaching to the same logical OAuth connection.
+
+Default lifetimes are:
+
+- access token: 60 minutes;
+- refresh family: 30 days, with an absolute family expiry that rotation does not extend;
+- reconnect grace: 15 minutes.
+
+The logical OAuth connection is durable and separate from an individual MCP session. A transport detach can therefore create a new MCP session while preserving the same authenticated connection identity. Remembered workspace grants and connection-level YOLO may survive reconnects and Core restarts. Session-only workspace leases are rebound only while their original expiry is still valid; reconnect never extends an expired lease.
+
+A normal disconnect or reconnect does **not** automatically replay a mutating request whose response was lost. `operation_get` and `operation_list` expose connection-owned durable operation status so a client can inspect what happened without risking duplicate writes, commits, deletes, or shell commands.
+
+**Disconnect session** and **Revoke connection** are intentionally different Admin actions. Disconnecting one MCP session does not invalidate OAuth credentials. Revoking a connection invalidates its access and refresh credentials, revokes its live sessions and leases, clears remembered workspace grants, and disables YOLO.
 
 ## Bearer connectors
 
@@ -38,7 +54,9 @@ Aevra rejects browser credential submission over plain HTTP. Direct HTTPS termin
 
 ## Session isolation
 
-MCP sessions are keyed by actor and subject. An OAuth reconnect restores remembered workspace grants for that connection subject only. Revoking a session does not reveal another client's tokens, workspaces, or YOLO state.
+MCP sessions are keyed by actor and subject. OAuth attachment also requires the same durable connection ID. A reconnect restores remembered workspace grants only for that connection subject and never converts a pending or one-shot approval into a broader permission. Remote IP changes are recorded but do not replace actor/subject/connection authentication.
+
+Operation history is connection-scoped. A different OAuth subject, an unauthenticated session, or a revoked connection cannot retrieve another connection's durable operation status.
 
 ## Worker IPC
 
@@ -46,4 +64,4 @@ The Execution Worker is reached only over a Unix domain socket or a Windows name
 
 ## Secret handling
 
-Admin passwords stay in process environment and in-memory verifiers. Connector tokens, OAuth access tokens, and refresh tokens are stored as hashes. DLP redacts known secrets from remote command output before it leaves the Worker.
+Admin passwords stay in process environment and in-memory verifiers. Connector tokens, OAuth access tokens, active refresh tokens, and retained spent refresh-token material are stored as hashes rather than raw bearer credentials. Admin connection projections and MCP operation projections never return raw credentials, token hashes, PKCE verifier/challenge values, or refresh-family hash material. DLP redacts known secrets from remote command output before it leaves the Worker.

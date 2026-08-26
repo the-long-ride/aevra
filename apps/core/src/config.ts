@@ -14,6 +14,9 @@ export interface CoreConfig {
   recoveryDir: string;
   workerSocketPath: string;
   leaseIdleMs: number;
+  oauthAccessTokenTtlMs: number;
+  oauthRefreshTokenTtlMs: number;
+  connectionReconnectGraceMs: number;
   approvalFastWaitMs: number;
   approvalLifetimeMs: number;
   tlsCertPath?: string;
@@ -29,6 +32,17 @@ function port(env: NodeJS.ProcessEnv, key: string, fallback: number) {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error(`${key} must be 1..65535`);
   return n;
+}
+
+function durationMs(env: NodeJS.ProcessEnv, key: string, fallback: number, allowZero = false) {
+  const raw = env[key];
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  const minimum = allowZero ? 0 : 1;
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw new Error(`${key} must be a safe integer >= ${minimum}`);
+  }
+  return value;
 }
 
 export function defaultStateDir(env: NodeJS.ProcessEnv = process.env): string {
@@ -58,6 +72,21 @@ export function loadCoreConfig(env: NodeJS.ProcessEnv = process.env): CoreConfig
     tlsCaPath = env.AEVRA_TLS_CA ? path.resolve(env.AEVRA_TLS_CA) : undefined;
   if (Boolean(tlsCertPath) !== Boolean(tlsKeyPath))
     throw new Error('AEVRA_TLS_CERT and AEVRA_TLS_KEY must be set together');
+  const oauthAccessTokenTtlMs = durationMs(env, 'AEVRA_OAUTH_ACCESS_TOKEN_TTL_MS', 60 * 60_000);
+  const oauthRefreshTokenTtlMs = durationMs(
+    env,
+    'AEVRA_OAUTH_REFRESH_TOKEN_TTL_MS',
+    30 * 24 * 60 * 60_000,
+  );
+  if (oauthRefreshTokenTtlMs <= oauthAccessTokenTtlMs) {
+    throw new Error('OAuth refresh token TTL must be greater than access token TTL');
+  }
+  const connectionReconnectGraceMs = durationMs(
+    env,
+    'AEVRA_CONNECTION_RECONNECT_GRACE_MS',
+    15 * 60_000,
+    true,
+  );
   return {
     publicHost: '127.0.0.1',
     publicPort: port(env, 'AEVRA_PUBLIC_PORT', 47830),
@@ -70,6 +99,9 @@ export function loadCoreConfig(env: NodeJS.ProcessEnv = process.env): CoreConfig
     recoveryDir: path.join(stateDir, 'recovery'),
     workerSocketPath,
     leaseIdleMs: 30 * 60_000,
+    oauthAccessTokenTtlMs,
+    oauthRefreshTokenTtlMs,
+    connectionReconnectGraceMs,
     approvalFastWaitMs: 20_000,
     approvalLifetimeMs: 5 * 60_000,
     tlsCertPath,

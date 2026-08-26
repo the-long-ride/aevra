@@ -75,7 +75,13 @@ test('modern ingress emits guaranteed request and response hook events', async (
       }),
     });
     assert.equal(response.status, 200);
-    assert.deepEqual(events, ['request_received', 'before_response', 'response_finished']);
+    assert.deepEqual(events, [
+      'request_received',
+      'session_start',
+      'session_connect',
+      'before_response',
+      'response_finished',
+    ]);
   } finally {
     await server.close();
   }

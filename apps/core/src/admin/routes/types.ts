@@ -15,6 +15,7 @@ export interface AdminApiContext {
   exposure?: any;
   localFilesystem?: any;
   oauth?: any;
+  connections?: any;
   connectors?: any;
   metrics?: any;
   environment?: any;

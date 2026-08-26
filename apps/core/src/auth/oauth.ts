@@ -2,7 +2,6 @@ import type {
   OAuthAuthorizationRequestRecord,
   OAuthClientRecord,
   OAuthRepository,
-  OAuthTokenRecord,
 } from '../../../../packages/store/src/oauth.js';
 import type { VerifiedRemoteIdentity } from './cloudflare.js';
 import {
@@ -85,13 +84,6 @@ function publicClient(record: OAuthClientRecord, applicationType?: string) {
 export class AevraOAuthService {
   private _issuer: string;
   private _resource: string;
-  get issuer() {
-    return this._issuer;
-  }
-  get resource() {
-    return this._resource;
-  }
-  private now: () => Date;
   private requestTtlMs: number;
   private codeTtlMs: number;
   private accessTtlMs: number;
@@ -103,11 +95,18 @@ export class AevraOAuthService {
   ) {
     this._issuer = options.issuer.replace(/\/$/, '');
     this._resource = options.resource;
-    this.now = options.now ?? (() => new Date());
     this.requestTtlMs = options.authorizationRequestTtlMs ?? 5 * 60_000;
     this.codeTtlMs = options.authorizationCodeTtlMs ?? 2 * 60_000;
     this.accessTtlMs = options.accessTokenTtlMs ?? 60 * 60_000;
     this.refreshTtlMs = options.refreshTokenTtlMs ?? 30 * 24 * 60 * 60_000;
+  }
+
+  get issuer() {
+    return this._issuer;
+  }
+
+  get resource() {
+    return this._resource;
   }
 
   setPublicBaseUrl(baseUrl: string) {
@@ -217,6 +216,7 @@ export class AevraOAuthService {
     const request = this.repo.getAuthorizationRequest(id);
     return request ?? { id, status: 'EXPIRED' };
   }
+
   listPendingAuthorizations() {
     return this.repo.listPendingAuthorizationRequests().map((request) => ({
       ...request,
@@ -224,11 +224,13 @@ export class AevraOAuthService {
       requestedScopes: request.scope.split(/\s+/).filter(Boolean),
     }));
   }
+
   approveAuthorization(id: string) {
     const request = this.repo.approveAuthorizationRequest(id);
     if (!request) throw new Error('OAuth authorization request not found');
     return request;
   }
+
   denyAuthorization(id: string) {
     const request = this.repo.denyAuthorizationRequest(id);
     if (!request) throw new Error('OAuth authorization request not found');
@@ -271,37 +273,46 @@ export class AevraOAuthService {
     const current = this.repo.findRefreshToken(input.refresh_token);
     if (!current || current.clientId !== input.client_id || current.resource !== resource)
       throw new Error('invalid refresh token');
+    if (current.status !== 'ACTIVE') {
+      this.repo.rotateRefreshTokenSecurely(input.refresh_token, this.refreshTtlMs);
+      throw new Error('invalid refresh token');
+    }
     const requestedScope = input.scope ? normalizeScope(input.scope) : current.scope;
     const currentScopes = new Set(current.scope.split(/\s+/));
     if (requestedScope.split(/\s+/).some((scope) => !currentScopes.has(scope)))
       throw new Error('refresh scope exceeds original grant');
-    const rotated = this.repo.rotateRefreshToken(input.refresh_token, this.refreshTtlMs);
-    if (!rotated) throw new Error('invalid refresh token');
-    const grant: OAuthTokenRecord = {
-      clientId: current.clientId,
-      actor: current.actor,
-      subject: current.subject,
-      scope: requestedScope,
-      resource: current.resource,
-      createdAt: this.now().toISOString(),
-      expiresAt: new Date(this.now().getTime() + this.accessTtlMs).toISOString(),
-    };
-    const access = this.repo.issueAccessToken(grant, this.accessTtlMs);
+    const rotated = this.repo.rotateRefreshTokenSecurely(input.refresh_token, this.refreshTtlMs);
+    if (rotated.status !== 'ROTATED') throw new Error('invalid refresh token');
+    const access = this.repo.issueAccessToken(
+      {
+        clientId: current.clientId,
+        actor: current.actor,
+        subject: current.subject,
+        scope: requestedScope,
+        resource: current.resource,
+      },
+      this.accessTtlMs,
+    );
     return {
       access_token: access.token,
       token_type: 'Bearer',
       expires_in: Math.floor(this.accessTtlMs / 1000),
       scope: requestedScope,
-      refresh_token: rotated.token,
+      refresh_token: rotated.nextToken,
     };
   }
 
   verifyAccessToken(token: string): VerifiedRemoteIdentity {
     const record = this.repo.findAccessToken(token);
     if (!record || record.resource !== this.resource) throw new Error('invalid OAuth access token');
+    const connection = this.repo.getConnection(record.subject);
+    if (!connection || connection.status !== 'ACTIVE')
+      throw new Error('invalid OAuth access token');
+    this.repo.touchConnection(record.subject);
     return {
       actor: record.actor,
       subject: record.subject,
+      connectionId: record.subject,
       issuer: this.issuer,
       audience: this.resource,
       expiresAt: record.expiresAt,
@@ -312,6 +323,10 @@ export class AevraOAuthService {
     this.repo.revokeToken(token);
   }
 
+  revokeConnection(subject: string, reason = 'ADMIN_REVOKE') {
+    this.repo.revokeConnection(subject, reason);
+  }
+
   private issueGrantTokens(grant: {
     clientId: string;
     actor: string;
@@ -319,6 +334,7 @@ export class AevraOAuthService {
     scope: string;
     resource: string;
   }): OAuthTokenResponse {
+    this.repo.ensureConnection(grant);
     const access = this.repo.issueAccessToken(grant, this.accessTtlMs);
     const response: OAuthTokenResponse = {
       access_token: access.token,

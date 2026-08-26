@@ -1,12 +1,17 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { eqHash, hash, secret } from './oauth-crypto.js';
+import { OAuthConnectionStore } from './oauth-connection-store.js';
 import { clientFromRow } from './oauth-records.js';
+import { OAuthTokenStore, type RefreshRotationResult } from './oauth-token-store.js';
 import type {
   OAuthAuthorizationCodeRecord,
   OAuthAuthorizationRequestRecord,
   OAuthClientRecord,
+  OAuthConnectionRecord,
   OAuthGrantRecord,
+  OAuthRefreshFamilyRecord,
+  OAuthRefreshTokenRecord,
   OAuthTokenRecord,
 } from './oauth-records.js';
 
@@ -14,15 +19,25 @@ export type {
   OAuthAuthorizationCodeRecord,
   OAuthAuthorizationRequestRecord,
   OAuthClientRecord,
+  OAuthConnectionRecord,
   OAuthGrantRecord,
+  OAuthRefreshFamilyRecord,
+  OAuthRefreshTokenRecord,
   OAuthTokenRecord,
-} from './oauth-records.js';
+  RefreshRotationResult,
+};
 
 export class OAuthRepository {
+  private connections: OAuthConnectionStore;
+  private tokens: OAuthTokenStore;
+
   constructor(
     private db: DatabaseSync,
     private now: () => Date = () => new Date(),
-  ) {}
+  ) {
+    this.connections = new OAuthConnectionStore(db, now);
+    this.tokens = new OAuthTokenStore(db, now);
+  }
 
   registerClient(input: { clientName: string; redirectUris: string[] }): OAuthClientRecord {
     const createdAt = this.now().toISOString();
@@ -83,8 +98,8 @@ export class OAuthRepository {
     },
     ttlMs: number,
   ): OAuthAuthorizationRequestRecord {
-    const createdAt = this.now(),
-      expiresAt = new Date(createdAt.getTime() + ttlMs);
+    const createdAt = this.now();
+    const expiresAt = new Date(createdAt.getTime() + ttlMs);
     const record: OAuthAuthorizationRequestRecord = {
       id: `oauth_req_${randomUUID()}`,
       clientId: input.clientId,
@@ -157,36 +172,22 @@ export class OAuthRepository {
     return this.decideAuthorizationRequest(id, 'DENIED');
   }
 
-  private decideAuthorizationRequest(id: string, status: 'APPROVED' | 'DENIED') {
-    const current = this.getAuthorizationRequest(id);
-    if (!current) return null;
-    const decidedAt = this.now().toISOString();
-    this.db
-      .prepare(
-        "UPDATE oauth_authorization_requests SET status=?,decided_at=? WHERE id=? AND status='PENDING'",
-      )
-      .run(status, decidedAt, id);
-    return this.getAuthorizationRequest(id);
-  }
-
-  issueAuthorizationCode(
-    requestId: string,
-    ttlMs: number,
-  ): { code: string; request: OAuthAuthorizationRequestRecord } {
+  issueAuthorizationCode(requestId: string, ttlMs: number) {
     const request = this.getAuthorizationRequest(requestId);
     if (
       !request ||
       request.status !== 'APPROVED' ||
       Date.parse(request.expiresAt) <= this.now().getTime()
-    )
+    ) {
       throw new Error('OAuth authorization request is not approved');
+    }
     const client = this.getClient(request.clientId);
     if (!client) throw new Error('OAuth client no longer exists');
-    const code = secret(32),
-      createdAt = this.now(),
-      expiresAt = new Date(createdAt.getTime() + ttlMs);
-    const actor = `oauth:${client.clientName}`,
-      subject = `oauth_grant_${randomUUID()}`;
+    const code = secret(32);
+    const createdAt = this.now();
+    const expiresAt = new Date(createdAt.getTime() + ttlMs);
+    const actor = `oauth:${client.clientName}`;
+    const subject = `oauth_grant_${randomUUID()}`;
     this.db
       .prepare(
         'INSERT INTO oauth_authorization_codes(code_hash,client_id,redirect_uri,scope,resource,code_challenge,actor,subject,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
@@ -214,130 +215,104 @@ export class OAuthRepository {
         'SELECT code_hash codeHash,client_id clientId,redirect_uri redirectUri,scope,resource,code_challenge codeChallenge,actor,subject,created_at createdAt,expires_at expiresAt FROM oauth_authorization_codes WHERE code_hash=?',
       )
       .get(codeHash) as any | undefined;
-    if (!row) return null;
-    if (!eqHash(codeHash, String(row.codeHash))) return null;
+    if (!row || !eqHash(codeHash, String(row.codeHash))) return null;
     this.db.prepare('DELETE FROM oauth_authorization_codes WHERE code_hash=?').run(codeHash);
     if (Date.parse(row.expiresAt) <= this.now().getTime()) return null;
     delete row.codeHash;
     return row as OAuthAuthorizationCodeRecord;
   }
 
-  issueAccessToken(
-    grant: OAuthGrantRecord,
-    ttlMs: number,
-  ): { token: string; record: OAuthTokenRecord } {
-    return this.issueToken(grant, ttlMs);
+  issueAccessToken(grant: OAuthGrantRecord, ttlMs: number) {
+    const connection = this.ensureConnection(grant);
+    if (connection.status !== 'ACTIVE') throw new Error('OAuth connection is revoked');
+    return this.tokens.issueAccessToken(grant, ttlMs);
   }
 
-  issueRefreshToken(
-    grant: OAuthGrantRecord,
-    ttlMs: number,
-    familyId = `oauth_family_${randomUUID()}`,
-  ): { token: string; record: OAuthTokenRecord & { familyId: string } } {
-    const token = secret(32),
-      createdAt = this.now(),
-      expiresAt = new Date(createdAt.getTime() + ttlMs),
-      record = {
-        ...grant,
-        familyId,
-        createdAt: createdAt.toISOString(),
-        expiresAt: expiresAt.toISOString(),
-      };
-    this.db
-      .prepare(
-        'INSERT INTO oauth_refresh_tokens(token_hash,family_id,client_id,actor,subject,scope,resource,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',
-      )
-      .run(
-        hash(token),
-        familyId,
-        grant.clientId,
-        grant.actor,
-        grant.subject,
-        grant.scope,
-        grant.resource,
-        record.createdAt,
-        record.expiresAt,
-      );
-    return { token, record };
+  issueRefreshToken(grant: OAuthGrantRecord, ttlMs: number, familyId?: string) {
+    const connection = this.ensureConnection(grant);
+    if (connection.status !== 'ACTIVE') throw new Error('OAuth connection is revoked');
+    return this.tokens.issueRefreshToken(grant, ttlMs, familyId);
   }
 
-  private issueToken(
-    grant: OAuthGrantRecord,
-    ttlMs: number,
-  ): { token: string; record: OAuthTokenRecord } {
-    const token = secret(32),
-      createdAt = this.now(),
-      record = {
-        ...grant,
-        createdAt: createdAt.toISOString(),
-        expiresAt: new Date(createdAt.getTime() + ttlMs).toISOString(),
-      };
-    this.db
-      .prepare(
-        'INSERT INTO oauth_access_tokens(token_hash,client_id,actor,subject,scope,resource,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)',
-      )
-      .run(
-        hash(token),
-        grant.clientId,
-        grant.actor,
-        grant.subject,
-        grant.scope,
-        grant.resource,
-        record.createdAt,
-        record.expiresAt,
-      );
-    return { token, record };
+  findAccessToken(token: string) {
+    return this.tokens.findAccessToken(token);
   }
 
-  findAccessToken(token: string): OAuthTokenRecord | null {
-    return this.findToken('oauth_access_tokens', token) as OAuthTokenRecord | null;
+  findRefreshToken(token: string) {
+    return this.tokens.findRefreshToken(token);
   }
 
-  findRefreshToken(token: string): (OAuthTokenRecord & { familyId: string }) | null {
-    return this.findToken('oauth_refresh_tokens', token, true) as
-      (OAuthTokenRecord & { familyId: string }) | null;
-  }
-
-  private findToken(
-    table: 'oauth_access_tokens' | 'oauth_refresh_tokens',
-    token: string,
-    refresh = false,
-  ): OAuthTokenRecord | (OAuthTokenRecord & { familyId: string }) | null {
-    const tokenHash = hash(token);
-    const columns = refresh
-      ? 'token_hash tokenHash,family_id familyId,client_id clientId,actor,subject,scope,resource,created_at createdAt,expires_at expiresAt'
-      : 'token_hash tokenHash,client_id clientId,actor,subject,scope,resource,created_at createdAt,expires_at expiresAt';
-    const row = this.db
-      .prepare(`SELECT ${columns} FROM ${table} WHERE token_hash=?`)
-      .get(tokenHash) as any | undefined;
-    if (!row || !eqHash(tokenHash, String(row.tokenHash))) return null;
-    if (Date.parse(row.expiresAt) <= this.now().getTime()) {
-      this.db.prepare(`DELETE FROM ${table} WHERE token_hash=?`).run(tokenHash);
-      return null;
-    }
-    delete row.tokenHash;
-    return row;
-  }
-
-  rotateRefreshToken(
-    token: string,
-    ttlMs: number,
-  ): { token: string; record: OAuthTokenRecord & { familyId: string } } | null {
-    const current = this.findRefreshToken(token);
-    if (!current) return null;
-    this.db.prepare('DELETE FROM oauth_refresh_tokens WHERE token_hash=?').run(hash(token));
-    return this.issueRefreshToken(current, ttlMs, current.familyId);
+  rotateRefreshTokenSecurely(token: string, ttlMs: number): RefreshRotationResult {
+    return this.tokens.rotateRefreshTokenSecurely(token, ttlMs);
   }
 
   revokeToken(token: string) {
-    const tokenHash = hash(token);
-    this.db.prepare('DELETE FROM oauth_access_tokens WHERE token_hash=?').run(tokenHash);
-    this.db.prepare('DELETE FROM oauth_refresh_tokens WHERE token_hash=?').run(tokenHash);
+    this.tokens.revokeToken(token);
+  }
+
+  ensureConnection(grant: OAuthGrantRecord) {
+    return this.connections.ensure(grant);
+  }
+
+  getConnection(subject: string) {
+    return this.connections.get(subject);
+  }
+
+  listConnections() {
+    return this.connections.list();
+  }
+
+  touchConnection(subject: string) {
+    this.connections.touch(subject);
+  }
+
+  setConnectionYolo(subject: string, enabled: boolean) {
+    return this.connections.setYolo(subject, enabled);
+  }
+
+  markConnectionConnected(subject: string) {
+    this.connections.markConnected(subject);
+  }
+
+  markConnectionGrace(subject: string, disconnectedAt: string, graceExpiresAt: string) {
+    this.connections.markGrace(subject, disconnectedAt, graceExpiresAt);
+  }
+
+  clearConnectionGrace(subject: string) {
+    this.connections.clearGrace(subject);
+  }
+
+  revokeConnection(subject: string, reason: string) {
+    this.tokens.revokeConnectionCredentials(subject, reason);
+  }
+
+  revokeRefreshFamily(familyId: string, reason: string) {
+    this.tokens.revokeRefreshFamily(familyId, reason);
+  }
+
+  getLatestRefreshFamily(subject: string): OAuthRefreshFamilyRecord | null {
+    return this.tokens.getLatestFamilyForSubject(subject);
+  }
+
+  clearRememberedWorkspaceGrants(subject: string) {
+    this.db.prepare('DELETE FROM oauth_workspace_grants WHERE subject=?').run(subject);
   }
 
   invalidateEphemeralForRestart() {
     this.db.exec(
       'DELETE FROM oauth_authorization_requests; DELETE FROM oauth_authorization_codes;',
     );
+  }
+
+  private decideAuthorizationRequest(id: string, status: 'APPROVED' | 'DENIED') {
+    const current = this.getAuthorizationRequest(id);
+    if (!current) return null;
+    const decidedAt = this.now().toISOString();
+    this.db
+      .prepare(
+        "UPDATE oauth_authorization_requests SET status=?,decided_at=? WHERE id=? AND status='PENDING'",
+      )
+      .run(status, decidedAt, id);
+    return this.getAuthorizationRequest(id);
   }
 }

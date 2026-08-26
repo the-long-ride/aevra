@@ -1,3 +1,8 @@
+import {
+  operationGetInputSchema,
+  operationListInputSchema,
+  operationSchema,
+} from './operation-tools.js';
 import { emptySchema, inputSchemas, type JsonSchema } from './registry-input-schemas.js';
 import { searchInputSchema } from './search-tool.js';
 
@@ -24,6 +29,8 @@ export const STABLE_TOOL_NAMES = [
   'process_logs',
   'process_stop',
   'process_restart',
+  'operation_get',
+  'operation_list',
   'git_status',
   'git_diff',
   'git_log',
@@ -127,8 +134,20 @@ const outputSchemas: Partial<Record<AevraToolName, JsonSchema>> = {
     additionalProperties: false,
   },
   process_restart: processStatusSchema,
+  operation_get: operationSchema,
+  operation_list: {
+    type: 'object',
+    properties: { result: { type: 'array', items: operationSchema } },
+    required: ['result'],
+    additionalProperties: false,
+  },
   skill_write: anyObjectSchema,
   instructions_write: anyObjectSchema,
+};
+
+const operationInputs: Partial<Record<AevraToolName, JsonSchema>> = {
+  operation_get: operationGetInputSchema,
+  operation_list: operationListInputSchema,
 };
 
 const readOnly = new Set<AevraToolName>([
@@ -144,6 +163,8 @@ const readOnly = new Set<AevraToolName>([
   'process_status',
   'process_wait',
   'process_logs',
+  'operation_get',
+  'operation_list',
   'git_status',
   'git_diff',
   'git_log',
@@ -192,6 +213,9 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
     'Read logs and terminal state from a managed process owned by the active workspace.',
   process_stop: 'Stop one managed process owned by the active workspace.',
   process_restart: 'Restart one managed process owned by the active workspace.',
+  operation_get:
+    'Inspect one durable Aevra operation owned by the current OAuth connection after reconnect.',
+  operation_list: 'List recent durable Aevra operations owned by the current OAuth connection.',
   git_status: 'Read Git status for the active workspace.',
   git_diff: 'Read a Git diff for the active workspace.',
   git_log: 'Read Git history for the active workspace.',
@@ -218,7 +242,10 @@ export function toolDefinitions(): ToolDescriptor[] {
     description:
       descriptions[name] ??
       `Aevra ${name.startsWith('aevra_') ? name.slice('aevra_'.length) : name.replaceAll('_', ' ')}`,
-    inputSchema: name === 'search' ? searchInputSchema : (inputSchemas[name] ?? emptySchema),
+    inputSchema:
+      name === 'search'
+        ? searchInputSchema
+        : (operationInputs[name] ?? inputSchemas[name] ?? emptySchema),
     outputSchema: outputSchemas[name] ?? anyObjectSchema,
     annotations: {
       readOnlyHint: readOnly.has(name),
