@@ -1,4 +1,4 @@
-# aevra
+﻿# aevra
 
 <div align="center">
 
@@ -48,7 +48,7 @@ Execution Worker (filesystem · git · commands · sandbox · processes · hooks
 
 ## What Makes aevra Different?
 
-- **Fast & Lightweight**: Pure native Node.js implementation with zero heavy runtime overhead, instant JSON-RPC 2.0 streaming, and multi-threaded parallel regex search (`workspace_search`).
+- **Fast & Lightweight**: Pure native Node.js implementation with zero heavy runtime overhead, instant JSON-RPC 2.0 streaming, and multi-threaded parallel regex search (`search`).
 - **Zero-Trust Security & Data Isolation**: Central `SecurityGuard` resource boundary with automatic `SECRET` denial, `SENSITIVE` data masking, real-time DLP redaction, and in-depth protection against symlink and hard-link alias attacks.
 - **Native Cross-Platform Support**: First-class citizen on **Windows** (Scheduled Tasks, named pipes, DPAPI), **Linux** (`systemd --user`, unix domain sockets, Secret Service), and **macOS** (`LaunchAgents`, Keychain).
 - **Granular Control & Step-Up Approvals**: Multi-tier capability profiles (Minimal, Read-Only, Safe Dev, Power Dev, Full Access, Custom), human-in-the-loop interactive approvals, and `policy.critical.alwaysConfirm` for sensitive operations.
@@ -147,36 +147,60 @@ Aevra does **not** automatically replay a lost mutating request after reconnect.
 
 ## Tips
 
-### Security
+<details>
+<summary><strong>Security</strong></summary>
 
 - **Rotate credentials regularly**: Update `AEVRA_USERNAME` / `AEVRA_PASSWORD` via `[System.Environment]::SetEnvironmentVariable` (Windows) or update the export in your shell profile (macOS / Linux) and restart aevra.
-- **Scope tunnel exposure**: Expose only the `/mcp` path through your tunnel (e.g. `cloudflared tunnel --url https://localhost:47830`). Never expose the admin control plane port (47831) to the public internet.
+- **Scope tunnel exposure**: Publish the MCP/OAuth `publicUrl` for AI clients. Keep the Admin UI local unless you intentionally configure a separate HTTPS `adminPublicUrl` and explicit trusted Admin origins; the MCP public origin is not trusted for Admin mutations automatically.
 - **Use capability profiles**: Assign the least-privilege profile per connector in the Web UI. Prefer `Read-Only` or `Safe Dev` for AI web clients and reserve `Full Access` for trusted local sessions.
 - **Audit regularly**: Review the tamper-evident audit log in the Web UI (`Activity` tab) to spot unexpected tool calls or policy overrides.
 
-### Performance
+</details>
 
-- **Scope workspace search**: Use `workspace_search` with explicit `include` / `exclude` glob patterns. Unbounded searches on large monorepos will be slower — pin to the relevant subdirectory.
+<details>
+<summary><strong>Performance</strong></summary>
+
+- **Scope workspace search**: Use `search` with explicit `include` / `exclude` glob patterns. Unbounded searches on large monorepos will be slower — pin to the relevant subdirectory.
 - **Parallel managed processes**: Prefer `process_start` + `process_wait` for long-running builds or test suites instead of blocking terminal commands. aevra tracks them across reconnects.
 - **Change set rollbacks**: Use journaled change sets for multi-file edits. If a mid-task error occurs, a single rollback call restores all files atomically without manual undo.
 - **Keep aevra as a background service**: Run `aevra service install && aevra service start` so the gateway survives reboots and reconnects from AI clients automatically.
 
-### Remote Working through AI Chat Web Interfaces
+</details>
 
-- **Generate images remotely**: Ask ChatGPT or Claude to call the `workspace_write` tool to save AI-generated image data directly into your local project folder or stage assets for a pipeline.
-- **Automate research and reporting**: Instruct the AI to run `workspace_search` across your notes or data directories, synthesize findings, and write a structured report to a local file — a full research loop without leaving chat.
-- **Manage social media and content pipelines**: Connect aevra to MCP servers that wrap social media APIs or content schedulers. The AI can draft posts, read engagement metrics via `terminal_exec`, and write scheduled content files — all orchestrated from a single chat session.
-- **Run multi-step automation as agents**: Chain `workspace_search`, `terminal_exec`, `file_write`, and `git_commit` in one prompt. The AI acts as an autonomous agent that finds, processes, writes, and records results end-to-end with no manual handoffs.
-- **Collaborate on code**: Point ChatGPT or Claude at your local repository through aevra. The AI can read files, run tests via `terminal_exec`, apply edits, and commit — all in one conversation thread.
+<details>
+<summary><strong>Remote Working through AI Chat Web Interfaces</strong></summary>
+
+- **Generate images remotely**: Ask ChatGPT or Claude to call the `file_write` tool to save AI-generated image data directly into your local project folder or stage assets for a pipeline.
+- **Automate research and reporting**: Instruct the AI to run `search` across your notes or data directories, synthesize findings, and write a structured report to a local file — a full research loop without leaving chat.
+- **Manage social media and content pipelines**: Connect aevra to MCP servers that wrap social media APIs or content schedulers. The AI can draft posts, read engagement metrics via `command_run`, and write scheduled content files — all orchestrated from a single chat session.
+- **Run multi-step automation as agents**: Chain `search`, `command_run`, `file_write`, and `git_commit` in one prompt. The AI acts as an autonomous agent that finds, processes, writes, and records results end-to-end with no manual handoffs.
+- **Collaborate on code**: Point ChatGPT or Claude at your local repository through aevra. The AI can read files, run tests via `command_run`, apply edits, and commit — all in one conversation thread.
 - **Office coworking**: Use aevra to let AI clients read, draft, and write local documents (`.md`, `.docx` via scripts, `.csv`). Automate repetitive tasks such as report generation, data summarization, or template filling directly from chat.
 - **Multi-client workflows**: Connect multiple AI chat web interfaces simultaneously — for example ChatGPT for drafting and Claude for review. Each connector gets its own capability profile so you control exactly what each client can touch.
+- **Untethered mobile development**: Pair a remote aevra instance with ChatGPT or Claude mobile apps. Prompt the assistant to fix bugs, run test suites, or generate files on your remote workspace from anywhere without sitting at a desk.
 
-### Hooks
+</details>
+
+<details>
+<summary><strong>Fully Remote Setup (Server / Headless Device & Remote Web UI)</strong></summary>
+
+- **Deploy on an always-on device or server**: Install and run aevra as a background service (`aevra service install && aevra service start`) on a dedicated Linux VPS, home lab, Mac mini, or NAS. Your workspaces, tools, and background processes remain online 24/7 without needing your personal laptop powered on or connected.
+- **Access Admin Web UI anywhere**: Reach the aevra Admin Dashboard remotely over a secure private network (such as Tailscale, WireGuard, or an authenticated reverse proxy like Caddy / Cloudflare Access). Monitor real-time MCP activity, inspect sanitized payloads, and adjust workspace grants from any mobile device, tablet, or browser.
+- **Step-up approvals on the go**: When an AI client triggers sensitive operations that require confirmation (`policy.critical.alwaysConfirm`), approve or reject them directly from your phone in the remote Web UI.
+- **True fully remote AI autonomy**: With MCP exposed over HTTPS / tunnel and the Web UI reachable remotely, you achieve complete untethered control. Trigger long-running jobs (`process_start`), git workflows, and multi-file code modifications from ChatGPT, Claude, or Grok while supervising everything remotely.
+- **Split-plane network isolation**: Keep MCP/OAuth and Admin exposure independent: publish the MCP `publicUrl` for AI clients, and expose `adminPublicUrl` only when needed through a private VPN or explicitly trusted HTTPS origin.
+
+</details>
+
+<details>
+<summary><strong>Hooks</strong></summary>
 
 - **Pre- and post-tool hooks**: Define `hooks.pre` and `hooks.post` entries in your workspace `aevra.config.json` to run scripts automatically before or after specific MCP tool calls — useful for linting before a commit, sending a notification after a file write, or triggering a build on code change.
 - **Abort dangerous operations**: A `pre` hook that exits non-zero cancels the tool call entirely. Use this to block destructive commands (`rm -rf`, `DROP TABLE`) in specific directories or enforce custom policy rules beyond aevra's built-in capability profiles.
 - **Chain external services**: Use `post` hooks to forward tool results to external services — post a Slack message when a report is generated, sync files to cloud storage after a write, or trigger a CI pipeline after a git commit.
 - **Per-workspace hook isolation**: Hooks are scoped to the workspace config file, so different projects can have different automation rules without affecting one another.
+
+</details>
 
 ---
 

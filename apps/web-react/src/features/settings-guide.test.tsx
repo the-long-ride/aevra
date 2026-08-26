@@ -76,15 +76,16 @@ test('Settings saves provider-neutral remote access and execution configuration'
     expect(body.cloudflare.audience).toBe('aud-123');
   });
 
-  const execution = formForButton('Save');
+  const execution = formForButton('Save execution');
   await user.click(execution.getByRole('button', { name: 'Sandbox backend' }));
   await user.click(screen.getByRole('option', { name: 'Docker' }));
   await user.click(execution.getByRole('button', { name: 'Cache policy' }));
   await user.click(screen.getByRole('option', { name: 'Shared' }));
+  await user.click(execution.getByRole('button', { name: 'Advanced execution settings' }));
   const drain = execution.getByLabelText('Drain timeout (ms)');
   await user.clear(drain);
   await user.type(drain, '90000');
-  await user.click(execution.getByRole('button', { name: 'Save' }));
+  await user.click(execution.getByRole('button', { name: 'Save execution' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/execution-settings', 'PATCH')).toBeTruthy(),
   );
@@ -95,7 +96,7 @@ test('Settings offers Native host and warns before direct computer execution', a
   render(<SettingsPage />);
   await waitForSettings();
 
-  const execution = formForButton('Save');
+  const execution = formForButton('Save execution');
   const backend = execution.getByRole('button', { name: 'Sandbox backend' });
   expect(screen.queryByText(/no container isolation/i)).not.toBeInTheDocument();
 
@@ -103,7 +104,7 @@ test('Settings offers Native host and warns before direct computer execution', a
   expect(screen.getByRole('option', { name: 'Native host' })).toBeInTheDocument();
   await user.click(screen.getByRole('option', { name: 'Native host' }));
   expect(screen.getByText(/no container isolation/i)).toBeInTheDocument();
-  await user.click(execution.getByRole('button', { name: 'Save' }));
+  await user.click(execution.getByRole('button', { name: 'Save execution' }));
 
   await waitFor(() => {
     const call = mutationCall(fetchMock, '/api/execution-settings', 'PATCH');
@@ -118,7 +119,8 @@ test('Settings creates and removes command and network policy entries', async ()
   render(<SettingsPage />);
   await waitForSettings();
 
-  const command = formForButton('Set override');
+  await user.click(screen.getByRole('button', { name: 'Add override' }));
+  const command = within(screen.getByRole('dialog', { name: 'Add command-family override' }));
   await user.type(command.getByLabelText('Family'), 'codegen');
   await user.click(command.getByRole('button', { name: 'Effect' }));
   await user.click(screen.getByRole('option', { name: 'BUILD_OUTPUT' }));
@@ -140,9 +142,9 @@ test('Settings creates and removes command and network policy entries', async ()
     ).toBeGreaterThanOrEqual(2),
   );
 
-  const network = formForButton('Add rule');
+  await user.click(screen.getByRole('button', { name: 'Add rule' }));
+  const network = within(screen.getByRole('dialog', { name: 'Add network rule' }));
   const host = network.getByLabelText('Host');
-  await user.clear(host);
   await user.type(host, 'registry.example.com');
   await user.click(network.getByRole('button', { name: 'Add rule' }));
   await waitFor(() =>
@@ -165,7 +167,8 @@ test('Settings creates environment profiles and securely stores/removes secret r
   render(<SettingsPage />);
   await waitForSettings();
 
-  const profile = formForButton('Create profile');
+  await user.click(screen.getByRole('button', { name: 'Create profile' }));
+  const profile = within(screen.getByRole('dialog', { name: 'Create environment profile' }));
   await user.type(profile.getByLabelText('Name'), 'test-profile');
   const vars = profile.getByLabelText('Variables JSON');
   fireEvent.change(vars, { target: { value: '{"NODE_ENV":"test"}' } });
@@ -176,7 +179,8 @@ test('Settings creates environment profiles and securely stores/removes secret r
     expect(mutationCall(fetchMock, '/api/environment-profiles', 'POST')).toBeTruthy(),
   );
 
-  const secret = formForButton('Store securely');
+  await user.click(screen.getByRole('button', { name: 'Add secret' }));
+  const secret = within(screen.getByRole('dialog', { name: 'Add secret reference' }));
   await user.type(secret.getByLabelText('Reference'), 'NEW_SECRET');
   await user.type(secret.getByLabelText('Secret value'), 'super-secret');
   await user.click(secret.getByRole('button', { name: 'Store securely' }));
@@ -273,7 +277,7 @@ test('Settings configures keep awake policy without changing screen lock behavio
   await waitForSettings();
 
   expect(screen.getByRole('heading', { name: 'Keep awake' })).toBeInTheDocument();
-  expect(screen.getByText('Active · 1 remote connection')).toBeInTheDocument();
+  expect(screen.getByText(/Active.*1 remote connection/)).toBeInTheDocument();
   expect(screen.getByText(/screen lock and display timeout remain unchanged/i)).toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: 'Prevent system sleep' }));

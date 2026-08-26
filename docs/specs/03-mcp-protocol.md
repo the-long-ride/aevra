@@ -1,6 +1,6 @@
 # 03 — MCP Protocol
 
-**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `0.1.1`
+**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `0.1.2`
 
 ## Transport
 
@@ -10,23 +10,25 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 
 ## Session lifecycle
 
-1. `initialize` → server creates a session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"0.1.1"}`.
-2. Every subsequent `POST` carries that header; `DELETE` disconnects. The session's admission identity (actor + subject) must match on every call — sessions cannot be hijacked across identities.
-3. Reconnects always create **fresh** sessions; clients re-select their workspace. Managed process records belong to the workspace, not to one outstanding HTTP request.
+1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"0.1.2"}`.
+2. Every subsequent `POST` carries that header; `DELETE` disconnects. The session's admission identity (actor + subject + durable OAuth connection when present) must match on every call.
+3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
+4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
 
-## Tool vocabulary (40 tools)
+## Tool vocabulary (42 tools)
 
-| Group     | Tools                                                                                                            |
-| --------- | ---------------------------------------------------------------------------------------------------------------- |
-| Status    | `aevra_status`                                                                                                   |
-| Workspace | `workspace_list` `workspace_select` `workspace_current`                                                          |
-| Files     | `file_list` `file_read` `file_search` `search` `file_create` `file_write` `file_patch` `file_move` `file_delete` |
-| Command   | `command_run` `shell_run`                                                                                        |
-| Git       | `git_status` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                                           |
-| Processes | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart`   |
-| Changes   | `change_begin` `change_status` `change_commit` `change_rollback`                                                 |
-| Approvals | `approval_status` `approval_wait` `approval_cancel`                                                              |
-| Skills    | `skills_list` `skill_read` `skill_write` `instructions_read` `instructions_write`                                |
+| Group      | Tools                                                                                                            |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- |
+| Status     | `aevra_status`                                                                                                   |
+| Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                          |
+| Files      | `file_list` `file_read` `file_search` `search` `file_create` `file_write` `file_patch` `file_move` `file_delete` |
+| Command    | `command_run` `shell_run`                                                                                        |
+| Git        | `git_status` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                                           |
+| Processes  | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart`   |
+| Operations | `operation_get` `operation_list`                                                                                 |
+| Changes    | `change_begin` `change_status` `change_commit` `change_rollback`                                                 |
+| Approvals  | `approval_status` `approval_wait` `approval_cancel`                                                              |
+| Skills     | `skills_list` `skill_read` `skill_write` `instructions_read` `instructions_write`                                |
 
 Stable public tools advertise closed `inputSchema` definitions and an `outputSchema`. Results retain text compatibility as `{content:[{type:'text'}]}` and also expose `structuredContent`; array results are represented as `{result:[...]}` in structured content. Tool errors arrive inside a normal result as `{error:{code,message,details}}` with `isError:true`.
 

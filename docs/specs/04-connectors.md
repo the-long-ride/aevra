@@ -1,6 +1,6 @@
 # 04 — Connectors
 
-**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `0.1.1`
+**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `0.1.2`
 
 A **connector** is a named admission credential for one AI client — the thing that makes "works with any web AI" true, because the client needs no auth capability at all: the credential _is_ the URL.
 
@@ -37,6 +37,10 @@ URL         → https://<public-url>/mcp/<token>
 | `DELETE /api/connectors/:id`      | revoke                                                             |
 
 Admin session + same-origin required; safe mode blocks mutations. There is **no connector management on the remote MCP surface** — no tool can create, list, or revoke connectors.
+
+## OAuth connections are distinct
+
+Static connector-token URLs remain admission credentials. OAuth clients instead receive a durable connection subject backed by rotating access/refresh credentials. The connection can enter a reconnect grace state after transport detach, retain remembered workspace grants and connection-level YOLO across a new MCP session, and expose its recent durable mutation outcomes through `operation_get` / `operation_list`. Admin **Disconnect session** affects one MCP session; **Revoke connection** invalidates the OAuth credential family and clears its remembered authority.
 
 ## Deployment rule
 

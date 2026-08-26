@@ -1,4 +1,4 @@
-@import url('./tokens.css');
+﻿@import url('./tokens.css');
 @import url('./shell.css');
 @import url('./components.css');
 @import url('./data-table.css');
@@ -8,6 +8,7 @@
 @import url('./remote-access-settings.css');
 @import url('./live-activity.css');
 @import url('./admin.css');
+@import url('./settings.css');
 @import url('./auth.css');
 @import url('./layout-tweaks.css');
 @import url('./requests.css');

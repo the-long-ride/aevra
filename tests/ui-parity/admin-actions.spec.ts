@@ -107,7 +107,7 @@ for (const surface of ADMIN_SURFACES) {
     await page.getByRole('option', { name: 'docker' }).click();
     const executionForm = page.locator('form').filter({ has: sandbox });
     const saveExecution = waitsFor(page, '/api/execution-settings', 'PATCH');
-    await executionForm.getByRole('button', { name: 'Save', exact: true }).click();
+    await executionForm.getByRole('button', { name: /Save/ }).click();
     await saveExecution;
 
     await page.getByRole('button', { name: 'Dashboard', exact: true }).click();

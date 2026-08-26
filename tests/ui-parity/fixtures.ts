@@ -132,6 +132,18 @@ export async function installAdminApi(page: Page, options: FixtureOptions = {}) 
     ['/api/secret-references', []],
     ['/api/hooks', []],
     [
+      '/api/power/keep-awake',
+      {
+        mode: 'remote-connections',
+        active: false,
+        supported: true,
+        platform: 'linux',
+        reason: 'No remote connections or managed processes active.',
+        remoteConnections: 0,
+        managedProcesses: 0,
+      },
+    ],
+    [
       '/api/guide',
       [
         { slug: 'quick-start', title: 'Quick Start', file: '00-quick-start.md' },

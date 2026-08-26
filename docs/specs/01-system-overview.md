@@ -1,29 +1,19 @@
 # 01 — System Overview
 
-**Audience:** engineers & AI agents · **Scope:** the whole product in one view · **Verified against:** `0.1.1`
+**Audience:** engineers & AI agents · **Scope:** the whole product in one view · **Verified against:** `0.1.2`
 
 Aevra is a **local, workspace-scoped MCP execution gateway**. An AI web client (Claude.ai, ChatGPT, Gemini CLI, anything MCP-capable) connects over HTTPS; Aevra decides what that client may do, and an isolated Worker does it.
 
-## The two planes & Public Gateway
+## The two planes & public endpoints
 
 ```text
-Internet / AI client MCP / Admin Browser
-        │
-HTTPS Public Gateway (127.0.0.1:47830)
-(Direct HTTPS / Local / Cloudflare / ngrok / Caddy / Tailscale / FRP / SSH)
-        │
- ┌──────┴─────────────────────────────────┐
- │                                        │
-127.0.0.1:47832                          127.0.0.1:47831
-MCP data plane ── Aevra Core Daemon     Admin control plane ── React Web UI
-(policy · sessions · approvals · audit)  (credentials auth · management modals)
-        │
-named pipe / unix socket
-        │
-Execution Worker (filesystem · git · commands · sandbox · processes · hooks)
+AI MCP client --HTTPS--> publicUrl ---------------------> Public Gateway :47830 --> MCP :47832
+Admin browser  --HTTPS--> adminPublicUrl (optional) ---> Admin UI/API :47831
+
+Core policy / sessions / approvals / audit --OS-local IPC--> Execution Worker
 ```
 
-Internal MCP and Admin listeners remain loopback-only. The unified Public Gateway coordinates ingress with support for provider-neutral exposure modes.
+All internal listeners bind to loopback. `ExposureConfig.publicUrl` is the canonical MCP/OAuth public endpoint. The Admin UI may be published independently at `adminPublicUrl`; its exact HTTPS origin and any explicit `trustedAdminOrigins` are trusted for Admin browser requests. The MCP public origin is not implicitly trusted for Admin login or mutations. Provider-neutral exposure supports Local, Direct HTTPS, Cloudflare, ngrok, and externally managed tunnels.
 
 ## The central invariant
 

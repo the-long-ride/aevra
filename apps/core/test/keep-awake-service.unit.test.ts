@@ -134,7 +134,7 @@ test('start evaluates immediately and close clears polling and releases inhibiti
     { remoteConnectionCount: () => 0, managedProcessCount: () => 0 },
     {
       platform: 'darwin',
-      setInterval(handler) {
+      setInterval(handler: any) {
         intervalHandler = handler;
         return { unref: () => (unrefed = true) } as any;
       },

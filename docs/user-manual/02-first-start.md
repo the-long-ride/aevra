@@ -16,4 +16,4 @@ The Web UI supports multiple independent signed-in sessions. All persisted Admin
 
 On first run, complete **Onboarding** from the dashboard. Configure Remote Access, connect an AI client, register a workspace, and try a bounded operation.
 
-Local exposure keeps the Public Gateway on loopback. Other exposure providers can publish the same authenticated Admin + MCP HTTPS origin without making the internal Admin or MCP listeners directly routable.
+Local exposure keeps the Public Gateway and Admin UI loopback-only. Remote MCP/OAuth exposure uses the configured public MCP URL. If you also need remote Admin access, configure an independent Admin public URL and explicit trusted Admin origins. Publishing the MCP endpoint never implicitly trusts that origin for Admin login or mutations.

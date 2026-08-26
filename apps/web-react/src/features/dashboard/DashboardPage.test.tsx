@@ -58,7 +58,7 @@ test('Active connections marks YOLO sessions and explains immutable approvals', 
 
   expect(await screen.findByText('YOLO')).toBeInTheDocument();
   expect(
-    screen.getByText('YOLO enabled — immutable security approvals still require confirmation'),
+    screen.getByText(/YOLO enabled.*immutable security approvals still require confirmation/),
   ).toBeInTheDocument();
 });
 
@@ -99,6 +99,7 @@ test('Runtime overview shows sleep inhibition state and reason', async () => {
     </DialogProvider>,
   );
 
-  expect(await screen.findByText('Sleep inhibition')).toBeInTheDocument();
-  expect(screen.getByText('Active · 1 remote connection')).toBeInTheDocument();
+  const sleepLabel = await screen.findByText('Sleep inhibition');
+  expect(sleepLabel.closest('.runtime-stat')).toHaveClass('runtime-stat-compact');
+  expect(screen.getByText(/Active.*1 remote connection/)).toHaveClass('runtime-stat-detail');
 });

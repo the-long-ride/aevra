@@ -1,6 +1,6 @@
 # 02 — Security Model
 
-**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `0.1.1`
+**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `0.1.2`
 
 Security is two questions: **who gets in** (admission) and **what may they do** (authority). They never mix.
 
@@ -13,12 +13,15 @@ Security is two questions: **who gets in** (admission) and **what may they do** 
 
 Both paths then share the same session pipeline. Connector identity becomes `actor: "connector:<name>"`. See [`04-connectors`](04-connectors.md).
 
-## Sessions and leases
+## Sessions, leases, and connection continuity
 
-- Admitted identity ⇒ fresh security session `ses_<uuid>` (client never chooses it).
-- A session holds **workspace leases** (`lease_<uuid>`, capabilities attached, idle-expiry 30 min, refreshed on activity).
+- Admitted identity -> fresh security session `ses_<uuid>` (client never chooses it).
+- A session holds **workspace leases** (`lease_<uuid>`, capabilities attached, idle-expiry 30 min). General session activity refreshes every currently active workspace lease, but never revives an already-expired session-only lease.
+- OAuth has a durable **connection identity** separate from an MCP session. Reconnect creates a fresh MCP session while preserving the authenticated connection subject.
+- Remembered OAuth workspace grants and connection-level YOLO survive transport reconnects and Core restarts. Session-only grants are rebound only while their original lease is still valid.
+- Disconnecting one MCP session starts the configured reconnect grace window; revoking the OAuth connection invalidates its credentials, live sessions/leases, remembered workspace grants, and YOLO state.
 - Switching workspaces drains in-flight operations first; a switch in progress blocks new mutating calls.
-- Admin plane sessions are separate: HttpOnly `aevra_admin` cookie, issued via username/password login; startup revokes persisted admin sessions.
+- Admin plane sessions are separate: HttpOnly `aevra_admin` cookie, issued via username/password login; startup revokes persisted admin sessions. Remote Admin requests are accepted only from the local origin, configured `adminPublicUrl`, or exact HTTPS origins in `trustedAdminOrigins`. Forwarded host/proto headers never create trust.
 
 ## Authority — capabilities
 

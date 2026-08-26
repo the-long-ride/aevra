@@ -1,6 +1,6 @@
 # 08 — Audit & Recovery
 
-**Audience:** engineers & AI agents · **Scope:** audit chain, change sets, safe mode, crash semantics · **Verified against:** `0.1.1`
+**Audience:** engineers & AI agents · **Scope:** audit chain, change sets, safe mode, crash semantics · **Verified against:** `0.1.2`
 
 ## Audit chain
 
@@ -25,6 +25,10 @@ On restart, incomplete mutating operations are reconciled into explicit states:
 | `RECOVERY_REQUIRED`         | snapshots exist; rollback available |
 
 They are **never automatically replayed**. The client or dashboard decides.
+
+## Durable operation inspection
+
+Mutating operation records are connection-scoped when the caller is OAuth-authenticated. After a transport loss, the same logical OAuth connection can query `operation_get` or bounded `operation_list` results to determine whether a write, commit, delete, or command completed. Unknown/revoked connections and unrelated sessions cannot inspect those records. This is observation, not replay: Aevra never retries a mutation merely because its response was lost.
 
 ## Safe mode
 

@@ -1,6 +1,6 @@
 # 06 — Workspaces & Execution
 
-**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `0.1.1`
+**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `0.1.2`
 
 A **workspace** is a registered host folder the AI may work in. Registration happens **only** in the localhost Web UI — the remote surface can never create or mutate roots.
 
@@ -35,6 +35,10 @@ The observable process state is:
 Terminal status includes `exitCode`, `signal`, `finishedAt`, and `durationMs`. This lets a remote AI distinguish “logs stopped arriving” from “the command completed successfully.”
 
 For detached `keep-running` processes, the process host writes an atomic result sidecar when the child exits so completion remains observable after the detached helper finishes. Core persists observed terminal state in SQLite. Remote control still requires the owning workspace active; the dashboard sees all records. Post-worker-restart ownership-uncertain records are never auto-signaled or blindly re-adopted.
+
+## Keep-awake policy
+
+The persisted `power.keepAwake` setting supports `off`, `remote-connections` (default), `managed-processes`, and `always`. Aevra evaluates the selected policy every 5 seconds and uses a platform sleep inhibitor only while needed. Windows uses `SetThreadExecutionState`, macOS uses `caffeinate`, and Linux uses a logind inhibitor. The policy prevents system idle sleep only; it does **not** force the display on or disable screen locking. Unsupported platforms degrade to an explicit unavailable status rather than failing startup.
 
 ## Change sets & recovery (short version)
 

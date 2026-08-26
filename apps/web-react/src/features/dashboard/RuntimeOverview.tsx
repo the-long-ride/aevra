@@ -17,11 +17,16 @@ export function RuntimeOverview({
       ? `${power.active ? 'Active' : 'Idle'} \u00b7 ${power.reason}`
       : `Unavailable${power.message ? ` \u00b7 ${power.message}` : ''}`
     : 'Unavailable';
-  const rows: Array<{ label: string; value: unknown; modal?: RuntimeModalKind }> = [
+  const rows: Array<{
+    label: string;
+    value: unknown;
+    modal?: RuntimeModalKind;
+    compact?: boolean;
+  }> = [
     { label: 'Remote sessions', value: snapshot.stats.sessions },
     { label: 'Workspace leases', value: snapshot.stats.workspaceLeases },
     { label: 'Pending requests', value: snapshot.pending.total },
-    { label: 'Sleep inhibition', value: powerValue },
+    { label: 'Sleep inhibition', value: powerValue, compact: true },
     { label: 'Managed processes', value: snapshot.stats.processes, modal: 'processes' },
     { label: 'Open changes', value: snapshot.stats.openChanges, modal: 'changes' },
     { label: 'Tool calls', value: snapshot.stats.toolCalls, modal: 'tools' },
@@ -43,9 +48,14 @@ export function RuntimeOverview({
               <strong>{String(row.value)}</strong>
             </button>
           ) : (
-            <div className="runtime-stat" key={row.label}>
+            <div
+              className={`runtime-stat${row.compact ? ' runtime-stat-compact' : ''}`}
+              key={row.label}
+            >
               <span>{row.label}</span>
-              <strong>{String(row.value)}</strong>
+              <strong className={row.compact ? 'runtime-stat-detail' : undefined}>
+                {String(row.value)}
+              </strong>
             </div>
           ),
         )}

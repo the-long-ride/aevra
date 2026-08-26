@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { KeepAwakeMode, KeepAwakeStatus } from '@aevra/admin-contracts';
 import { Dropdown } from '../../components/Dropdown';
 
@@ -37,23 +37,23 @@ export function KeepAwakeSettings({
   };
 
   return (
-    <section className="panel keep-awake-panel">
-      <div className="panel-head">
-        <div>
+    <section
+      className="panel keep-awake-panel compact-settings-panel settings-compact-panel"
+      role="region"
+      aria-label="Keep awake"
+    >
+      <div className="compact-settings-row">
+        <div className="compact-settings-copy">
           <h3>Keep awake</h3>
-          <p>Prevent system idle sleep when Aevra needs to remain remotely reachable.</p>
+          <span className={`status ${status.active ? 'success' : ''}`}>{stateLabel}</span>
         </div>
-        <span className={`status ${status.active ? 'success' : ''}`}>{stateLabel}</span>
-      </div>
-      <form
-        className="stack-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save();
-        }}
-      >
-        <label className="field">
-          <span>Prevent system sleep</span>
+        <form
+          className="compact-keep-awake-controls"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
           <Dropdown
             ariaLabel="Prevent system sleep"
             value={mode}
@@ -61,16 +61,19 @@ export function KeepAwakeSettings({
             onChange={(value) => setMode(value as KeepAwakeMode)}
             options={OPTIONS}
           />
-        </label>
-        <p className="section-note">
-          Screen lock and display timeout remain unchanged. This only inhibits automatic system
-          sleep.
+          <button className="primary" aria-label="Save keep awake" disabled={busy}>
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+        </form>
+      </div>
+      <p className="section-note compact-settings-note">
+        Prevents automatic system sleep only; screen lock and display timeout remain unchanged.
+      </p>
+      {error ? (
+        <p role="alert" className="inline-result warning-text">
+          {error}
         </p>
-        {error ? <p role="alert">{error}</p> : null}
-        <button className="primary" disabled={busy}>
-          {busy ? 'Saving…' : 'Save keep awake'}
-        </button>
-      </form>
+      ) : null}
     </section>
   );
 }

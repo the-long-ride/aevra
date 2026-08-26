@@ -1,0 +1,171 @@
+.settings-page-head {
+  margin-bottom: 10px;
+}
+
+.settings-grid.settings-grid-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-compact-panel {
+  padding: 12px;
+}
+
+.compact-panel-head {
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.compact-panel-head h3,
+.compact-settings-copy h3 {
+  margin: 0;
+}
+
+.compact-panel-head p,
+.compact-settings-note {
+  margin: 3px 0 0;
+  color: var(--mute);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.compact-settings-form {
+  display: grid;
+  gap: 8px;
+}
+
+.compact-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.compact-disclosure,
+.configuration-details > summary {
+  width: fit-content;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--mute);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.compact-settings-actions {
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.compact-settings-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(260px, 1.3fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.compact-settings-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.compact-settings-copy .status {
+  min-width: 0;
+  padding: 4px 7px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.compact-keep-awake-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: end;
+}
+
+.compact-settings-note {
+  margin-top: 6px;
+}
+
+.configuration-details {
+  margin-top: 8px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 6px;
+}
+
+.configuration-details pre {
+  max-height: 180px;
+  margin-bottom: 0;
+  overflow: auto;
+}
+
+.settings-form-modal {
+  width: min(560px, calc(100vw - 24px));
+}
+
+.settings-form-modal .modal-body {
+  padding-block: 12px;
+}
+
+.settings-modal-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-modal-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-modal-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-json-field textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.settings-grid-compact .hooks-panel {
+  padding: 12px;
+}
+
+.settings-grid-compact .hooks-panel .panel-head {
+  margin-bottom: 8px;
+}
+
+@media (max-width: 900px) {
+  .settings-grid.settings-grid-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-grid.settings-grid-compact > .panel,
+  .settings-grid.settings-grid-compact > .wide,
+  .settings-grid.settings-grid-compact > .execution-panel {
+    grid-column: 1;
+  }
+
+  .compact-settings-row,
+  .compact-control-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-modal-grid,
+  .compact-keep-awake-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-panel-head {
+    align-items: stretch;
+  }
+
+  .compact-panel-head > button {
+    width: 100%;
+  }
+}
+
+.settings-grid.settings-grid-compact .execution-panel {
+  grid-column: auto;
+}

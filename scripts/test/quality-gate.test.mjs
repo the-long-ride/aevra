@@ -80,6 +80,9 @@ test('release publishes only an exact SHA already validated by the quality workf
   assert.match(releaseWorkflow, /event\s*==\s*['"]push['"]/);
   assert.match(releaseWorkflow, /npm ci --ignore-scripts/);
   assert.match(releaseWorkflow, /npm publish --provenance --access public/);
+  assert.match(releaseWorkflow, /contents:\s*write/);
+  assert.match(releaseWorkflow, /node scripts\/release-notes\.mjs/);
+  assert.match(releaseWorkflow, /gh release create/);
   assert.doesNotMatch(releaseWorkflow, /playwright install/);
   assert.doesNotMatch(releaseWorkflow, /npm run test:gate/);
   assert.doesNotMatch(releaseWorkflow, /npm run build/);

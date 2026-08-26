@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   actions: read
   id-token: write
 
@@ -66,3 +66,22 @@ jobs:
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_SHA="$(git rev-parse HEAD)"
+          TAG="${{ inputs.tag != '' && inputs.tag || github.ref_name }}"
+          if [[ "$TAG" != v* ]]; then
+            VERSION=$(node -p "require('./package.json').version")
+            TAG="v$VERSION"
+          fi
+          echo "Creating GitHub Release for $TAG at $RELEASE_SHA"
+          node scripts/release-notes.mjs "$TAG" release-notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; updating release notes..."
+            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" --target "$RELEASE_SHA" --title "$TAG" --notes-file release-notes.md
+          fi
