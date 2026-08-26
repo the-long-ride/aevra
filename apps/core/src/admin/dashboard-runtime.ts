@@ -62,6 +62,58 @@ function buildConnectorInventory(context: any, sessions: any[]) {
   }));
   return [...oauthConnectors, ...bearerConnectors];
 }
+
+function sessionConnection(session: any, workspaceNames: Map<string, string>) {
+  const leases = Array.isArray(session.leases)
+    ? session.leases
+    : session.lease
+      ? [session.lease]
+      : [];
+  const workspaceIds = leases.map((lease: any) => String(lease?.workspaceId ?? '')).filter(Boolean);
+  const workspaces = workspaceIds.map((id: string) => workspaceNames.get(id) ?? id);
+  const capabilities = [...new Set(leases.flatMap((lease: any) => lease?.capabilities ?? []))];
+  return {
+    id: session.id,
+    sessionId: session.id,
+    actor: session.actor,
+    client: String(session.actor ?? '').replace(/^(oauth:|connector:)/, ''),
+    provider: authType(String(session.actor ?? '')),
+    authType: authType(String(session.actor ?? '')),
+    remoteIp: session.remoteIp ?? null,
+    workspaceId: workspaceIds.length === 1 ? workspaceIds[0] : null,
+    workspace: workspaces.join(', ') || null,
+    workspaces,
+    workspaceIds,
+    capabilities,
+    yolo: session.yolo === true,
+    connectedAt: session.createdAt,
+    lastActivityAt: session.lastActivityAt,
+    status: 'CONNECTED',
+  };
+}
+
+function connectionInventory(context: any, sessions: any[], workspaceNames: Map<string, string>) {
+  const durable = context.connections?.list?.() ?? [];
+  if (!durable.length) return sessions.map((session) => sessionConnection(session, workspaceNames));
+  const durableIds = new Set(durable.map((row: any) => String(row.connectionId)));
+  const oauth = durable.map((row: any) => {
+    const workspaceIds = Array.isArray(row.workspaceIds) ? row.workspaceIds.map(String) : [];
+    const workspaces = workspaceIds.map((id: string) => workspaceNames.get(id) ?? id);
+    return {
+      ...row,
+      workspaceId: workspaceIds.length === 1 ? workspaceIds[0] : null,
+      workspace: workspaces.join(', ') || null,
+      workspaces,
+    };
+  });
+  const otherSessions = sessions.filter(
+    (session: any) =>
+      !session.actor?.startsWith?.('oauth:') ||
+      !durableIds.has(String(session.connectionId ?? session.subject)),
+  );
+  return [...oauth, ...otherSessions.map((session) => sessionConnection(session, workspaceNames))];
+}
+
 export function buildDashboardRuntimeSnapshot(
   context: any,
   status: any,
@@ -78,7 +130,7 @@ export function buildDashboardRuntimeSnapshot(
   const changes = context.changes?.list?.() ?? [];
   const connectors = buildConnectorInventory(context, sessions);
   const workspaces = context.workspaces?.listRemote?.() ?? context.workspaces?.listLocal?.() ?? [];
-  const workspaceNames = new Map(
+  const workspaceNames = new Map<string, string>(
     workspaces.map((workspace: any) => [
       String(workspace.id),
       String(workspace.name ?? workspace.id),
@@ -86,35 +138,7 @@ export function buildDashboardRuntimeSnapshot(
   );
   const toolCalls = metrics.reduce((sum: number, row: any) => sum + Number(row.calls || 0), 0),
     totalMs = metrics.reduce((sum: number, row: any) => sum + Number(row.totalMs || 0), 0);
-  const activeConnections = sessions.map((session: any) => {
-    const leases = Array.isArray(session.leases)
-      ? session.leases
-      : session.lease
-        ? [session.lease]
-        : [];
-    const workspaceIds = leases
-      .map((lease: any) => String(lease?.workspaceId ?? ''))
-      .filter(Boolean);
-    const workspaceLabels = workspaceIds.map((id: string) => workspaceNames.get(id) ?? id);
-    const capabilities = [...new Set(leases.flatMap((lease: any) => lease?.capabilities ?? []))];
-    return {
-      id: session.id,
-      actor: session.actor,
-      client: String(session.actor ?? '').replace(/^(oauth:|connector:)/, ''),
-      provider: authType(String(session.actor ?? '')),
-      authType: authType(String(session.actor ?? '')),
-      remoteIp: session.remoteIp ?? null,
-      workspaceId: workspaceIds.length === 1 ? workspaceIds[0] : null,
-      workspace: workspaceLabels.join(', ') || null,
-      workspaces: workspaceLabels,
-      workspaceIds,
-      capabilities,
-      yolo: session.yolo === true,
-      connectedAt: session.createdAt,
-      lastActivityAt: session.lastActivityAt,
-      status: 'active',
-    };
-  });
+  const activeConnections = connectionInventory(context, sessions, workspaceNames);
   return {
     generatedAt: now.toISOString(),
     startedAt,

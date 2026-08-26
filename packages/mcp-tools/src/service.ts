@@ -15,6 +15,7 @@ import { AevraToolError } from './errors.js';
 import { FILE_TOOL_NAMES, handleFileTool } from './file-tools.js';
 import { GIT_TOOL_NAMES, gitTool } from './git-tools.js';
 import { HookService } from './hook-service.js';
+import { handleOperationTool, OPERATION_TOOL_NAMES } from './operation-tools.js';
 import {
   handleProcessChangeTool,
   processStart,
@@ -160,6 +161,7 @@ export class McpToolService {
     if (name === 'command_run') return commandTool(context, sessionId, args);
     if (name === 'shell_run') return shellTool(context, sessionId, args);
     if (GIT_TOOL_NAMES.has(name)) return gitTool(context, sessionId, name, args);
+    if (OPERATION_TOOL_NAMES.has(name)) return handleOperationTool(context, sessionId, name, args);
     if (PROCESS_CHANGE_TOOL_NAMES.has(name)) {
       return handleProcessChangeTool(context, sessionId, name, args);
     }

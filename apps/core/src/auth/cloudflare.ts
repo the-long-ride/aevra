@@ -7,6 +7,7 @@ import {
 export interface VerifiedRemoteIdentity {
   subject: string;
   actor: string;
+  connectionId?: string;
   issuer: string;
   audience: string;
   expiresAt: string;

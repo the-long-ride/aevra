@@ -37,6 +37,8 @@ export class RuntimeExposureWiring {
     this.oauth = new AevraOAuthService(oauthRepo, {
       issuer: provisionalBase,
       resource: `${provisionalBase}/mcp`,
+      accessTokenTtlMs: config.oauthAccessTokenTtlMs,
+      refreshTokenTtlMs: config.oauthRefreshTokenTtlMs,
     });
     const exposure = new ExposureService({
       cloudflare: this.cloudflare,

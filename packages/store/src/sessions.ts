@@ -9,6 +9,9 @@ export class SessionRepository {
       .run(s.id, s.actor, s.subject, s.createdAt, s.lastActivityAt, s.remoteIp ?? null);
     return s;
   }
+  detach(id: string) {
+    this.db.prepare('UPDATE sessions SET valid=0 WHERE id=?').run(id);
+  }
   revoke(id: string) {
     this.db.prepare('UPDATE sessions SET valid=0 WHERE id=?').run(id);
     this.revokeSessionLeases(id);

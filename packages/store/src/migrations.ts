@@ -149,6 +149,52 @@ CREATE TABLE IF NOT EXISTS oauth_workspace_grants(
 );
 `,
   },
+  {
+    version: 9,
+    name: '009_oauth_connection_continuity',
+    sql: `
+CREATE TABLE IF NOT EXISTS oauth_connections(
+  subject TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+  actor TEXT NOT NULL,
+  resource TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ACTIVE',
+  yolo_enabled INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT NOT NULL,
+  revoked_at TEXT,
+  revoke_reason TEXT,
+  disconnected_at TEXT,
+  grace_expires_at TEXT
+);
+CREATE TABLE IF NOT EXISTS oauth_refresh_families(
+  family_id TEXT PRIMARY KEY,
+  subject TEXT NOT NULL REFERENCES oauth_connections(subject) ON DELETE CASCADE,
+  client_id TEXT NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'ACTIVE',
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT,
+  revoke_reason TEXT
+);
+ALTER TABLE oauth_refresh_tokens ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE';
+ALTER TABLE oauth_refresh_tokens ADD COLUMN rotated_at TEXT;
+ALTER TABLE oauth_refresh_tokens ADD COLUMN revoked_at TEXT;
+ALTER TABLE oauth_refresh_tokens ADD COLUMN replaced_by_hash TEXT;
+CREATE INDEX IF NOT EXISTS idx_oauth_connections_status ON oauth_connections(status,last_used_at);
+CREATE INDEX IF NOT EXISTS idx_oauth_refresh_families_subject ON oauth_refresh_families(subject,status);
+CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_family_status ON oauth_refresh_tokens(family_id,status);
+`,
+  },
+  {
+    version: 10,
+    name: '010_operation_connection_scope',
+    sql: `
+ALTER TABLE operations ADD COLUMN connection_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_operations_connection_updated ON operations(connection_id,updated_at);
+`,
+  },
 ];
 export function applyMigrations(db: DatabaseSync) {
   db.exec(

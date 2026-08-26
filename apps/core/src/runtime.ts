@@ -23,6 +23,7 @@ import { MetricsService } from './metrics.js';
 import { SettingsRepository } from '../../../packages/store/src/settings.js';
 import { WorkerManager } from './worker/worker-manager.js';
 import { AdminServer } from './admin/server.js';
+import { ConnectionAdminService } from './admin/connection-admin.js';
 import { buildRuntimeHealth } from './admin/runtime-health.js';
 import { McpIngressServer } from './mcp/server.js';
 import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
@@ -30,15 +31,18 @@ import { LocalFilesystemService } from './admin/local-filesystem.js';
 import type { WorkerClient } from '../../../packages/ipc/src/client.js';
 import { CapabilityProfileService } from './policy/capabilities.js';
 import { SessionManager } from './sessions/session-manager.js';
+import { ConnectionStateStore } from './sessions/connection-state.js';
 import { WorkspaceService } from './workspaces/workspace-service.js';
 import { ReadVersionCache } from './operations/read-version-cache.js';
+import { ResumableOperationService } from './operations/resumable-operation-service.js';
 import { AuditService } from './audit/audit-service.js';
 import { ApprovalService } from './approvals/approval-service.js';
 import { PermissionEngine } from './policy/permissions.js';
 import { OperationService } from './operations/operation-service.js';
 import { ChangeSetService } from './changes/change-service.js';
 import { ProcessService } from './processes/process-service.js';
-import { McpToolService, type WorkerGateway } from '../../../packages/mcp-tools/src/service.js';
+import { McpToolService } from '../../../packages/mcp-tools/src/service.js';
+import { unavailableWorkerGateway } from './runtime-support.js';
 import { SessionSkillAccessGate } from '../../../packages/mcp-tools/src/skill-access-gate.js';
 import type { CloudflareManager } from './cloudflare/manager.js';
 import { BackupService } from './backup/backup-service.js';
@@ -134,31 +138,36 @@ export async function createCoreRuntime(
           connectorRepo = new ConnectorRepository(raw),
           oauthRepo = new OAuthRepository(raw);
         const connectorBindings = (subject: string) => connectorRepo.getBindings(subject);
+        const connectionState = new ConnectionStateStore(oauthRepo);
         processRepo.markKeepRunningUncertain();
         const workspaces = new WorkspaceService(workspaceRepo),
           profiles = new CapabilityProfileService(raw),
-          sessions = new SessionManager(sessionRepo, profiles, config.leaseIdleMs),
+          sessions = new SessionManager(
+            sessionRepo,
+            profiles,
+            config.leaseIdleMs,
+            undefined,
+            connectionState,
+            config.connectionReconnectGraceMs,
+          ),
+          connections = new ConnectionAdminService(
+            oauthRepo,
+            sessions,
+            Math.floor(config.oauthAccessTokenTtlMs / 1000),
+          ),
           audit = new AuditService(auditRepo),
           permissions = new PermissionEngine(permissionRepo),
           reads = new ReadVersionCache(),
           security = new SecurityGuard(sessions, workspaces);
+        operationRepo.setConnectionResolver(
+          (sessionId) => sessions.connectionIdentity(sessionId)?.connectionId,
+        );
+        const resumableOperations = new ResumableOperationService(operationRepo, sessions);
         sessions.invalidateForRestart();
         oauthRepo.invalidateEphemeralForRestart();
         if (!safeMode) worker = await wm.start();
-        const workerGateway: WorkerGateway =
-          !safeMode && typeof wm.execute === 'function'
-            ? wm
-            : {
-                async execute() {
-                  return {
-                    ok: false,
-                    error: {
-                      code: 'EXECUTOR_UNAVAILABLE',
-                      message: 'Execution Worker unavailable',
-                    },
-                  } as any;
-                },
-              };
+        const workerGateway =
+          !safeMode && typeof wm.execute === 'function' ? wm : unavailableWorkerGateway();
         const changes = new ChangeSetService(
             changeRepo,
             operationRepo,
@@ -214,6 +223,7 @@ export async function createCoreRuntime(
         const activity = new McpActivityLog();
         const tools = new McpToolService(sessions, workspaces, workerGateway, reads, approvals, {
           operations,
+          resumableOperations,
           processes,
           changes,
           permissions,
@@ -286,6 +296,7 @@ export async function createCoreRuntime(
               exposure: exposureWiring,
               localFilesystem,
               oauth,
+              connections,
               environment,
               vault,
               database: databaseAdmin,

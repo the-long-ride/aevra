@@ -128,13 +128,18 @@ test('access expiry and refresh rotation reject stale credentials', () => {
   const refresh = repo.issueRefreshToken(grant, 10_000);
   now += 2_000;
   assert.equal(repo.findAccessToken(access.token), null);
-  const rotated = repo.rotateRefreshToken(refresh.token, 10_000);
-  assert.ok(rotated);
-  assert.equal(repo.findRefreshToken(refresh.token), null);
-  assert.ok(repo.findRefreshToken(rotated!.token));
-  assert.equal(repo.rotateRefreshToken(refresh.token, 10_000), null);
-  repo.revokeToken(rotated!.token);
-  assert.equal(repo.findRefreshToken(rotated!.token), null);
+
+  const rotated = repo.rotateRefreshTokenSecurely(refresh.token, 10_000);
+  assert.equal(rotated.status, 'ROTATED');
+  if (rotated.status !== 'ROTATED') throw new Error('expected rotated refresh token');
+  assert.equal(repo.findRefreshToken(refresh.token)?.status, 'SPENT');
+  assert.equal(repo.findRefreshToken(rotated.nextToken)?.status, 'ACTIVE');
+
+  const replayed = repo.rotateRefreshTokenSecurely(refresh.token, 10_000);
+  assert.equal(replayed.status, 'REPLAYED');
+  assert.equal(repo.findRefreshToken(rotated.nextToken)?.status, 'REVOKED');
+  repo.revokeToken(rotated.nextToken);
+  assert.equal(repo.findRefreshToken(rotated.nextToken)?.status, 'REVOKED');
   db.close();
 });
 

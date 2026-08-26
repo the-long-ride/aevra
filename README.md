@@ -54,12 +54,13 @@ Execution Worker (filesystem · git · commands · sandbox · processes · hooks
 - **Granular Control & Step-Up Approvals**: Multi-tier capability profiles (Minimal, Read-Only, Safe Dev, Power Dev, Full Access, Custom), human-in-the-loop interactive approvals, and `policy.critical.alwaysConfirm` for sensitive operations.
 - **Durable Process Lifecycle & Recovery**: Named managed background processes (`process_start`, `process_wait`, `process_logs`) with detached completion sidecars, journaled change sets with rollback, and safe 3-way auto-merging for non-conflicting concurrent edits.
 - **Provider-Neutral Ingress**: Run directly via built-in self-signed Direct HTTPS, Cloudflare Access tunnels, managed ngrok, Caddy, Tailscale Funnel, FRP, or reverse SSH with full OAuth 2.0 / PKCE authentication.
+- **OAuth Connection Continuity**: Short-lived access credentials and rotating refresh families reconnect to the same durable logical connection while keeping MCP sessions and workspace leases bounded.
 
 ---
 
 ## Core Features
 
-- **40 Stable MCP Tools**: Comprehensive toolset covering workspace operations, file mutations, git actions, terminal commands, managed processes, change set rollbacks, lifecycle hooks, and native workspace search.
+- **42 Stable MCP Tools**: Comprehensive toolset covering workspace operations, file mutations, git actions, terminal commands, managed processes, connection-owned operation inspection, change set rollbacks, lifecycle hooks, and native workspace search.
 - **Dynamic Resources & Instruction Prompts**: Serves context files seamlessly via MCP resources (`aevra://skill/<source>/<name>`) and instruction prompts (`aevra-instructions` parsed from `AGENTS.md` / `CLAUDE.md`).
 - **React 19 Admin Dashboard**: Single-page dark theme dashboard featuring real-time MCP activity monitoring with sanitized input/output payload inspection, interactive runtime modals, and debounced workspace directory browsing.
 - **Out-of-Process Worker Sandbox**: Execution worker runs in an isolated child process communicating over authenticated local IPC, with Docker and Podman container sandboxing support.
@@ -133,6 +134,14 @@ Claude example:
    - **Server URL**: `https://<your-aevra-host>/mcp` (e.g. your tunnel or public URL)
    - **Authentication**: `OAuth`
 2. Other steps are familiar with ChatGPT.
+
+### OAuth connection continuity
+
+Aevra cannot guarantee one physical HTTP/MCP transport remains open. Continuity is achieved by re-authenticating with a short-lived access token or rotating a refresh token and reattaching to the same logical connection.
+
+By default, access tokens last 60 minutes, the refresh family has an absolute 30-day lifetime, and an interrupted MCP session gets a 15-minute reconnect grace window. The durable connection can preserve remembered workspace grants and connection-level YOLO, but session-only leases still expire independently.
+
+Aevra does **not** automatically replay a lost mutating request after reconnect. Use `operation_get` or `operation_list` to inspect a connection-owned durable operation result before deciding whether another write, commit, delete, or command is necessary.
 
 ---
 

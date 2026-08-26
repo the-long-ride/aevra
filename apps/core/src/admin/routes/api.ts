@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { handleAccessRoutes } from './access-routes.js';
 import { handleActivityRoutes } from './activity-routes.js';
 import { handleApprovalPermissionRoutes } from './approval-permission-routes.js';
+import { handleConnectionRoutes } from './connection-routes.js';
 import { sendAdminResponse } from './http.js';
 import { handleLocalFilesystemRoutes } from './local-filesystem-routes.js';
 import { handleOperationRoutes } from './operation-routes.js';
@@ -17,6 +18,7 @@ const handlers: AdminRouteHandler[] = [
   handleLocalFilesystemRoutes,
   handleWorkspaceRoutes,
   handleApprovalPermissionRoutes,
+  handleConnectionRoutes,
   handleSessionConnectorRoutes,
   handleOperationRoutes,
   handleSettingsRoutes,

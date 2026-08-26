@@ -24,8 +24,8 @@ test('SessionManager exposes identity-bound get-or-create semantics', () => {
   assert.equal(typeof (manager as any).getOrCreateForIdentity, 'function');
   const first = (manager as any).getOrCreateForIdentity(identity, '127.0.0.1');
   const second = (manager as any).getOrCreateForIdentity(identity, '127.0.0.2');
-  assert.equal(first.created, true);
-  assert.equal(second.created, false);
+  assert.equal(first.mode, 'created');
+  assert.equal(second.mode, 'existing');
   assert.equal(first.session.id, second.session.id);
   const other = (manager as any).getOrCreateForIdentity({ ...identity, subject: 'other' });
   assert.notEqual(other.session.id, first.session.id);

@@ -6,6 +6,9 @@ import { requestJson } from '../../services/api-client';
 
 export interface ActiveConnection {
   id?: string;
+  connectionId?: string;
+  sessionId?: string;
+  sessionCount?: number;
   client?: string;
   actor?: string;
   provider?: string;
@@ -18,7 +21,32 @@ export interface ActiveConnection {
   remoteIp?: string | null;
   connectedAt?: string;
   lastActivityAt?: string;
+  lastUsedAt?: string;
+  graceExpiresAt?: string;
+  refreshFamilyExpiresAt?: string;
+  accessTokenLifetimeSeconds?: number;
   status?: string;
+}
+
+function dateTime(value?: string) {
+  if (!value) return '—';
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? value : new Date(time).toLocaleString();
+}
+
+function statusLabel(status?: string) {
+  switch (status) {
+    case 'CONNECTED':
+      return 'Connected';
+    case 'GRACE':
+      return 'Reconnect grace';
+    case 'OFFLINE':
+      return 'Offline / reconnectable';
+    case 'REVOKED':
+      return 'Revoked';
+    default:
+      return status ?? 'active';
+  }
 }
 
 export function ConnectionDetailModal({
@@ -43,6 +71,8 @@ export function ConnectionDetailModal({
 
   if (!connection?.id) return null;
 
+  const durableOAuth = connection.authType === 'OAuth' && Boolean(connection.connectionId);
+  const sessionId = connection.sessionId ?? (durableOAuth ? undefined : connection.id);
   const granted = connection.workspaceIds ?? [];
   const grantOptions = workspaces
     .filter((workspace) => !granted.includes(workspace.id))
@@ -59,31 +89,38 @@ export function ConnectionDetailModal({
   };
 
   const revoke = async () => {
+    const target = durableOAuth ? connection.connectionId! : sessionId!;
+    const noun = durableOAuth ? 'connection' : 'session';
     if (
       !(await dialog.confirm({
-        title: 'Revoke session',
-        message: `Disconnect ${connection.client ?? connection.id}?`,
-        confirmLabel: 'Revoke',
+        title: `Revoke ${noun}`,
+        message: durableOAuth
+          ? `Revoke ${connection.client ?? target} OAuth credentials and prevent silent resume?`
+          : `Disconnect ${connection.client ?? target}?`,
+        confirmLabel: durableOAuth ? 'Revoke connection' : 'Revoke',
         confirmTone: 'danger',
       }))
     ) {
       return;
     }
     await run(() =>
-      requestJson(`/api/sessions/${encodeURIComponent(connection.id!)}/revoke`, {
-        method: 'POST',
-        body: '{}',
-      }),
+      requestJson(
+        durableOAuth
+          ? `/api/connections/${encodeURIComponent(target)}/revoke`
+          : `/api/sessions/${encodeURIComponent(target)}/revoke`,
+        { method: 'POST', body: '{}' },
+      ),
     );
     onClose();
   };
 
   const toggleYolo = async () => {
+    if (!sessionId) return;
     const enable = connection.yolo !== true;
     if (
       enable &&
       !(await dialog.confirm({
-        title: 'Enable YOLO session?',
+        title: `Enable YOLO ${durableOAuth ? 'connection' : 'session'}?`,
         message: 'YOLO enabled — immutable security approvals still require confirmation',
         confirmLabel: 'Enable YOLO',
         confirmTone: 'yolo',
@@ -92,7 +129,7 @@ export function ConnectionDetailModal({
       return;
     }
     await run(() =>
-      requestJson(`/api/sessions/${encodeURIComponent(connection.id!)}/yolo`, {
+      requestJson(`/api/sessions/${encodeURIComponent(sessionId)}/yolo`, {
         method: enable ? 'POST' : 'DELETE',
         body: '{}',
       }),
@@ -100,9 +137,9 @@ export function ConnectionDetailModal({
   };
 
   const grantWorkspace = async () => {
-    if (!workspaceId) return;
+    if (!sessionId || !workspaceId) return;
     await run(() =>
-      requestJson(`/api/sessions/${encodeURIComponent(connection.id!)}/workspace`, {
+      requestJson(`/api/sessions/${encodeURIComponent(sessionId)}/workspace`, {
         method: 'POST',
         body: JSON.stringify({ workspaceId, timeoutMs: 60000 }),
       }),
@@ -110,9 +147,10 @@ export function ConnectionDetailModal({
   };
 
   const revokeWorkspace = async (id: string) => {
+    if (!sessionId) return;
     await run(() =>
       requestJson(
-        `/api/sessions/${encodeURIComponent(connection.id!)}/workspace/${encodeURIComponent(id)}`,
+        `/api/sessions/${encodeURIComponent(sessionId)}/workspace/${encodeURIComponent(id)}`,
         { method: 'DELETE' },
       ),
     );
@@ -144,29 +182,61 @@ export function ConnectionDetailModal({
               <span>Auth</span>
               <strong>{connection.authType ?? 'Unknown'}</strong>
             </div>
-            <div>
-              <span>Mode</span>
-              <strong>
-                {connection.yolo ? (
-                  <span
-                    className="badge good"
-                    title="YOLO enabled — immutable security approvals still require confirmation"
-                  >
-                    YOLO
-                  </span>
-                ) : (
-                  'Confirm'
-                )}
-              </strong>
-            </div>
-            <div>
-              <span>Status</span>
-              <strong>{connection.status ?? 'active'}</strong>
-            </div>
-            <div>
-              <span>Remote IP</span>
-              <strong>{connection.remoteIp ?? 'Hidden'}</strong>
-            </div>
+            {durableOAuth ? (
+              <>
+                <div>
+                  <span>Connection status</span>
+                  <strong>{statusLabel(connection.status)}</strong>
+                </div>
+                <div>
+                  <span>Last used</span>
+                  <strong>{dateTime(connection.lastUsedAt ?? connection.lastActivityAt)}</strong>
+                </div>
+                <div>
+                  <span>YOLO</span>
+                  <strong>{connection.yolo ? 'Enabled' : 'Disabled'}</strong>
+                </div>
+                <div>
+                  <span>Reconnect grace</span>
+                  <strong>
+                    {connection.graceExpiresAt ? dateTime(connection.graceExpiresAt) : '—'}
+                  </strong>
+                </div>
+                <div>
+                  <span>Access token</span>
+                  <strong>
+                    {connection.accessTokenLifetimeSeconds
+                      ? `${Math.round(connection.accessTokenLifetimeSeconds / 60)} min lifetime`
+                      : '—'}
+                  </strong>
+                </div>
+                <div>
+                  <span>Refresh grant</span>
+                  <strong>{dateTime(connection.refreshFamilyExpiresAt)}</strong>
+                </div>
+                <div>
+                  <span>Live sessions</span>
+                  <strong>{connection.sessionCount ?? 0}</strong>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <span>Mode</span>
+                  <strong>
+                    {connection.yolo ? <span className="badge good">YOLO</span> : 'Confirm'}
+                  </strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>{statusLabel(connection.status)}</strong>
+                </div>
+                <div>
+                  <span>Remote IP</span>
+                  <strong>{connection.remoteIp ?? 'Hidden'}</strong>
+                </div>
+              </>
+            )}
           </dl>
           <div className="connection-workspaces">
             <h3>Workspaces</h3>
@@ -175,16 +245,18 @@ export function ConnectionDetailModal({
                 {granted.map((id, index) => (
                   <li key={id}>
                     <span>{connection.workspaces?.[index] ?? id}</span>
-                    <button type="button" onClick={() => void revokeWorkspace(id)}>
-                      Remove
-                    </button>
+                    {sessionId ? (
+                      <button type="button" onClick={() => void revokeWorkspace(id)}>
+                        Remove
+                      </button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="muted">No workspace granted to this chat session yet.</p>
+              <p className="muted">No workspace granted to this live session.</p>
             )}
-            {grantOptions.length ? (
+            {sessionId && grantOptions.length ? (
               <div className="connection-grant">
                 <Dropdown
                   ariaLabel="Grant workspace"
@@ -200,20 +272,24 @@ export function ConnectionDetailModal({
           </div>
           {error ? <p className="warning">{error}</p> : null}
           <div className="actions">
-            <button
-              type="button"
-              data-surface-id="connections:yolo"
-              onClick={() => void toggleYolo()}
-            >
-              {connection.yolo ? 'Disable YOLO' : 'Enable YOLO'}
-            </button>
+            {sessionId ? (
+              <button
+                type="button"
+                data-surface-id="connections:yolo"
+                onClick={() => void toggleYolo()}
+              >
+                {connection.yolo ? 'Disable YOLO' : 'Enable YOLO'}
+              </button>
+            ) : null}
             <button
               type="button"
               className="danger-button"
-              data-surface-id="connections:revoke-session"
+              data-surface-id={
+                durableOAuth ? 'connections:revoke-connection' : 'connections:revoke-session'
+              }
               onClick={() => void revoke()}
             >
-              Revoke session
+              {durableOAuth ? 'Revoke connection' : 'Revoke session'}
             </button>
           </div>
         </div>
