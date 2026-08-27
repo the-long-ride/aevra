@@ -1,6 +1,6 @@
 # 06 — Workspaces & Execution
 
-**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `0.1.2`
+**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `Unreleased`
 
 A **workspace** is a registered host folder the AI may work in. Registration happens **only** in the localhost Web UI — the remote surface can never create or mutate roots.
 
@@ -8,7 +8,19 @@ A **workspace** is a registered host folder the AI may work in. Registration hap
 
 - Workspace root + optional external mounts (logical path ↔ host path, per-mount capabilities). The AI sees logical paths only; host absolutes never leave the box.
 - Every operation resolves canonically; `..`, symlinks, junctions, reparse points escaping a capability root ⇒ `WORKSPACE_ESCAPE`.
-- `file_read` returns a SHA-256 content hash; mutations carry the expected hash. Concurrent edits: Aevra three-way-merges **only provably non-overlapping** changes; overlap ⇒ `MERGE_CONFLICT`, nothing written.
+- `file_read_many` is the model-facing read interface for one or more files. Each successful read preserves the ordinary file-read metadata, including SHA-256 content hashes used for conflict-aware mutation flows.
+- `file_write_many` is the model-facing mutation interface for create, replace, and patch operations. Replace/patch items can carry the expected hash, and concurrent edits still three-way-merge **only provably non-overlapping** changes; overlap ⇒ `MERGE_CONFLICT`, nothing written.
+
+## Batched file execution
+
+The model-facing file tools batch even single-item work so clients do not need to choose between singular and batch APIs:
+
+- `file_read_many`: one to 32 reads, bounded concurrency, input-order results, and per-item failures rather than failing unrelated reads.
+- `file_write_many`: one to 32 creates/replacements/patches. The write item schema is discriminated by `operation`, so irrelevant fields are rejected instead of silently ignored.
+- Duplicate write paths are rejected before any mutation dispatch.
+- Every individual mutation delegates through the same security-sensitive primitive used by singular internal operations, preserving approvals, sensitivity handling, recovery journaling, conflict detection, and workspace mutation locks.
+
+The singular primitives `file_read`, `file_create`, `file_write`, and `file_patch` remain internal implementation operations and are not advertised through MCP `tools/list`.
 
 ## Command execution
 
@@ -16,7 +28,8 @@ A **workspace** is a registered host folder the AI may work in. Registration hap
 - Commands classify into effects: `READ_ONLY` `BUILD_OUTPUT` `SOURCE_MUTATION` `REPOSITORY_STATE` `UNKNOWN`. Read-only may run concurrently; mutations and unknowns take conservative workspace locks; build outputs may overlap when output areas don't conflict.
 - Risk + permission rules decide: run, ask (approval ticket), or deny. Aevra never auto-elevates and doesn't run as root/SYSTEM.
 - Network egress defaults to deny-all; destinations are explicit allow-rules, capability-gated (`network`).
-- `command_run` is synchronous and bounded. If a command may exceed the upstream tool-request window, use a managed process instead of extending one MCP HTTP response indefinitely.
+- `command_run_many` is the model-facing bounded command interface for one to 16 commands, including a single command. Aevra uses bounded concurrency for compatible effects and serializes potentially conflicting work. The singular `command_run` primitive remains internal/non-discoverable.
+- If a command may exceed the upstream tool-request window, use a managed process instead of extending one MCP HTTP response indefinitely.
 
 ## Managed processes
 

@@ -30,6 +30,31 @@ export function formatCliError(error: unknown): string {
   return error.message;
 }
 
+export const START_STOP_LINE = '[aevra] Press Ctrl+C to stop Aevra.';
+
+function serviceTable(info: { adminUrl: string; mcpUrl: string }): string[] {
+  const rows: Array<[string, string]> = [
+    ['Service', 'Value'],
+    ['Core', 'ready'],
+    ['MCP', `${info.mcpUrl}/mcp`],
+    ['Dashboard', info.adminUrl],
+  ];
+  const serviceWidth = Math.max(...rows.map(([service]) => service.length));
+  const valueWidth = Math.max(...rows.map(([, value]) => value.length));
+  const border = (left: string, middle: string, right: string) =>
+    `${left}${'─'.repeat(serviceWidth + 2)}${middle}${'─'.repeat(valueWidth + 2)}${right}`;
+  const row = (service: string, value: string) =>
+    `│ ${service.padEnd(serviceWidth)} │ ${value.padEnd(valueWidth)} │`;
+
+  return [
+    border('┌', '┬', '┐'),
+    row(...rows[0]!),
+    border('├', '┼', '┤'),
+    ...rows.slice(1).map(([service, value]) => row(service, value)),
+    border('└', '┴', '┘'),
+  ];
+}
+
 export function readyLines(info: { adminUrl: string; mcpUrl: string }): string[] {
   return [
     '',
@@ -39,10 +64,8 @@ export function readyLines(info: { adminUrl: string; mcpUrl: string }): string[]
     ' ▄█▀██ ██▄█▀ ██▄██ ██   ▄█▀██',
     '▄▀█▄██▄▀█▄▄▄  ▀█▀ ▄█▀  ▄▀█▄██',
     '',
-    '[aevra] Core: ready',
-    `[aevra] MCP: ${info.mcpUrl}/mcp`,
-    `[aevra] Dashboard: ${info.adminUrl}`,
-    '[aevra] Press Ctrl+C to stop Aevra.',
+    ...serviceTable(info),
+    '',
   ];
 }
 

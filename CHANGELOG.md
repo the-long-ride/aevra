@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Fast Lane batch tools**: added `file_read_many`, `file_write_many`, and `command_run_many` as the model-facing file-read, file-mutation, and bounded-command interfaces, with ordered per-item results, bounded concurrency, and existing Aevra security controls preserved.
+
+### Changed
+
+- **Simplified MCP discovery surface**: `tools/list` now hides the singular `file_read`, `file_create`, `file_write`, `file_patch`, and `command_run` primitives while retaining them internally for secure delegation and backward-compatible direct calls.
+- **Batch write contract**: `file_write_many` now publishes operation-discriminated create/replace/patch schemas and rejects fields that do not belong to the selected operation instead of silently discarding them.
+- **Startup status output**: `aevra start` now renders Core readiness, the MCP endpoint, and Dashboard URL in an aligned terminal table. With `--ui`, the browser-opening line follows the table, and `Press Ctrl+C to stop Aevra.` is always the final startup line.
+- **Documentation**: synchronized the MCP and execution specs with the 40-tool discoverable surface and Fast Lane as the default interface even for single-item operations, and updated the Quick Start / First Start guides for the new startup status table.
+
+### Fixed
+
+- **Quality gate hangs**: MCP session integration cleanup now closes server/database resources even when assertions fail; Node test and coverage subprocesses have bounded timeouts and coverage batches identify suspect files instead of hanging CI indefinitely.
+- **Fast Lane registry coverage**: updated stale registry expectations to distinguish stable internal singular primitives from the public batch tool surface.
+
 ## [0.1.2] - 2026-08-26
 
 ### Added

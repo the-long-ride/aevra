@@ -5,7 +5,8 @@ dist/
 
 *.patch
 *.diff
-docs/superpowers/
+# Local Superpowers planning artifacts
+/docs/superpowers/
 .superpowers/
 .verification
 .agents/
