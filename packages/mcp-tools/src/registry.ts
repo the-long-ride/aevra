@@ -3,6 +3,7 @@ import {
   operationListInputSchema,
   operationSchema,
 } from './operation-tools.js';
+import { fastLaneInputSchemas } from './fast-lane-schemas.js';
 import { emptySchema, inputSchemas, type JsonSchema } from './registry-input-schemas.js';
 import { searchInputSchema } from './search-tool.js';
 
@@ -13,14 +14,17 @@ export const STABLE_TOOL_NAMES = [
   'workspace_current',
   'file_list',
   'file_read',
+  'file_read_many',
   'file_search',
   'search',
   'file_create',
   'file_write',
   'file_patch',
+  'file_write_many',
   'file_move',
   'file_delete',
   'command_run',
+  'command_run_many',
   'shell_run',
   'process_start',
   'process_list',
@@ -157,6 +161,7 @@ const readOnly = new Set<AevraToolName>([
   'workspace_current',
   'file_list',
   'file_read',
+  'file_read_many',
   'file_search',
   'search',
   'process_list',
@@ -181,7 +186,13 @@ const destructive = new Set<AevraToolName>([
   'skill_write',
   'instructions_write',
 ]);
-const openWorld = new Set<AevraToolName>(['git_push', 'command_run', 'shell_run', 'process_start']);
+const openWorld = new Set<AevraToolName>([
+  'git_push',
+  'command_run',
+  'command_run_many',
+  'shell_run',
+  'process_start',
+]);
 
 const descriptions: Partial<Record<AevraToolName, string>> = {
   aevra_status: 'Show the current Aevra MCP session, active workspace, and granted capabilities.',
@@ -191,6 +202,8 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
   workspace_current: 'Show the workspace currently selected for this MCP session.',
   file_list: 'List files and directories under a logical path in the active workspace.',
   file_read: 'Read a file from the active workspace, with optional partial-read offsets.',
+  file_read_many:
+    'FAST PATH. Prefer whenever 2+ independent files are needed. Read up to 32 files in one MCP call with bounded concurrency and per-file results.',
   file_search: 'Search for one text value inside files in the active workspace.',
   search:
     'Search the codebase for multiple text, regex, or file-name values in parallel using native search tooling.',
@@ -198,9 +211,13 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
   file_write:
     'Replace file content in the active workspace with optional expected-hash protection.',
   file_patch: 'Apply a patch to a file in the active workspace with optional conflict protection.',
+  file_write_many:
+    'FAST PATH. Prefer whenever 2+ independent file changes are needed. Create, replace, or patch up to 32 files in one MCP call while preserving normal approvals, recovery, conflict checks, and workspace mutation locks.',
   file_move: 'Move or rename a path inside the active workspace.',
   file_delete: 'Delete a file or directory inside the active workspace.',
   command_run: 'Run a bounded command through Aevra execution and approval policy.',
+  command_run_many:
+    'FAST PATH. Prefer whenever 2+ independent commands can run together. Run up to 16 commands in one MCP call; Aevra schedules bounded concurrency and still serializes conflicting effects.',
   shell_run:
     'Run a PowerShell, bash, or sh script in the active workspace through Aevra command policy, sandbox, and local approval controls.',
   process_start:
@@ -243,9 +260,11 @@ export function toolDefinitions(): ToolDescriptor[] {
       descriptions[name] ??
       `Aevra ${name.startsWith('aevra_') ? name.slice('aevra_'.length) : name.replaceAll('_', ' ')}`,
     inputSchema:
-      name === 'search'
-        ? searchInputSchema
-        : (operationInputs[name] ?? inputSchemas[name] ?? emptySchema),
+      name in fastLaneInputSchemas
+        ? fastLaneInputSchemas[name as keyof typeof fastLaneInputSchemas]
+        : name === 'search'
+          ? searchInputSchema
+          : (operationInputs[name] ?? inputSchemas[name] ?? emptySchema),
     outputSchema: outputSchemas[name] ?? anyObjectSchema,
     annotations: {
       readOnlyHint: readOnly.has(name),
