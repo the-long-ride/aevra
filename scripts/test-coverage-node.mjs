@@ -6,6 +6,7 @@ const root = process.cwd();
 const output = path.join(root, '.coverage-dist');
 const rawCoverage = path.join(root, '.coverage-v8');
 const TEST_BATCH_SIZE = 20;
+const TEST_BATCH_TIMEOUT_MS = 120_000;
 
 // Resolve local tool entries so every child spawns as `node <entry>` without
 // a shell. Coverage tests are also executed in bounded batches because Windows
@@ -23,6 +24,26 @@ function command(program, args, options = {}) {
     shell: false,
     ...options,
   });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+function runTestBatch(files, batchNumber, batchCount) {
+  console.error(`[coverage] Node batch ${batchNumber}/${batchCount}: ${files.length} files`);
+  const result = spawnSync(process.execPath, ['--test', ...files], {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: 'inherit',
+    shell: false,
+    timeout: TEST_BATCH_TIMEOUT_MS,
+    env: { ...process.env, NODE_V8_COVERAGE: rawCoverage },
+  });
+  if (result.error?.code === 'ETIMEDOUT') {
+    console.error(
+      `[coverage] Node batch ${batchNumber}/${batchCount} timed out after ${TEST_BATCH_TIMEOUT_MS}ms. Suspect files:\n${files.join('\n')}`,
+    );
+    process.exit(1);
+  }
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
@@ -56,10 +77,10 @@ if (tests.length === 0) {
   process.exit(1);
 }
 
+const batchCount = Math.ceil(tests.length / TEST_BATCH_SIZE);
 for (let start = 0; start < tests.length; start += TEST_BATCH_SIZE) {
-  command(process.execPath, ['--test', ...tests.slice(start, start + TEST_BATCH_SIZE)], {
-    env: { ...process.env, NODE_V8_COVERAGE: rawCoverage },
-  });
+  const files = tests.slice(start, start + TEST_BATCH_SIZE);
+  runTestBatch(files, Math.floor(start / TEST_BATCH_SIZE) + 1, batchCount);
 }
 
 command(process.execPath, [

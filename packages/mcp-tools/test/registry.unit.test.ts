@@ -10,7 +10,7 @@ const READ_ONLY_TOOLS = [
   'workspace_select',
   'workspace_current',
   'file_list',
-  'file_read',
+  'file_read_many',
   'file_search',
   'process_list',
   'process_status',
@@ -19,8 +19,8 @@ const READ_ONLY_TOOLS = [
 ] as const satisfies readonly StableToolName[];
 
 const MUTATING_TOOLS = [
-  'file_write',
-  'command_run',
+  'file_write_many',
+  'command_run_many',
   'shell_run',
   'process_start',
   'process_stop',
@@ -33,6 +33,7 @@ test('stable tool vocabulary includes read and policy tools but no root mutation
     'aevra_status',
     'workspace_select',
     'file_read',
+    'file_read_many',
     'approval_wait',
     'change_rollback',
     'shell_run',
@@ -69,12 +70,22 @@ test('workspace file and process inspection tools are explicitly read-only', () 
 test('workspace and file read tools publish concrete input schemas', () => {
   const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
   const workspaceSelect = definitions.get('workspace_select')?.inputSchema as any;
-  const fileRead = definitions.get('file_read')?.inputSchema as any;
+  const fileReadMany = definitions.get('file_read_many')?.inputSchema as any;
   const fileSearch = definitions.get('file_search')?.inputSchema as any;
+  const readItem = fileReadMany?.properties?.reads?.items;
   assert.equal(workspaceSelect?.type, 'object');
   assert.ok(workspaceSelect?.properties?.workspace, 'workspace_select.workspace schema missing');
-  assert.equal(fileRead?.required?.includes('path'), true, 'file_read.path must be required');
-  assert.ok(fileRead?.properties?.path, 'file_read.path schema missing');
+  assert.equal(
+    fileReadMany?.required?.includes('reads'),
+    true,
+    'file_read_many.reads must be required',
+  );
+  assert.equal(
+    readItem?.required?.includes('path'),
+    true,
+    'file_read_many reads[].path is required',
+  );
+  assert.ok(readItem?.properties?.path, 'file_read_many reads[].path schema missing');
   assert.equal(fileSearch?.required?.includes('query'), true, 'file_search.query must be required');
   assert.ok(fileSearch?.properties?.query, 'file_search.query schema missing');
 });
@@ -120,12 +131,12 @@ test('shell_run publishes a concrete high-control script schema', () => {
   assert.equal(shell.annotations.readOnlyHint, false);
 });
 
-test('workspace-scoped tools accept explicit workspace name or ID', () => {
+test('workspace-scoped public tools accept explicit workspace name or ID', () => {
   const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
   for (const name of [
-    'file_read',
+    'file_read_many',
     'git_status',
-    'command_run',
+    'command_run_many',
     'process_list',
     'change_begin',
   ] as const) {

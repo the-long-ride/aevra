@@ -5,6 +5,7 @@ import { SessionRepository } from '../../../packages/store/src/sessions.js';
 import { CapabilityProfileService } from '../src/policy/capabilities.js';
 import { SessionManager } from '../src/sessions/session-manager.js';
 import { McpActivityLog } from '../src/mcp/activity-log.js';
+import { aevraServerInfo } from '../src/mcp/server-info.js';
 import { McpIngressServer } from '../src/mcp/server.js';
 
 const identity = {
@@ -43,64 +44,64 @@ test('MCP initialize creates server-owned session and unknown client session is 
     { activity },
   );
   await server.start();
-  const init = await fetch(`${server.url()}/mcp`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'initialize',
-      params: { protocolVersion: '2025-06-18' },
-    }),
-  });
-  assert.equal(init.status, 200);
-  const initBody = (await init.json()) as any;
-  assert.equal(
-    initBody.result.serverInfo.description,
-    'Use Claude, ChatGPT, Grok, etc. chat to control your workspace. Risks are under control by permissions and your approvals.',
-  );
-  const sid = init.headers.get('mcp-session-id');
-  assert.match(sid ?? '', /^ses_/);
-  assert.deepEqual(
-    activity.recent().map((entry) => [entry.action, entry.state]),
-    [['initialize', 'success']],
-  );
 
-  const bad = await fetch(`${server.url()}/mcp`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'mcp-session-id': 'client-chosen' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
-  });
-  assert.equal(bad.status, 404);
-  const good = await fetch(`${server.url()}/mcp`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'mcp-session-id': sid! },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' }),
-  });
-  assert.equal(good.status, 200);
-  const toolListActivity = activity.recent().at(-1);
-  assert.equal(toolListActivity?.action, 'tools/list');
-  assert.equal(toolListActivity?.kind, 'rpc');
-  assert.equal(toolListActivity?.state, 'success');
-  assert.equal(toolListActivity?.actor, identity.actor);
-  assert.match(toolListActivity?.output ?? '', /"tools"/);
+  try {
+    const init = await fetch(`${server.url()}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { protocolVersion: '2025-06-18' },
+      }),
+    });
+    assert.equal(init.status, 200);
+    const initBody = (await init.json()) as any;
+    assert.equal(initBody.result.serverInfo.description, aevraServerInfo().description);
+    const sid = init.headers.get('mcp-session-id');
+    assert.match(sid ?? '', /^ses_/);
+    assert.deepEqual(
+      activity.recent().map((entry) => [entry.action, entry.state]),
+      [['initialize', 'success']],
+    );
 
-  const call = await fetch(`${server.url()}/mcp`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'mcp-session-id': sid! },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 4,
-      method: 'tools/call',
-      params: { name: 'file_read', arguments: { path: 'README.md' } },
-    }),
-  });
-  assert.equal(call.status, 200);
-  const callActivity = activity.recent().at(-1);
-  assert.equal(callActivity?.action, 'file_read');
-  assert.match(callActivity?.input ?? '', /README\.md/);
-  assert.match(callActivity?.output ?? '', /"ok": true/);
+    const bad = await fetch(`${server.url()}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'mcp-session-id': 'client-chosen' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+    });
+    assert.equal(bad.status, 404);
+    const good = await fetch(`${server.url()}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'mcp-session-id': sid! },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' }),
+    });
+    assert.equal(good.status, 200);
+    const toolListActivity = activity.recent().at(-1);
+    assert.equal(toolListActivity?.action, 'tools/list');
+    assert.equal(toolListActivity?.kind, 'rpc');
+    assert.equal(toolListActivity?.state, 'success');
+    assert.equal(toolListActivity?.actor, identity.actor);
+    assert.match(toolListActivity?.output ?? '', /"tools"/);
 
-  await server.close();
-  db.close();
+    const call = await fetch(`${server.url()}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'mcp-session-id': sid! },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'file_read', arguments: { path: 'README.md' } },
+      }),
+    });
+    assert.equal(call.status, 200);
+    const callActivity = activity.recent().at(-1);
+    assert.equal(callActivity?.action, 'file_read');
+    assert.match(callActivity?.input ?? '', /README\.md/);
+    assert.match(callActivity?.output ?? '', /"ok": true/);
+  } finally {
+    await server.close();
+    db.close();
+  }
 });
