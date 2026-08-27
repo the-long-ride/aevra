@@ -12,6 +12,8 @@ import {
 } from './basic-tools.js';
 import { commandTool, shellTool } from './command-tools.js';
 import { AevraToolError } from './errors.js';
+import { FAST_LANE_TOOL_NAMES, isFastLaneTool } from './fast-lane-schemas.js';
+import { handleFastLaneTool } from './fast-lane-tools.js';
 import { FILE_TOOL_NAMES, handleFileTool } from './file-tools.js';
 import { GIT_TOOL_NAMES, gitTool } from './git-tools.js';
 import { HookService } from './hook-service.js';
@@ -27,6 +29,7 @@ import type { McpRuntimeContext, McpToolDependencies, WorkerGateway } from './se
 
 const TARGETED_WORKSPACE_TOOLS = new Set([
   ...FILE_TOOL_NAMES,
+  ...FAST_LANE_TOOL_NAMES,
   ...GIT_TOOL_NAMES,
   'search',
   'command_run',
@@ -156,6 +159,7 @@ export class McpToolService {
     const context = this.context(workspaceLease?.workspaceId);
 
     if (BASIC_TOOL_NAMES.has(name)) return handleBasicTool(context, sessionId, name, args);
+    if (isFastLaneTool(name)) return handleFastLaneTool(context, sessionId, name, args);
     if (FILE_TOOL_NAMES.has(name)) return handleFileTool(context, sessionId, name, args);
     if (name === 'search') return searchTool(context, sessionId, args);
     if (name === 'command_run') return commandTool(context, sessionId, args);
