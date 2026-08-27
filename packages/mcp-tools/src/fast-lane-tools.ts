@@ -159,6 +159,20 @@ function validateRead(item: unknown, index: number) {
   };
 }
 
+function rejectUnsupportedWriteFields(
+  value: Record<string, any>,
+  index: number,
+  operation: string,
+  allowedFields: readonly string[],
+) {
+  const allowed = new Set(allowedFields);
+  for (const field of Object.keys(value)) {
+    if (!allowed.has(field)) {
+      invalid(`writes[${index}].${field} is not supported for ${operation}`);
+    }
+  }
+}
+
 function validateWrite(item: unknown, index: number): Record<string, any> {
   const value = objectItem(item, `writes[${index}]`);
   const operation = stringValue(value.operation, `writes[${index}].operation`);
@@ -166,19 +180,67 @@ function validateWrite(item: unknown, index: number): Record<string, any> {
     invalid(`writes[${index}].operation must be create, replace, or patch`);
   }
   const path = stringValue(value.path, `writes[${index}].path`);
-  if ((operation === 'create' || operation === 'replace') && typeof value.content !== 'string') {
-    invalid(`writes[${index}].content is required for ${operation}`);
+
+  if (operation === 'create') {
+    rejectUnsupportedWriteFields(value, index, operation, [
+      'operation',
+      'path',
+      'content',
+      'encoding',
+    ]);
+    if (typeof value.content !== 'string') {
+      invalid(`writes[${index}].content is required for create`);
+    }
+    if (value.encoding !== undefined && !['utf8', 'base64'].includes(String(value.encoding))) {
+      invalid(`writes[${index}].encoding must be utf8 or base64`);
+    }
+    return {
+      operation,
+      path,
+      content: value.content,
+      ...(value.encoding !== undefined ? { encoding: value.encoding } : {}),
+    };
   }
-  if (operation === 'patch' && typeof value.patch !== 'string') {
+
+  if (operation === 'replace') {
+    rejectUnsupportedWriteFields(value, index, operation, [
+      'operation',
+      'path',
+      'content',
+      'expectedHash',
+    ]);
+    if (typeof value.content !== 'string') {
+      invalid(`writes[${index}].content is required for replace`);
+    }
+    if (value.expectedHash !== undefined && typeof value.expectedHash !== 'string') {
+      invalid(`writes[${index}].expectedHash must be a string`);
+    }
+    return {
+      operation,
+      path,
+      content: value.content,
+      ...(value.expectedHash !== undefined ? { expectedHash: value.expectedHash } : {}),
+    };
+  }
+
+  rejectUnsupportedWriteFields(value, index, operation, [
+    'operation',
+    'path',
+    'patch',
+    'expectedHash',
+  ]);
+  if (typeof value.patch !== 'string') {
     invalid(`writes[${index}].patch is required for patch`);
-  }
-  if (value.encoding !== undefined && !['utf8', 'base64'].includes(String(value.encoding))) {
-    invalid(`writes[${index}].encoding must be utf8 or base64`);
   }
   if (value.expectedHash !== undefined && typeof value.expectedHash !== 'string') {
     invalid(`writes[${index}].expectedHash must be a string`);
   }
-  return { ...value, operation, path };
+  return {
+    operation,
+    path,
+    patch: value.patch,
+    ...(value.expectedHash !== undefined ? { expectedHash: value.expectedHash } : {}),
+  };
 }
 
 function validateCommand(item: unknown, index: number) {

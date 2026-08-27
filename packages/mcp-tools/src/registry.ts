@@ -56,6 +56,14 @@ export const STABLE_TOOL_NAMES = [
 ] as const;
 export type AevraToolName = (typeof STABLE_TOOL_NAMES)[number];
 
+const MODEL_HIDDEN_TOOL_NAMES = new Set<AevraToolName>([
+  'file_read',
+  'file_create',
+  'file_write',
+  'file_patch',
+  'command_run',
+]);
+
 type ToolAnnotations = {
   readOnlyHint?: boolean;
   destructiveHint?: boolean;
@@ -203,7 +211,7 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
   file_list: 'List files and directories under a logical path in the active workspace.',
   file_read: 'Read a file from the active workspace, with optional partial-read offsets.',
   file_read_many:
-    'FAST PATH. Prefer whenever 2+ independent files are needed. Read up to 32 files in one MCP call with bounded concurrency and per-file results.',
+    'Read one or more files from a workspace, up to 32 per call, with bounded concurrency and per-file results.',
   file_search: 'Search for one text value inside files in the active workspace.',
   search:
     'Search the codebase for multiple text, regex, or file-name values in parallel using native search tooling.',
@@ -212,12 +220,12 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
     'Replace file content in the active workspace with optional expected-hash protection.',
   file_patch: 'Apply a patch to a file in the active workspace with optional conflict protection.',
   file_write_many:
-    'FAST PATH. Prefer whenever 2+ independent file changes are needed. Create, replace, or patch up to 32 files in one MCP call while preserving normal approvals, recovery, conflict checks, and workspace mutation locks.',
+    'Create, replace, or patch one or more files in a workspace, up to 32 changes per call, while preserving approvals, recovery, conflict checks, and workspace mutation locks.',
   file_move: 'Move or rename a path inside the active workspace.',
   file_delete: 'Delete a file or directory inside the active workspace.',
   command_run: 'Run a bounded command through Aevra execution and approval policy.',
   command_run_many:
-    'FAST PATH. Prefer whenever 2+ independent commands can run together. Run up to 16 commands in one MCP call; Aevra schedules bounded concurrency and still serializes conflicting effects.',
+    'Run one or more bounded commands through Aevra execution and approval policy, up to 16 per call, with bounded concurrency and conflict serialization.',
   shell_run:
     'Run a PowerShell, bash, or sh script in the active workspace through Aevra command policy, sandbox, and local approval controls.',
   process_start:
@@ -254,7 +262,7 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
 };
 
 export function toolDefinitions(): ToolDescriptor[] {
-  return STABLE_TOOL_NAMES.map((name) => ({
+  return STABLE_TOOL_NAMES.filter((name) => !MODEL_HIDDEN_TOOL_NAMES.has(name)).map((name) => ({
     name,
     description:
       descriptions[name] ??

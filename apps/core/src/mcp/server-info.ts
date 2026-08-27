@@ -28,7 +28,7 @@ export function aevraServerInfo(baseUrl?: string): AevraServerInfo {
     name: 'Aevra',
     version: AEVRA_VERSION,
     description:
-      'Use Claude, ChatGPT, Grok, etc. chat to control your workspace. Prefer Aevra Fast Lane *_many tools for 2+ independent reads, writes, or commands. Risks remain under control by permissions and your approvals.',
+      'Use Claude, ChatGPT, Grok, etc. chat to control your workspace. Operations remain protected by Aevra permissions and approval controls.',
   };
   if (baseUrl) {
     info.icons = [

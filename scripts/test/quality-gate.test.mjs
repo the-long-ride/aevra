@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const workflow = readFileSync('.github/workflows/quality-gate.yml', 'utf8');
+const nodeRunner = readFileSync('scripts/test.mjs', 'utf8');
 const coverageRunner = readFileSync('scripts/test-coverage-node.mjs', 'utf8');
 const gitignore = readFileSync('.gitignore', 'utf8');
 
@@ -63,6 +64,15 @@ test('node coverage batches tests, merges one complete V8 report, and requires 8
     assert.match(coverageRunner, new RegExp(`${metric}',\\s*'85'`));
   }
   assert.match(gitignore, /^\.coverage-v8\/$/m);
+});
+
+test('node test runners bound leaked handles and identify the suspect files', () => {
+  assert.match(nodeRunner, /TEST_RUN_TIMEOUT_MS\s*=\s*120_000/);
+  assert.match(coverageRunner, /TEST_BATCH_TIMEOUT_MS\s*=\s*120_000/);
+  for (const runner of [nodeRunner, coverageRunner]) {
+    assert.match(runner, /ETIMEDOUT/);
+    assert.match(runner, /Suspect files/);
+  }
 });
 
 test('release publishes only an exact SHA already validated by the quality workflow', () => {

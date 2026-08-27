@@ -59,6 +59,50 @@ const commandItemSchema = {
   additionalProperties: false,
 };
 
+const writePathProperty = { type: 'string', description: 'Logical workspace file path.' };
+const writeContentProperty = { type: 'string', description: 'File content.' };
+const writeExpectedHashProperty = {
+  type: 'string',
+  description: 'Optional hash from a previous read for conflict detection.',
+};
+const writeItemSchema = {
+  oneOf: [
+    {
+      type: 'object',
+      properties: {
+        operation: { const: 'create' },
+        path: writePathProperty,
+        content: writeContentProperty,
+        encoding: { type: 'string', enum: ['utf8', 'base64'] },
+      },
+      required: ['operation', 'path', 'content'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        operation: { const: 'replace' },
+        path: writePathProperty,
+        content: writeContentProperty,
+        expectedHash: writeExpectedHashProperty,
+      },
+      required: ['operation', 'path', 'content'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        operation: { const: 'patch' },
+        path: writePathProperty,
+        patch: { type: 'string', description: 'Patch text to apply.' },
+        expectedHash: writeExpectedHashProperty,
+      },
+      required: ['operation', 'path', 'patch'],
+      additionalProperties: false,
+    },
+  ],
+};
+
 export const fastLaneInputSchemas: Record<FastLaneToolName, JsonSchema> = {
   file_read_many: {
     type: 'object',
@@ -105,22 +149,7 @@ export const fastLaneInputSchemas: Record<FastLaneToolName, JsonSchema> = {
         type: 'array',
         minItems: 1,
         maxItems: 32,
-        items: {
-          type: 'object',
-          properties: {
-            operation: { type: 'string', enum: ['create', 'replace', 'patch'] },
-            path: { type: 'string', description: 'Logical workspace file path.' },
-            content: { type: 'string', description: 'Content for create or replace.' },
-            patch: { type: 'string', description: 'Patch text for patch operations.' },
-            encoding: { type: 'string', enum: ['utf8', 'base64'] },
-            expectedHash: {
-              type: 'string',
-              description: 'Optional hash from a previous read for conflict detection.',
-            },
-          },
-          required: ['operation', 'path'],
-          additionalProperties: false,
-        },
+        items: writeItemSchema,
       },
       concurrency: {
         type: 'integer',

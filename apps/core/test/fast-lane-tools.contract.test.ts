@@ -8,12 +8,11 @@ function context(callInner: (sessionId: string, name: string, args: any) => Prom
   return { callInner } as any;
 }
 
-test('registry exposes Fast Lane tools with model-facing hints and schemas', () => {
+test('registry exposes Fast Lane tools with schemas and annotations', () => {
   const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
   for (const name of ['file_read_many', 'file_write_many', 'command_run_many'] as const) {
     const tool = definitions.get(name);
     assert.ok(tool, name);
-    assert.match(tool.description, /FAST PATH/);
     assert.ok(Array.isArray(tool.inputSchema.required));
   }
   assert.equal(definitions.get('file_read_many')?.annotations.readOnlyHint, true);
