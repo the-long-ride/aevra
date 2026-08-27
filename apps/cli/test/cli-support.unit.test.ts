@@ -18,12 +18,12 @@ test('help and shell completions expose only the single UI launch flag', () => {
   }
 });
 
-test('aevra start ready output begins with the Aevra banner', () => {
+test('aevra start ready output renders the service endpoints as a table', () => {
   const lines = readyLines({
     adminUrl: 'https://localhost:47831',
     mcpUrl: 'https://localhost:47832',
   });
-  assert.deepEqual(lines.slice(0, 7), [
+  assert.deepEqual(lines, [
     '',
     '               ',
     '                   ▄         ',
@@ -31,9 +31,16 @@ test('aevra start ready output begins with the Aevra banner', () => {
     ' ▄█▀██ ██▄█▀ ██▄██ ██   ▄█▀██',
     '▄▀█▄██▄▀█▄▄▄  ▀█▀ ▄█▀  ▄▀█▄██',
     '',
+    '┌───────────┬─────────────────────────────┐',
+    '│ Service   │ Value                       │',
+    '├───────────┼─────────────────────────────┤',
+    '│ Core      │ ready                       │',
+    '│ MCP       │ https://localhost:47832/mcp │',
+    '│ Dashboard │ https://localhost:47831     │',
+    '└───────────┴─────────────────────────────┘',
+    '',
   ]);
-  assert.equal(lines.at(-4), '[aevra] Core: ready');
-  assert.equal(lines.at(-1), '[aevra] Press Ctrl+C to stop Aevra.');
+  assert.doesNotMatch(lines.join('\n'), /Press Ctrl\+C/);
   assert.doesNotMatch(lines.join('\n'), /\x1b\[/);
 });
 

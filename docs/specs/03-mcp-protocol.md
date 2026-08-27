@@ -1,6 +1,6 @@
 # 03 — MCP Protocol
 
-**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `0.1.2`
+**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `Unreleased`
 
 ## Transport
 
@@ -15,26 +15,34 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
 4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
 
-## Tool vocabulary (42 tools)
+## Tool vocabulary (40 discoverable tools)
 
-| Group      | Tools                                                                                                            |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| Status     | `aevra_status`                                                                                                   |
-| Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                          |
-| Files      | `file_list` `file_read` `file_search` `search` `file_create` `file_write` `file_patch` `file_move` `file_delete` |
-| Command    | `command_run` `shell_run`                                                                                        |
-| Git        | `git_status` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                                           |
-| Processes  | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart`   |
-| Operations | `operation_get` `operation_list`                                                                                 |
-| Changes    | `change_begin` `change_status` `change_commit` `change_rollback`                                                 |
-| Approvals  | `approval_status` `approval_wait` `approval_cancel`                                                              |
-| Skills     | `skills_list` `skill_read` `skill_write` `instructions_read` `instructions_write`                                |
+| Group      | Tools                                                                                                          |
+| ---------- | -------------------------------------------------------------------------------------------------------------- |
+| Status     | `aevra_status`                                                                                                 |
+| Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                        |
+| Files      | `file_list` `file_read_many` `file_search` `search` `file_write_many` `file_move` `file_delete`                |
+| Command    | `command_run_many` `shell_run`                                                                                 |
+| Git        | `git_status` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                                         |
+| Processes  | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart` |
+| Operations | `operation_get` `operation_list`                                                                               |
+| Changes    | `change_begin` `change_status` `change_commit` `change_rollback`                                               |
+| Approvals  | `approval_status` `approval_wait` `approval_cancel`                                                            |
+| Skills     | `skills_list` `skill_read` `skill_write` `instructions_read` `instructions_write`                              |
+
+The public MCP discovery surface exposes batch tools as the normal interface for file reads, file mutations, and bounded commands, including single-item operations:
+
+- `file_read_many` accepts one to 32 reads, preserves input ordering, uses bounded concurrency, and returns a result for each requested path.
+- `file_write_many` accepts one to 32 creates, replacements, or patches. Its item schema is discriminated by operation, duplicate target paths are rejected before dispatch, and each mutation still uses the ordinary approval, recovery, conflict, and workspace-lock path.
+- `command_run_many` accepts one to 16 commands and uses bounded scheduling while serializing commands whose effects may conflict.
+
+The singular primitives `file_read`, `file_create`, `file_write`, `file_patch`, and `command_run` remain internal service operations used by batch delegation and backward-compatible direct calls. They are intentionally omitted from `tools/list` and are not part of model-facing tool selection.
 
 Stable public tools advertise closed `inputSchema` definitions and an `outputSchema`. Results retain text compatibility as `{content:[{type:'text'}]}` and also expose `structuredContent`; array results are represented as `{result:[...]}` in structured content. Tool errors arrive inside a normal result as `{error:{code,message,details}}` with `isError:true`.
 
 ### Long-running command pattern
 
-Use `command_run` only when completion is expected inside the bounded synchronous command window. For longer work:
+Use `command_run_many` for one or more commands only when each command is expected to complete inside the bounded synchronous command window. For longer work:
 
 1. `process_start` → returns `processId` immediately.
 2. `process_wait {processId, timeoutMs?}` → waits at most 30 seconds, returning early on completion.

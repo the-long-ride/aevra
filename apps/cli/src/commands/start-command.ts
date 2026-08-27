@@ -1,4 +1,5 @@
 import type { AdminUiDestination, AevraCommand } from '../args.js';
+import { START_STOP_LINE } from '../cli-support.js';
 
 type StartCommand = Extract<AevraCommand, { command: 'start' }>;
 
@@ -27,15 +28,15 @@ export async function runStartCommand<Config>(
           dependencies.error(line);
         }
 
-        if (!command.uiDestination) {
-          return;
+        if (command.uiDestination) {
+          try {
+            await dependencies.openUi(config, command.uiDestination);
+          } catch (error) {
+            dependencies.error(`[aevra] UI launch failed: ${dependencies.formatError(error)}`);
+          }
         }
 
-        try {
-          await dependencies.openUi(config, command.uiDestination);
-        } catch (error) {
-          dependencies.error(`[aevra] UI launch failed: ${dependencies.formatError(error)}`);
-        }
+        dependencies.error(START_STOP_LINE);
       },
     });
   } catch (error) {

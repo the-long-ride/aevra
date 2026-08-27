@@ -10,6 +10,25 @@ aevra start --ui
 
 Aevra validates the credentials before opening listeners, starts the internal Admin and MCP services on loopback, starts the unified HTTPS Public Gateway, and opens the Aevra login page. Keep the terminal running unless Aevra is installed as a background service.
 
+## Startup output
+
+Once startup is ready, Aevra renders Core readiness and the local service endpoints as an aligned table. With the default local ports and `--ui`, the status portion looks like this:
+
+```text
+┌───────────┬─────────────────────────────┐
+│ Service   │ Value                       │
+├───────────┼─────────────────────────────┤
+│ Core      │ ready                       │
+│ MCP       │ https://localhost:47832/mcp │
+│ Dashboard │ https://localhost:47831     │
+└───────────┴─────────────────────────────┘
+
+[aevra] Opening https://localhost:47831/
+[aevra] Press Ctrl+C to stop Aevra.
+```
+
+The table expands automatically when configured URLs are longer. The `Opening` line appears only when Aevra launches the UI automatically. The Ctrl+C hint is always printed after the table and any UI-launch message, so it is the final startup line.
+
 `aevra ui` can reopen the login page later. It does not create or bypass an authenticated Admin session.
 
 The Web UI supports multiple independent signed-in sessions. All persisted Admin sessions are invalidated whenever the Core starts, so a restart requires signing in again.
