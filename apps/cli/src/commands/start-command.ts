@@ -6,6 +6,7 @@ type StartCommand = Extract<AevraCommand, { command: 'start' }>;
 interface ReadyInfo {
   adminUrl: string;
   mcpUrl: string;
+  gatewayUrl?: string;
 }
 
 export interface StartCommandDependencies<Config> {
@@ -26,6 +27,15 @@ export async function runStartCommand<Config>(
       async onReady(info) {
         for (const line of dependencies.readyLines(info)) {
           dependencies.error(line);
+        }
+
+        if (info.gatewayUrl?.startsWith('http://')) {
+          dependencies.error(
+            '[aevra] Warning: HTTP is enabled only for the local gateway on 127.0.0.1. Admin and MCP remain HTTPS.',
+          );
+          dependencies.error(
+            '[aevra] Use HTTP only for localhost or behind a secure tunnel/reverse proxy. Use HTTPS for direct exposure.',
+          );
         }
 
         if (command.uiDestination) {

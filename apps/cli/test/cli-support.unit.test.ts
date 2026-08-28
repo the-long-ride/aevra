@@ -20,6 +20,7 @@ test('help and shell completions expose only the single UI launch flag', () => {
 
 test('aevra start ready output renders the service endpoints as a table', () => {
   const lines = readyLines({
+    gatewayUrl: 'http://127.0.0.1:47830',
     adminUrl: 'https://localhost:47831',
     mcpUrl: 'https://localhost:47832',
   });
@@ -35,6 +36,7 @@ test('aevra start ready output renders the service endpoints as a table', () => 
     '│ Service   │ Value                       │',
     '├───────────┼─────────────────────────────┤',
     '│ Core      │ ready                       │',
+    '│ Gateway   │ http://127.0.0.1:47830      │',
     '│ MCP       │ https://localhost:47832/mcp │',
     '│ Dashboard │ https://localhost:47831     │',
     '└───────────┴─────────────────────────────┘',

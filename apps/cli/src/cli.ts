@@ -61,7 +61,7 @@ function adminDependencies(
     async credentials() {
       return loadAdminCredentials(process.env);
     },
-    base: localAdminBase,
+    base: (currentConfig) => localAdminBase(currentConfig),
     fetch: (currentConfig, apiPath, init) => localAdminFetch(currentConfig, apiPath, init),
   };
 }

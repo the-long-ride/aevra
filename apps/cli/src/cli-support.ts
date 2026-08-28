@@ -32,10 +32,11 @@ export function formatCliError(error: unknown): string {
 
 export const START_STOP_LINE = '[aevra] Press Ctrl+C to stop Aevra.';
 
-function serviceTable(info: { adminUrl: string; mcpUrl: string }): string[] {
+function serviceTable(info: { adminUrl: string; mcpUrl: string; gatewayUrl?: string }): string[] {
   const rows: Array<[string, string]> = [
     ['Service', 'Value'],
     ['Core', 'ready'],
+    ...(info.gatewayUrl ? ([['Gateway', info.gatewayUrl]] as Array<[string, string]>) : []),
     ['MCP', `${info.mcpUrl}/mcp`],
     ['Dashboard', info.adminUrl],
   ];
@@ -55,7 +56,11 @@ function serviceTable(info: { adminUrl: string; mcpUrl: string }): string[] {
   ];
 }
 
-export function readyLines(info: { adminUrl: string; mcpUrl: string }): string[] {
+export function readyLines(info: {
+  adminUrl: string;
+  mcpUrl: string;
+  gatewayUrl?: string;
+}): string[] {
   return [
     '',
     '               ',
