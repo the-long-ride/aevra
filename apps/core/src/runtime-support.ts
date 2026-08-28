@@ -2,6 +2,10 @@ import path from 'node:path';
 import type { WorkerGateway } from '../../../packages/mcp-tools/src/service.js';
 import type { CoreConfig } from './config.js';
 import type { RuntimeDependencies } from './runtime-types.js';
+import {
+  detectSystemCapabilities,
+  fallbackSystemCapabilitySnapshot,
+} from './system/capability-detector.js';
 import { ensureLocalTls } from './tls/local-tls.js';
 import { WorkerManager } from './worker/worker-manager.js';
 
@@ -20,6 +24,30 @@ export async function resolveRuntimeTls(config: CoreConfig, deps: RuntimeDepende
     keyPath: config.tlsKeyPath,
     caPath: config.tlsCaPath,
   });
+}
+
+export function createCachedSystemCapabilityResolver<T>(scan: () => Promise<T>): () => Promise<T> {
+  let cached: Promise<T> | undefined;
+  return () => (cached ??= scan());
+}
+
+const resolveDefaultSystemCapabilities =
+  createCachedSystemCapabilityResolver(detectSystemCapabilities);
+
+export async function resolveRuntimeSystemCapabilities(deps: RuntimeDependencies) {
+  try {
+    return await (deps.detectSystemCapabilities ?? resolveDefaultSystemCapabilities)();
+  } catch {
+    return fallbackSystemCapabilitySnapshot();
+  }
+}
+
+export async function closeRuntimeResource(fn: () => Promise<unknown>) {
+  try {
+    await fn();
+  } catch {
+    /* Preserve the original startup/shutdown error. */
+  }
 }
 
 export function runtimeWorkerGateway(

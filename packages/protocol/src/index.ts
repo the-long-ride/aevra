@@ -175,3 +175,5 @@ export type ToolResult<T> =
       ok: false;
       error: { code: AevraErrorCode; message: string; details?: Record<string, unknown> };
     };
+
+export * from './system-capabilities.js';

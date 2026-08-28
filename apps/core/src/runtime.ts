@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,12 +43,13 @@ import { ChangeSetService } from './changes/change-service.js';
 import { ProcessService } from './processes/process-service.js';
 import { McpToolService } from '../../../packages/mcp-tools/src/service.js';
 import {
+  closeRuntimeResource,
   createRuntimeWorkerManager,
+  resolveRuntimeSystemCapabilities,
   resolveRuntimeTls,
   runtimeWorkerGateway,
 } from './runtime-support.js';
 import { SessionSkillAccessGate } from '../../../packages/mcp-tools/src/skill-access-gate.js';
-import type { CloudflareManager } from './cloudflare/manager.js';
 import { BackupService } from './backup/backup-service.js';
 import { ConfigExportService } from './config/export-service.js';
 import { EncryptedVault } from '../../../packages/secrets/src/vault.js';
@@ -66,35 +68,25 @@ export async function createCoreRuntime(
     worker: WorkerClient | undefined,
     admin: AdminServer | undefined,
     mcp: McpIngressServer | undefined,
-    cloudflare: CloudflareManager | undefined,
     exposureWiring: RuntimeExposureWiring | undefined,
     keepAwake: KeepAwakeService | undefined;
   let safeMode = false,
     started = false;
   const wm = createRuntimeWorkerManager(config, deps);
   const cleanup = async () => {
-    const safe = async (fn: () => Promise<unknown>) => {
-      try {
-        await fn();
-      } catch {
-        /* Preserve the original startup/shutdown error. */
-      }
-    };
-    if (keepAwake) await safe(() => keepAwake!.close());
+    if (keepAwake) await closeRuntimeResource(() => keepAwake!.close());
     keepAwake = undefined;
-    if (exposureWiring) await safe(() => exposureWiring!.close());
+    if (exposureWiring) await closeRuntimeResource(() => exposureWiring!.close());
     exposureWiring = undefined;
-    if (mcp) await safe(() => mcp!.close());
+    if (mcp) await closeRuntimeResource(() => mcp!.close());
     mcp = undefined;
-    if (admin) await safe(() => admin!.close());
+    if (admin) await closeRuntimeResource(() => admin!.close());
     admin = undefined;
-    if (worker) await safe(() => wm.close());
+    if (worker) await closeRuntimeResource(() => wm.close());
     worker = undefined;
     try {
       db?.close();
-    } catch {
-      /* best-effort close */
-    }
+    } catch {}
     db = undefined;
     started = false;
   };
@@ -116,6 +108,7 @@ export async function createCoreRuntime(
       try {
         await mkdir(config.stateDir, { recursive: true, mode: 0o700 });
         await mkdir(config.recoveryDir, { recursive: true, mode: 0o700 });
+        const systemCapabilities = await resolveRuntimeSystemCapabilities(deps);
         const tls = await resolveRuntimeTls(config, deps);
         const adminCredentialVerifier = await config.createAdminCredentialVerifier();
         db = (deps.databaseOpen ?? AevraDatabase.open)(config.databasePath);
@@ -234,20 +227,23 @@ export async function createCoreRuntime(
           connectorBindings,
           metrics,
           settings,
+          systemCapabilities,
         });
         const remoteTools = new SessionSkillAccessGate(tools, sessions, approvals);
         const bootstrap = new AdminBootstrapService(raw);
         await bootstrap.revokeAll();
         const controlSecret = ensureLocalControlSecret(config.stateDir);
         const localFilesystem = new LocalFilesystemService();
+        const gatewayTrustSecret = randomBytes(32).toString('base64url');
         exposureWiring = new RuntimeExposureWiring(
           config,
           settings,
           oauthRepo,
           tls,
           deps.cloudflare,
+          gatewayTrustSecret,
         );
-        cloudflare = exposureWiring.cloudflare;
+        const localTls = tls.serverOptions;
         const vault = new EncryptedVault(path.join(config.stateDir, 'secrets.vault')),
           platformSecrets = new CommandSecretStore(process.platform),
           secretStore = (await platformSecrets.probe()) ? platformSecrets : vault,
@@ -279,10 +275,14 @@ export async function createCoreRuntime(
             credentialVerifier: adminCredentialVerifier,
             controlSecret,
             staticDir,
-            tls: tls.serverOptions,
+            ...(localTls ? { tls: localTls } : {}),
             advertisedHost: 'localhost',
             trustedOrigins: () =>
               exposureWiring?.trustedAdminOrigins() ?? config.trustedAdminOrigins,
+            gatewayTrustSecret,
+            localHttpGatewayEnabled: () =>
+              exposureWiring?.currentConfig().provider === 'local' &&
+              exposureWiring.localProtocol() === 'http',
             api: {
               workspaces,
               approvals,
@@ -294,7 +294,7 @@ export async function createCoreRuntime(
               changes,
               audit,
               settings,
-              cloudflare,
+              cloudflare: exposureWiring.cloudflare,
               exposure: exposureWiring,
               localFilesystem,
               oauth,
@@ -306,6 +306,7 @@ export async function createCoreRuntime(
               metrics,
               activity,
               power: keepAwake,
+              systemCapabilities: () => systemCapabilities,
               mcpDiagnostics: () => mcp?.diagnosticsSnapshot() ?? null,
               safeMode: () => safeMode,
             },
@@ -323,7 +324,7 @@ export async function createCoreRuntime(
           { sessions, service: remoteTools },
           connectorsAdmission,
           {
-            tls: tls.serverOptions,
+            ...(localTls ? { tls: localTls } : {}),
             advertisedHost: 'localhost',
             plainMcpEnabled: true,
             oauth,

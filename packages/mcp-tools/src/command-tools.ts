@@ -7,7 +7,7 @@ import {
 import { resumeApproval } from './approval-resume.js';
 import { authorizeCapability } from './authorization.js';
 import { AevraToolError } from './errors.js';
-import { buildShellCommand, shellRiskFloor } from './shell-command.js';
+import { buildShellCommand, resolveShellKind, shellRiskFloor } from './shell-command.js';
 import { argsHash, maxRisk, oneTimeAllowed, requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
@@ -34,16 +34,17 @@ function resolveExecutionMode(context: McpRuntimeContext, requestedMode: unknown
 
 export async function shellTool(context: McpRuntimeContext, sessionId: string, args: any) {
   const mode = resolveExecutionMode(context, args.executionMode);
-  const command = buildShellCommand({ ...args, executionMode: mode });
-  const requestedShell = String(args.shell ?? 'auto');
-  const shell =
-    requestedShell === 'auto'
-      ? mode === 'sandbox'
-        ? 'bash'
-        : process.platform === 'win32'
-          ? 'powershell'
-          : 'bash'
-      : requestedShell;
+  const recommendedShell = context.deps.systemCapabilities?.os.recommendedShell;
+  const command = buildShellCommand(
+    { ...args, executionMode: mode },
+    process.platform,
+    recommendedShell,
+  );
+  const shell = resolveShellKind(
+    { ...args, executionMode: mode },
+    process.platform,
+    recommendedShell,
+  );
   return commandTool(
     context,
     sessionId,

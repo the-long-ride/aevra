@@ -34,6 +34,33 @@ test('host auto shell resolves to native PowerShell on Windows', () => {
   ]);
 });
 
+test('host auto shell follows the detected pwsh recommendation', () => {
+  const command = buildShellCommand(
+    { script: 'Get-ChildItem', shell: 'auto', executionMode: 'host' },
+    'win32',
+    'pwsh',
+  );
+  assert.equal(command.executable, 'pwsh');
+  assert.deepEqual(command.args, [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    'Get-ChildItem',
+  ]);
+});
+
+test('host execution supports cmd and zsh shell IDs reported by capability inventory', () => {
+  assert.deepEqual(
+    buildShellCommand({ script: 'dir', shell: 'cmd', executionMode: 'host' }, 'win32'),
+    { executable: 'cmd.exe', args: ['/d', '/s', '/c', 'dir'], env: {}, timeoutMs: undefined },
+  );
+  assert.deepEqual(
+    buildShellCommand({ script: 'pwd', shell: 'zsh', executionMode: 'host' }, 'linux'),
+    { executable: 'zsh', args: ['-lc', 'pwd'], env: {}, timeoutMs: undefined },
+  );
+});
+
 test('host auto shell resolves to bash on unix-like systems', () => {
   const command = buildShellCommand(
     { script: 'pwd', shell: 'auto', executionMode: 'host' },
