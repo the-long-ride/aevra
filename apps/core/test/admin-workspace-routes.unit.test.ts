@@ -30,6 +30,8 @@ function workspaceContext() {
       workspaces: {
         listLocal: () => [{ id: 'w1', name: 'local' }],
         listRemote: () => [{ id: 'remote' }],
+        getLocal: (id: string) =>
+          id === 'w1' ? { id, hostRoot: 'canonical:F:/ws/current' } : null,
         create: (input: any) => {
           calls.push(['create', input]);
           return { id: 'w2', ...input };
@@ -121,6 +123,33 @@ test('workspace listing falls back to remote then empty without services', async
   const none = response();
   await handleWorkspaceRoutes(request('GET'), none, new URL(`${BASE}/api/workspaces`), {} as any);
   assert.deepEqual(JSON.parse(none.body), []);
+});
+
+test('workspace root change is rejected while that workspace owns a running process', async () => {
+  const { context, calls } = workspaceContext();
+  context.processes = {
+    listLocal: () => [{ id: 'proc-1', workspace_id: 'w1', state: 'running' }],
+  };
+
+  const result = response();
+  await handleWorkspaceRoutes(
+    request('PATCH', { hostRoot: 'F:/ws/next' }),
+    result,
+    new URL(`${BASE}/api/workspaces/w1`),
+    context,
+  );
+
+  assert.equal(result.statusCode, 409);
+  assert.deepEqual(JSON.parse(result.body), {
+    error: {
+      code: 'WORKSPACE_PROCESS_ACTIVE',
+      message: 'Stop active managed processes before changing the workspace root.',
+    },
+  });
+  assert.equal(
+    calls.some((row) => row[0] === 'update'),
+    false,
+  );
 });
 
 test('workspace mount routes cover local remote fallback add and delete', async () => {

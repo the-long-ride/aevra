@@ -1,10 +1,15 @@
+import type { SystemCapabilitySnapshot } from '../../protocol/src/index.js';
+export type { SystemCapabilitySnapshot } from '../../protocol/src/index.js';
+
 export type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type ApprovalState = 'PENDING' | 'APPROVED' | 'DENIED' | 'EXPIRED';
 
 export type ExposureProvider = 'local' | 'direct' | 'cloudflare' | 'ngrok' | 'external';
+export type LocalProtocol = 'https' | 'http';
 
 export interface ExposureConfig {
   provider: ExposureProvider;
+  localProtocol?: LocalProtocol;
   publicUrl?: string;
   adminPublicUrl?: string;
   trustedAdminOrigins?: string[];
@@ -186,6 +191,28 @@ export interface KeepAwakeStatus {
   managedProcesses: number;
   message?: string;
 }
+
+export interface TransportValidationEndpoint {
+  url: string;
+  protocol: LocalProtocol;
+  encrypted: boolean;
+  loopback: boolean;
+}
+
+export interface TransportValidationSnapshot {
+  state: 'secure' | 'local-http' | 'action-required' | 'invalid';
+  summary: string;
+  gateway: TransportValidationEndpoint;
+  admin: TransportValidationEndpoint;
+  mcp: TransportValidationEndpoint;
+  public: {
+    url?: string;
+    protocol: 'https' | null;
+    encrypted: boolean | null;
+  };
+  issues: string[];
+}
+
 export interface DashboardRuntimeSnapshot {
   status: RuntimeHealthStatus;
   uptimeSeconds: number;
@@ -202,6 +229,8 @@ export interface DashboardRuntimeSnapshot {
     connectors: number;
   };
   power?: KeepAwakeStatus | null;
+  system: SystemCapabilitySnapshot;
+  transport: TransportValidationSnapshot;
   metrics: Array<Record<string, unknown>>;
   activeConnections: Array<Record<string, unknown>>;
   connectors: ConnectorSummary[];

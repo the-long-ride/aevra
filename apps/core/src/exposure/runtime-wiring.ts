@@ -3,6 +3,7 @@ import type { SettingsRepository } from '../../../../packages/store/src/settings
 import type { CoreConfig } from '../config.js';
 import type { LocalTlsMaterial } from '../tls/local-tls.js';
 import { normalizeAdminPublicUrl, normalizeTrustedAdminOrigins } from './admin-origin.js';
+import { loadExposureConfig, resolveLocalProtocol } from './config.js';
 import {
   CloudflareAccessVerifier,
   RejectingIdentityVerifier,
@@ -15,6 +16,8 @@ import { PublicGateway } from '../gateway/public-gateway.js';
 import { ExposureService } from './service.js';
 import { NgrokAdapter } from './ngrok.js';
 import { RuntimeExposureController } from './runtime-controller.js';
+import { validateRuntimeTransport } from './transport-validation.js';
+import type { LocalProtocol } from './types.js';
 
 const TUNNEL_WATCHDOG_INTERVAL_MS = 5_000;
 
@@ -25,6 +28,8 @@ export class RuntimeExposureWiring {
   private readonly controller: RuntimeExposureController;
   private gateway?: PublicGateway;
   private watchdog?: TunnelWatchdog;
+  private adminUrl?: string;
+  private mcpUrl?: string;
 
   constructor(
     private readonly config: CoreConfig,
@@ -32,9 +37,11 @@ export class RuntimeExposureWiring {
     oauthRepo: OAuthRepository,
     private readonly tls: LocalTlsMaterial,
     cloudflareOverride?: CloudflareManager,
+    private readonly gatewayTrustSecret?: string,
   ) {
     this.cloudflare = cloudflareOverride ?? new CloudflareManagerImpl(settings);
-    const provisionalBase = `https://localhost:${config.publicPort || 47830}`;
+    const initialExposureConfig = loadExposureConfig(settings);
+    const provisionalBase = `${resolveLocalProtocol(initialExposureConfig)}://localhost:${config.publicPort || 47830}`;
     this.oauth = new AevraOAuthService(oauthRepo, {
       issuer: provisionalBase,
       resource: `${provisionalBase}/mcp`,
@@ -80,13 +87,22 @@ export class RuntimeExposureWiring {
       : new RejectingIdentityVerifier();
   }
 
+  localProtocol(): LocalProtocol {
+    return resolveLocalProtocol(this.controller.currentConfig());
+  }
+
   async startGateway(adminUrl: string, mcpUrl: string): Promise<void> {
+    const protocol = this.localProtocol();
+    this.adminUrl = adminUrl;
+    this.mcpUrl = mcpUrl;
     this.gateway = new PublicGateway({
       host: this.controller.gatewayHost(),
       port: this.config.publicPort,
-      tls: this.tls.serverOptions,
+      protocol,
+      ...(protocol === 'https' ? { tls: this.tls.serverOptions } : {}),
       targets: { adminUrl, mcpUrl },
       upstreamCa: this.tls.certificatePem,
+      gatewayTrustSecret: this.gatewayTrustSecret,
     });
     await this.gateway.start();
   }
@@ -109,10 +125,12 @@ export class RuntimeExposureWiring {
     await this.controller.close();
     await this.gateway?.close();
     this.gateway = undefined;
+    this.adminUrl = undefined;
+    this.mcpUrl = undefined;
   }
 
   gatewayUrl(): string {
-    return this.gateway?.url() ?? `https://localhost:${this.config.publicPort}`;
+    return this.gateway?.url() ?? `${this.localProtocol()}://localhost:${this.config.publicPort}`;
   }
 
   publicUrl(): string | undefined {
@@ -130,6 +148,18 @@ export class RuntimeExposureWiring {
       ...(config.trustedAdminOrigins ?? []),
       ...(this.config.trustedAdminOrigins ?? []),
     ]);
+  }
+
+  transportValidation() {
+    const status = this.controller.status();
+    return validateRuntimeTransport({
+      provider: this.controller.currentConfig().provider,
+      gatewayUrl: this.gatewayUrl(),
+      adminUrl: this.adminUrl ?? `https://localhost:${this.config.adminPort}`,
+      mcpUrl: this.mcpUrl ?? `https://localhost:${this.config.mcpPort}`,
+      ...(this.publicUrl() ? { publicUrl: this.publicUrl() } : {}),
+      restartRequired: status.restartRequired,
+    });
   }
 
   status() {
@@ -209,6 +239,7 @@ export class RuntimeExposureWiring {
       };
     }
   }
+
   async test() {
     const status = this.controller.status();
     if (status.provider === 'local') return this.controller.test();

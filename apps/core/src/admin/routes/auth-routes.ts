@@ -6,7 +6,7 @@ import { sendAdminResponse } from './http.js';
 
 const LOGIN_BODY_LIMIT = 8 * 1024;
 const ADMIN_COOKIE = 'aevra_admin';
-const COOKIE_ATTRIBUTES = 'Secure; HttpOnly; SameSite=Strict; Path=/';
+const COOKIE_ATTRIBUTES = 'HttpOnly; SameSite=Strict; Path=/';
 
 export interface AdminAuthRouteContext {
   sessions: AdminBootstrapService;
@@ -14,8 +14,10 @@ export interface AdminAuthRouteContext {
   loginLimiter: IpRateLimiter;
   sessionId?: string;
   secure: boolean;
+  allowLocalHttpPassword?: boolean;
   sameOrigin: boolean;
   clientIp: string;
+  onInsecureLoginBlocked?: () => void;
 }
 
 async function readLoginBody(request: IncomingMessage): Promise<Record<string, unknown>> {
@@ -37,15 +39,19 @@ async function readLoginBody(request: IncomingMessage): Promise<Record<string, u
   }
 }
 
-function setSessionCookie(response: ServerResponse, sessionId: string) {
+function cookieAttributes(secure: boolean) {
+  return `${secure ? 'Secure; ' : ''}${COOKIE_ATTRIBUTES}`;
+}
+
+function setSessionCookie(response: ServerResponse, sessionId: string, secure: boolean) {
   response.setHeader(
     'set-cookie',
-    `${ADMIN_COOKIE}=${encodeURIComponent(sessionId)}; ${COOKIE_ATTRIBUTES}`,
+    `${ADMIN_COOKIE}=${encodeURIComponent(sessionId)}; ${cookieAttributes(secure)}`,
   );
 }
 
-function clearSessionCookie(response: ServerResponse) {
-  response.setHeader('set-cookie', `${ADMIN_COOKIE}=; ${COOKIE_ATTRIBUTES}; Max-Age=0`);
+function clearSessionCookie(response: ServerResponse, secure: boolean) {
+  response.setHeader('set-cookie', `${ADMIN_COOKIE}=; ${cookieAttributes(secure)}; Max-Age=0`);
 }
 
 function rejectCsrf(response: ServerResponse) {
@@ -75,7 +81,8 @@ export async function handleAuthRoutes(
       rejectCsrf(response);
       return true;
     }
-    if (!context.secure) {
+    if (!context.secure && !context.allowLocalHttpPassword) {
+      context.onInsecureLoginBlocked?.();
       sendAdminResponse(response, 400, {
         error: { code: 'HTTPS_REQUIRED', message: 'Admin login requires HTTPS' },
       });
@@ -108,7 +115,7 @@ export async function handleAuthRoutes(
     }
 
     const session = await context.sessions.issueSession();
-    setSessionCookie(response, session.sessionId);
+    setSessionCookie(response, session.sessionId, context.secure);
     sendAdminResponse(response, 200, { authenticated: true });
     return true;
   }
@@ -123,7 +130,7 @@ export async function handleAuthRoutes(
       return true;
     }
     context.sessions.revokeSession(context.sessionId);
-    clearSessionCookie(response);
+    clearSessionCookie(response, context.secure);
     sendAdminResponse(response, 200, { authenticated: false });
     return true;
   }

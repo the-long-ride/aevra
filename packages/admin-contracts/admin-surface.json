@@ -33,7 +33,8 @@
     "onboarding",
     "runtime-overview",
     "live-mcp-activity",
-    "active-connections"
+    "active-connections",
+    "system-capabilities"
   ],
   "onboarding": {
     "beforeCompletion": [

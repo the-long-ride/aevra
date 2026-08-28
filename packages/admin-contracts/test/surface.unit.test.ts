@@ -22,6 +22,7 @@ test('navigation and onboarding ordering are stable', () => {
     'runtime-overview',
     'live-mcp-activity',
     'active-connections',
+    'system-capabilities',
   ]);
   assert.deepEqual(ADMIN_SURFACE.onboarding.beforeCompletion, [
     'remote-access',
