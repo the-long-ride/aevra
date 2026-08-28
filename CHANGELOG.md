@@ -2,23 +2,27 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.1.3] - 2026-08-28
 
 ### Added
 
+- **Host System Capabilities Detection**: non-blocking, bounded probes for host OS details, arch, available shells (`pwsh`, `powershell`, `cmd`, `bash`, `zsh`, `sh`, `wsl`), platform-specific recommended shell resolution, and 11 toolchain categories (Git, Node.js/npm/npx/pnpm/yarn/bun, Python/pip/uv, .NET, Rust/Cargo, Go, JVM/Java/javac/Maven/Gradle, Ruby/RubyGems, PHP/Composer, native C/C++/GCC/Clang/CMake/Make, Docker/Podman); published via MCP `aevra_status` under `execution.system` and displayed in the Admin Dashboard.
+- **Local Gateway Protocol & Transport Validation**: added `localProtocol` (`https` | `http`) configuration for the local loopback gateway while maintaining strict loopback HTTPS for internal Admin and MCP listeners; added interactive setup selection in `aevra setup` and a `TransportValidationModal` on the Admin Dashboard with runtime encryption checks and safety warnings.
 - **Fast Lane batch tools**: added `file_read_many`, `file_write_many`, and `command_run_many` as the model-facing file-read, file-mutation, and bounded-command interfaces, with ordered per-item results, bounded concurrency, and existing Aevra security controls preserved.
+- **React Admin Web UI Polish**: added a dedicated `System Capabilities` section to the Dashboard; `TransportValidationModal`; refactored `use-mcp-activity` hook for live event streams; added accessible `Dropdown` component with full keyboard navigation (arrows, enter, space, escape, focus management) and UI polish styles.
 
 ### Changed
 
-- **Simplified MCP discovery surface**: `tools/list` now hides the singular `file_read`, `file_create`, `file_write`, `file_patch`, and `command_run` primitives while retaining them internally for secure delegation and backward-compatible direct calls.
-- **Batch write contract**: `file_write_many` now publishes operation-discriminated create/replace/patch schemas and rejects fields that do not belong to the selected operation instead of silently discarding them.
-- **Startup status output**: `aevra start` now renders Core readiness, the MCP endpoint, and Dashboard URL in an aligned terminal table. With `--ui`, the browser-opening line follows the table, and `Press Ctrl+C to stop Aevra.` is always the final startup line.
-- **Documentation**: synchronized the MCP and execution specs with the 40-tool discoverable surface and Fast Lane as the default interface even for single-item operations, and updated the Quick Start / First Start guides for the new startup status table.
+- **Simplified MCP discovery surface**: `tools/list` now advertises 40 discoverable tools, hiding singular `file_read`, `file_create`, `file_write`, `file_patch`, and `command_run` primitives while retaining them internally for secure delegation and backward-compatible direct calls.
+- **Batch write contract**: `file_write_many` publishes operation-discriminated create/replace/patch schemas, rejects duplicate paths prior to dispatch, and rejects fields that do not belong to the selected operation instead of silently discarding them.
+- **Startup status output & safety warnings**: `aevra start` renders Core readiness, the MCP endpoint, and Dashboard URL in an aligned terminal table; warns clearly when running with a local HTTP loopback gateway. With `--ui`, the browser-opening line follows the table, and `Press Ctrl+C to stop Aevra.` is always the final startup line.
+- **Documentation**: synchronized all engineering specs (01–09, README), user manual guides, and root README with Aevra v0.1.3, the 40-tool discoverable surface, Fast Lane batch operations, system capability detection, and transport validation.
 
 ### Fixed
 
 - **Quality gate hangs**: MCP session integration cleanup now closes server/database resources even when assertions fail; Node test and coverage subprocesses have bounded timeouts and coverage batches identify suspect files instead of hanging CI indefinitely.
 - **Fast Lane registry coverage**: updated stale registry expectations to distinguish stable internal singular primitives from the public batch tool surface.
+- **Shell resolution**: command and shell tools now respect host capability probes and auto-resolve to the platform's recommended shell.
 
 ## [0.1.2] - 2026-08-26
 

@@ -1,4 +1,4 @@
-﻿# aevra
+# aevra
 
 <div align="center">
 
@@ -28,12 +28,12 @@ It works with any AI tool that supports the [Model Context Protocol (MCP)](https
 ```text
 Internet / AI Web Client / Admin Browser
         │
-HTTPS Public Gateway (127.0.0.1:47830)
+Public Gateway (127.0.0.1:47830 - HTTPS/HTTP)
 (Direct HTTPS / Local / Cloudflare / ngrok / Caddy / Tailscale / FRP / SSH)
         │
  ┌──────┴─────────────────────────────────┐
  │                                        │
-127.0.0.1:47832                          127.0.0.1:47831
+127.0.0.1:47832 (HTTPS)                  127.0.0.1:47831 (HTTPS)
 MCP Data Plane ── aevra Core Daemon      Admin Control Plane ── React Web UI
 (policy · sessions · approvals · audit)  (credentials auth · management modals)
         │
@@ -48,8 +48,10 @@ Execution Worker (filesystem · git · commands · sandbox · processes · hooks
 
 ## What Makes aevra Different?
 
-- **Fast & Lightweight**: Pure native Node.js implementation with zero heavy runtime overhead, instant JSON-RPC 2.0 streaming, and multi-threaded parallel regex search (`search`).
+- **Fast Lane Batch Operations & High Performance**: First-class `file_read_many`, `file_write_many`, and `command_run_many` batch tools that streamline model tool execution with bounded concurrency, parallel regex search (`search`), and zero heavy runtime overhead.
+- **Host System Capabilities Detection**: Non-blocking host environment probing that discovers 11 toolchain categories (Git, Node, Python, .NET, Rust, Go, JVM, Ruby, PHP, C/C++, Docker/Podman) and resolves recommended shells (`pwsh`, `powershell`, `cmd`, `bash`, `zsh`, `sh`) automatically.
 - **Zero-Trust Security & Data Isolation**: Central `SecurityGuard` resource boundary with automatic `SECRET` denial, `SENSITIVE` data masking, real-time DLP redaction, and in-depth protection against symlink and hard-link alias attacks.
+- **Configurable Local Transport & Runtime Validation**: Support for HTTPS and HTTP loopback gateway protocols with strict internal HTTPS isolation and active runtime transport security checks.
 - **Native Cross-Platform Support**: First-class citizen on **Windows** (Scheduled Tasks, named pipes, DPAPI), **Linux** (`systemd --user`, unix domain sockets, Secret Service), and **macOS** (`LaunchAgents`, Keychain).
 - **Granular Control & Step-Up Approvals**: Multi-tier capability profiles (Minimal, Read-Only, Safe Dev, Power Dev, Full Access, Custom), human-in-the-loop interactive approvals, and `policy.critical.alwaysConfirm` for sensitive operations.
 - **Durable Process Lifecycle & Recovery**: Named managed background processes (`process_start`, `process_wait`, `process_logs`) with detached completion sidecars, journaled change sets with rollback, and safe 3-way auto-merging for non-conflicting concurrent edits.
@@ -60,9 +62,10 @@ Execution Worker (filesystem · git · commands · sandbox · processes · hooks
 
 ## Core Features
 
-- **42 Stable MCP Tools**: Comprehensive toolset covering workspace operations, file mutations, git actions, terminal commands, managed processes, connection-owned operation inspection, change set rollbacks, lifecycle hooks, and native workspace search.
+- **40 Discoverable MCP Tools & Fast Lane Interfaces**: Streamlined public toolset featuring batch file reads, mutations, command execution, workspace management, Git operations, durable processes, and change sets (with singular primitives safely delegated internally).
+- **Host System Capabilities & Status**: MCP `aevra_status` exposes host toolchain snapshots, available shells, and execution defaults directly to models and the Admin UI.
 - **Dynamic Resources & Instruction Prompts**: Serves context files seamlessly via MCP resources (`aevra://skill/<source>/<name>`) and instruction prompts (`aevra-instructions` parsed from `AGENTS.md` / `CLAUDE.md`).
-- **React 19 Admin Dashboard**: Single-page dark theme dashboard featuring real-time MCP activity monitoring with sanitized input/output payload inspection, interactive runtime modals, and debounced workspace directory browsing.
+- **React 19 Admin Dashboard**: Single-page dark theme dashboard featuring live System Capabilities breakdown, Transport Validation status, real-time MCP activity monitoring with sanitized payloads, and interactive runtime modals.
 - **Out-of-Process Worker Sandbox**: Execution worker runs in an isolated child process communicating over authenticated local IPC, with Docker and Podman container sandboxing support.
 
 ---
