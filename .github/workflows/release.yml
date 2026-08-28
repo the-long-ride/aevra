@@ -14,6 +14,7 @@ on:
 permissions:
   contents: write
   actions: read
+  packages: write
   id-token: write
 
 concurrency:
@@ -63,9 +64,14 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Publish to npm (Trusted Publishing / Provenance)
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --registry=https://registry.npmjs.org
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to GitHub Packages
+        run: npm publish --registry=https://npm.pkg.github.com --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
 
       - name: Create GitHub Release
         env:
