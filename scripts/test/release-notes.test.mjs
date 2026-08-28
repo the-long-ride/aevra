@@ -131,9 +131,9 @@ test('generateReleaseNotes extracts real repository CHANGELOG.md for current ver
 
   assert.match(notes, /\*\*npm\*\*:/);
   assert.match(notes, /npm install -g @the-long-ride\/aevra@latest/);
-  assert.match(notes, /OAuth connection continuity/);
+  assert.match(notes, /Host System Capabilities Detection/);
   assert.match(
     notes,
-    /\*\*Full Changelog\*\*:\s*https:\/\/github\.com\/the-long-ride\/aevra\/compare\/v0\.1\.1\.\.\.v0\.1\.2/,
+    /\*\*Full Changelog\*\*:\s*https:\/\/github\.com\/the-long-ride\/aevra\/compare\/v0\.1\.2\.\.\.v0\.1\.3/,
   );
 });
