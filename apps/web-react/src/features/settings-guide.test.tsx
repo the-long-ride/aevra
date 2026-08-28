@@ -277,7 +277,9 @@ test('Settings configures keep awake policy without changing screen lock behavio
   await waitForSettings();
 
   expect(screen.getByRole('heading', { name: 'Keep awake' })).toBeInTheDocument();
-  expect(screen.getByText(/Active.*1 remote connection/)).toBeInTheDocument();
+  expect(screen.getByText('1 remote connection')).toBeInTheDocument();
+  expect(screen.getByLabelText('Sleep inhibition enabled')).toHaveClass('is-active');
+  expect(screen.queryByText(/Active.*1 remote connection/)).not.toBeInTheDocument();
   expect(screen.getByText(/screen lock and display timeout remain unchanged/i)).toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: 'Prevent system sleep' }));

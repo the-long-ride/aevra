@@ -37,6 +37,7 @@ export function SecretReferenceCreateModal({
       submitting={submitting}
       submitLabel="Store securely"
       submittingLabel="Storing…"
+      halfWidth
       onClose={onClose}
       onSubmit={submit}
     >

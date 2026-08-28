@@ -6,6 +6,7 @@ export function SettingsFormModal({
   submitting,
   submitLabel,
   submittingLabel,
+  halfWidth = false,
   onClose,
   onSubmit,
   children,
@@ -15,6 +16,7 @@ export function SettingsFormModal({
   submitting: boolean;
   submitLabel: string;
   submittingLabel: string;
+  halfWidth?: boolean;
   onClose(): void;
   onSubmit(event: React.FormEvent<HTMLFormElement>): void;
   children: ReactNode;
@@ -35,7 +37,7 @@ export function SettingsFormModal({
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={requestClose}>
       <form
-        className="modal settings-form-modal"
+        className={`modal settings-form-modal${halfWidth ? ' settings-form-modal-half' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

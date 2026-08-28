@@ -7,5 +7,7 @@ const normal: DashboardSectionId[] = [
 ];
 
 export function dashboardOrder(completed: boolean): DashboardSectionId[] {
-  return completed ? [...normal, 'onboarding'] : ['onboarding', ...normal];
+  return completed
+    ? [...normal, 'onboarding', 'system-capabilities']
+    : ['onboarding', ...normal, 'system-capabilities'];
 }

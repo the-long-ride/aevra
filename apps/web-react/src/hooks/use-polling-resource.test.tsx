@@ -69,3 +69,34 @@ test('unmount aborts the active request and invalidates late completion', async 
   resolve?.('late');
   await Promise.resolve();
 });
+
+test('disabled resources skip automatic and manual loading', async () => {
+  const load = vi.fn(async () => 'unused');
+  const { result } = renderHook(() => usePollingResource({ load, enabled: false }));
+
+  expect(result.current.loading).toBe(false);
+  await act(async () => {
+    await result.current.refresh();
+  });
+  expect(load).not.toHaveBeenCalled();
+  expect(result.current.data).toBeNull();
+  expect(result.current.error).toBeNull();
+});
+
+test('load failures preserve Error instances and normalize non-Error causes', async () => {
+  const load = vi
+    .fn<(signal: AbortSignal) => Promise<string>>()
+    .mockRejectedValueOnce(new Error('first failure'))
+    .mockRejectedValueOnce('second failure');
+  const { result } = renderHook(() => usePollingResource({ load }));
+
+  await waitFor(() => expect(result.current.error?.message).toBe('first failure'));
+  expect(result.current.error).toBeInstanceOf(Error);
+
+  await act(async () => {
+    await result.current.refresh();
+  });
+  expect(result.current.error).toBeInstanceOf(Error);
+  expect(result.current.error?.message).toBe('second failure');
+  expect(result.current.loading).toBe(false);
+});

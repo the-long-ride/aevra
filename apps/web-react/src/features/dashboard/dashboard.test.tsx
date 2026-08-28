@@ -25,6 +25,9 @@ test('incomplete Onboarding is first and open by default', async () => {
   expect(details?.open).toBe(true);
   const sections = container.querySelectorAll('[data-dashboard-section]');
   expect(sections[0]?.getAttribute('data-dashboard-section')).toBe('onboarding');
+  expect(sections[sections.length - 1]?.getAttribute('data-dashboard-section')).toBe(
+    'system-capabilities',
+  );
   const blocks = details?.querySelectorAll('[data-onboarding-section]');
   expect(blocks?.[0]?.getAttribute('data-onboarding-section')).toBe('remote-access');
   expect(within(details as HTMLElement).getByText('Connect an AI')).toBeInTheDocument();
@@ -52,13 +55,15 @@ test('recent activity is merged into Runtime overview', async () => {
   expect(screen.queryByText('Recent activity')).not.toBeInTheDocument();
 });
 
-test('completed Onboarding is last and collapsed by default', async () => {
+test('completed System capabilities stays final after collapsed Onboarding', async () => {
   installApiFixtures({ onboardingCompleted: true });
   const { container } = renderDashboard();
   await screen.findByText('Onboarding completed');
   const sections = container.querySelectorAll('[data-dashboard-section]');
-  const onboarding = sections[sections.length - 1] as HTMLDetailsElement | undefined;
+  const system = sections[sections.length - 1] as HTMLDetailsElement | undefined;
+  const onboarding = sections[sections.length - 2] as HTMLDetailsElement | undefined;
   expect(onboarding?.getAttribute('data-dashboard-section')).toBe('onboarding');
+  expect(system?.getAttribute('data-dashboard-section')).toBe('system-capabilities');
   expect(onboarding?.open).toBe(false);
 });
 

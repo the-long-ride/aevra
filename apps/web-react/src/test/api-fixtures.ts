@@ -100,6 +100,71 @@ export function installApiFixtures(options: FixtureOptions = {}) {
           remoteConnections: 1,
           managedProcesses: 0,
         },
+        system: {
+          detectedAt: '2026-08-27T12:00:00.000Z',
+          os: {
+            platform: 'windows',
+            platformDetail: 'Windows 11',
+            arch: 'x64',
+            recommendedShell: 'pwsh',
+            availableShells: [
+              { id: 'pwsh', label: 'PowerShell 7', version: '7.5.2' },
+              { id: 'cmd', label: 'Command Prompt' },
+            ],
+          },
+          toolchains: [
+            {
+              id: 'git',
+              label: 'Git',
+              category: 'source-control',
+              available: true,
+              executable: 'git',
+              version: '2.51.0',
+            },
+            {
+              id: 'node',
+              label: 'Node.js',
+              category: 'javascript',
+              available: true,
+              executable: 'node',
+              version: '24.7.0',
+            },
+            {
+              id: 'go',
+              label: 'Go',
+              category: 'go',
+              available: false,
+            },
+          ],
+        },
+        transport: {
+          state: 'secure',
+          summary: 'Local gateway, Admin, and MCP are using HTTPS.',
+          gateway: {
+            url: 'https://127.0.0.1:47830',
+            protocol: 'https',
+            encrypted: true,
+            loopback: true,
+          },
+          admin: {
+            url: 'https://localhost:47831',
+            protocol: 'https',
+            encrypted: true,
+            loopback: true,
+          },
+          mcp: {
+            url: 'https://localhost:47832',
+            protocol: 'https',
+            encrypted: true,
+            loopback: true,
+          },
+          public: {
+            url: 'https://aevra.example.com',
+            protocol: 'https',
+            encrypted: true,
+          },
+          issues: [],
+        },
         metrics: [{ tool: 'file_read', calls: 3, avgMs: 10, totalMs: 30 }],
         activeConnections: [
           {

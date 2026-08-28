@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
 import { DialogProvider } from '../../components/Dialog';
 import { installApiFixtures } from '../../test/api-fixtures';
@@ -16,6 +17,23 @@ test('Runtime overview shows operational metrics without duplicating Version', a
   expect(screen.getByText('Workspace leases')).toBeInTheDocument();
   expect(screen.getByText('Pending requests')).toBeInTheDocument();
   expect(screen.queryByText('Version')).not.toBeInTheDocument();
+});
+
+test('Runtime overview opens transport validation details', async () => {
+  installApiFixtures();
+  render(
+    <DialogProvider>
+      <DashboardPage />
+    </DialogProvider>,
+  );
+  const user = userEvent.setup();
+
+  await user.click(await screen.findByRole('button', { name: /Transport/ }));
+
+  const dialog = await screen.findByRole('dialog', { name: 'Transport validation' });
+  expect(within(dialog).getByText('https://127.0.0.1:47830')).toBeInTheDocument();
+  expect(within(dialog).getByText('https://localhost:47831')).toBeInTheDocument();
+  expect(within(dialog).getByText('https://localhost:47832')).toBeInTheDocument();
 });
 
 test('Active connections marks YOLO sessions and explains immutable approvals', async () => {
@@ -62,7 +80,7 @@ test('Active connections marks YOLO sessions and explains immutable approvals', 
   ).toBeInTheDocument();
 });
 
-test('Runtime overview shows sleep inhibition state and reason', async () => {
+test('Runtime overview shows sleep inhibition reason with a status dot', async () => {
   installApiFixtures({
     routes: {
       '/api/dashboard/runtime': {
@@ -100,6 +118,103 @@ test('Runtime overview shows sleep inhibition state and reason', async () => {
   );
 
   const sleepLabel = await screen.findByText('Sleep inhibition');
-  expect(sleepLabel.closest('.runtime-stat')).toHaveClass('runtime-stat-compact');
-  expect(screen.getByText(/Active.*1 remote connection/)).toHaveClass('runtime-stat-detail');
+  const sleepStat = sleepLabel.closest('.runtime-stat');
+  expect(sleepStat).toHaveClass('runtime-stat-compact');
+  expect(within(sleepStat as HTMLElement).getByText('1 remote connection')).toHaveClass(
+    'runtime-stat-detail',
+  );
+  expect(within(sleepStat as HTMLElement).getByLabelText('Enabled')).toHaveClass('active');
+  expect(within(sleepStat as HTMLElement).queryByText('Active')).not.toBeInTheDocument();
+});
+
+test('Pending requests opens the request drawer trigger', async () => {
+  installApiFixtures();
+  const requestButton = document.createElement('button');
+  requestButton.id = 'open-requests';
+  let opened = false;
+  requestButton.addEventListener('click', () => {
+    opened = true;
+  });
+  document.body.append(requestButton);
+
+  render(
+    <DialogProvider>
+      <DashboardPage />
+    </DialogProvider>,
+  );
+
+  await userEvent.setup().click(await screen.findByRole('button', { name: /Pending requests/ }));
+  expect(opened).toBe(true);
+  requestButton.remove();
+});
+
+test('Active connections can revoke selected rows', async () => {
+  const fetchMock = installApiFixtures();
+  render(
+    <DialogProvider>
+      <DashboardPage />
+    </DialogProvider>,
+  );
+  const user = userEvent.setup();
+
+  await user.click(await screen.findByRole('switch', { name: 'Select ChatGPT' }));
+  expect(screen.getByText('1 selected')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Revoke selected' }));
+
+  const dialog = await screen.findByRole('dialog');
+  await user.click(within(dialog).getByRole('button', { name: 'Revoke selected' }));
+
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) => input === '/api/sessions/ses-chatgpt/revoke' && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  );
+});
+
+test('bulk revoke refreshes after partial failure and keeps failed selection', async () => {
+  const fetchMock = installApiFixtures({
+    routes: {
+      '/api/dashboard/runtime': {
+        status: { version: '0.1.0' },
+        uptimeSeconds: 1,
+        pending: { total: 0 },
+        metrics: [],
+        stats: {
+          sessions: 2,
+          workspaceLeases: 0,
+          processes: 0,
+          openChanges: 0,
+          toolCalls: 0,
+          avgToolLatencyMs: null,
+          connectors: 0,
+        },
+        activeConnections: [
+          { id: 'ok', client: 'OK', authType: 'OAuth', status: 'CONNECTED', capabilities: [] },
+          { id: 'bad', client: 'Bad', authType: 'OAuth', status: 'CONNECTED', capabilities: [] },
+        ],
+        connectors: [],
+      },
+    },
+    mutationResponses: { 'POST /api/sessions/bad/revoke': new Response('no', { status: 500 }) },
+  });
+  render(
+    <DialogProvider>
+      <DashboardPage />
+    </DialogProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('switch', { name: 'Select OK' }));
+  await user.click(screen.getByRole('switch', { name: 'Select Bad' }));
+  await user.click(screen.getByRole('button', { name: 'Revoke selected' }));
+  await user.click(
+    within(await screen.findByRole('dialog')).getByRole('button', { name: 'Revoke selected' }),
+  );
+  expect(await screen.findByText('1 connection revoked; 1 failed.')).toBeInTheDocument();
+  expect(screen.getByRole('switch', { name: 'Select Bad' })).toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Select OK' })).not.toBeChecked();
+  expect(
+    fetchMock.mock.calls.filter(([url]) => url === '/api/dashboard/runtime').length,
+  ).toBeGreaterThan(1);
 });

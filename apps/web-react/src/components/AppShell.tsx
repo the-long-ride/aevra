@@ -2,6 +2,7 @@ import type { AdminPageId, RuntimeHealthStatus } from '@aevra/admin-contracts';
 import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { useMcpActivityEntries } from '../hooks/use-mcp-activity';
 import type { Theme } from '../hooks/theme-state';
 
 export function isVersionOutdated(current?: string, latest?: string): boolean {
@@ -62,6 +63,24 @@ function HealthChip({
   );
 }
 
+function ToolRunningSignal({ count }: { count: number }) {
+  if (!count) return null;
+  return (
+    <span
+      className="tool-running-signal"
+      role="status"
+      aria-label={`${count} tool ${count === 1 ? 'call' : 'calls'} running`}
+      title={`${count} tool ${count === 1 ? 'call' : 'calls'} running`}
+    >
+      <i />
+      <i />
+      <i />
+      <i />
+      <i />
+    </span>
+  );
+}
+
 export function AppShell({
   page,
   status,
@@ -75,6 +94,10 @@ export function AppShell({
 }: AppShellProps) {
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const activity = useMcpActivityEntries();
+  const runningToolCount = activity.filter(
+    (entry) => entry.kind === 'tool' && entry.state === 'running',
+  ).length;
 
   useEffect(() => {
     if (!status.version) return;
@@ -143,6 +166,7 @@ export function AppShell({
         </div>
         <div className="topbar-actions">
           <div className="health-cluster">
+            <ToolRunningSignal count={runningToolCount} />
             {(['core', 'worker', 'mcp', 'tunnel'] as const).map((name) => (
               <HealthChip key={name} name={name} status={status} />
             ))}

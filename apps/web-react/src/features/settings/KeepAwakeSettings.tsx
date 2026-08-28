@@ -20,7 +20,7 @@ export function KeepAwakeSettings({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const stateLabel = status.supported
-    ? `${status.active ? 'Active' : 'Idle'} · ${status.reason}`
+    ? status.reason
     : `Unavailable${status.message ? ` · ${status.message}` : ''}`;
 
   const save = async () => {
@@ -42,30 +42,41 @@ export function KeepAwakeSettings({
       role="region"
       aria-label="Keep awake"
     >
-      <div className="compact-settings-row">
-        <div className="compact-settings-copy">
-          <h3>Keep awake</h3>
-          <span className={`status ${status.active ? 'success' : ''}`}>{stateLabel}</span>
-        </div>
-        <form
-          className="compact-keep-awake-controls"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
-          <Dropdown
-            ariaLabel="Prevent system sleep"
-            value={mode}
-            disabled={busy}
-            onChange={(value) => setMode(value as KeepAwakeMode)}
-            options={OPTIONS}
-          />
-          <button className="primary" aria-label="Save keep awake" disabled={busy}>
-            {busy ? 'Saving…' : 'Save'}
-          </button>
-        </form>
+      <span
+        className={`keep-awake-status-dot${status.supported && status.active ? ' is-active' : ''}`}
+        aria-label={
+          status.supported && status.active
+            ? 'Sleep inhibition enabled'
+            : 'Sleep inhibition disabled'
+        }
+        title={
+          status.supported && status.active
+            ? 'Sleep inhibition enabled'
+            : 'Sleep inhibition disabled'
+        }
+      />
+      <div className="compact-settings-copy keep-awake-copy">
+        <h3>Keep awake</h3>
+        <span className="keep-awake-state-label">{stateLabel}</span>
       </div>
+      <form
+        className="compact-keep-awake-controls"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        <Dropdown
+          ariaLabel="Prevent system sleep"
+          value={mode}
+          disabled={busy}
+          onChange={(value) => setMode(value as KeepAwakeMode)}
+          options={OPTIONS}
+        />
+        <button className="primary" aria-label="Save keep awake" disabled={busy}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </form>
       <p className="section-note compact-settings-note">
         Prevents automatic system sleep only; screen lock and display timeout remain unchanged.
       </p>
