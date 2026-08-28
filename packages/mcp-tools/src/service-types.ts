@@ -1,4 +1,4 @@
-import type { CapabilityRoot } from '../../protocol/src/index.js';
+import type { CapabilityRoot, SystemCapabilitySnapshot } from '../../protocol/src/index.js';
 import type { WorkerOperation, WorkerResult } from '../../protocol/src/worker.js';
 import type { ApprovalService } from '../../../apps/core/src/approvals/approval-service.js';
 import type { AuditService } from '../../../apps/core/src/audit/audit-service.js';
@@ -48,6 +48,7 @@ export interface McpToolDependencies {
   } | null;
   metrics?: MetricsSink;
   settings?: SettingsReader;
+  systemCapabilities?: SystemCapabilitySnapshot;
 }
 
 export type McpDependencies = McpToolDependencies;

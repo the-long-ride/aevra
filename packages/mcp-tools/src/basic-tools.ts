@@ -135,7 +135,11 @@ export async function handleBasicTool(
       effectiveCapabilities: summary.effectiveCapabilities,
       capabilities: summary.effectiveCapabilities,
       commandMatchers: summary.commandMatchers,
-      execution: { default: 'sandbox', hostFallback: true },
+      execution: {
+        default: 'sandbox',
+        hostFallback: true,
+        ...(context.deps.systemCapabilities ? { system: context.deps.systemCapabilities } : {}),
+      },
     };
   }
 

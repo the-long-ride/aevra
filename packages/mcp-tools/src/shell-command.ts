@@ -1,7 +1,8 @@
 import type { CommandInput, ExecutionMode, RiskTier } from '../../protocol/src/index.js';
 import { AevraToolError } from './errors.js';
 
-export type ShellKind = 'auto' | 'powershell' | 'bash' | 'sh';
+export type HostShellKind = 'pwsh' | 'powershell' | 'cmd' | 'bash' | 'zsh' | 'sh';
+export type ShellKind = 'auto' | HostShellKind;
 export interface ShellRunInput {
   script: string;
   shell?: ShellKind;
@@ -36,33 +37,56 @@ export function shellRiskFloor(_mode: ExecutionMode): RiskTier {
   return 'HIGH';
 }
 
-export function buildShellCommand(input: ShellRunInput, platform = process.platform): CommandInput {
+export function resolveShellKind(
+  input: ShellRunInput,
+  platform = process.platform,
+  recommendedShell?: string | null,
+): ShellKind {
+  const requested: ShellKind = ['pwsh', 'powershell', 'cmd', 'bash', 'zsh', 'sh'].includes(
+    String(input.shell),
+  )
+    ? (input.shell as ShellKind)
+    : 'auto';
+  if (requested !== 'auto') return requested;
+  if (input.executionMode !== 'host') return 'bash';
+  if (
+    recommendedShell &&
+    ['pwsh', 'powershell', 'cmd', 'bash', 'zsh', 'sh'].includes(recommendedShell)
+  ) {
+    return recommendedShell as HostShellKind;
+  }
+  return platform === 'win32' ? 'powershell' : 'bash';
+}
+
+export function buildShellCommand(
+  input: ShellRunInput,
+  platform = process.platform,
+  recommendedShell?: string | null,
+): CommandInput {
   const script = String(input.script ?? '');
   if (!script.trim()) throw new AevraToolError('INVALID_REQUEST', 'shell script is required');
   const mode: ExecutionMode = input.executionMode === 'host' ? 'host' : 'sandbox';
-  const requested: ShellKind = ['powershell', 'bash', 'sh'].includes(String(input.shell))
-    ? (input.shell as ShellKind)
-    : 'auto';
-  const shell =
-    requested === 'auto'
-      ? mode === 'sandbox'
-        ? 'bash'
-        : platform === 'win32'
-          ? 'powershell'
-          : 'bash'
-      : requested;
-  if (mode === 'sandbox' && shell === 'powershell')
+  const shell = resolveShellKind({ ...input, executionMode: mode }, platform, recommendedShell);
+  if (mode === 'sandbox' && ['pwsh', 'powershell', 'cmd'].includes(shell))
     throw new AevraToolError(
       'INVALID_REQUEST',
       'PowerShell requires host execution because the current strict sandbox image is Linux-based',
     );
   const base = { env: environment(input.env), timeoutMs: timeout(input.timeoutMs) };
+  if (shell === 'pwsh')
+    return {
+      executable: 'pwsh',
+      args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+      ...base,
+    };
   if (shell === 'powershell')
     return {
       executable: 'powershell.exe',
       args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
       ...base,
     };
+  if (shell === 'cmd') return { executable: 'cmd.exe', args: ['/d', '/s', '/c', script], ...base };
+  if (shell === 'zsh') return { executable: 'zsh', args: ['-lc', script], ...base };
   if (shell === 'sh') return { executable: 'sh', args: ['-lc', script], ...base };
   return { executable: 'bash', args: ['-lc', script], ...base };
 }
