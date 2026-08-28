@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { nativeMultiSearch, nodeCandidates } from '../src/native-search.js';
+
+test('Windows native search prefers pwsh before legacy Windows PowerShell', () => {
+  const source = readFileSync('packages/executor/src/native-search.ts', 'utf8');
+  assert.match(source, /for \(const executable of \['pwsh', 'powershell\.exe'\]\)/);
+});
 
 test('native multi-search runs values together and returns safe hits', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aevra-search-'));

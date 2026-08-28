@@ -102,7 +102,7 @@ async function powershell(query: SearchQuery, cwd: string) {
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   const args = ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded];
   let lastError: unknown;
-  for (const executable of ['powershell.exe', 'pwsh']) {
+  for (const executable of ['pwsh', 'powershell.exe']) {
     let result;
     try {
       result = await runCommand(commandInput(executable, args), cwd);
