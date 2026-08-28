@@ -43,8 +43,8 @@ const system: SystemCapabilitySnapshot = {
   ],
 };
 
-test('renders OS shell and curated tool availability read-only', () => {
-  render(<SystemCapabilities system={system} />);
+test('renders OS shell and curated tool availability read-only with checkmarks and gap structure', () => {
+  const { container } = render(<SystemCapabilities system={system} />);
 
   expect(screen.getByText('Windows 11 · x64')).toBeInTheDocument();
   expect(screen.getByText('PowerShell 7')).toBeInTheDocument();
@@ -54,6 +54,16 @@ test('renders OS shell and curated tool availability read-only', () => {
   expect(screen.getAllByText('Not detected').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('Shells')).toBeInTheDocument();
   expect(screen.getByText('WSL')).toBeInTheDocument();
+
+  // Check state indicators and labels
+  const availableRows = container.querySelectorAll('.system-capability-row.available');
+  const unavailableRows = container.querySelectorAll('.system-capability-row.unavailable');
+  expect(availableRows.length).toBeGreaterThan(0);
+  expect(unavailableRows.length).toBeGreaterThan(0);
+
+  const checkmarks = container.querySelectorAll('.system-capability-state');
+  expect(checkmarks.length).toBeGreaterThan(0);
+  expect(checkmarks[0]?.textContent).toBe('✓');
 
   expect(screen.queryByRole('button')).toBeNull();
   expect(screen.queryByRole('textbox')).toBeNull();

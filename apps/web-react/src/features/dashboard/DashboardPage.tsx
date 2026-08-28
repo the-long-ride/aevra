@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
@@ -142,6 +142,10 @@ export function DashboardPage() {
     );
   }
 
+  const selectableConnectionIds = data.snapshot.activeConnections
+    .map((row: any) => String(row.id ?? row.sessionId ?? ''))
+    .filter(Boolean);
+
   const selectedRows = data.snapshot.activeConnections.filter((row: any) =>
     selectedConnectionIds.has(String(row.id ?? row.sessionId ?? '')),
   );
@@ -153,6 +157,14 @@ export function DashboardPage() {
       else next.delete(id);
       return next;
     });
+  };
+
+  const selectAll = () => {
+    setSelectedConnectionIds(new Set(selectableConnectionIds));
+  };
+
+  const unselectAll = () => {
+    setSelectedConnectionIds(new Set());
   };
 
   const revokeSelected = async () => {
@@ -227,11 +239,34 @@ export function DashboardPage() {
           </p>
         ) : null}
         <div className="active-connections-toolbar">
-          <span>
-            {selectedRows.length
-              ? `${selectedRows.length} selected`
-              : 'Select one or more connections to revoke'}
-          </span>
+          <div className="active-connections-toolbar-actions">
+            <span>
+              {selectedRows.length
+                ? `${selectedRows.length} selected`
+                : 'Select one or more connections to revoke'}
+            </span>
+            <div className="active-connections-selection-controls">
+              <button
+                type="button"
+                className="compact-button"
+                disabled={
+                  !selectableConnectionIds.length ||
+                  selectedRows.length === selectableConnectionIds.length
+                }
+                onClick={selectAll}
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                className="compact-button"
+                disabled={!selectedRows.length}
+                onClick={unselectAll}
+              >
+                Unselect all
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             className="danger-button"

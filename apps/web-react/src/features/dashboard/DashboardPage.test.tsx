@@ -148,6 +148,71 @@ test('Pending requests opens the request drawer trigger', async () => {
   requestButton.remove();
 });
 
+test('Active connections can select all and unselect all rows', async () => {
+  installApiFixtures({
+    routes: {
+      '/api/dashboard/runtime': {
+        status: { version: '0.1.0' },
+        uptimeSeconds: 1,
+        pending: { total: 0 },
+        metrics: [],
+        stats: {
+          sessions: 2,
+          workspaceLeases: 0,
+          processes: 0,
+          openChanges: 0,
+          toolCalls: 0,
+          avgToolLatencyMs: null,
+          connectors: 0,
+        },
+        activeConnections: [
+          {
+            id: 'c1',
+            client: 'Client 1',
+            authType: 'OAuth',
+            status: 'CONNECTED',
+            capabilities: [],
+          },
+          {
+            id: 'c2',
+            client: 'Client 2',
+            authType: 'OAuth',
+            status: 'CONNECTED',
+            capabilities: [],
+          },
+        ],
+        connectors: [],
+      },
+    },
+  });
+  render(
+    <DialogProvider>
+      <DashboardPage />
+    </DialogProvider>,
+  );
+  const user = userEvent.setup();
+
+  const selectAllBtn = await screen.findByRole('button', { name: 'Select all' });
+  const unselectAllBtn = screen.getByRole('button', { name: 'Unselect all' });
+
+  expect(selectAllBtn).toBeEnabled();
+  expect(unselectAllBtn).toBeDisabled();
+
+  await user.click(selectAllBtn);
+  expect(screen.getByText('2 selected')).toBeInTheDocument();
+  expect(screen.getByRole('switch', { name: 'Select Client 1' })).toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Select Client 2' })).toBeChecked();
+  expect(selectAllBtn).toBeDisabled();
+  expect(unselectAllBtn).toBeEnabled();
+
+  await user.click(unselectAllBtn);
+  expect(screen.getByText('Select one or more connections to revoke')).toBeInTheDocument();
+  expect(screen.getByRole('switch', { name: 'Select Client 1' })).not.toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Select Client 2' })).not.toBeChecked();
+  expect(selectAllBtn).toBeEnabled();
+  expect(unselectAllBtn).toBeDisabled();
+});
+
 test('Active connections can revoke selected rows', async () => {
   const fetchMock = installApiFixtures();
   render(
