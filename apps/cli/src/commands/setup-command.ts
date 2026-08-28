@@ -1,5 +1,5 @@
 import type { AevraCommand } from '../args.js';
-import type { ExposureConfig } from '../../../core/src/exposure/types.js';
+import type { ExposureConfig, LocalProtocol } from '../../../core/src/exposure/types.js';
 
 type SetupCommand = Extract<AevraCommand, { command: 'setup' }>;
 type Ownership = 'managed' | 'external';
@@ -47,24 +47,49 @@ export interface SetupCommandDependencies<Config> {
   formatError(error: unknown): string;
 }
 
+async function promptLocalProtocol<Config>(
+  resources: SetupResources,
+  dependencies: SetupCommandDependencies<Config>,
+): Promise<LocalProtocol> {
+  const answer = (await resources.prompt.question('Local gateway protocol [https/http] (https): '))
+    .trim()
+    .toLowerCase();
+  const protocol = answer || 'https';
+  if (protocol !== 'https' && protocol !== 'http') {
+    throw new Error('Local gateway protocol must be https or http');
+  }
+  if (protocol === 'http') {
+    dependencies.error(
+      '[aevra] HTTP applies only to the loopback local gateway. Admin and MCP remain HTTPS. Use HTTP only for localhost or behind a secure tunnel/reverse proxy; use HTTPS for direct exposure.',
+    );
+  }
+  return protocol;
+}
+
 async function configureSimpleProvider(
   provider: 'local' | 'direct' | 'ngrok' | 'external',
   resources: SetupResources,
+  localProtocol: LocalProtocol,
 ): Promise<void> {
   const { prompt } = resources;
   if (provider === 'local') {
-    await resources.configure({ provider: 'local' });
+    await resources.configure({ provider: 'local', localProtocol });
     return;
   }
   if (provider === 'direct') {
     const publicUrl = (await prompt.question('Public HTTPS URL: ')).trim();
     const host = (await prompt.question('Direct bind host (0.0.0.0): ')).trim() || '0.0.0.0';
-    await resources.configure({ provider: 'direct', publicUrl, direct: { host } });
+    await resources.configure({
+      provider: 'direct',
+      localProtocol: 'https',
+      publicUrl,
+      direct: { host },
+    });
     return;
   }
   if (provider === 'external') {
     const publicUrl = (await prompt.question('Public HTTPS URL: ')).trim();
-    await resources.configure({ provider: 'external', publicUrl });
+    await resources.configure({ provider: 'external', localProtocol, publicUrl });
     return;
   }
 
@@ -78,6 +103,7 @@ async function configureSimpleProvider(
     ownership === 'external' ? (await prompt.question('Public HTTPS URL: ')).trim() : undefined;
   await resources.configure({
     provider: 'ngrok',
+    localProtocol,
     ...(publicUrl ? { publicUrl } : {}),
     ngrok: { ownership },
   });
@@ -86,6 +112,7 @@ async function configureSimpleProvider(
 async function configureCloudflare<Config>(
   resources: SetupResources,
   dependencies: SetupCommandDependencies<Config>,
+  localProtocol: LocalProtocol,
 ): Promise<void> {
   const { prompt, cloudflare } = resources;
   const detected = await cloudflare.detectCloudflared();
@@ -139,6 +166,7 @@ async function configureCloudflare<Config>(
   const finalAccess = result.authMode === 'access' || access;
   await resources.configure({
     provider: 'cloudflare',
+    localProtocol,
     publicUrl: `https://${result.hostname}`,
     cloudflare: {
       tunnelId: result.tunnelId ?? (tunnelId || undefined),
@@ -177,12 +205,15 @@ export async function runSetupCommand<Config>(
       throw new Error(`Unsupported exposure provider: ${provider}`);
     }
 
+    const localProtocol =
+      provider === 'direct' ? 'https' : await promptLocalProtocol(resources, dependencies);
     if (provider === 'cloudflare') {
-      await configureCloudflare(resources, dependencies);
+      await configureCloudflare(resources, dependencies, localProtocol);
     } else {
       await configureSimpleProvider(
         provider as 'local' | 'direct' | 'ngrok' | 'external',
         resources,
+        localProtocol,
       );
     }
     dependencies.error(`[aevra] Exposure configured: ${provider}.`);

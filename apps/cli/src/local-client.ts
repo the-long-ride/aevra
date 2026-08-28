@@ -30,9 +30,9 @@ export async function localAdminFetch(
 ): Promise<Response> {
   const headers = new Headers(init.headers);
   const body = typeof init.body === 'string' || Buffer.isBuffer(init.body) ? init.body : undefined;
-  if (body !== undefined && !headers.has('content-length'))
+  if (body !== undefined && !headers.has('content-length')) {
     headers.set('content-length', String(Buffer.byteLength(body)));
-  const ca = trustedCa(config);
+  }
   return await new Promise<Response>((resolve, reject) => {
     const request = https.request(
       {
@@ -41,7 +41,7 @@ export async function localAdminFetch(
         path: requestPath,
         method: init.method ?? 'GET',
         headers: Object.fromEntries(headers.entries()),
-        ca,
+        ca: trustedCa(config),
         rejectUnauthorized: true,
         servername: 'localhost',
       },

@@ -76,38 +76,45 @@ test('setup rejects non-interactive terminals', async () => {
 });
 
 test('setup defaults to local exposure without probing Cloudflare', async () => {
-  const resource = resources(['']);
+  const resource = resources(['', '']);
   const state = fixture(resource);
   const code = await runSetupCommand({}, { command: 'setup' }, state.dependencies);
   assert.equal(code, 0);
-  assert.deepEqual(resource.configs, [{ provider: 'local' }]);
+  assert.deepEqual(resource.configs, [{ provider: 'local', localProtocol: 'https' }]);
   assert.equal(resource.cloudflareDetections, 0);
   assert.equal(resource.closed, 1);
 });
 
 test('setup configures external exposure from one HTTPS public URL', async () => {
-  const resource = resources(['external', 'https://aevra.example.com']);
+  const resource = resources(['external', '', 'https://aevra.example.com']);
   const state = fixture(resource);
   const code = await runSetupCommand({}, { command: 'setup' }, state.dependencies);
   assert.equal(code, 0);
   assert.deepEqual(resource.configs, [
-    { provider: 'external', publicUrl: 'https://aevra.example.com' },
+    {
+      provider: 'external',
+      localProtocol: 'https',
+      publicUrl: 'https://aevra.example.com',
+    },
   ]);
   assert.equal(resource.cloudflareDetections, 0);
 });
 
 test('setup configures managed ngrok without requesting a public URL', async () => {
-  const resource = resources(['ngrok', '']);
+  const resource = resources(['ngrok', '', '']);
   const state = fixture(resource);
   const code = await runSetupCommand({}, { command: 'setup' }, state.dependencies);
   assert.equal(code, 0);
-  assert.deepEqual(resource.configs, [{ provider: 'ngrok', ngrok: { ownership: 'managed' } }]);
+  assert.deepEqual(resource.configs, [
+    { provider: 'ngrok', localProtocol: 'https', ngrok: { ownership: 'managed' } },
+  ]);
   assert.equal(resource.cloudflareDetections, 0);
 });
 
 test('setup Cloudflare Access collects verifier values and writes provider-neutral exposure', async () => {
   const resource = resources([
     'cloudflare',
+    '',
     'n',
     'mcp.example.com',
     'tunnel-1',
@@ -123,6 +130,7 @@ test('setup Cloudflare Access collects verifier values and writes provider-neutr
   assert.deepEqual(resource.configs, [
     {
       provider: 'cloudflare',
+      localProtocol: 'https',
       publicUrl: 'https://mcp.example.com',
       cloudflare: {
         tunnelId: 'tunnel-1',
