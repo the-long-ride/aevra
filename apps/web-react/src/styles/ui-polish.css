@@ -179,6 +179,26 @@
   background: var(--surface-soft);
 }
 
+.active-connections-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.active-connections-selection-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compact-button {
+  padding: 3px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+  min-height: 24px;
+}
+
 .connection-select {
   width: 28px;
   min-height: 20px;
@@ -287,7 +307,22 @@
     flex-direction: column;
   }
 
-  .active-connections-toolbar button {
+  .active-connections-toolbar-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .active-connections-selection-controls {
+    display: flex;
+    gap: 6px;
+  }
+
+  .active-connections-selection-controls button {
+    flex: 1 1 auto;
+  }
+
+  .active-connections-toolbar > button {
     width: 100%;
   }
 }

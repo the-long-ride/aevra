@@ -43,13 +43,13 @@ export function SystemCapabilities({ system }: { system?: SystemCapabilitySnapsh
   return (
     <div className="system-capabilities" aria-label="System capabilities">
       <div className="system-capabilities-summary">
-        <div>
+        <div className="system-capabilities-summary-item">
           <span>Operating system</span>
           <strong>
             {system.os.platformDetail ?? system.os.platform} · {system.os.arch}
           </strong>
         </div>
-        <div>
+        <div className="system-capabilities-summary-item">
           <span>Recommended shell</span>
           <strong>{shellSummary(system)}</strong>
         </div>
@@ -62,14 +62,14 @@ export function SystemCapabilities({ system }: { system?: SystemCapabilitySnapsh
             <div className="system-capability-list">
               {group.tools.map((tool) => (
                 <div
-                  className={`system-capability-row${tool.available ? '' : ' unavailable'}`}
+                  className={`system-capability-row${tool.available ? ' available' : ' unavailable'}`}
                   key={tool.id}
                 >
                   <span className="system-capability-state" aria-hidden="true">
                     {tool.available ? '✓' : '—'}
                   </span>
-                  <strong>{tool.label}</strong>
-                  <span>
+                  <strong className="system-capability-name">{tool.label}</strong>
+                  <span className="system-capability-version">
                     {tool.available ? (tool.version ?? 'Version unavailable') : 'Not detected'}
                   </span>
                 </div>
@@ -83,12 +83,12 @@ export function SystemCapabilities({ system }: { system?: SystemCapabilitySnapsh
           {system.os.availableShells.length ? (
             <div className="system-capability-list">
               {system.os.availableShells.map((shell) => (
-                <div className="system-capability-row" key={shell.id}>
+                <div className="system-capability-row available" key={shell.id}>
                   <span className="system-capability-state" aria-hidden="true">
                     ✓
                   </span>
-                  <strong>{shell.label}</strong>
-                  <span>{shell.version ?? shell.id}</span>
+                  <strong className="system-capability-name">{shell.label}</strong>
+                  <span className="system-capability-version">{shell.version ?? shell.id}</span>
                 </div>
               ))}
             </div>
