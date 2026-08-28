@@ -1,6 +1,6 @@
 # 02 — Security Model
 
-**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `0.1.2`
+**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `0.1.3`
 
 Security is two questions: **who gets in** (admission) and **what may they do** (authority). They never mix.
 

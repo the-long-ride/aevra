@@ -1,19 +1,19 @@
 # 01 — System Overview
 
-**Audience:** engineers & AI agents · **Scope:** the whole product in one view · **Verified against:** `0.1.2`
+**Audience:** engineers & AI agents · **Scope:** the whole product in one view · **Verified against:** `0.1.3`
 
 Aevra is a **local, workspace-scoped MCP execution gateway**. An AI web client (Claude.ai, ChatGPT, Gemini CLI, anything MCP-capable) connects over HTTPS; Aevra decides what that client may do, and an isolated Worker does it.
 
 ## The two planes & public endpoints
 
 ```text
-AI MCP client --HTTPS--> publicUrl ---------------------> Public Gateway :47830 --> MCP :47832
-Admin browser  --HTTPS--> adminPublicUrl (optional) ---> Admin UI/API :47831
+AI MCP client --HTTPS--> publicUrl ---------------------> Public Gateway :47830 (HTTPS/HTTP) --> MCP :47832 (HTTPS)
+Admin browser  --HTTPS--> adminPublicUrl (optional) ---> Admin UI/API :47831 (HTTPS)
 
 Core policy / sessions / approvals / audit --OS-local IPC--> Execution Worker
 ```
 
-All internal listeners bind to loopback. `ExposureConfig.publicUrl` is the canonical MCP/OAuth public endpoint. The Admin UI may be published independently at `adminPublicUrl`; its exact HTTPS origin and any explicit `trustedAdminOrigins` are trusted for Admin browser requests. The MCP public origin is not implicitly trusted for Admin login or mutations. Provider-neutral exposure supports Local, Direct HTTPS, Cloudflare, ngrok, and externally managed tunnels.
+All internal listeners bind to loopback. `ExposureConfig.publicUrl` is the canonical MCP/OAuth public endpoint. The local gateway on `:47830` supports configurable `localProtocol` (`https` default, or `http` for local loopback / behind reverse proxies), while internal Admin (`:47831`) and MCP (`:47832`) listeners strictly enforce loopback HTTPS. The Admin UI may be published independently at `adminPublicUrl`; its exact HTTPS origin and any explicit `trustedAdminOrigins` are trusted for Admin browser requests. The MCP public origin is not implicitly trusted for Admin login or mutations. Provider-neutral exposure supports Local, Direct HTTPS, Cloudflare, ngrok, and externally managed tunnels.
 
 ## The central invariant
 

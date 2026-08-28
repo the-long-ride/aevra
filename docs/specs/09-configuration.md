@@ -1,14 +1,14 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `0.1.2`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `0.1.3`
 
 ## Ports and listeners (fixed hosts)
 
-| Listener       | Address                                       | Env override        |
-| -------------- | --------------------------------------------- | ------------------- |
-| Public Gateway | `https://localhost:47830` (binds `127.0.0.1`) | `AEVRA_PUBLIC_PORT` |
-| Admin UI/API   | `https://localhost:47831` (binds `127.0.0.1`) | `AEVRA_ADMIN_PORT`  |
-| Remote MCP     | `https://localhost:47832` (binds `127.0.0.1`) | `AEVRA_MCP_PORT`    |
+| Listener       | Address                                                       | Env override        |
+| -------------- | ------------------------------------------------------------- | ------------------- |
+| Public Gateway | `https://localhost:47830` or `http://...` (binds `127.0.0.1`) | `AEVRA_PUBLIC_PORT` |
+| Admin UI/API   | `https://localhost:47831` (binds `127.0.0.1`)                 | `AEVRA_ADMIN_PORT`  |
+| Remote MCP     | `https://localhost:47832` (binds `127.0.0.1`)                 | `AEVRA_MCP_PORT`    |
 
 ## Environment variables
 
@@ -17,7 +17,7 @@
 | `AEVRA_USERNAME`                                                                              | required                      | Admin username                                                                  |
 | `AEVRA_PASSWORD`                                                                              | required                      | Admin password                                                                  |
 | `AEVRA_STATE_DIR`                                                                             | platform state dir            | State directory override                                                        |
-| `AEVRA_PUBLIC_PORT`                                                                           | `47830`                       | Public HTTPS gateway port                                                       |
+| `AEVRA_PUBLIC_PORT`                                                                           | `47830`                       | Public HTTPS/HTTP gateway port                                                  |
 | `AEVRA_ADMIN_PORT`                                                                            | `47831`                       | Admin listener port                                                             |
 | `AEVRA_MCP_PORT`                                                                              | `47832`                       | MCP listener port                                                               |
 | `AEVRA_TLS_CERT`                                                                              | managed localhost certificate | Advanced certificate PEM override; requires `AEVRA_TLS_KEY`                     |
@@ -36,16 +36,18 @@ Remote Admin origins are normalized to exact HTTPS origins. Wildcards and embedd
 
 ## Persisted settings
 
-- `exposure.config`: provider (`local|direct|cloudflare|ngrok|external`), canonical MCP/OAuth `publicUrl`, optional independent `adminPublicUrl`, additional `trustedAdminOrigins`, and provider-specific fields.
+- `exposure.config`: provider (`local|direct|cloudflare|ngrok|external`), optional `localProtocol` (`https|http`, default `https`), canonical MCP/OAuth `publicUrl`, optional independent `adminPublicUrl`, additional `trustedAdminOrigins`, and provider-specific fields.
 - Managed ngrok supports `domainMode: automatic|stable`; stable mode requires the configured public URL and refuses a discovered-domain mismatch instead of silently falling back.
 - `execution.settings`: sandbox backend (`auto|docker|podman|native`), cache policy, workspace drain timeout (default 60,000 ms), and parallel search limit (default 8, clamped 1..32).
 - `power.keepAwake`: `off|remote-connections|managed-processes|always`; default `remote-connections`.
+- Transport validation checks runtime endpoints against encryption, loopback constraints, and provider requirements, classifying state as `secure`, `local-http`, `action-required`, or `invalid`.
 - Command-family overrides, network rules, environment profiles, secret references, hooks, permissions, and workspace mappings are managed through their dedicated Admin APIs/UI.
 
 ## CLI (`apps/cli`)
 
 ```text
 aevra start [--ui]                       foreground daemon; --ui opens the authenticated dashboard when ready
+aevra setup                              interactive terminal wizard for exposure and local transport configuration
 aevra ui [--logout-all]                  open authenticated dashboard / revoke admin sessions
 aevra status [--json]                    display daemon status and health watchdog
 aevra connectors list|create|revoke <id> manage admission connector tokens

@@ -1,6 +1,6 @@
 # 06 — Workspaces & Execution
 
-**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `Unreleased`
+**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `0.1.3`
 
 A **workspace** is a registered host folder the AI may work in. Registration happens **only** in the localhost Web UI — the remote surface can never create or mutate roots.
 
@@ -22,9 +22,10 @@ The model-facing file tools batch even single-item work so clients do not need t
 
 The singular primitives `file_read`, `file_create`, `file_write`, and `file_patch` remain internal implementation operations and are not advertised through MCP `tools/list`.
 
-## Command execution
+## Command execution & system capabilities
 
 - **Strict sandbox by default**: Docker → Podman → fail (`EXECUTOR_UNAVAILABLE`). Host execution is a separate request with its own approval — never a silent fallback.
+- **Host system capabilities & shell resolution**: Aevra probes host OS information, available shells (`pwsh`, `powershell`, `cmd`, `bash`, `zsh`, `sh`, `wsl`), and installed toolchain categories (Git, JavaScript, Python, .NET, Rust, Go, JVM, Ruby, PHP, native build tools, container runtimes). `shell_run` automatically resolves an unspecified shell to the platform's recommended shell (`pwsh`/`powershell` on Windows, `bash`/`zsh` on unix-like systems).
 - Commands classify into effects: `READ_ONLY` `BUILD_OUTPUT` `SOURCE_MUTATION` `REPOSITORY_STATE` `UNKNOWN`. Read-only may run concurrently; mutations and unknowns take conservative workspace locks; build outputs may overlap when output areas don't conflict.
 - Risk + permission rules decide: run, ask (approval ticket), or deny. Aevra never auto-elevates and doesn't run as root/SYSTEM.
 - Network egress defaults to deny-all; destinations are explicit allow-rules, capability-gated (`network`).

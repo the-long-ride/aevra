@@ -1,6 +1,6 @@
 # 05 — Skills & Instructions
 
-**Audience:** engineers & AI agents · **Scope:** how skills and AGENTS.md reach the remote AI · **Verified against:** `0.1.2`
+**Audience:** engineers & AI agents · **Scope:** how skills and AGENTS.md reach the remote AI · **Verified against:** `0.1.3`
 
 Aevra gives a web AI the same context conventions local coding agents use: a **skills** library and **instruction files**. Reads and writes are purpose-specific MCP operations with capabilities separate from ordinary workspace file access.
 

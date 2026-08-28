@@ -1,6 +1,6 @@
 # Aevra Roadmap & Weak-Points Map
 
-**Date:** 2026-08-26 · **Baseline:** Aevra `0.1.2` · **Derived from:** the MCP 2.0 migration, OAuth continuity work, exposure/security review, keep-awake implementation, Web UI consolidation, and the current full repository gate.
+**Date:** 2026-08-28 · **Baseline:** Aevra `0.1.3` · **Derived from:** Fast Lane batch tools, system capability detection, local transport protocol options and validation, Web UI polish, and full test suite verification.
 
 This file tracks remaining product/architecture gaps only. Delivered work belongs in `CHANGELOG.md`.
 
@@ -13,15 +13,13 @@ This file tracks remaining product/architecture gaps only. Delivered work belong
 5. **The daemon is deliberately single-user.** Admin credentials protect one local owner's control plane; a true multi-user/tenant authority model is not yet designed.
 6. **Keep-awake support is platform dependent.** Unsupported or unavailable platform inhibitors degrade safely to an explicit unavailable state; broader platform coverage is future work.
 
-## Recently closed in 0.1.2
+## Recently closed in 0.1.3
 
-- Durable OAuth connection identity, refresh-family rotation/replay revocation, reconnect grace, remembered multi-workspace grants, and connection-level YOLO.
-- Connection-owned durable operation inspection so lost responses do not require unsafe mutation replay.
-- Independent MCP/OAuth and Admin public URLs with exact HTTPS Admin-origin trust and no forwarded-header trust expansion.
-- Managed ngrok stable-domain mode with origin verification.
-- Cross-platform keep-awake policies that inhibit idle sleep without forcing the display on or disabling screen lock.
-- Compact Settings workflows and Runtime Overview status density.
-- Engineering specs synchronized through schema migration v10 and the 42-tool MCP surface.
+- Host system capabilities detection across 11 toolchain categories and shell families with platform-specific recommended shell resolution.
+- Configurable local gateway transport protocol (`localProtocol: https|http`) with strict loopback HTTPS for internal Admin and MCP listeners, interactive CLI setup, and runtime transport validation modal.
+- Fast Lane batch tools (`file_read_many`, `file_write_many`, `command_run_many`) as primary model-facing interfaces while retaining singular primitives internally.
+- Simplified 40-tool discoverable MCP surface.
+- React Admin Web UI polish (System Capabilities panel, Transport Validation modal, accessible keyboard-navigable Dropdown, refactored activity stream hook).
 
 ## Not yet specified
 
