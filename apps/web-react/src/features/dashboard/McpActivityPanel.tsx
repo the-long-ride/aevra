@@ -1,40 +1,20 @@
 import type { McpActivityEntry, WorkspaceSummary } from '@aevra/admin-contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { JsonDetailView } from '../../components/JsonDetailView';
 import { useDialog } from '../../components/Dialog';
-
-type StreamState = 'connecting' | 'live' | 'reconnecting' | 'unsupported';
+import {
+  McpActivityProvider,
+  useHasMcpActivityProvider,
+  useMcpActivity,
+} from '../../hooks/use-mcp-activity';
 
 function clientLabel(actor: string) {
   return actor.replace(/^(oauth:|connector:)/, '') || actor;
 }
 
-function mergeActivity(current: McpActivityEntry[], incoming: McpActivityEntry) {
-  const next = new Map(current.map((entry) => [entry.id, entry]));
-  next.set(incoming.id, incoming);
-  return [...next.values()]
-    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-    .slice(0, 100);
-}
-
-function validEntry(value: unknown): value is McpActivityEntry {
-  if (!value || typeof value !== 'object') return false;
-  const entry = value as Partial<McpActivityEntry>;
-  return Boolean(
-    entry.id &&
-    entry.actor &&
-    entry.sessionId &&
-    entry.action &&
-    entry.updatedAt &&
-    ['tool', 'rpc', 'session'].includes(String(entry.kind)) &&
-    ['running', 'success', 'error'].includes(String(entry.state)),
-  );
-}
-
-export function McpActivityPanel({ workspaces }: { workspaces: WorkspaceSummary[] }) {
-  const [entries, setEntries] = useState<McpActivityEntry[]>([]);
-  const [streamState, setStreamState] = useState<StreamState>('connecting');
+function McpActivityPanelContent({ workspaces }: { workspaces: WorkspaceSummary[] }) {
+  const { entries, streamState } = useMcpActivity();
   const dialog = useDialog();
   const workspaceNames = useMemo(
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace.name])),
@@ -42,26 +22,6 @@ export function McpActivityPanel({ workspaces }: { workspaces: WorkspaceSummary[
   );
   const workspaceLabel = (entry: McpActivityEntry) =>
     entry.workspaceId ? (workspaceNames.get(entry.workspaceId) ?? entry.workspaceId) : '—';
-
-  useEffect(() => {
-    if (typeof EventSource === 'undefined') {
-      setStreamState('unsupported');
-      return undefined;
-    }
-
-    const source = new EventSource('/api/activity/stream');
-    source.onopen = () => setStreamState('live');
-    source.onerror = () => setStreamState('reconnecting');
-    source.addEventListener('activity', (event) => {
-      try {
-        const parsed: unknown = JSON.parse((event as MessageEvent<string>).data);
-        if (validEntry(parsed)) setEntries((current) => mergeActivity(current, parsed));
-      } catch {
-        // Ignore malformed stream events. The stream itself remains connected.
-      }
-    });
-    return () => source.close();
-  }, []);
 
   const showDetails = (entry: McpActivityEntry) =>
     dialog.message({
@@ -160,5 +120,16 @@ export function McpActivityPanel({ workspaces }: { workspaces: WorkspaceSummary[
         ]}
       />
     </div>
+  );
+}
+
+export function McpActivityPanel({ workspaces }: { workspaces: WorkspaceSummary[] }) {
+  const hasProvider = useHasMcpActivityProvider();
+  return hasProvider ? (
+    <McpActivityPanelContent workspaces={workspaces} />
+  ) : (
+    <McpActivityProvider>
+      <McpActivityPanelContent workspaces={workspaces} />
+    </McpActivityProvider>
   );
 }

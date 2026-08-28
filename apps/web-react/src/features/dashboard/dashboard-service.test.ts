@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { completeOnboarding, loadDashboard, registerWorkspace } from './dashboard-service';
+import {
+  completeOnboarding,
+  loadDashboard,
+  registerWorkspace,
+  revokeActiveConnection,
+} from './dashboard-service';
 
 const requestJson = vi.fn();
 
@@ -68,5 +73,44 @@ describe('dashboard-service', () => {
         body: JSON.stringify({ name: 'main', hostRoot: 'F:/ws/main' }),
       },
     ]);
+  });
+
+  it('revokes durable connections by connection id', async () => {
+    requestJson.mockResolvedValue(undefined);
+
+    await revokeActiveConnection({ connectionId: 'conn/one', sessionId: 'session-unused' });
+
+    expect(requestJson).toHaveBeenLastCalledWith('/api/connections/conn%2Fone/revoke', {
+      method: 'POST',
+      body: '{}',
+    });
+  });
+
+  it('revokes session-backed connections by session id', async () => {
+    requestJson.mockResolvedValue(undefined);
+
+    await revokeActiveConnection({ sessionId: 'session/one' });
+
+    expect(requestJson).toHaveBeenLastCalledWith('/api/sessions/session%2Fone/revoke', {
+      method: 'POST',
+      body: '{}',
+    });
+  });
+
+  it('falls back to the row id for session-backed connections', async () => {
+    requestJson.mockResolvedValue(undefined);
+
+    await revokeActiveConnection({ id: 'row/one' });
+
+    expect(requestJson).toHaveBeenLastCalledWith('/api/sessions/row%2Fone/revoke', {
+      method: 'POST',
+      body: '{}',
+    });
+  });
+
+  it('rejects connections without a revocable identifier', async () => {
+    await expect(revokeActiveConnection({})).rejects.toThrow(
+      'Connection has no revocable session identifier.',
+    );
   });
 });

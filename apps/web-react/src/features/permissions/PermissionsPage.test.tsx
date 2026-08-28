@@ -31,4 +31,5 @@ test('permission form renders every capability as a switch including skills and 
 
   await user.click(screen.getByRole('switch', { name: 'commands.run' }));
   expect(screen.getByLabelText(/Command matchers/)).toBeInTheDocument();
+  expect(screen.getByRole('switch', { name: 'commands.run' })).toHaveFocus();
 });

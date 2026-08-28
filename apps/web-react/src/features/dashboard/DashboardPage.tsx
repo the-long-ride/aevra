@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
+import { Switch } from '../../components/Switch';
 import { usePollingResource } from '../../hooks/use-polling-resource';
 import { ConnectorModal } from './ConnectorModal';
 import { ConnectionDetailModal, type ActiveConnection } from './ConnectionDetailModal';
@@ -9,6 +11,7 @@ import {
   completeOnboarding,
   loadDashboard,
   registerWorkspace,
+  revokeActiveConnection,
   type DashboardData,
 } from './dashboard-service';
 import { DashboardSection } from './DashboardSection';
@@ -16,6 +19,8 @@ import { McpActivityPanel } from './McpActivityPanel';
 import { RemoteAccessPanel } from './RemoteAccessPanel';
 import { RuntimeManagementModal } from './RuntimeManagementModal';
 import { RuntimeOverview, type RuntimeModalKind } from './RuntimeOverview';
+import { SystemCapabilities } from './SystemCapabilities';
+import { TransportValidationModal } from './TransportValidationModal';
 
 function Onboarding({ data, refresh }: { data: DashboardData; refresh(): Promise<void> }) {
   const endpoint = data.exposure.publicUrl
@@ -116,9 +121,13 @@ function Onboarding({ data, refresh }: { data: DashboardData; refresh(): Promise
 
 export function DashboardPage() {
   const resource = usePollingResource({ load: loadDashboard, intervalMs: 2000 });
+  const dialog = useDialog();
   const [connectorModalOpen, setConnectorModalOpen] = useState(false);
   const [runtimeModal, setRuntimeModal] = useState<RuntimeModalKind | null>(null);
+  const [transportModalOpen, setTransportModalOpen] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<ActiveConnection | null>(null);
+  const [selectedConnectionIds, setSelectedConnectionIds] = useState<Set<string>>(() => new Set());
+  const [revokingConnections, setRevokingConnections] = useState(false);
   const data = resource.data;
   const selectedLive = selectedConnection?.id
     ? ((data?.snapshot.activeConnections.find((row: any) => row.id === selectedConnection.id) as
@@ -133,6 +142,57 @@ export function DashboardPage() {
     );
   }
 
+  const selectedRows = data.snapshot.activeConnections.filter((row: any) =>
+    selectedConnectionIds.has(String(row.id ?? row.sessionId ?? '')),
+  );
+
+  const toggleConnection = (id: string, checked: boolean) => {
+    setSelectedConnectionIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const revokeSelected = async () => {
+    if (!selectedRows.length || revokingConnections) return;
+    const confirmed = await dialog.confirm({
+      title: 'Revoke selected connections',
+      message: `Revoke ${selectedRows.length} selected connection${selectedRows.length === 1 ? '' : 's'}?`,
+      confirmLabel: 'Revoke selected',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
+    setRevokingConnections(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedRows.map((row: any) => revokeActiveConnection(row)),
+      );
+      const succeeded = new Set(
+        selectedRows
+          .filter((_, index) => results[index]?.status === 'fulfilled')
+          .map((row: any) => String(row.id ?? row.sessionId ?? '')),
+      );
+      const failed = selectedRows.length - succeeded.size;
+      setSelectedConnectionIds(
+        (current) => new Set([...current].filter((id) => !succeeded.has(id))),
+      );
+      if (selectedConnection?.id && succeeded.has(selectedConnection.id))
+        setSelectedConnection(null);
+      await resource.refresh();
+      if (failed) {
+        void dialog.message({
+          title: 'Connection revocation',
+          actionLabel: 'Close',
+          message: `${succeeded.size} connection${succeeded.size === 1 ? '' : 's'} revoked; ${failed} failed.`,
+        });
+      }
+    } finally {
+      setRevokingConnections(false);
+    }
+  };
+
   const sections = {
     onboarding: (
       <DashboardSection
@@ -146,7 +206,12 @@ export function DashboardPage() {
     ),
     'runtime-overview': (
       <DashboardSection key="runtime" id="runtime-overview" title="Runtime overview">
-        <RuntimeOverview data={data} onOpen={setRuntimeModal} />
+        <RuntimeOverview
+          data={data}
+          onOpen={setRuntimeModal}
+          onOpenPending={() => document.getElementById('open-requests')?.click()}
+          onOpenTransport={() => setTransportModalOpen(true)}
+        />
       </DashboardSection>
     ),
     'live-mcp-activity': (
@@ -161,6 +226,21 @@ export function DashboardPage() {
             YOLO enabled — immutable security approvals still require confirmation
           </p>
         ) : null}
+        <div className="active-connections-toolbar">
+          <span>
+            {selectedRows.length
+              ? `${selectedRows.length} selected`
+              : 'Select one or more connections to revoke'}
+          </span>
+          <button
+            type="button"
+            className="danger-button"
+            disabled={!selectedRows.length || revokingConnections}
+            onClick={() => void revokeSelected()}
+          >
+            {revokingConnections ? 'Revoking…' : 'Revoke selected'}
+          </button>
+        </div>
         <DataTable
           id="react-dashboard-active"
           rows={data.snapshot.activeConnections}
@@ -170,6 +250,25 @@ export function DashboardPage() {
             { key: 'status', label: 'Status' },
           ]}
           columns={[
+            {
+              key: 'select',
+              label: 'Select',
+              sortable: false,
+              search: false,
+              render: (row: any) => {
+                const id = String(row.id ?? row.sessionId ?? '');
+                const label = `Select ${String(row.client ?? id)}`;
+                return id ? (
+                  <Switch
+                    label={<span className="sr-only">{label}</span>}
+                    containerClassName="connection-select"
+                    aria-label={label}
+                    checked={selectedConnectionIds.has(id)}
+                    onChange={(event) => toggleConnection(id, event.currentTarget.checked)}
+                  />
+                ) : null;
+              },
+            },
             { key: 'client', label: 'Client' },
             { key: 'authType', label: 'Auth' },
             {
@@ -209,6 +308,15 @@ export function DashboardPage() {
         />
       </DashboardSection>
     ),
+    'system-capabilities': (
+      <DashboardSection
+        key="system-capabilities"
+        id="system-capabilities"
+        title="System capabilities"
+      >
+        <SystemCapabilities system={data.snapshot.system} />
+      </DashboardSection>
+    ),
   } satisfies Record<string, React.ReactNode>;
 
   return (
@@ -229,6 +337,11 @@ export function DashboardPage() {
           setRuntimeModal(null);
           setConnectorModalOpen(true);
         }}
+      />
+      <TransportValidationModal
+        open={transportModalOpen}
+        transport={data.snapshot.transport}
+        onClose={() => setTransportModalOpen(false)}
       />
       <ConnectorModal
         open={connectorModalOpen}

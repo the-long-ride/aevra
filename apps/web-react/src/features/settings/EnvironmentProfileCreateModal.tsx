@@ -48,6 +48,7 @@ export function EnvironmentProfileCreateModal({
       submitting={submitting}
       submitLabel="Create profile"
       submittingLabel="Creating…"
+      halfWidth
       onClose={onClose}
       onSubmit={submit}
     >

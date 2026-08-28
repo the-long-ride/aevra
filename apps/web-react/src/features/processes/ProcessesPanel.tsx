@@ -64,7 +64,19 @@ export function ProcessesPanel({ contained = false }: { contained?: boolean }) {
           { key: 'lifecycle', label: 'Lifecycle' },
         ]}
         columns={[
-          { key: 'name', label: 'Name', value: processName },
+          {
+            key: 'name',
+            label: 'Name',
+            value: processName,
+            render: (row) => {
+              const name = processName(row);
+              return (
+                <code className="process-name-cell" title={name}>
+                  {name}
+                </code>
+              );
+            },
+          },
           { key: 'id', label: 'Process ID' },
           {
             key: 'workspace_name',

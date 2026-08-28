@@ -1,4 +1,9 @@
-import type { ExposureConfig, ExposureProvider, ExposureStatus } from '@aevra/admin-contracts';
+import type {
+  ExposureConfig,
+  ExposureProvider,
+  ExposureStatus,
+  LocalProtocol,
+} from '@aevra/admin-contracts';
 import { useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
 import { AdminWebUiSettings, type AdminProbeState } from './AdminWebUiSettings';
@@ -11,6 +16,11 @@ const PROVIDERS = [
   { value: 'cloudflare', label: 'Cloudflare' },
   { value: 'ngrok', label: 'ngrok' },
   { value: 'external', label: 'External / Custom' },
+] as const;
+
+const LOCAL_PROTOCOLS = [
+  { value: 'https', label: 'HTTPS' },
+  { value: 'http', label: 'HTTP' },
 ] as const;
 
 function normalizedOrigin(value: string) {
@@ -34,6 +44,9 @@ export function RemoteAccessSettings({
     ? normalizedOrigin(initialAdminPublicUrl)
     : '';
   const [provider, setProvider] = useState<ExposureProvider>(initial?.provider ?? status.provider);
+  const [localProtocol, setLocalProtocol] = useState<LocalProtocol>(
+    initial?.localProtocol ?? 'https',
+  );
   const [ownership, setOwnership] = useState<'managed' | 'external'>(
     initial?.cloudflare?.ownership ?? initial?.ngrok?.ownership ?? 'managed',
   );
@@ -67,10 +80,11 @@ export function RemoteAccessSettings({
       ...(savedAdminPublicUrl ? { adminPublicUrl: savedAdminPublicUrl } : {}),
       ...(effectiveTrustedOrigins.length ? { trustedAdminOrigins: effectiveTrustedOrigins } : {}),
     };
+    const protocolConfig = localProtocol === 'http' ? { localProtocol } : {};
 
     let config: ExposureConfig;
     if (provider === 'local') {
-      config = { provider: 'local', ...adminConfig };
+      config = { provider: 'local', ...protocolConfig, ...adminConfig };
     } else if (provider === 'direct') {
       config = {
         provider,
@@ -79,11 +93,17 @@ export function RemoteAccessSettings({
         ...adminConfig,
       };
     } else if (provider === 'external') {
-      config = { provider, publicUrl: String(values.publicUrl ?? ''), ...adminConfig };
+      config = {
+        provider,
+        ...protocolConfig,
+        publicUrl: String(values.publicUrl ?? ''),
+        ...adminConfig,
+      };
     } else if (provider === 'ngrok') {
       const stableManaged = ownership === 'managed' && ngrokDomainMode === 'stable';
       config = {
         provider,
+        ...protocolConfig,
         ...(ownership === 'external' || stableManaged
           ? { publicUrl: String(values.publicUrl ?? '') }
           : {}),
@@ -97,6 +117,7 @@ export function RemoteAccessSettings({
       const hostname = String(values.hostname ?? '').trim();
       config = {
         provider,
+        ...protocolConfig,
         ...(hostname ? { publicUrl: `https://${hostname}` } : {}),
         cloudflare: {
           hostname: hostname || undefined,
@@ -215,6 +236,18 @@ export function RemoteAccessSettings({
               />
             </label>
 
+            {provider !== 'direct' ? (
+              <label className="field">
+                <span>Local gateway protocol</span>
+                <Dropdown
+                  ariaLabel="Local gateway protocol"
+                  value={localProtocol}
+                  onChange={(value) => setLocalProtocol(value as LocalProtocol)}
+                  options={LOCAL_PROTOCOLS}
+                />
+              </label>
+            ) : null}
+
             {showMcpUrl ? (
               <label className="field">
                 <span>Public MCP HTTPS URL</span>
@@ -306,6 +339,19 @@ export function RemoteAccessSettings({
               </>
             ) : null}
           </div>
+
+          {provider === 'direct' ? (
+            <p className="remote-provider-hints">
+              Direct exposure requires HTTPS. Aevra will not bind a plaintext HTTP gateway directly
+              to the network.
+            </p>
+          ) : localProtocol === 'http' ? (
+            <p className="remote-provider-hints">
+              HTTP applies only to the loopback local gateway. Admin and MCP remain HTTPS. Use HTTP
+              only for localhost or behind a secure tunnel/reverse proxy; use HTTPS for direct
+              exposure.
+            </p>
+          ) : null}
 
           {provider === 'external' ? (
             <p className="remote-provider-hints" data-testid="external-provider-hints">

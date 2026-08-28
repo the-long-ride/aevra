@@ -40,3 +40,25 @@ export async function registerWorkspace(data: FormData): Promise<void> {
     body: JSON.stringify(Object.fromEntries(data)),
   });
 }
+
+export async function revokeActiveConnection(connection: Record<string, unknown>): Promise<void> {
+  const connectionId = typeof connection.connectionId === 'string' ? connection.connectionId : '';
+  if (connectionId) {
+    await requestJson(`/api/connections/${encodeURIComponent(connectionId)}/revoke`, {
+      method: 'POST',
+      body: '{}',
+    });
+    return;
+  }
+  const sessionId =
+    typeof connection.sessionId === 'string'
+      ? connection.sessionId
+      : typeof connection.id === 'string'
+        ? connection.id
+        : '';
+  if (!sessionId) throw new Error('Connection has no revocable session identifier.');
+  await requestJson(`/api/sessions/${encodeURIComponent(sessionId)}/revoke`, {
+    method: 'POST',
+    body: '{}',
+  });
+}

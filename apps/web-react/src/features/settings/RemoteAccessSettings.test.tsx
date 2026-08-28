@@ -257,7 +257,7 @@ test('cloudflare can configure distinct MCP and Admin URLs with explicit trusted
   ]);
 });
 
-test('trusted Admin origins can be removed and replaced', async () => {
+test('trusted Admin origins can be removed and replaced from the modal', async () => {
   const { fetchMock } = renderSettings({
     adminPublicUrl: 'https://admin.example.com',
     config: {
@@ -267,10 +267,20 @@ test('trusted Admin origins can be removed and replaced', async () => {
     },
   });
   const user = userEvent.setup();
-  expect(screen.getByText('https://old.example.com')).toBeInTheDocument();
+  expect(screen.queryByText('https://old.example.com')).not.toBeInTheDocument();
+
+  const viewAll = screen.getByRole('button', { name: 'View all trusted origins (1)' });
+  expect(viewAll).toBeEnabled();
+  await user.click(viewAll);
+  const modal = screen.getByRole('dialog', { name: 'Trusted Admin origins' });
+  expect(within(modal).getByText('https://old.example.com')).toBeInTheDocument();
   await user.click(
-    screen.getByRole('button', { name: 'Remove trusted origin https://old.example.com' }),
+    within(modal).getByRole('button', {
+      name: 'Remove trusted origin https://old.example.com',
+    }),
   );
+  expect(screen.queryByRole('dialog', { name: 'Trusted Admin origins' })).not.toBeInTheDocument();
+
   await type('New trusted Admin origin', 'https://new.example.com');
   await user.click(screen.getByRole('button', { name: 'Add trusted origin' }));
   await user.click(screen.getByRole('button', { name: 'Save remote access' }));
@@ -280,6 +290,11 @@ test('trusted Admin origins can be removed and replaced', async () => {
     'https://new.example.com',
     'https://admin.example.com',
   ]);
+});
+
+test('trusted Admin origin modal trigger is disabled while the list is empty', () => {
+  renderSettings();
+  expect(screen.getByRole('button', { name: 'View all trusted origins (0)' })).toBeDisabled();
 });
 
 test('managed ngrok stable domain mode submits its requested MCP URL', async () => {
@@ -327,7 +342,8 @@ test('Admin URL test probes the edited candidate and normalized trusted origins'
   });
   expect(await screen.findByText('Reachable · Trusted')).toBeInTheDocument();
 });
-test('Admin URL is presented as the primary trusted origin instead of a removable duplicate', () => {
+
+test('Admin URL is presented as the primary trusted origin instead of a removable duplicate', async () => {
   renderSettings({
     adminPublicUrl: 'https://admin.example.com',
     config: {
@@ -340,11 +356,20 @@ test('Admin URL is presented as the primary trusted origin instead of a removabl
   expect(screen.getByText('Primary')).toBeInTheDocument();
   expect(screen.getByLabelText('Admin public URL')).toHaveValue('https://admin.example.com');
   expect(screen.queryByText('https://admin.example.com')).not.toBeInTheDocument();
+
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'View all trusted origins (1)' }));
+  const modal = screen.getByRole('dialog', { name: 'Trusted Admin origins' });
+  expect(within(modal).queryByText('https://admin.example.com')).not.toBeInTheDocument();
   expect(
-    screen.queryByRole('button', { name: 'Remove trusted origin https://admin.example.com' }),
+    within(modal).queryByRole('button', {
+      name: 'Remove trusted origin https://admin.example.com',
+    }),
   ).not.toBeInTheDocument();
   expect(
-    screen.getByRole('button', { name: 'Remove trusted origin https://ops.example.com' }),
+    within(modal).getByRole('button', {
+      name: 'Remove trusted origin https://ops.example.com',
+    }),
   ).toBeInTheDocument();
 });
 

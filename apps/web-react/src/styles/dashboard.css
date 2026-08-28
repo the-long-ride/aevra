@@ -307,6 +307,51 @@
   align-items: center;
 }
 
+.transport-validation,
+.transport-validation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.transport-validation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+}
+
+.transport-validation-row > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.transport-validation-row code {
+  overflow: auto;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.transport-validation-badges {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.transport-validation-issues {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12px;
+}
+
 @media (max-width: 1023px) {
   .onboarding-body,
   .client-grid,
@@ -377,6 +422,15 @@
 
   .remote-endpoint > span {
     grid-column: 1 / -1;
+  }
+
+  .transport-validation-row {
+    display: grid;
+    align-items: start;
+  }
+
+  .transport-validation-badges {
+    justify-content: flex-start;
   }
 }
 

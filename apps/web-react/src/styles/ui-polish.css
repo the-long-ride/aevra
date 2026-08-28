@@ -1,0 +1,293 @@
+.dropdown-menu-portal {
+  position: fixed;
+  z-index: 1000;
+  min-width: 0;
+}
+
+.settings-form-modal-half {
+  width: min(50vw, 760px);
+}
+
+.keep-awake-panel {
+  position: relative;
+}
+
+.keep-awake-copy {
+  padding-right: 22px;
+}
+
+.keep-awake-state-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mute);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.keep-awake-status-dot,
+.runtime-stat-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--ash);
+}
+
+.keep-awake-status-dot {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.keep-awake-status-dot.is-active,
+.runtime-stat-status-dot.active {
+  background: var(--success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--success) 15%, transparent);
+}
+
+.compact-keep-awake-controls {
+  margin-top: 10px;
+}
+
+.trusted-origin-view-all {
+  justify-self: start;
+}
+
+.trusted-origin-modal {
+  width: min(620px, calc(100vw - 24px));
+}
+
+.trusted-origin-modal-list {
+  display: grid;
+  gap: 7px;
+}
+
+.trusted-origin-modal-list .trusted-origin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+}
+
+.trusted-origin-modal-list .trusted-origin-row code {
+  min-width: 0;
+}
+
+.workspace-details-form {
+  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1fr) minmax(260px, 1.3fr) auto;
+}
+
+[data-table-id='react-processes'] .data-table th:first-child,
+[data-table-id='react-processes'] .data-table td:first-child {
+  width: 36%;
+  min-width: 340px;
+}
+
+.process-name-cell {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  background: transparent;
+  padding: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-stat {
+  position: relative;
+}
+
+.runtime-stat-status-dot {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.runtime-stat-status-dot.inactive {
+  background: var(--ash);
+}
+
+.runtime-request-chart {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid var(--hairline);
+  padding: 12px;
+  background: var(--canvas);
+}
+
+.runtime-request-chart-head,
+.active-connections-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.runtime-request-chart-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.runtime-request-chart-head span,
+.runtime-request-chart-head small,
+.active-connections-toolbar span {
+  color: var(--mute);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.runtime-request-chart-head strong {
+  font-size: 13px;
+}
+
+.runtime-request-chart svg {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  color: var(--ink);
+}
+
+.runtime-chart-axis {
+  stroke: var(--hairline-strong);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.runtime-chart-grid {
+  stroke: var(--hairline);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+
+.runtime-chart-line {
+  stroke: var(--success);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.runtime-chart-label {
+  fill: var(--mute);
+  font-family: inherit;
+  font-size: 9px;
+}
+
+.active-connections-toolbar {
+  margin-bottom: 10px;
+  border: 1px solid var(--hairline);
+  padding: 8px 10px;
+  background: var(--surface-soft);
+}
+
+.connection-select {
+  width: 28px;
+  min-height: 20px;
+  gap: 0;
+}
+
+.connection-select .switch-track {
+  width: 28px;
+  height: 18px;
+}
+
+.connection-select .switch-thumb {
+  width: 10px;
+  height: 10px;
+}
+
+.connection-select > input:checked + .switch-track .switch-thumb {
+  transform: translateX(10px);
+}
+
+.tool-running-signal {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid color-mix(in srgb, var(--success) 48%, var(--hairline));
+  padding: 5px 4px;
+  color: var(--success);
+}
+
+.tool-running-signal i {
+  display: block;
+  width: 3px;
+  height: 4px;
+  background: currentColor;
+  animation: aevra-pixel-run 720ms steps(3, end) infinite;
+}
+
+.tool-running-signal i:nth-child(2) {
+  animation-delay: -560ms;
+}
+
+.tool-running-signal i:nth-child(3) {
+  animation-delay: -400ms;
+}
+
+.tool-running-signal i:nth-child(4) {
+  animation-delay: -240ms;
+}
+
+.tool-running-signal i:nth-child(5) {
+  animation-delay: -80ms;
+}
+
+@keyframes aevra-pixel-run {
+  0%,
+  100% {
+    height: 4px;
+    opacity: 0.35;
+  }
+  45% {
+    height: 16px;
+    opacity: 1;
+  }
+  70% {
+    height: 9px;
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-running-signal i {
+    height: 10px;
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .workspace-details-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .workspace-details-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-form-modal-half {
+    width: 100vw;
+  }
+
+  .workspace-details-form {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-details-actions {
+    grid-column: auto;
+  }
+
+  .runtime-request-chart-head,
+  .active-connections-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .active-connections-toolbar button {
+    width: 100%;
+  }
+}

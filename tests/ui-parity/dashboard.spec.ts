@@ -23,7 +23,7 @@ for (const surface of ADMIN_SURFACES) {
     await expect(runtime).not.toHaveAttribute('open', '');
   });
 
-  test(`${surface.name} moves completed onboarding to the bottom and preserves collapse through polling`, async ({
+  test(`${surface.name} keeps system capabilities final after completed onboarding and preserves collapse through polling`, async ({
     page,
   }) => {
     await installAdminApi(page, { onboardingCompleted: true });
@@ -34,7 +34,8 @@ for (const surface of ADMIN_SURFACES) {
     const ids = await sections.evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute('data-dashboard-section')),
     );
-    expect(ids.at(-1)).toBe('onboarding');
+    expect(ids.at(-1)).toBe('system-capabilities');
+    expect(ids.at(-2)).toBe('onboarding');
 
     const onboarding = page.locator('[data-dashboard-section="onboarding"]');
     await expect(onboarding).not.toHaveAttribute('open', '');

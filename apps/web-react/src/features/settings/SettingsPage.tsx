@@ -69,7 +69,6 @@ export function SettingsPage() {
             <pre>{JSON.stringify(data.adminSettings, null, 2)}</pre>
           </details>
         </section>
-        <HooksSettings hooks={data.hooks} onChanged={refresh} />
         <CommandPolicySettings families={data.commandFamilies} onChanged={refresh} />
         <NetworkPolicySettings
           rules={data.networkRules}
@@ -78,6 +77,7 @@ export function SettingsPage() {
         />
         <EnvironmentProfilesSettings profiles={data.profiles} onChanged={refresh} />
         <SecretReferencesSettings secretRefs={data.secretRefs} onChanged={refresh} />
+        <HooksSettings hooks={data.hooks} onChanged={refresh} />
       </div>
     </>
   );

@@ -79,12 +79,15 @@ export function WorkspacesPage() {
     event.preventDefault();
     if (!selected) return;
     const data = Object.fromEntries(new FormData(event.currentTarget));
+    const hostRoot = String(data.hostRoot ?? '').trim();
+    const update = {
+      name: String(data.name ?? '').trim(),
+      description: String(data.description ?? '').trim(),
+      ...(hostRoot !== String(selected.hostRoot ?? '').trim() ? { hostRoot } : {}),
+    };
     await requestJson(`/api/workspaces/${encodeURIComponent(selected.id)}`, {
       method: 'PATCH',
-      body: JSON.stringify({
-        name: String(data.name ?? '').trim(),
-        description: String(data.description ?? '').trim(),
-      }),
+      body: JSON.stringify(update),
     });
     await resource.refresh();
   };
@@ -230,14 +233,17 @@ export function WorkspacesPage() {
                     <span>Workspace name</span>
                     <input name="name" defaultValue={selected.name} required />
                   </label>
-                  <label className="field workspace-description-field">
+                  <label className="field">
                     <span>Description</span>
-                    <textarea
+                    <input
                       name="description"
                       defaultValue={selected.description ?? ''}
                       placeholder="Describe this workspace"
-                      rows={3}
                     />
+                  </label>
+                  <label className="field workspace-root-field">
+                    <span>Root local path</span>
+                    <input name="hostRoot" defaultValue={selected.hostRoot ?? ''} required />
                   </label>
                   <div className="workspace-details-actions">
                     <button className="primary" data-surface-id="workspaces:save-details">

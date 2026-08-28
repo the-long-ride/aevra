@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { ManagementModal } from '../../components/ManagementModal';
+
 export interface AdminProbeState {
   tone: 'success' | 'warning' | 'error';
   message: string;
@@ -24,6 +27,13 @@ export function AdminWebUiSettings({
   onAddTrustedOrigin(): void;
   onRemoveTrustedOrigin(index: number): void;
 }) {
+  const [originsOpen, setOriginsOpen] = useState(false);
+
+  const removeTrustedOrigin = (index: number) => {
+    onRemoveTrustedOrigin(index);
+    if (trustedAdminOrigins.length === 1) setOriginsOpen(false);
+  };
+
   return (
     <section className="remote-config-section remote-admin-config">
       <div className="remote-config-section-head">
@@ -67,25 +77,6 @@ export function AdminWebUiSettings({
           <small className="field-help">
             Additional exact HTTPS origins allowed to send Admin login and mutation requests.
           </small>
-          <div className="trusted-origin-list">
-            {trustedAdminOrigins.map((origin, index) => (
-              <div className="trusted-origin-row" key={`${origin}-${index}`}>
-                <code>{origin}</code>
-                <button
-                  type="button"
-                  className="trusted-origin-remove"
-                  aria-label={`Remove trusted origin ${origin}`}
-                  title="Remove trusted origin"
-                  onClick={() => onRemoveTrustedOrigin(index)}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            {trustedAdminOrigins.length === 0 ? (
-              <span className="trusted-origin-empty">No additional trusted origins.</span>
-            ) : null}
-          </div>
           <div className="trusted-origin-add">
             <input
               aria-label="New trusted Admin origin"
@@ -97,8 +88,36 @@ export function AdminWebUiSettings({
               Add trusted origin
             </button>
           </div>
+          <button
+            type="button"
+            className="trusted-origin-view-all"
+            disabled={trustedAdminOrigins.length === 0}
+            onClick={() => setOriginsOpen(true)}
+          >
+            View all trusted origins ({trustedAdminOrigins.length})
+          </button>
         </div>
       </div>
+      {originsOpen ? (
+        <ManagementModal open title="Trusted Admin origins" onClose={() => setOriginsOpen(false)}>
+          <div className="trusted-origin-modal-list">
+            {trustedAdminOrigins.map((origin, index) => (
+              <div className="trusted-origin-row" key={`${origin}-${index}`}>
+                <code title={origin}>{origin}</code>
+                <button
+                  type="button"
+                  className="trusted-origin-remove"
+                  aria-label={`Remove trusted origin ${origin}`}
+                  title="Remove trusted origin"
+                  onClick={() => removeTrustedOrigin(index)}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </ManagementModal>
+      ) : null}
     </section>
   );
 }
