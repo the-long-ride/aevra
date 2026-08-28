@@ -32,6 +32,9 @@ export class SessionRepository {
   revokeLease(id: string) {
     this.db.prepare('UPDATE workspace_leases SET valid=0 WHERE id=?').run(id);
   }
+  revokeWorkspaceLeases(workspaceId: string) {
+    this.db.prepare('UPDATE workspace_leases SET valid=0 WHERE workspace_id=?').run(workspaceId);
+  }
   rememberWorkspaceGrant(subject: string, workspaceId: string, profileId: string) {
     const now = new Date().toISOString();
     this.db
@@ -48,6 +51,9 @@ export class SessionRepository {
         .prepare('DELETE FROM oauth_workspace_grants WHERE subject=? AND workspace_id=?')
         .run(subject, workspaceId).changes > 0
     );
+  }
+  forgetWorkspaceGrants(workspaceId: string) {
+    this.db.prepare('DELETE FROM oauth_workspace_grants WHERE workspace_id=?').run(workspaceId);
   }
   listRememberedWorkspaceGrants(subject: string) {
     return this.db

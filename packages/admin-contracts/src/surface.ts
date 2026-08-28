@@ -8,7 +8,13 @@ export const ADMIN_SURFACE = {
     { id: 'settings', label: 'Settings' },
     { id: 'guide', label: 'Guide' },
   ],
-  dashboardSections: ['onboarding', 'runtime-overview', 'live-mcp-activity', 'active-connections'],
+  dashboardSections: [
+    'onboarding',
+    'runtime-overview',
+    'live-mcp-activity',
+    'active-connections',
+    'system-capabilities',
+  ],
   onboarding: {
     beforeCompletion: [
       'remote-access',

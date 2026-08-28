@@ -3,6 +3,17 @@ import { canonicalDirectory } from '../local-filesystem.js';
 import { readAdminBody, sendAdminResponse } from './http.js';
 import type { AdminRouteHandler } from './types.js';
 
+const TERMINAL_PROCESS_STATES = new Set(['completed', 'failed', 'stopped']);
+
+function hasActiveWorkspaceProcess(context: Parameters<AdminRouteHandler>[3], workspaceId: string) {
+  const processes = context.processes?.listLocal?.() ?? [];
+  return processes.some(
+    (process: any) =>
+      String(process.workspace_id ?? process.workspaceId ?? '') === workspaceId &&
+      !TERMINAL_PROCESS_STATES.has(String(process.state ?? 'unknown')),
+  );
+}
+
 export const handleWorkspaceRoutes: AdminRouteHandler = async (req, res, url, context) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
@@ -37,7 +48,27 @@ export const handleWorkspaceRoutes: AdminRouteHandler = async (req, res, url, co
 
   let match = path.match(/^\/api\/workspaces\/([^/]+)$/);
   if (match && method === 'PATCH') {
-    const workspace = context.workspaces.update(match[1], await readAdminBody(req));
+    const input = await readAdminBody(req);
+    const current = context.workspaces?.getLocal?.(match[1]);
+    if (Object.prototype.hasOwnProperty.call(input, 'hostRoot')) {
+      const rawHostRoot = String(input.hostRoot ?? '').trim();
+      input.hostRoot = context.localFilesystem?.canonicalDirectory
+        ? await context.localFilesystem.canonicalDirectory(rawHostRoot)
+        : await canonicalDirectory(rawHostRoot);
+    }
+    if (current && input.hostRoot && input.hostRoot !== current.hostRoot) {
+      if (hasActiveWorkspaceProcess(context, match[1])) {
+        sendAdminResponse(res, 409, {
+          error: {
+            code: 'WORKSPACE_PROCESS_ACTIVE',
+            message: 'Stop active managed processes before changing the workspace root.',
+          },
+        });
+        return true;
+      }
+      context.sessions?.invalidateWorkspaceAccess?.(match[1]);
+    }
+    const workspace = context.workspaces.update(match[1], input);
     sendAdminResponse(res, 200, {
       ok: true,
       revision: Date.now(),

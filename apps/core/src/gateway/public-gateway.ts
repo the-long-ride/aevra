@@ -1,6 +1,15 @@
-import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
-import https, { type Server, type ServerOptions as HttpsServerOptions } from 'node:https';
+import http, {
+  type IncomingHttpHeaders,
+  type IncomingMessage,
+  type Server as HttpServer,
+  type ServerResponse,
+} from 'node:http';
+import https, {
+  type Server as HttpsServer,
+  type ServerOptions as HttpsServerOptions,
+} from 'node:https';
 import { pipeline } from 'node:stream/promises';
+import type { LocalProtocol } from '../exposure/types.js';
 
 export interface PublicGatewayTargets {
   adminUrl: string;
@@ -10,10 +19,15 @@ export interface PublicGatewayTargets {
 export interface PublicGatewayOptions {
   host: string;
   port: number;
-  tls: HttpsServerOptions;
+  protocol?: LocalProtocol;
+  tls?: HttpsServerOptions;
   targets: PublicGatewayTargets;
   upstreamCa?: string | Buffer;
+  gatewayTrustSecret?: string;
 }
+
+export const ORIGINAL_TRANSPORT_HEADER = 'x-aevra-gateway-original-proto';
+export const GATEWAY_TRUST_HEADER = 'x-aevra-gateway-trust';
 
 const HOP_BY_HOP = new Set([
   'connection',
@@ -33,6 +47,8 @@ const UNTRUSTED_FORWARDED = new Set([
   'x-forwarded-host',
   'x-forwarded-port',
   'x-forwarded-proto',
+  ORIGINAL_TRANSPORT_HEADER,
+  GATEWAY_TRUST_HEADER,
 ]);
 
 function connectionTokens(headers: IncomingHttpHeaders): Set<string> {
@@ -103,7 +119,7 @@ function sendBadGateway(response: ServerResponse): void {
 }
 
 export class PublicGateway {
-  private server?: Server;
+  private server?: HttpServer | HttpsServer;
   private port: number;
 
   constructor(private readonly options: PublicGatewayOptions) {
@@ -112,9 +128,16 @@ export class PublicGateway {
 
   async start(): Promise<void> {
     if (this.server) return;
-    this.server = https.createServer(this.options.tls, (request, response) => {
+    const handler = (request: IncomingMessage, response: ServerResponse) => {
       void this.proxy(request, response);
-    });
+    };
+    const protocol = this.options.protocol ?? 'https';
+    if (protocol === 'https') {
+      if (!this.options.tls) throw new Error('HTTPS public gateway requires TLS options');
+      this.server = https.createServer(this.options.tls, handler);
+    } else {
+      this.server = http.createServer(handler);
+    }
     await new Promise<void>((resolve, reject) => {
       this.server!.once('error', reject);
       this.server!.listen(this.port, this.options.host, resolve);
@@ -128,7 +151,7 @@ export class PublicGateway {
   }
 
   url(): string {
-    return `https://${this.options.host}:${this.port}`;
+    return `${this.options.protocol ?? 'https'}://${this.options.host}:${this.port}`;
   }
 
   async close(): Promise<void> {
@@ -145,15 +168,22 @@ export class PublicGateway {
       : this.options.targets.adminUrl;
     const target = new URL(`${inboundUrl.pathname}${inboundUrl.search}`, base);
 
-    let upstream: ReturnType<typeof https.request> | undefined;
+    const headers = requestHeaders(request.headers);
+    if (!usesMcpOrigin(inboundUrl.pathname) && this.options.gatewayTrustSecret) {
+      headers[ORIGINAL_TRANSPORT_HEADER] = this.options.protocol ?? 'https';
+      headers[GATEWAY_TRUST_HEADER] = this.options.gatewayTrustSecret;
+    }
+    let upstream: ReturnType<typeof http.request> | undefined;
     try {
-      upstream = https.request(
+      const requestUpstream = target.protocol === 'https:' ? https.request : http.request;
+      upstream = requestUpstream(
         target,
         {
           method: request.method,
-          headers: requestHeaders(request.headers),
-          ca: this.options.upstreamCa,
-          rejectUnauthorized: true,
+          headers,
+          ...(target.protocol === 'https:'
+            ? { ca: this.options.upstreamCa, rejectUnauthorized: true }
+            : {}),
         },
         (upstreamResponse) => {
           response.statusCode = upstreamResponse.statusCode ?? 502;

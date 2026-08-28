@@ -73,11 +73,13 @@ function normalizeManagedGatewayOrigin(value: string): string {
   try {
     url = new URL(value);
   } catch {
-    throw new Error('Managed Cloudflare requires a loopback HTTPS Aevra gateway origin');
+    throw new Error('Managed Cloudflare requires a loopback HTTP or HTTPS Aevra gateway origin');
   }
   const host = url.hostname.toLowerCase();
-  if (url.protocol !== 'https:' || !['localhost', '127.0.0.1', '[::1]', '::1'].includes(host)) {
-    throw new Error('Managed Cloudflare requires a loopback HTTPS Aevra gateway origin');
+  const loopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(host);
+  const supportedProtocol = url.protocol === 'https:' || url.protocol === 'http:';
+  if (!supportedProtocol || !loopback) {
+    throw new Error('Managed Cloudflare requires a loopback HTTP or HTTPS Aevra gateway origin');
   }
   return url.toString().replace(/\/$/, '');
 }

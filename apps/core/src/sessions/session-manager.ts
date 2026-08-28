@@ -15,7 +15,6 @@ import {
 } from './session-lease-continuity.js';
 import type { SecuritySession, SessionResolution, WorkspaceLease } from './session-types.js';
 export type { SecuritySession, SessionResolution, WorkspaceLease } from './session-types.js';
-
 const systemClock: Clock = { now: () => new Date() };
 
 export class SessionManager {
@@ -26,7 +25,6 @@ export class SessionManager {
     string,
     { actor: string; subject: string; connectionId?: string }
   >();
-
   constructor(
     private repo: SessionRepository,
     private profiles: CapabilityProfileService,
@@ -79,7 +77,6 @@ export class SessionManager {
   connectionState(connectionId: string) {
     return this.connections?.state(connectionId) ?? null;
   }
-
   async switchWorkspace(
     sessionId: string,
     workspaceId: string,
@@ -205,7 +202,6 @@ export class SessionManager {
     const leases = this.leases(sessionId);
     return leases.length === 1 ? leases[0]! : null;
   }
-
   grantConnectionWorkspace(sessionId: string, workspaceId: string, profileId: string) {
     const source = this.sessions.get(sessionId) ?? this.disconnectedIdentities.get(sessionId);
     if (!source) throw new Error('session identity not found');
@@ -219,7 +215,6 @@ export class SessionManager {
       admitWorkspace: (id, target, profile) => this.admitWorkspace(id, target, profile),
     });
   }
-
   admitWorkspace(
     sessionId: string,
     workspaceId: string,
@@ -275,6 +270,13 @@ export class SessionManager {
       leaseForWorkspace: (id, target) => this.leaseForWorkspace(id, target),
       revokeLease: (id) => this.revokeLease(id),
     });
+  }
+  invalidateWorkspaceAccess(workspaceId: string) {
+    for (const lease of [...this.leaseRows.values()]) {
+      if (lease.workspaceId === workspaceId) this.revokeLease(lease.id);
+    }
+    this.repo.revokeWorkspaceLeases?.(workspaceId);
+    this.repo.forgetWorkspaceGrants?.(workspaceId);
   }
   revokeLease(id: string) {
     const lease = this.leaseRows.get(id);

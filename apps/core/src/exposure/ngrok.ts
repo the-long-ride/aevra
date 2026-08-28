@@ -20,7 +20,7 @@ export interface NgrokDependencies {
   sleep(ms: number): Promise<void>;
 }
 
-function isLoopbackHttps(value: string) {
+function isLoopbackOrigin(value: string) {
   let url: URL;
   try {
     url = new URL(value);
@@ -28,7 +28,7 @@ function isLoopbackHttps(value: string) {
     return false;
   }
   return (
-    url.protocol === 'https:' &&
+    (url.protocol === 'https:' || url.protocol === 'http:') &&
     ['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname.toLowerCase())
   );
 }
@@ -62,8 +62,8 @@ export class NgrokAdapter {
     localGatewayUrl: string,
     requestedPublicUrl?: string,
   ): Promise<{ publicUrl?: string }> {
-    if (!isLoopbackHttps(localGatewayUrl)) {
-      throw new Error('Managed ngrok requires a loopback HTTPS Aevra gateway origin');
+    if (!isLoopbackOrigin(localGatewayUrl)) {
+      throw new Error('Managed ngrok requires a loopback HTTP or HTTPS Aevra gateway origin');
     }
     await this.stop();
     this.stopping = false;

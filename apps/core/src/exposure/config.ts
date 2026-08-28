@@ -1,6 +1,6 @@
 import type { SettingsRepository } from '../../../../packages/store/src/settings.js';
 import { normalizeAdminPublicUrl, normalizeTrustedAdminOrigins } from './admin-origin.js';
-import { EXPOSURE_PROVIDERS, type ExposureConfig } from './types.js';
+import { EXPOSURE_PROVIDERS, type ExposureConfig, type LocalProtocol } from './types.js';
 
 type SettingsLike = Pick<SettingsRepository, 'get' | 'set'>;
 
@@ -16,6 +16,14 @@ function normalizePublicUrl(value: string | undefined): string | undefined {
   url.hash = '';
   url.search = '';
   return url.toString().replace(/\/$/, '');
+}
+
+export function resolveLocalProtocol(config: Pick<ExposureConfig, 'localProtocol'>): LocalProtocol {
+  const protocol = config.localProtocol ?? 'https';
+  if (protocol !== 'https' && protocol !== 'http') {
+    throw new Error('Local transport protocol must be https or http');
+  }
+  return protocol;
 }
 
 function validateCloudflare(config: ExposureConfig) {
@@ -44,11 +52,16 @@ function adminFields(input: ExposureConfig) {
   };
 }
 
+function localProtocolField(input: ExposureConfig) {
+  return input.localProtocol ? { localProtocol: resolveLocalProtocol(input) } : {};
+}
+
 export function validateExposureConfig(input: ExposureConfig): ExposureConfig {
   if (!(EXPOSURE_PROVIDERS as readonly string[]).includes(input.provider)) {
     throw new Error(`Unsupported exposure provider: ${String(input.provider)}`);
   }
 
+  const localProtocol = resolveLocalProtocol(input);
   const config: ExposureConfig = {
     ...input,
     publicUrl: normalizePublicUrl(input.publicUrl),
@@ -59,10 +72,12 @@ export function validateExposureConfig(input: ExposureConfig): ExposureConfig {
   if (!config.trustedAdminOrigins?.length) delete config.trustedAdminOrigins;
 
   if (input.provider === 'local') {
-    return { provider: 'local', ...adminFields(config) };
+    return { provider: 'local', ...localProtocolField(input), ...adminFields(config) };
   }
 
   if (input.provider === 'direct') {
+    if (localProtocol !== 'https')
+      throw new Error('Direct exposure requires HTTPS local transport');
     if (!config.publicUrl) throw new Error('Direct exposure requires a public URL');
     if (!input.direct?.host?.trim()) throw new Error('Direct exposure host is required');
     config.direct = { host: input.direct.host.trim() };
@@ -73,6 +88,7 @@ export function validateExposureConfig(input: ExposureConfig): ExposureConfig {
     if (!config.publicUrl) throw new Error('External exposure requires a public URL');
     return {
       provider: 'external',
+      ...localProtocolField(input),
       publicUrl: config.publicUrl,
       ...adminFields(config),
     };

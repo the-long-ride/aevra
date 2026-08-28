@@ -1,9 +1,11 @@
 export const EXPOSURE_PROVIDERS = ['local', 'direct', 'cloudflare', 'ngrok', 'external'] as const;
 
 export type ExposureProvider = (typeof EXPOSURE_PROVIDERS)[number];
+export type LocalProtocol = 'https' | 'http';
 
 export interface ExposureConfig {
   provider: ExposureProvider;
+  localProtocol?: LocalProtocol;
   publicUrl?: string;
   adminPublicUrl?: string;
   trustedAdminOrigins?: string[];

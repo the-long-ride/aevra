@@ -1,4 +1,10 @@
+import type { SystemCapabilitySnapshot } from '../../../../packages/protocol/src/index.js';
 import type { KeepAwakeStatus } from '../power/keep-awake-service.js';
+import { fallbackSystemCapabilitySnapshot } from '../system/capability-detector.js';
+import {
+  validateRuntimeTransport,
+  type RuntimeTransportValidation,
+} from '../exposure/transport-validation.js';
 
 export interface DashboardRuntimeSnapshot {
   generatedAt: string;
@@ -7,6 +13,8 @@ export interface DashboardRuntimeSnapshot {
   status: any;
   metrics: any[];
   power: KeepAwakeStatus | null;
+  system: SystemCapabilitySnapshot;
+  transport: RuntimeTransportValidation;
   pending: { approvals: number; oauth: number; total: number };
   stats: {
     sessions: number;
@@ -117,6 +125,14 @@ function connectionInventory(context: any, sessions: any[], workspaceNames: Map<
   return [...oauth, ...otherSessions.map((session) => sessionConnection(session, workspaceNames))];
 }
 
+function fallbackTransport(): RuntimeTransportValidation {
+  return validateRuntimeTransport({
+    gatewayUrl: 'https://localhost',
+    adminUrl: 'https://localhost',
+    mcpUrl: 'https://localhost',
+  });
+}
+
 export function buildDashboardRuntimeSnapshot(
   context: any,
   status: any,
@@ -149,6 +165,11 @@ export function buildDashboardRuntimeSnapshot(
     status,
     metrics,
     power: context.power?.status?.() ?? null,
+    system: context.systemCapabilities?.() ?? fallbackSystemCapabilitySnapshot(),
+    transport:
+      context.transportValidation?.() ??
+      context.exposure?.transportValidation?.() ??
+      fallbackTransport(),
     pending: {
       approvals: approvals.length,
       oauth: oauth.length,

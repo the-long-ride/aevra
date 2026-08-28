@@ -5,6 +5,7 @@ import { IpRateLimiter } from '../mcp/rate-limit.js';
 import type { AdminCredentialVerifier } from './admin-credentials.js';
 import type { AdminBootstrapService } from './bootstrap.js';
 import { secretEquals } from './bootstrap.js';
+import { GATEWAY_TRUST_HEADER, ORIGINAL_TRANSPORT_HEADER } from '../gateway/public-gateway.js';
 import { handleBulkAdminAction } from './bulk-actions.js';
 import { buildDashboardRuntimeSnapshot } from './dashboard-runtime.js';
 import { handleAdminApi, type AdminApiContext } from './routes/api.js';
@@ -30,7 +31,21 @@ function isMutation(req: IncomingMessage) {
   return !['GET', 'HEAD', 'OPTIONS'].includes(req.method ?? 'GET');
 }
 
-function sameOrigin(req: IncomingMessage, url: URL, trustedOrigins: string[] = []) {
+function isLoopback(address: string | undefined) {
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
+function headerValue(req: IncomingMessage, name: string) {
+  const value = req.headers[name];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function sameOrigin(
+  req: IncomingMessage,
+  url: URL,
+  trustedOrigins: string[] = [],
+  allowLoopbackHttpOrigin = false,
+) {
   if (!isMutation(req)) return true;
   const fetchSite = req.headers['sec-fetch-site'];
   if (typeof fetchSite === 'string' && !['same-origin', 'none'].includes(fetchSite)) {
@@ -44,7 +59,10 @@ function sameOrigin(req: IncomingMessage, url: URL, trustedOrigins: string[] = [
   } catch {
     return false;
   }
-  return requestOrigin === url.origin || trustedOrigins.includes(requestOrigin);
+  if (requestOrigin === url.origin || trustedOrigins.includes(requestOrigin)) return true;
+  if (!allowLoopbackHttpOrigin) return false;
+  const originUrl = new URL(requestOrigin);
+  return originUrl.protocol === 'http:' && isLoopback(originUrl.hostname);
 }
 
 function staticContentType(file: string) {
@@ -66,12 +84,16 @@ export interface AdminServerOptions {
   tls?: HttpsServerOptions;
   advertisedHost?: string;
   trustedOrigins?: () => string[];
+  gatewayTrustSecret?: string;
+  localHttpGatewayEnabled?: () => boolean;
+  onSecurityWarning?: (line: string) => void;
 }
 
 export class AdminServer {
   private server?: http.Server | https.Server;
   private readonly startedAt = new Date().toISOString();
   private readonly loginLimiter: IpRateLimiter;
+  private lastInsecureLoginWarningAt = 0;
 
   constructor(
     private host: string,
@@ -142,14 +164,27 @@ export class AdminServer {
     }
 
     if (url.pathname.startsWith('/api/auth/') && this.options.bootstrap) {
+      const trustedGateway =
+        isLoopback(req.socket.remoteAddress) &&
+        secretEquals(headerValue(req, GATEWAY_TRUST_HEADER), this.options.gatewayTrustSecret ?? '');
+      const originalTransport = headerValue(req, ORIGINAL_TRANSPORT_HEADER);
+      const localHttpGateway =
+        trustedGateway &&
+        originalTransport === 'http' &&
+        this.options.localHttpGatewayEnabled?.() === true;
+      const browserSecure =
+        (req.socket as { encrypted?: boolean }).encrypted === true &&
+        (!trustedGateway || originalTransport !== 'http');
       const handled = await handleAuthRoutes(req, res, url, {
         sessions: this.options.bootstrap,
         credentialVerifier: this.options.credentialVerifier,
         loginLimiter: this.loginLimiter,
         sessionId: this.adminSession(req),
-        secure: (req.socket as { encrypted?: boolean }).encrypted === true,
-        sameOrigin: sameOrigin(req, url, trustedOrigins),
+        secure: browserSecure,
+        allowLocalHttpPassword: localHttpGateway,
+        sameOrigin: sameOrigin(req, url, trustedOrigins, localHttpGateway),
         clientIp: req.socket.remoteAddress ?? 'unknown',
+        onInsecureLoginBlocked: () => this.warnInsecureLogin(),
       });
       if (handled) return;
     }
@@ -211,5 +246,16 @@ export class AdminServer {
 
     res.statusCode = 404;
     res.end('Not Found');
+  }
+
+  private warnInsecureLogin() {
+    if (Date.now() - this.lastInsecureLoginWarningAt < 60_000) return;
+    this.lastInsecureLoginWarningAt = Date.now();
+    for (const line of [
+      '[aevra] Admin login blocked: insecure password submission.',
+      '[aevra] HTTP login is allowed only in explicit Local HTTP mode from a loopback connection.',
+      '[aevra] Use the local gateway or switch Local transport to HTTPS.',
+    ])
+      this.options.onSecurityWarning?.(line);
   }
 }

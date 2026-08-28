@@ -1,6 +1,6 @@
 import type { SettingsRepository } from '../../../../packages/store/src/settings.js';
 import type { AevraOAuthService } from '../auth/oauth.js';
-import { loadExposureConfig, validateExposureConfig } from './config.js';
+import { loadExposureConfig, resolveLocalProtocol, validateExposureConfig } from './config.js';
 import type { ExposureConfig } from './types.js';
 import type { ExposureService } from './service.js';
 
@@ -33,6 +33,17 @@ export class RuntimeExposureController {
     return this.config;
   }
 
+  restartRequired(): boolean {
+    const gatewayUrl = this.gateway.url();
+    if (!gatewayUrl) return false;
+    const currentHost = this.gateway.host();
+    const currentProtocol = new URL(gatewayUrl).protocol.replace(':', '');
+    return Boolean(
+      (currentHost && currentHost !== this.gatewayHost()) ||
+      currentProtocol !== resolveLocalProtocol(this.config),
+    );
+  }
+
   async start(localGatewayUrl: string) {
     await this.exposure.start(this.config, localGatewayUrl);
     this.oauth.setPublicBaseUrl(this.exposure.effectivePublicUrl());
@@ -43,6 +54,7 @@ export class RuntimeExposureController {
     return {
       ...this.exposure.status(),
       config: this.config,
+      restartRequired: this.restartRequired(),
       oauth: {
         issuer: this.oauth.issuer,
         resource: this.oauth.resource,
@@ -57,8 +69,7 @@ export class RuntimeExposureController {
     this.config = next;
 
     const gatewayUrl = this.gateway.url();
-    const currentHost = this.gateway.host();
-    const restartRequired = Boolean(currentHost && currentHost !== this.gatewayHost());
+    const restartRequired = !gatewayUrl || this.restartRequired();
     if (!gatewayUrl || restartRequired) {
       return {
         config: next,
