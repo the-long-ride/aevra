@@ -14,6 +14,24 @@ function entropy(s: string) {
   }
   return h;
 }
+
+/**
+ * True when a slash-separated run carries a segment that reads as an opaque payload
+ * rather than a path component: either long and high-entropy, or mixing case with
+ * digits the way encoded credentials do and directory names do not.
+ */
+function hasBlobSegment(candidate: string) {
+  return candidate.split('/').some((segment) => {
+    if (entropy(segment) < 3.5) return false;
+    if (segment.length >= 32) return true;
+    return (
+      segment.length >= 16 &&
+      /[a-z]/.test(segment) &&
+      /[A-Z]/.test(segment) &&
+      /[0-9]/.test(segment)
+    );
+  });
+}
 export interface DlpResult {
   text: string;
   redactionCount: number;
@@ -40,7 +58,10 @@ export function redactText(
       return '[REDACTED]';
     });
   text = text.replace(/\b[A-Za-z0-9+/_=-]{32,}\b/g, (m) => {
-    if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(m) || m.includes('/') || entropy(m) < 3.5) return m;
+    if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(m)) return m;
+    // A slash used to grant blanket immunity, so any encoded payload containing '/'
+    // passed through. Judge slash-bearing runs per segment instead.
+    if (m.includes('/') ? !hasBlobSegment(m) : entropy(m) < 3.5) return m;
     count++;
     return '[REDACTED]';
   });
