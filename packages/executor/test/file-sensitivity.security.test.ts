@@ -37,7 +37,7 @@ test('file_search contributes zero hits from SECRET files', async () => {
   writeFileSync(path.join(root, '.env'), 'AEVRA_UNIQUE_SECRET=needle-secret-value\n');
   writeFileSync(path.join(root, 'normal.txt'), 'needle public value\n');
 
-  const hits = await fileSearch('/', 'needle', roots);
+  const { hits } = await fileSearch('/', 'needle', roots);
   assert.equal(
     hits.some((hit) => hit.path.endsWith('/.env')),
     false,
@@ -59,7 +59,7 @@ test('file_search masks SENSITIVE matching lines before return', async () => {
     '//registry.npmjs.org/:_authToken=raw-sensitive-value\n',
   );
 
-  const hits = await fileSearch('/', '_authToken', roots);
+  const { hits } = await fileSearch('/', '_authToken', roots);
   assert.equal(hits.length, 1);
   assert.match(hits[0]!.text, /_authToken/);
   assert.match(hits[0]!.text, /\[REDACTED\]/);
@@ -92,7 +92,7 @@ test('Executor rejects hard-link aliases when another in-workspace alias is SECR
   await assert.rejects(() => fileWrite('/alias.txt', 'TOKEN=changed', roots), /secret|protected/i);
   await assert.rejects(() => fileDelete('/alias.txt', false, roots), /secret|protected/i);
   await assert.rejects(() => fileMove('/alias.txt', '/moved.txt', roots), /secret|protected/i);
-  const hits = await fileSearch('/', 'hardlink-secret-marker', roots);
+  const { hits } = await fileSearch('/', 'hardlink-secret-marker', roots);
   assert.equal(hits.length, 0);
 });
 
@@ -103,7 +103,7 @@ test('normal hard-linked files remain readable and searchable', async () => {
 
   const read = await fileRead('/alias.txt', roots);
   assert.match(read.content, /normal-hardlink-marker/);
-  const hits = await fileSearch('/', 'normal-hardlink-marker', roots);
+  const { hits } = await fileSearch('/', 'normal-hardlink-marker', roots);
   assert.ok(hits.some((hit) => hit.path.endsWith('/source.txt')));
   assert.ok(hits.some((hit) => hit.path.endsWith('/alias.txt')));
 });

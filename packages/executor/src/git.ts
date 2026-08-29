@@ -6,6 +6,7 @@ async function git(cwd: string, args: string[]) {
 }
 
 export const gitStatus = (cwd: string) => git(cwd, ['status', '--porcelain=v1', '--branch']);
+export const gitAdd = (cwd: string, args: string[] = []) => git(cwd, ['add', ...args]);
 export const gitDiff = (cwd: string, args: string[] = []) => git(cwd, ['diff', ...args]);
 export const gitLog = (cwd: string, args: string[] = []) =>
   git(cwd, ['log', '--oneline', '-n', '50', ...args]);

@@ -24,10 +24,10 @@ test('file primitives return logical metadata without host path', async () => {
   const r = await fileRead('/a.txt', roots);
   assert.equal(r.content, 'hello world');
   assert.equal('hostPath' in r, false);
-  assert.equal((await fileSearch('/', 'world', roots))[0]!.path, '/a.txt');
+  assert.equal((await fileSearch('/', 'world', roots)).hits[0]!.path, '/a.txt');
 
   const { fileList, fileCreate, fileWrite, fileMove, fileDelete } = await import('../src/files.js');
-  const list = await fileList('/', roots);
+  const { entries: list } = await fileList('/', roots);
   assert.ok(list.some((item) => item.name === 'a.txt'));
 
   await fileCreate('/b.txt', 'content b', roots, 'utf8');
@@ -47,10 +47,10 @@ test('file primitives return logical metadata without host path', async () => {
   );
   assert.equal((await fileRead('/nested/sub.txt', roots)).content, 'hello nested');
 
-  const nestedSearch = await fileSearch('/', 'nested', roots);
+  const { hits: nestedSearch } = await fileSearch('/', 'nested', roots);
   assert.ok(nestedSearch.some((h) => h.path === '/nested/sub.txt'));
 
-  const subList = await fileList('/nested', roots);
+  const { entries: subList } = await fileList('/nested', roots);
   assert.ok(subList.some((item) => item.name === 'sub.txt'));
 
   await fileWrite(
@@ -66,7 +66,7 @@ test('file primitives return logical metadata without host path', async () => {
 
   // SENSITIVE file search masking
   writeFileSync(path.join(d, 'credentials.json'), '{\n  "api_key": "my-secret-key"\n}\n');
-  const sensitiveSearch = await fileSearch('/', 'my-secret-key', roots);
+  const { hits: sensitiveSearch } = await fileSearch('/', 'my-secret-key', roots);
   assert.ok(sensitiveSearch.length > 0);
   assert.ok(sensitiveSearch[0]?.text.includes('[REDACTED]'));
 

@@ -144,19 +144,29 @@ async function readUtf8Range(file: string, offset: number, requestedLength: numb
   return { content, offset, length: content.length, totalLength: position };
 }
 
-export async function fileList(logicalPath: string, roots: CapabilityRoot[]) {
+export type FileListEntry = {
+  name: string;
+  type: 'directory' | 'file' | 'link' | 'other';
+};
+
+export async function fileList(
+  logicalPath: string,
+  roots: CapabilityRoot[],
+): Promise<{ entries: FileListEntry[] }> {
   const r = await resolveCapabilityPath(logicalPath, roots, 'read');
   const entries = await readdir(r.canonicalHostPath, { withFileTypes: true });
-  return entries.map((entry) => ({
-    name: entry.name,
-    type: entry.isDirectory()
-      ? 'directory'
-      : entry.isFile()
-        ? 'file'
-        : entry.isSymbolicLink()
-          ? 'link'
-          : 'other',
-  }));
+  return {
+    entries: entries.map((entry) => ({
+      name: entry.name,
+      type: entry.isDirectory()
+        ? 'directory'
+        : entry.isFile()
+          ? 'file'
+          : entry.isSymbolicLink()
+            ? 'link'
+            : 'other',
+    })),
+  };
 }
 
 export async function fileRead(
@@ -238,7 +248,7 @@ export async function fileSearch(
     }
   }
   await walk(r.canonicalHostPath, r.logicalPath.replace(/\/$/, ''));
-  return hits;
+  return { hits };
 }
 
 export async function fileCreate(

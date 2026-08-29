@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { CommandInput, CommandResult } from '../../protocol/src/index.js';
 import { redactText } from '../../security/src/dlp.js';
+import { stripControlCharacters } from '../../security/src/untrusted.js';
 import { buildChildEnvironment } from './environment.js';
 export const COMMAND_OUTPUT_LIMIT = 1024 * 1024;
 const TRUNCATED = '\n...[output truncated by Aevra]';
@@ -15,7 +16,10 @@ export function sanitizeCommandOutput(
   knownSecrets: string[] = [],
   truncated = false,
 ) {
-  const text = redactText(value, knownSecrets).text;
+  // Command output is untrusted data that flows straight into an AI context and,
+  // through approval previews, onto a human's screen. Terminal control sequences
+  // and bidi overrides let it render as something other than what it says.
+  const text = stripControlCharacters(redactText(value, knownSecrets).text);
   return truncated ? `${text}${TRUNCATED}` : text;
 }
 export async function runCommand(input: CommandInput, cwd?: string): Promise<CommandResult> {
