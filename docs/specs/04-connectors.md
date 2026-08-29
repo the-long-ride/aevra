@@ -17,6 +17,12 @@ URL         → https://<public-url>/mcp/<token>
 - Admitted identity: `actor: "connector:<name>"`, `subject: <connector id>` — flows into sessions, permissions, and audit like any actor.
 - Optional policy bindings: default workspace, capability profile ceiling, and token expiry TTL.
 
+> **Deprecated:** placing the token in the URL path is deprecated. Proxies, CDNs, and
+> error pages record request lines, so the credential can outlive the request it
+> authenticated. Aevra never records the path itself, and responses on that path set
+> `Cache-Control: no-store`, but prefer sending the same token as an
+> `Authorization: Bearer <token>` header against `/mcp`.
+
 ## Verification semantics
 
 1. Path matches `/^\/mcp\/([A-Za-z0-9_-]+)$/` → connector branch.
@@ -41,6 +47,8 @@ Admin session + same-origin required; safe mode blocks mutations. There is **no 
 ## OAuth connections are distinct
 
 Static connector-token URLs remain admission credentials. OAuth clients instead receive a durable connection subject backed by rotating access/refresh credentials. The connection can enter a reconnect grace state after transport detach, retain remembered workspace grants and connection-level YOLO across a new MCP session, and expose its recent durable mutation outcomes through `operation_get` / `operation_list`. Admin **Disconnect session** affects one MCP session; **Revoke connection** invalidates the OAuth credential family and clears its remembered authority.
+
+Access tokens, refresh tokens, PKCE verifiers, and authorization codes are **never persisted in plaintext**: like connector tokens, only their SHA-256 hashes are stored and compared in constant time, so a durable-state dump cannot yield a usable credential. Refresh tokens rotate on use, and replaying a spent one revokes the whole family. Regression coverage: `apps/core/test/oauth-secret-persistence.unit.test.ts`.
 
 ## Deployment rule
 

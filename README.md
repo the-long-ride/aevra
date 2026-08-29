@@ -62,7 +62,7 @@ Execution Worker (filesystem · git · commands · sandbox · processes · hooks
 
 ## Core Features
 
-- **40 Discoverable MCP Tools & Fast Lane Interfaces**: Streamlined public toolset featuring batch file reads, mutations, command execution, workspace management, Git operations, durable processes, and change sets (with singular primitives safely delegated internally).
+- **41 Discoverable MCP Tools & Fast Lane Interfaces**: Streamlined public toolset featuring batch file reads, mutations, command execution, workspace management, Git operations, durable processes, and change sets (with singular primitives safely delegated internally).
 - **Host System Capabilities & Status**: MCP `aevra_status` exposes host toolchain snapshots, available shells, and execution defaults directly to models and the Admin UI.
 - **Dynamic Resources & Instruction Prompts**: Serves context files seamlessly via MCP resources (`aevra://skill/<source>/<name>`) and instruction prompts (`aevra-instructions` parsed from `AGENTS.md` / `CLAUDE.md`).
 - **React 19 Admin Dashboard**: Single-page dark theme dashboard featuring live System Capabilities breakdown, Transport Validation status, real-time MCP activity monitoring with sanitized payloads, and interactive runtime modals.

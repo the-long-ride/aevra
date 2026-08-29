@@ -2,6 +2,134 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **YOLO modes**: unattended automation now has two operator-chosen modes in
+  Settings (`policy.yolo`, `GET`/`PATCH /api/policy/yolo`). `workspace` (default)
+  auto-runs only work that stays inside the workspace sandbox and still raises an
+  approval for host execution, network access, `git.push`, CRITICAL risk, and command
+  bodies that elevate privilege, reach a remote host, touch system or home paths,
+  change host services or the registry, drive a container or cluster runtime, publish,
+  or traverse out of the workspace. `unrestricted` waives that scope check, is
+  confirmed in the UI before it applies, and has to be selected
+  deliberately; it still honors `policy.critical.alwaysConfirm`. A YOLO session also
+  no longer stops for a per-command approval after clearing the capability gate.
+
+### Security
+
+Remediates an internal security audit. Each item carries a regression test in the
+`.security.test.ts` suite.
+
+- **Explicit DENY outranks YOLO**: permission rules are now evaluated before the YOLO
+  short-circuit in both authorization gates, so a standing DENY refuses the operation
+  instead of being skipped by a session flag.
+- **Unknown sandbox backend fails closed**: an unset or unreadable
+  `execution.settings.sandboxBackend` counts as sandboxed, so a settings gap can no
+  longer let host execution run unattended under workspace-scoped YOLO.
+- **Escape detection is linear**: the workspace-escape patterns no longer pair two
+  tokens across a scan-to-end-of-line, which backtracked quadratically on a
+  caller-controlled script body.
+
+- **Slash-bearing secrets are redacted**: the generic entropy rule skipped every
+  candidate containing `/`, so a base64 payload with a `/` in it passed through
+  unredacted. Slash-bearing runs are now judged per segment - a long or
+  mixed-case-with-digits segment is treated as an opaque payload, while ordinary path
+  components (including Windows paths) still survive.
+- **Client IP is no longer attacker-controlled**: `remoteIp` trusted the
+  `cf-connecting-ip` header unconditionally and the public gateway did not strip it,
+  so any remote client could mint a fresh rate-limit bucket per request and forge the
+  origin address recorded in the audit trail. The gateway now strips
+  `cf-connecting-ip`, `true-client-ip`, and `x-real-ip`, and `remoteIp` ignores them
+  unless a caller explicitly opts in. `IpRateLimiter` additionally bounds its bucket
+  and failure maps with LRU eviction so key cycling cannot exhaust memory.
+- **Shell approvals are one-time only**: the permission matcher `shell:<shell>:*`
+  excludes the script body, so approving a single shell command with a persistent
+  scope authorized every future script. Persistent scopes are now refused for
+  `commands.run` operations whose family begins with `shell:`.
+- **Approval previews are trustworthy**: previews left Unicode control and format
+  characters intact and truncated shell scripts at 180 characters, so a benign prefix
+  plus padding could hide the real payload behind the ellipsis. Previews now strip
+  Cc/Cf characters (ANSI escapes, zero-width spaces, bidi overrides), executable text
+  gets a 4000-character budget, and any remaining truncation is reported through the
+  new `truncated` and `previewFullLength` fields.
+- **Workspace instructions are marked untrusted**: workspace `AGENTS.md` reached the
+  model as a `role: user` prompt, so a hostile repository could place text in the
+  highest-trust position available. Workspace-sourced instructions are now delivered
+  inside a labeled untrusted-content envelope that also neutralizes forged
+  delimiters. User-global instructions, which the operator authors, are unchanged.
+  Command `stdout`/`stderr` is stripped of terminal control sequences.
+- **YOLO honors `policy.critical.alwaysConfirm`**: YOLO short-circuited ahead of the
+  policy check, contradicting the documented guarantee that critical operations never
+  execute unattended. The policy is now evaluated first in both `gated()` and
+  `authorizeCapability()`.
+- **Admin is not published by default through a tunnel**: the public gateway routed
+  every non-MCP path to the Admin plane, so enabling an exposure provider also
+  exposed the Admin UI and its login endpoint. Admin proxying now requires either
+  local-only exposure or an explicitly configured `adminPublicUrl`; otherwise those
+  paths return `404` without reaching the upstream.
+- **Destructive commands are classified correctly**: risk classification matched only
+  abstract tokens that never appear in real command lines, so a recursive force
+  delete of a filesystem root classified LOW. Added patterns for privilege
+  elevation, filesystem creation and wipe, raw device writes, power-state changes,
+  recursive delete, recursive `chmod`/`chown`, `npm publish`, and
+  download-piped-to-interpreter.
+- **Dynamic client registration is bounded**: `client_name` is unauthenticated input
+  that renders into local approval prompts and OS notifications; it is now stripped
+  of control characters and capped at 80 characters. Registration is refused with
+  `too_many_clients` beyond 50 registered clients.
+- **Admin CSRF checks require positive evidence**: a state-changing request carrying
+  neither `Origin` nor `Sec-Fetch-Site` was accepted. Such requests are now accepted
+  only from a loopback peer, which preserves the local CLI while closing the
+  fail-open path.
+- **Connector URL tokens are kept out of caches**: responses on the `/mcp/<token>`
+  path set `Cache-Control: no-store`, and a one-time startup warning recommends the
+  `Authorization: Bearer` form. Aevra itself never recorded the request path, so no
+  audit or activity redaction was required.
+
+- **Workspace read output carries provenance**: `file_read`, `file_search`, and
+  `search` results are tagged `untrusted: true` with a notice stating the content is
+  data rather than instructions. The marker travels alongside the content instead of
+  wrapping it, because `file_read` output doubles as the merge base for `file_patch`
+  and rewriting those bytes would corrupt subsequent writes; a regression test pins
+  that byte-exactness. `file_search`'s output schema admits the two advisory fields
+  explicitly, since it is `additionalProperties: false`.
+
+### Known gaps
+
+- Workspace-scoped YOLO judges command text with a pattern net, not a parser. Quoting,
+  encoding, or an interpreter (`node -e`, a written-then-run script) can hide an escape
+  from it; the sandbox boundary, capability leases, and permission rules remain the
+  enforcement mechanism.
+- Workspace-scoped YOLO also auto-runs in-workspace writes that execute later, such as
+  `.git/hooks`, `package.json` scripts, and workspace skill files. They stay inside the
+  workspace, so the scope check allows them, but they run the next time a human or a
+  tool triggers them.
+- Provenance marking is advisory, not enforcement. `file_read`, `file_search`, and
+  `search` results carry `untrusted: true` and a notice, but a model that ignores the
+  marker can still act on injected text. Approvals remain the backstop.
+
+### Added
+
+- **`git_add` tool**: stages files in the workspace index (`paths` list or `all: true` for `git add -A`). Classified LOW risk with no approval gate, matching the other read-adjacent Git tools.
+- **`git_diff` short mode**: optional `short: true` input returns a compact `--stat` summary instead of the full patch text.
+- **OAuth secret-persistence regression tests**: assert that access tokens, refresh tokens, PKCE verifiers, and authorization codes never reach durable storage in plaintext, that refresh rotation preserves the invariant, and that tokens stay verifiable from their stored hashes.
+
+### Changed
+
+- **Remembered workspace grants restore lazily**: creating or resuming a session now records that a restore is owed instead of re-admitting every remembered grant up front; the leases are admitted when the session first reads them, at most once per session. A session that never touches a workspace no longer writes lease rows, and concurrent first use cannot admit a lease twice. Reconnect re-arms the restore, preserving repair of leases that expired while the connection was away.
+
+### Fixed
+
+- **MCP structured-content schema violations**: seven tools could return a shape that failed their own declared (or default) output schema, surfacing as `Structured content does not match the tool's output schema` in strict MCP clients that validate `structuredContent`:
+  - `file_list` and `file_search` returned bare arrays instead of an object; now `{ entries: [...] }` and `{ hits: [...] }` respectively, each with a matching output schema.
+  - `workspace_list` returned a bare array; now `{ workspaces: [...] }` with a matching output schema.
+  - `workspace_current` returned a bare `null` when no workspace was leased; now `{ status: 'none', workspace: null }`.
+  - `process_list` returned a bare array even though its output schema already required `{ result: [...] }`; the handler now wraps its result to match.
+  - `change_commit` resolved to `undefined` (`ChangeSetService.commit()` had no `return` statement); now returns `{ id, state: 'COMMITTED' }`.
+  - `approval_status` / `approval_cancel` returned a bare `null` when the request wasn't found or approvals weren't configured; now return `{ status: 'not_found' }` or throw `CAPABILITY_REQUIRED` accordingly.
+
 ## [0.1.3] - 2026-08-28
 
 ### Added

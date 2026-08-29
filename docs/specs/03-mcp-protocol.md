@@ -15,7 +15,7 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
 4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
 
-## Tool vocabulary (40 discoverable tools)
+## Tool vocabulary (41 discoverable tools)
 
 | Group      | Tools                                                                                                          |
 | ---------- | -------------------------------------------------------------------------------------------------------------- |
@@ -23,7 +23,7 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 | Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                        |
 | Files      | `file_list` `file_read_many` `file_search` `search` `file_write_many` `file_move` `file_delete`                |
 | Command    | `command_run_many` `shell_run`                                                                                 |
-| Git        | `git_status` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                                         |
+| Git        | `git_status` `git_add` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                               |
 | Processes  | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart` |
 | Operations | `operation_get` `operation_list`                                                                               |
 | Changes    | `change_begin` `change_status` `change_commit` `change_rollback`                                               |
