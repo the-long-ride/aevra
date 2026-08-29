@@ -80,7 +80,8 @@ export async function handleProcessChangeTool(
 ) {
   if (name === 'process_start') return processStart(context, sessionId, args);
   if (name === 'process_list') {
-    return context.deps.processes?.list(sessionId) ?? unavailable(name);
+    if (!context.deps.processes) return unavailable(name);
+    return { result: await context.deps.processes.list(sessionId) };
   }
   if (name === 'process_status') {
     return unwrapProcessResult(

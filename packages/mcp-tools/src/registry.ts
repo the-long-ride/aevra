@@ -36,6 +36,7 @@ export const STABLE_TOOL_NAMES = [
   'operation_get',
   'operation_list',
   'git_status',
+  'git_add',
   'git_diff',
   'git_log',
   'git_branch',
@@ -114,7 +115,48 @@ const processStatusSchema: JsonSchema = {
   ],
   additionalProperties: false,
 };
+const fileListEntrySchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    type: { type: 'string', enum: ['directory', 'file', 'link', 'other'] },
+  },
+  required: ['name', 'type'],
+  additionalProperties: false,
+};
+const searchHitSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    path: { type: 'string' },
+    line: { type: 'integer' },
+    text: { type: 'string' },
+  },
+  required: ['path'],
+  additionalProperties: false,
+};
 const outputSchemas: Partial<Record<AevraToolName, JsonSchema>> = {
+  file_list: {
+    type: 'object',
+    properties: { entries: { type: 'array', items: fileListEntrySchema } },
+    required: ['entries'],
+    additionalProperties: false,
+  },
+  file_search: {
+    type: 'object',
+    properties: {
+      hits: { type: 'array', items: searchHitSchema },
+      untrusted: { type: 'boolean' },
+      notice: { type: 'string' },
+    },
+    required: ['hits'],
+    additionalProperties: false,
+  },
+  workspace_list: {
+    type: 'object',
+    properties: { workspaces: { type: 'array', items: anyObjectSchema } },
+    required: ['workspaces'],
+    additionalProperties: false,
+  },
   process_start: anyObjectSchema,
   process_list: {
     type: 'object',
@@ -242,6 +284,7 @@ const descriptions: Partial<Record<AevraToolName, string>> = {
     'Inspect one durable Aevra operation owned by the current OAuth connection after reconnect.',
   operation_list: 'List recent durable Aevra operations owned by the current OAuth connection.',
   git_status: 'Read Git status for the active workspace.',
+  git_add: 'Stage files in the active workspace index (git add). Low-risk, no approval required.',
   git_diff: 'Read a Git diff for the active workspace.',
   git_log: 'Read Git history for the active workspace.',
   git_branch: 'Read or change Git branch state according to Aevra policy.',

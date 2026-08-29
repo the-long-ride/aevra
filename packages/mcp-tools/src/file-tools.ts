@@ -6,6 +6,7 @@ import {
   maxSensitivity,
   type Sensitivity,
 } from '../../security/src/sensitive.js';
+import { markUntrusted } from '../../security/src/untrusted.js';
 import { authorizeCapability, authorizeImmutableSecurityApproval, gated } from './authorization.js';
 import { AevraToolError } from './errors.js';
 import { argsHash, requiredLease, unavailable } from './service-helpers.js';
@@ -291,6 +292,8 @@ async function readTool(
   if (!result.ok) {
     throw new AevraToolError(result.error.code, result.error.message, result.error.details);
   }
+  // Search hits echo workspace file text back to the model; tag their provenance.
+  if (name === 'file_search') return markUntrusted(result.value as object);
   if (name !== 'file_read') return result.value;
 
   const value = result.value as any;
@@ -306,17 +309,19 @@ async function readTool(
       : value.content;
   const ranged = args.offset !== undefined || args.length !== undefined;
   if (ranged) {
-    return {
+    return markUntrusted({
       ...value,
       content,
       offset: Number(value.offset ?? Math.max(0, Number(args.offset ?? 0) || 0)),
       length: Number(value.length ?? String(content ?? '').length),
       totalLength: Number(value.totalLength ?? String(content ?? '').length),
       sensitivity,
-    };
+    });
   }
 
   if (sensitivity === 'NORMAL') {
+    // Stores value.content (raw), not the masked/marked return value, so file_patch
+    // merge bases stay byte-exact.
     context.reads.put({
       sessionId,
       workspaceId: lease.workspaceId,
@@ -326,5 +331,5 @@ async function readTool(
       storedAt: Date.now(),
     });
   }
-  return { ...value, path: String(args.path ?? value.path), content, sensitivity };
+  return markUntrusted({ ...value, path: String(args.path ?? value.path), content, sensitivity });
 }

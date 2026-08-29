@@ -1,4 +1,5 @@
 import { authorizeCapability, gated, workspaceSelect } from './authorization.js';
+import { renderInstructionPrompt } from './instruction-prompt.js';
 import { AevraToolError } from './errors.js';
 import { argsHash, sessionLeases, unavailable, workspaceRoot } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
@@ -231,10 +232,12 @@ export async function handleBasicTool(
   }
 
   if (name === 'approval_status') {
-    return context.approvals?.status(String(args.requestId)) ?? null;
+    if (!context.approvals) return { status: 'unavailable' };
+    return context.approvals.status(String(args.requestId)) ?? { status: 'not_found' };
   }
   if (name === 'approval_cancel') {
-    return context.approvals?.cancel(String(args.requestId)) ?? null;
+    if (!context.approvals) return { status: 'unavailable' };
+    return context.approvals.cancel(String(args.requestId)) ?? { status: 'not_found' };
   }
   if (name === 'approval_wait') {
     const { resumeApproval } = await import('./approval-resume.js');
@@ -243,17 +246,24 @@ export async function handleBasicTool(
 
   if (name === 'workspace_list') {
     const leases = sessionLeases(context, sessionId);
-    return context.workspaces.listRemote().map((workspace) => ({
-      ...workspace,
-      granted: leases.some((lease) => lease.workspaceId === workspace.id),
-    }));
+    return {
+      workspaces: context.workspaces.listRemote().map((workspace) => ({
+        ...workspace,
+        granted: leases.some((lease) => lease.workspaceId === workspace.id),
+      })),
+    };
   }
   if (name === 'workspace_current') {
     const leases = sessionLeases(context, sessionId);
-    if (!leases.length) return null;
+    if (!leases.length) return { status: 'none', workspace: null };
     const remote = context.workspaces.listRemote();
     if (leases.length === 1) {
-      return remote.find((workspace) => workspace.id === leases[0]!.workspaceId) ?? null;
+      return (
+        remote.find((workspace) => workspace.id === leases[0]!.workspaceId) ?? {
+          status: 'none',
+          workspace: null,
+        }
+      );
     }
     return {
       status: 'multiple',
@@ -318,12 +328,7 @@ export async function promptGet(context: McpRuntimeContext, sessionId: string) {
   if (!result) {
     throw new AevraToolError('INVALID_REQUEST', 'Skills are not configured');
   }
-  const text =
-    result.instructions
-      .map((instruction) => `# ${instruction.source} instructions\n\n${instruction.content}`)
-      .join('\n\n---\n\n') ||
-    result.note ||
-    'No instruction files found.';
+  const text = renderInstructionPrompt(result.instructions, result.note);
   return {
     description: 'Aevra instructions',
     messages: [{ role: 'user', content: { type: 'text', text } }],

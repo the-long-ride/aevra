@@ -1,3 +1,4 @@
+import { markUntrusted } from '../../security/src/untrusted.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { authorizeCapability } from './authorization.js';
 import { AevraToolError } from './errors.js';
@@ -100,5 +101,5 @@ export async function searchTool(context: McpRuntimeContext, sessionId: string, 
   if (!result.ok) {
     throw new AevraToolError(result.error.code, result.error.message, result.error.details);
   }
-  return result.value;
+  return markUntrusted(result.value as object);
 }

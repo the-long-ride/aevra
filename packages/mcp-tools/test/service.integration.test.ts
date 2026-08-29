@@ -278,7 +278,7 @@ test('conflicting workspace name and workspaceId are rejected', async () => {
     },
   );
   const processList = await svcWithProcesses.call(session.id, 'process_list', {});
-  assert.deepEqual(processList, [{ id: 'p1' }]);
+  assert.deepEqual(processList, { result: [{ id: 'p1' }] });
 
   db.close();
 });

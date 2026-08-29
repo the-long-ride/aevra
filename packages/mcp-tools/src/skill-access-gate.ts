@@ -3,6 +3,7 @@ import type {
   ApprovalService,
   FrozenOperationTicket,
 } from '../../../apps/core/src/approvals/approval-service.js';
+import { renderInstructionPrompt } from './instruction-prompt.js';
 import { AevraToolError } from './errors.js';
 
 const SKILL_READ_TOOLS = new Set(['skills_list', 'skill_read', 'instructions_read']);
@@ -111,16 +112,17 @@ export class SessionSkillAccessGate {
       result,
       'Local instruction prompt access requires capability approval',
     );
-    const instructions = Array.isArray(result?.instructions) ? result.instructions : [];
-    const text =
-      instructions
-        .map((instruction: any) => `# ${instruction.source} instructions\n\n${instruction.content}`)
-        .join('\n\n---\n\n') ||
-      result?.note ||
-      'No instruction files found.';
     return {
       description: 'Aevra instructions',
-      messages: [{ role: 'user', content: { type: 'text', text } }],
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: renderInstructionPrompt(result?.instructions, result?.note),
+          },
+        },
+      ],
     };
   }
 

@@ -70,7 +70,16 @@ function context(options: { yolo?: boolean; workerFailure?: boolean } = {}) {
       workspaces: { capabilityRoots: () => [] },
       worker,
       reads: {} as any,
-      deps: { processes, changes },
+      // Unrestricted YOLO keeps this dispatch coverage over every git operation; the
+      // workspace-scoped default sends git_push to approval by design.
+      deps: {
+        processes,
+        changes,
+        settings: {
+          get: (key: string, fallback: any) =>
+            key === 'policy.yolo' ? { mode: 'unrestricted' } : fallback,
+        },
+      },
       oneTimeCapabilities: new Set<string>(),
       processStart: async () => ({}),
       callInner: async () => ({}),
@@ -180,7 +189,7 @@ test('process start normalizes command lifecycle and process metadata', async ()
 test('process and change dispatcher covers every supported operation', async () => {
   const fx = context();
   const calls = [
-    ['process_list', {}, (value: any) => assert.equal(value[0].id, 'p1')],
+    ['process_list', {}, (value: any) => assert.equal(value.result[0].id, 'p1')],
     ['process_status', { processId: 7 }, (value: any) => assert.equal(value.id, '7')],
     [
       'process_wait',

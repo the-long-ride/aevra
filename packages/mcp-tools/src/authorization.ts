@@ -10,6 +10,7 @@ import {
   workspaceResult,
 } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
+import { commandTextOf, criticalConfirmRequired, yoloAllows } from './yolo-mode.js';
 
 export type CapabilityGate =
   { authorization: ReturnType<typeof authorizationContext> } | { response: any };
@@ -145,12 +146,10 @@ export async function authorizeCapability(
 ): Promise<CapabilityGate> {
   const lease = requiredLease(context, sessionId);
   const session = context.sessions.get(sessionId)!;
-  if (context.sessions.isYolo?.(sessionId)) {
-    return {
-      authorization: authorizationContext(context, sessionId, capability, permissionMatcher),
-    };
-  }
-  const lowDecision = context.deps.permissions?.decide({
+  const forceCriticalApproval = criticalConfirmRequired(context, risk);
+  // `decide?.()` rather than `decide()`: this now runs before the YOLO short-circuit,
+  // so it is reached by callers that supply a permission engine without a decider.
+  const lowDecision = context.deps.permissions?.decide?.({
     capability,
     matcher: permissionMatcher,
     workspaceId: lease.workspaceId,
@@ -158,15 +157,32 @@ export async function authorizeCapability(
     sessionId,
     risk: 'LOW',
   });
+  // An explicit DENY outranks YOLO: the permission model promises DENY wins, and a
+  // session flag must not turn an operator's refusal into an unattended run.
   if (lowDecision?.outcome === 'deny') {
     throw new AevraToolError('CAPABILITY_REQUIRED', lowDecision.reason);
+  }
+  if (
+    yoloAllows(context, sessionId, {
+      capability,
+      risk,
+      family: permissionMatcher,
+      executionMode: original.args?.executionMode,
+      networkDestinations: original.args?.networkDestinations,
+      commandText: commandTextOf(original.args),
+    })
+  ) {
+    return {
+      authorization: authorizationContext(context, sessionId, capability, permissionMatcher),
+    };
   }
 
   const authorization = authorizationContext(context, sessionId, capability, permissionMatcher);
   if (
-    lease.capabilities.includes(capability) ||
-    oneTimeAllowed(context, sessionId, capability, permissionMatcher) ||
-    lowDecision?.outcome === 'allow'
+    !forceCriticalApproval &&
+    (lease.capabilities.includes(capability) ||
+      oneTimeAllowed(context, sessionId, capability, permissionMatcher) ||
+      lowDecision?.outcome === 'allow')
   ) {
     return { authorization };
   }
@@ -223,13 +239,10 @@ export async function gated<T>(
 ) {
   const session = context.sessions.get(sessionId)!;
   const lease = requiredLease(context, sessionId);
-  if (context.sessions.isYolo?.(sessionId)) return execute();
-
-  const forceCriticalApproval =
-    normalized.risk === 'CRITICAL' &&
-    context.deps.settings?.get<boolean>('policy.critical.alwaysConfirm', false) === true;
+  const forceCriticalApproval = criticalConfirmRequired(context, normalized.risk);
+  const payloadArgs = (payload as any)?.args ?? payload;
   const once = oneTimeAllowed(context, sessionId, normalized.capability, normalized.family);
-  const decision = context.deps.permissions?.decide({
+  const decision = context.deps.permissions?.decide?.({
     capability: normalized.capability,
     matcher: normalized.family,
     workspaceId: lease.workspaceId,
@@ -237,9 +250,21 @@ export async function gated<T>(
     sessionId,
     risk: normalized.risk,
   });
+  // Evaluated before the YOLO short-circuit so an explicit DENY still wins.
   if (decision?.outcome === 'deny') {
     throw new AevraToolError('CAPABILITY_REQUIRED', decision.reason);
   }
+  if (
+    yoloAllows(context, sessionId, {
+      capability: normalized.capability,
+      risk: normalized.risk,
+      family: normalized.family,
+      executionMode: payloadArgs?.executionMode,
+      networkDestinations: payloadArgs?.networkDestinations,
+      commandText: commandTextOf(payloadArgs),
+    })
+  )
+    return execute();
 
   const newCommandApproval =
     normalized.capability === 'commands.run' &&

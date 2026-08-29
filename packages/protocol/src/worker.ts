@@ -41,6 +41,7 @@ export type WorkerOperation =
   | { kind: 'file.move'; from: string; to: string }
   | { kind: 'file.delete'; path: string; recursive: boolean }
   | { kind: 'git.status' }
+  | { kind: 'git.add'; args: string[] }
   | { kind: 'git.diff'; args: string[] }
   | { kind: 'git.log'; args: string[] }
   | { kind: 'git.branch'; args: string[] }
@@ -100,6 +101,7 @@ const kinds = new Set([
   'file.move',
   'file.delete',
   'git.status',
+  'git.add',
   'git.diff',
   'git.log',
   'git.branch',

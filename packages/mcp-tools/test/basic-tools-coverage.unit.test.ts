@@ -210,15 +210,18 @@ test('approval and workspace helpers cover null current single current and multi
     'CANCELLED',
   );
   const list: any = await handleBasicTool(fx.context, 's1', 'workspace_list', {});
-  assert.equal(list.find((row: any) => row.id === 'w1').granted, true);
-  assert.equal(list.find((row: any) => row.id === 'w2').granted, false);
+  assert.equal(list.workspaces.find((row: any) => row.id === 'w1').granted, true);
+  assert.equal(list.workspaces.find((row: any) => row.id === 'w2').granted, false);
   assert.equal(
     ((await handleBasicTool(fx.context, 's1', 'workspace_current', {})) as any).id,
     'w1',
   );
 
   const none = fixture({ leases: [] });
-  assert.equal(await handleBasicTool(none.context, 's1', 'workspace_current', {}), null);
+  assert.deepEqual(await handleBasicTool(none.context, 's1', 'workspace_current', {}), {
+    status: 'none',
+    workspace: null,
+  });
   const multi = fixture({
     leases: [
       { id: 'l1', workspaceId: 'w1', capabilities: [], expiresAt: 'x' },
@@ -233,14 +236,12 @@ test('approval and workspace helpers cover null current single current and multi
   );
 
   fx.context.approvals = undefined;
-  assert.equal(
-    await handleBasicTool(fx.context, 's1', 'approval_status', { requestId: 'x' }),
-    null,
-  );
-  assert.equal(
-    await handleBasicTool(fx.context, 's1', 'approval_cancel', { requestId: 'x' }),
-    null,
-  );
+  assert.deepEqual(await handleBasicTool(fx.context, 's1', 'approval_status', { requestId: 'x' }), {
+    status: 'unavailable',
+  });
+  assert.deepEqual(await handleBasicTool(fx.context, 's1', 'approval_cancel', { requestId: 'x' }), {
+    status: 'unavailable',
+  });
 });
 
 test('resource and prompt surfaces cover descriptions URI validation missing services and text fallbacks', async () => {

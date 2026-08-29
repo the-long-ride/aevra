@@ -1,66 +1,21 @@
-export type JsonSchema = Record<string, unknown>;
+import {
+  approvalIdSchema,
+  changeSetIdSchema,
+  commandProperties,
+  emptySchema,
+  executionMode,
+  nonNegativeInteger,
+  processIdSchema,
+  skillSource,
+  stringArray,
+  stringProp,
+  workspaceEmptySchema,
+  workspaceTargetProperties,
+  type JsonSchema,
+} from './registry-schema-parts.js';
 
-export const emptySchema: JsonSchema = {
-  type: 'object',
-  properties: {},
-  additionalProperties: false,
-};
-const stringProp = (description: string) => ({ type: 'string', description });
-const nonNegativeInteger = (description: string) => ({ type: 'integer', minimum: 0, description });
-const stringArray = (description: string) => ({
-  type: 'array',
-  items: { type: 'string' },
-  description,
-});
-const stringMap = (description: string) => ({
-  type: 'object',
-  additionalProperties: { type: 'string' },
-  description,
-});
-const workspaceTargetProperties = {
-  workspace: stringProp('Workspace name for this operation.'),
-  workspaceId: stringProp('Workspace ID for this operation.'),
-};
-const workspaceEmptySchema: JsonSchema = {
-  type: 'object',
-  properties: { ...workspaceTargetProperties },
-  additionalProperties: false,
-};
-const skillSource = { type: 'string', enum: ['user', 'workspace'], description: 'Skill source.' };
-const executionMode = {
-  type: 'string',
-  enum: ['sandbox', 'host'],
-  description: 'Execution mode. Defaults according to Aevra execution settings.',
-};
-const commandProperties = {
-  executable: stringProp('Executable to run in the active workspace.'),
-  args: stringArray('Arguments passed directly to the executable.'),
-  env: stringMap('Environment variables injected only into the child process.'),
-  timeoutMs: {
-    type: 'integer',
-    minimum: 1,
-    maximum: 86_400_000,
-    description: 'Execution timeout in milliseconds, up to 24 hours.',
-  },
-};
-const processIdSchema: JsonSchema = {
-  type: 'object',
-  properties: { processId: stringProp('Managed process ID.') },
-  required: ['processId'],
-  additionalProperties: false,
-};
-const changeSetIdSchema: JsonSchema = {
-  type: 'object',
-  properties: { changeSetId: stringProp('Change-set ID.') },
-  required: ['changeSetId'],
-  additionalProperties: false,
-};
-const approvalIdSchema: JsonSchema = {
-  type: 'object',
-  properties: { requestId: stringProp('Approval request ID.') },
-  required: ['requestId'],
-  additionalProperties: false,
-};
+export { emptySchema } from './registry-schema-parts.js';
+export type { JsonSchema } from './registry-schema-parts.js';
 
 export const inputSchemas: Record<string, JsonSchema> = {
   aevra_status: emptySchema,
@@ -241,11 +196,32 @@ export const inputSchemas: Record<string, JsonSchema> = {
   process_stop: processIdSchema,
   process_restart: processIdSchema,
   git_status: workspaceEmptySchema,
+  git_add: {
+    type: 'object',
+    properties: {
+      ...workspaceTargetProperties,
+      paths: {
+        type: 'array',
+        items: { type: 'string' },
+        minItems: 1,
+        description: 'Logical paths to stage.',
+      },
+      all: {
+        type: 'boolean',
+        description: 'Stage all tracked and untracked changes (git add -A); ignores paths.',
+      },
+    },
+    additionalProperties: false,
+  },
   git_diff: {
     type: 'object',
     properties: {
       ...workspaceTargetProperties,
       args: stringArray('Optional git diff arguments.'),
+      short: {
+        type: 'boolean',
+        description: 'Return a compact --stat summary instead of the full patch text.',
+      },
     },
     additionalProperties: false,
   },

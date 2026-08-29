@@ -10,6 +10,7 @@ import { AevraToolError } from './errors.js';
 import { buildShellCommand, resolveShellKind, shellRiskFloor } from './shell-command.js';
 import { argsHash, maxRisk, oneTimeAllowed, requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
+import { commandTextOf, yoloAllows } from './yolo-mode.js';
 
 interface ShellSource {
   tool: 'shell_run';
@@ -199,7 +200,17 @@ export async function commandTool(
   }
   const once = oneTimeAllowed(context, sessionId, 'commands.run', permissionMatcher);
   const needsCommandApproval = needsCommandPermissionApproval(commandDecision?.outcome, once);
-  const approvalNormalized = needsCommandApproval ? normalized : networkApproval;
+  // The capability gate above already cleared this command for an in-scope YOLO
+  // session; without the same check here every command still stopped for approval.
+  const yoloRuns = yoloAllows(context, sessionId, {
+    capability: 'commands.run',
+    risk,
+    family: permissionMatcher,
+    executionMode: mode,
+    networkDestinations: rawDestinations,
+    commandText: commandTextOf({ script: source?.script, command }),
+  });
+  const approvalNormalized = yoloRuns ? null : needsCommandApproval ? normalized : networkApproval;
   const payload = {
     tool: 'command_run',
     permissionMatcher,
