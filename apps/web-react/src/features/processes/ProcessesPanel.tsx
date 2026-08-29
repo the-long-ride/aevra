@@ -1,4 +1,5 @@
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
@@ -40,6 +41,7 @@ function processName(row: ProcessRow) {
 
 export function ProcessesPanel({ contained = false }: { contained?: boolean }) {
   const resource = useApiResource(load);
+  const dialog = useDialog();
 
   const mutate = async (id: string, action: 'stop' | 'restart' | 'forget') => {
     await requestJson(`/api/processes/${encodeURIComponent(id)}/${action}`, {
@@ -70,10 +72,34 @@ export function ProcessesPanel({ contained = false }: { contained?: boolean }) {
             value: processName,
             render: (row) => {
               const name = processName(row);
+              const showName = () =>
+                void dialog.message({
+                  title: 'Process command / name',
+                  message: (
+                    <code
+                      style={{
+                        display: 'block',
+                        padding: '8px 12px',
+                        background: 'var(--surface-soft)',
+                        border: '1px solid var(--hairline)',
+                        wordBreak: 'break-all',
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {name}
+                    </code>
+                  ),
+                  actionLabel: 'Close',
+                });
               return (
-                <code className="process-name-cell" title={name}>
-                  {name}
-                </code>
+                <button
+                  type="button"
+                  className="process-name-button"
+                  title={name}
+                  onClick={showName}
+                >
+                  <code className="process-name-cell">{name}</code>
+                </button>
               );
             },
           },

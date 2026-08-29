@@ -8,6 +8,7 @@ import { KeepAwakeSettings } from './KeepAwakeSettings';
 import { NetworkPolicySettings } from './NetworkPolicySettings';
 import { RemoteAccessSettings } from './RemoteAccessSettings';
 import { SecretReferencesSettings } from './SecretReferencesSettings';
+import { YoloPolicySettings } from './YoloPolicySettings';
 import { loadSettings, patchJson, type SettingsData } from './settings-service';
 
 export function SettingsPage() {
@@ -49,6 +50,7 @@ export function SettingsPage() {
           onSave={(mode) => patchJson('/api/power/keep-awake', { mode }).then(refresh)}
         />
         <ExecutionSettings execution={data.execution} onChanged={refresh} />
+        <YoloPolicySettings mode={data.yolo.mode} onChanged={refresh} />
         <section className="panel settings-compact-panel configuration-panel">
           <div className="panel-head compact-panel-head">
             <div>

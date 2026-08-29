@@ -285,8 +285,48 @@
 }
 
 @media (max-width: 1023px) {
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 8px 16px;
+  }
+
+  .brand {
+    order: 1;
+    flex: 1 1 auto;
+  }
+
+  .topbar-actions {
+    display: contents;
+  }
+
+  .theme-toggle {
+    order: 2;
+    margin-left: auto;
+  }
+
+  #open-requests {
+    order: 3;
+  }
+
   .health-cluster {
-    display: none;
+    order: 4;
+    display: flex;
+    flex: 0 0 100%;
+    width: 100%;
+    gap: 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-top: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .health-chip {
+    flex: 0 0 auto;
+  }
+
+  .top-nav {
+    top: 92px;
   }
 
   .page {
@@ -298,8 +338,7 @@
 @media (max-width: 640px) {
   .topbar {
     gap: 8px;
-    min-height: 54px;
-    padding-inline: 12px;
+    padding: 8px 12px;
   }
 
   .brand small,
@@ -312,13 +351,9 @@
     height: 28px;
   }
 
-  .topbar-actions {
-    gap: 4px;
-  }
-
   .theme-toggle,
   #open-requests {
-    min-height: 40px;
+    min-height: 36px;
     padding-inline: 8px;
   }
 
@@ -328,8 +363,17 @@
     text-overflow: ellipsis;
   }
 
+  .health-cluster {
+    gap: 4px;
+    scrollbar-width: none;
+  }
+
+  .health-cluster::-webkit-scrollbar {
+    display: none;
+  }
+
   .top-nav {
-    top: 54px;
+    top: 88px;
     padding-inline: 8px;
   }
 

@@ -80,6 +80,61 @@ test('Active connections marks YOLO sessions and explains immutable approvals', 
   ).toBeInTheDocument();
 });
 
+test('Active connections capabilities button opens dialog with full capabilities list', async () => {
+  const user = userEvent.setup();
+  installApiFixtures({
+    routes: {
+      '/api/dashboard/runtime': {
+        status: { version: '0.1.0' },
+        uptimeSeconds: 100,
+        pending: { total: 0 },
+        stats: {
+          sessions: 1,
+          workspaceLeases: 1,
+          processes: 0,
+          openChanges: 0,
+          toolCalls: 0,
+          avgToolLatencyMs: null,
+          connectors: 0,
+        },
+        power: null,
+        metrics: [],
+        activeConnections: [
+          {
+            client: 'Claude',
+            authType: 'OAuth',
+            workspace: 'Aevra',
+            status: 'active',
+            capabilities: ['files.read', 'files.write', 'commands.run', 'custom.tool'],
+            yolo: false,
+            lastActivityAt: '2026-08-19T00:00:00Z',
+          },
+        ],
+        connectors: [],
+      },
+    },
+  });
+
+  render(
+    <DialogProvider>
+      <DashboardPage />
+    </DialogProvider>,
+  );
+
+  const button = await screen.findByRole('button', {
+    name: 'files.read, files.write, commands.run, custom.tool',
+  });
+  expect(button).toBeInTheDocument();
+  await user.click(button);
+
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText('Capabilities')).toBeInTheDocument();
+  expect(within(dialog).getByText('files.read')).toBeInTheDocument();
+  expect(within(dialog).getByText('files.write')).toBeInTheDocument();
+  expect(within(dialog).getByText('commands.run')).toBeInTheDocument();
+  expect(within(dialog).getByText('custom.tool')).toBeInTheDocument();
+});
+
 test('Runtime overview shows sleep inhibition reason with a status dot', async () => {
   installApiFixtures({
     routes: {

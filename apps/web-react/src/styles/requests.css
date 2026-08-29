@@ -253,3 +253,92 @@
     animation: none;
   }
 }
+
+/* Quick approval modal — appears in-viewport when new requests arrive */
+
+.approval-modal-backdrop {
+  z-index: 95;
+  align-items: flex-start;
+  padding-top: max(80px, 12vh);
+  background: transparent;
+  pointer-events: none;
+}
+
+.approval-modal {
+  width: min(480px, calc(100vw - 24px));
+  border: 1px solid var(--hairline-strong);
+  background: var(--canvas);
+  pointer-events: auto;
+}
+
+.approval-modal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-soft);
+}
+
+.approval-modal-label {
+  color: var(--mute);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.approval-modal-toolbar > button {
+  min-height: 24px;
+  padding: 2px 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--mute);
+  font-size: 14px;
+}
+
+.approval-modal-body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.approval-modal-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.approval-modal-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.approval-modal-head b {
+  font-size: 13px;
+}
+
+.approval-modal-head span:not(.risk) {
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.approval-modal-detail {
+  margin: 0;
+  color: var(--mute);
+  font-size: 12px;
+}
+
+.approval-modal-actions {
+  padding-top: 2px;
+  border-top: 1px solid var(--hairline);
+}
+
+@media (max-width: 640px) {
+  .approval-modal-backdrop {
+    padding-top: max(60px, 10vh);
+  }
+}

@@ -1,5 +1,5 @@
 import type { ApprovalItem, ApprovalScope } from '@aevra/admin-contracts';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { actionsForApproval } from './request-actions';
@@ -114,25 +114,49 @@ export function RequestDrawer({
   open,
   onClose,
   onPendingCountChange,
+  onNewPending,
+  refreshRef,
 }: {
   open: boolean;
   onClose(): void;
   onPendingCountChange(count: number): void;
+  onNewPending?(data: RequestsData): void;
+  refreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 }) {
   const [data, setData] = useState<RequestsData | null>(null);
   const [tab, setTab] = useState<'pending' | 'history'>('pending');
   const [notifications, setNotifications] = useState(
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
   );
+  const prevPendingIds = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
     const next = await loadRequests();
     setData(next);
     announceNewRequests(next.approvals, next.oauth);
-    onPendingCountChange(
-      next.approvals.filter((item) => item.state === 'PENDING').length + next.oauth.length,
-    );
-  }, [onPendingCountChange]);
+    const pendingItems = next.approvals.filter((item) => item.state === 'PENDING');
+    const pendingCount = pendingItems.length + next.oauth.length;
+    onPendingCountChange(pendingCount);
+
+    if (onNewPending) {
+      const currentIds = new Set([
+        ...pendingItems.map((item) => String(item.id)),
+        ...next.oauth.map((item) => `oauth:${item.id}`),
+      ]);
+      const hasNew = [...currentIds].some((id) => !prevPendingIds.current.has(id));
+      if (hasNew && pendingCount > 0) {
+        onNewPending(next);
+      }
+      prevPendingIds.current = currentIds;
+    }
+  }, [onPendingCountChange, onNewPending]);
+
+  useEffect(() => {
+    if (refreshRef) refreshRef.current = refresh;
+    return () => {
+      if (refreshRef) refreshRef.current = null;
+    };
+  }, [refresh, refreshRef]);
 
   useEffect(() => {
     void refresh();

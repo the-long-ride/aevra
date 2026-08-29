@@ -224,6 +224,7 @@ export function installApiFixtures(options: FixtureOptions = {}) {
     ],
     ['/api/policy/command-families', {}],
     ['/api/policy/network-rules', []],
+    ['/api/policy/yolo', { mode: 'workspace' }],
     [
       '/api/execution-settings',
       {

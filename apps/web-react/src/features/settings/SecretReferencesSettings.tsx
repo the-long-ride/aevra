@@ -16,7 +16,7 @@ export function SecretReferencesSettings({
   }));
 
   return (
-    <section className="panel wide settings-compact-panel">
+    <section className="panel settings-compact-panel">
       <div className="panel-head compact-panel-head">
         <div>
           <h3>Secret references</h3>

@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
+import { DialogProvider } from '../components/Dialog';
 import { installApiFixtures } from '../test/api-fixtures';
 import { RemoteAccessPanel } from './dashboard/RemoteAccessPanel';
 import { SettingsPage } from './settings/SettingsPage';
@@ -26,7 +27,11 @@ test('Remote Access settings exposes all providers and keeps Cloudflare Access f
       '/api/exposure/status': exposure(),
     },
   });
-  render(<SettingsPage />);
+  render(
+    <DialogProvider>
+      <SettingsPage />
+    </DialogProvider>,
+  );
 
   await screen.findByRole('heading', { name: 'Settings' });
   const provider = screen.getByRole('button', { name: 'Exposure provider' });

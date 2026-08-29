@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
+import { DialogProvider } from '../../components/Dialog';
 import { installApiFixtures } from '../../test/api-fixtures';
 import { SettingsPage } from './SettingsPage';
 
@@ -25,7 +26,11 @@ async function renderSettings() {
       '/api/secret-references': [{ ref: 'API_TOKEN' }],
     },
   });
-  render(<SettingsPage />);
+  render(
+    <DialogProvider>
+      <SettingsPage />
+    </DialogProvider>,
+  );
   expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
   return fetchMock;
 }

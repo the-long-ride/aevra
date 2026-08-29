@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
+import { DialogProvider } from '../components/Dialog';
 import { installApiFixtures } from '../test/api-fixtures';
 import { GuidePage } from './guide/GuidePage';
 import { SettingsPage } from './settings/SettingsPage';
@@ -57,7 +58,11 @@ function formForButton(name: string) {
 test('Settings saves provider-neutral remote access and execution configuration', async () => {
   const user = userEvent.setup();
   const fetchMock = settingsFixtures();
-  render(<SettingsPage />);
+  render(
+    <DialogProvider>
+      <SettingsPage />
+    </DialogProvider>,
+  );
   await waitForSettings();
 
   const remote = formForButton('Save remote access');
@@ -93,7 +98,11 @@ test('Settings saves provider-neutral remote access and execution configuration'
 test('Settings offers Native host and warns before direct computer execution', async () => {
   const user = userEvent.setup();
   const fetchMock = settingsFixtures();
-  render(<SettingsPage />);
+  render(
+    <DialogProvider>
+      <SettingsPage />
+    </DialogProvider>,
+  );
   await waitForSettings();
 
   const execution = formForButton('Save execution');
@@ -116,7 +125,11 @@ test('Settings offers Native host and warns before direct computer execution', a
 test('Settings creates and removes command and network policy entries', async () => {
   const user = userEvent.setup();
   const fetchMock = settingsFixtures();
-  render(<SettingsPage />);
+  render(
+    <DialogProvider>
+      <SettingsPage />
+    </DialogProvider>,
+  );
   await waitForSettings();
 
   await user.click(screen.getByRole('button', { name: 'Add override' }));
@@ -164,7 +177,11 @@ test('Settings creates and removes command and network policy entries', async ()
 test('Settings creates environment profiles and securely stores/removes secret references', async () => {
   const user = userEvent.setup();
   const fetchMock = settingsFixtures();
-  render(<SettingsPage />);
+  render(
+    <DialogProvider>
+      <SettingsPage />
+    </DialogProvider>,
+  );
   await waitForSettings();
 
   await user.click(screen.getByRole('button', { name: 'Create profile' }));
@@ -273,7 +290,11 @@ test('Settings configures keep awake policy without changing screen lock behavio
       },
     },
   });
-  render(<SettingsPage />);
+  render(
+    <DialogProvider>
+      <SettingsPage />
+    </DialogProvider>,
+  );
   await waitForSettings();
 
   expect(screen.getByRole('heading', { name: 'Keep awake' })).toBeInTheDocument();

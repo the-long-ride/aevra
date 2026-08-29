@@ -11,12 +11,12 @@ beforeEach(() => requestJson.mockReset().mockResolvedValue(undefined));
 
 test('settings loading uses empty options without a signal and forwards one when provided', async () => {
   await loadSettings();
-  expect(requestJson).toHaveBeenCalledTimes(10);
+  expect(requestJson).toHaveBeenCalledTimes(11);
   for (const [, init] of requestJson.mock.calls) expect(init).toEqual({});
 
   requestJson.mockClear();
   const controller = new AbortController();
   await loadSettings(controller.signal);
-  expect(requestJson).toHaveBeenCalledTimes(10);
+  expect(requestJson).toHaveBeenCalledTimes(11);
   for (const [, init] of requestJson.mock.calls) expect(init?.signal).toBe(controller.signal);
 });
