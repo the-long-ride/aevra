@@ -263,7 +263,7 @@ test('runtime health exposes live tunnel reachability for configured remote expo
     await runtime.start();
     let health: any;
     for (let attempt = 0; attempt < 10; attempt++) {
-      health = await getJson(`${runtime.gatewayUrl}/api/health`);
+      health = await getJson(`${runtime.adminUrl}/api/health`);
       if (health.tunnelReachable === true) break;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }

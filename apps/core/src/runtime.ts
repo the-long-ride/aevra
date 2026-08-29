@@ -3,17 +3,8 @@ import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CoreConfig } from './config.js';
+import { createRuntimeRepositories } from './runtime-repositories.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
-import { WorkspaceRepository } from '../../../packages/store/src/workspaces.js';
-import { SessionRepository } from '../../../packages/store/src/sessions.js';
-import { PermissionRepository } from '../../../packages/store/src/permissions.js';
-import { ApprovalRepository } from '../../../packages/store/src/approvals.js';
-import { OperationRepository } from '../../../packages/store/src/operations.js';
-import { ChangeRepository } from '../../../packages/store/src/changes.js';
-import { AuditRepository } from '../../../packages/store/src/audit.js';
-import { ProcessRepository } from '../../../packages/store/src/processes.js';
-import { ConnectorRepository } from '../../../packages/store/src/connectors.js';
-import { OAuthRepository } from '../../../packages/store/src/oauth.js';
 import { SkillsService } from './skills/skills-service.js';
 import { SecurityGuard } from './security/security-guard.js';
 import { IpRateLimiter } from './mcp/rate-limit.js';
@@ -21,7 +12,6 @@ import { createConnectorAdmission } from './mcp/connector-admission.js';
 import { McpActivityLog } from './mcp/activity-log.js';
 import { AEVRA_VERSION } from './version.js';
 import { MetricsService } from './metrics.js';
-import { SettingsRepository } from '../../../packages/store/src/settings.js';
 import { AdminServer } from './admin/server.js';
 import { ConnectionAdminService } from './admin/connection-admin.js';
 import { buildRuntimeHealth } from './admin/runtime-health.js';
@@ -91,6 +81,8 @@ export async function createCoreRuntime(
     started = false;
   };
   return {
+    // Getters, not spread values: every server is created during `start()`, so these
+    // must read the live reference rather than a snapshot taken at return time.
     get adminUrl() {
       return admin ? admin.url() : `https://localhost:${config.adminPort}`;
     },
@@ -113,18 +105,20 @@ export async function createCoreRuntime(
         const adminCredentialVerifier = await config.createAdminCredentialVerifier();
         db = (deps.databaseOpen ?? AevraDatabase.open)(config.databasePath);
         safeMode = !db.integrityCheck().ok;
-        const raw = db.raw(),
-          settings = new SettingsRepository(raw),
-          workspaceRepo = new WorkspaceRepository(raw),
-          sessionRepo = new SessionRepository(raw),
-          permissionRepo = new PermissionRepository(raw),
-          approvalRepo = new ApprovalRepository(raw),
-          operationRepo = new OperationRepository(raw),
-          changeRepo = new ChangeRepository(raw),
-          auditRepo = new AuditRepository(raw),
-          processRepo = new ProcessRepository(raw),
-          connectorRepo = new ConnectorRepository(raw),
-          oauthRepo = new OAuthRepository(raw);
+        const raw = db.raw();
+        const {
+          settings,
+          workspaceRepo,
+          sessionRepo,
+          permissionRepo,
+          approvalRepo,
+          operationRepo,
+          changeRepo,
+          auditRepo,
+          processRepo,
+          connectorRepo,
+          oauthRepo,
+        } = createRuntimeRepositories(raw);
         const connectorBindings = (subject: string) => connectorRepo.getBindings(subject);
         const connectionState = new ConnectionStateStore(oauthRepo);
         processRepo.markKeepRunningUncertain();
@@ -329,6 +323,7 @@ export async function createCoreRuntime(
             plainMcpEnabled: true,
             oauth,
             activity,
+            trustForwardedClientIp: () => exposureWiring?.trustForwardedClientIp() === true,
           },
         );
         await admin.start();

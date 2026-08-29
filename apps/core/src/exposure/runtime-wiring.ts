@@ -103,6 +103,12 @@ export class RuntimeExposureWiring {
       targets: { adminUrl, mcpUrl },
       upstreamCa: this.tls.certificatePem,
       gatewayTrustSecret: this.gatewayTrustSecret,
+      // Local-only keeps serving the Admin UI on the gateway as before. Once a
+      // public exposure provider is active, Admin is reachable through the gateway
+      // only if the operator deliberately published an adminPublicUrl.
+      adminProxyEnabled: () =>
+        this.controller.currentConfig().provider === 'local' || Boolean(this.adminPublicUrl()),
+      trustForwardedClientIp: () => this.trustForwardedClientIp(),
     });
     await this.gateway.start();
   }
@@ -139,6 +145,15 @@ export class RuntimeExposureWiring {
 
   adminPublicUrl(): string | undefined {
     return this.controller.currentConfig().adminPublicUrl ?? this.config.adminPublicUrl;
+  }
+
+  /**
+   * True when the operator declared an upstream proxy that overwrites the client-IP
+   * header. Without it those headers are client-controlled and must be ignored, which
+   * collapses every client behind a proxy onto one rate-limit bucket.
+   */
+  trustForwardedClientIp(): boolean {
+    return this.controller.currentConfig().trustedProxyClientIp === true;
   }
 
   trustedAdminOrigins(): string[] {

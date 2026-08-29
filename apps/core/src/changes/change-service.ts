@@ -104,6 +104,7 @@ export class ChangeSetService {
         new Date().toISOString(),
         changeSetId,
       );
+    return { id: changeSetId, state: 'COMMITTED' as const };
   }
   async rollback(changeSetId: string, options: RollbackOptions): Promise<RollbackResult> {
     const db = (this.changes as any).db;

@@ -40,7 +40,7 @@ function headerValue(req: IncomingMessage, name: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function sameOrigin(
+export function sameOrigin(
   req: IncomingMessage,
   url: URL,
   trustedOrigins: string[] = [],
@@ -52,7 +52,13 @@ function sameOrigin(
     return false;
   }
   const origin = req.headers.origin;
-  if (typeof origin !== 'string') return true;
+  if (typeof origin !== 'string') {
+    // Browsers always send Sec-Fetch-Site on a state-changing request, so a caller
+    // presenting neither header is a non-browser client such as the Aevra CLI.
+    // Require positive evidence rather than failing open: accept it only from a
+    // loopback peer, where a cross-site attacker cannot reach us.
+    return typeof fetchSite === 'string' ? true : isLoopback(req.socket.remoteAddress);
+  }
   let requestOrigin: string;
   try {
     requestOrigin = new URL(origin).origin;

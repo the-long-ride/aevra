@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AevraOAuthService } from '../auth/oauth.js';
+import { IpRateLimiter } from './rate-limit.js';
 import {
   applyOAuthCors,
   htmlEscape,
@@ -130,6 +131,10 @@ function isOAuthSurface(path: string) {
   );
 }
 
+// Dynamic client registration is unauthenticated by design (RFC 7591 open
+// registration), so bound how fast one address can create clients.
+const registrationLimiter = new IpRateLimiter(3, 1 / 60);
+
 export async function handleOAuthRoute(
   req: IncomingMessage,
   res: ServerResponse,
@@ -161,6 +166,10 @@ export async function handleOAuthRoute(
   }
 
   if (path === '/oauth/register' && method === 'POST') {
+    if (!registrationLimiter.allow(remoteIp(req))) {
+      sendOAuthJson(res, 429, { error: 'rate_limited' });
+      return true;
+    }
     try {
       const input = await readJson(req);
       sendOAuthJson(res, 201, oauth.registerClient(input));

@@ -97,7 +97,10 @@ test('session-only workspace access disappears after reconnect', async () => {
 
   f.sessions.disconnect(first.id);
   const second = f.sessions.create(identity());
-  assert.equal(await f.tools.call(second.id, 'workspace_current'), null);
+  assert.deepEqual(await f.tools.call(second.id, 'workspace_current'), {
+    status: 'none',
+    workspace: null,
+  });
   const next = (await f.tools.call(second.id, 'workspace_select', { workspace: 'Aevra' })) as any;
   assert.equal(next.status, 'approval_pending');
   assert.notEqual(next.requestId, pending.requestId);
@@ -131,7 +134,10 @@ test('different OAuth authorization still requires workspace approval', async ()
   await f.tools.call(first.id, 'approval_wait', { requestId: pending.requestId });
   f.sessions.disconnect(first.id);
   const second = f.sessions.create(identity('oauth_grant_two'));
-  assert.equal(await f.tools.call(second.id, 'workspace_current'), null);
+  assert.deepEqual(await f.tools.call(second.id, 'workspace_current'), {
+    status: 'none',
+    workspace: null,
+  });
   const next = (await f.tools.call(second.id, 'workspace_select', { workspace: 'Aevra' })) as any;
   assert.equal(next.status, 'approval_pending');
   assert.notEqual(next.requestId, pending.requestId);

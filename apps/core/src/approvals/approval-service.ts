@@ -3,6 +3,7 @@ import type { RiskTier, NormalizedOperation } from '../../../../packages/protoco
 import type { ApprovalRepository } from '../../../../packages/store/src/approvals.js';
 import type { AuditService } from '../audit/audit-service.js';
 import { notifySystem } from '../../../../packages/notifications/src/notify.js';
+import { recordTicketDecision } from './approval-audit.js';
 import { presentApproval } from './request-presentation.js';
 
 export type ApprovalState =
@@ -61,6 +62,10 @@ export class ApprovalService {
     this.sessionIdentityResolver = resolver;
   }
 
+  private record(ticket: FrozenOperationTicket, decision: string, result: string) {
+    recordTicketDecision(this.audit, ticket, decision, result);
+  }
+
   async request(input: Omit<FrozenOperationTicket, 'id' | 'state' | 'expiresAt'>) {
     const reusable = this.reusableConnectionRequest(input);
     if (reusable) {
@@ -92,16 +97,7 @@ export class ApprovalService {
     ) {
       this.volatilePayloads.set(t.id, input.payload);
     }
-    this.audit.append({
-      actor: t.actor,
-      sessionId: t.sessionId,
-      workspaceId: t.workspaceId,
-      operation: t.operation.family,
-      risk: t.risk,
-      decision: 'approval_requested',
-      result: 'pending',
-      redactionCount: 0,
-    });
+    this.record(t, 'approval_requested', 'pending');
     const view = presentApproval(stored),
       parts = [view.action, view.target, view.preview].filter(Boolean);
     notifySystem(`Aevra: ${view.title}`, parts.join(' · '));
@@ -127,16 +123,7 @@ export class ApprovalService {
       t.state = 'EXPIRED';
       this.repo.put(t);
       this.volatilePayloads.delete(t.id);
-      this.audit.append({
-        actor: t.actor,
-        sessionId: t.sessionId,
-        workspaceId: t.workspaceId,
-        operation: t.operation.family,
-        risk: t.risk,
-        decision: 'expired',
-        result: 'APPROVAL_TIMEOUT',
-        redactionCount: 0,
-      });
+      this.record(t, 'expired', 'APPROVAL_TIMEOUT');
     }
     return t;
   }
@@ -147,6 +134,16 @@ export class ApprovalService {
       throw new Error('Critical operations only support one-time local approval');
     if ((t.payload as any)?.securityOnce === true && scope !== 'once')
       throw new Error('Security-sensitive operations only support one-time local approval');
+    // Command matchers collapse positional arguments to `*`, so a standing grant
+    // authorizes far more than the command that was actually reviewed: the shell
+    // matcher `shell:<shell>:*` excludes the script body entirely, and approving
+    // `rm -rf ./build` stores `rm:-rf:*`, which covers any other path too.
+    if (t.operation.capability === 'commands.run' && scope !== 'once') {
+      if (t.operation.family.startsWith('shell:'))
+        throw new Error('Shell execution only supports one-time local approval');
+      if (t.operation.risk === 'HIGH')
+        throw new Error('High-risk commands only support one-time local approval');
+    }
     if (t.operation.family === 'skills:read' && scope !== 'once')
       throw new Error(
         'This request is connection/session scoped and only supports one-time local approval',
@@ -159,16 +156,7 @@ export class ApprovalService {
     t.state = 'APPROVED';
     t.decisionScope = scope;
     this.repo.put(t);
-    this.audit.append({
-      actor: t.actor,
-      sessionId: t.sessionId,
-      workspaceId: t.workspaceId,
-      operation: t.operation.family,
-      risk: t.risk,
-      decision: `approved:${scope}`,
-      result: 'armed',
-      redactionCount: 0,
-    });
+    this.record(t, `approved:${scope}`, 'armed');
     this.approvedHandler?.(t);
     return t;
   }
@@ -178,16 +166,7 @@ export class ApprovalService {
     t.state = 'DENIED';
     this.repo.put(t);
     this.volatilePayloads.delete(t.id);
-    this.audit.append({
-      actor: t.actor,
-      sessionId: t.sessionId,
-      workspaceId: t.workspaceId,
-      operation: t.operation.family,
-      risk: t.risk,
-      decision: 'denied',
-      result: 'APPROVAL_DENIED',
-      redactionCount: 0,
-    });
+    this.record(t, 'denied', 'APPROVAL_DENIED');
     return t;
   }
   cancel(id: string, reason = 'client_cancelled') {
@@ -197,16 +176,7 @@ export class ApprovalService {
     t.cancellationReason = reason;
     this.repo.put(t);
     this.volatilePayloads.delete(t.id);
-    this.audit.append({
-      actor: t.actor,
-      sessionId: t.sessionId,
-      workspaceId: t.workspaceId,
-      operation: t.operation.family,
-      risk: t.risk,
-      decision: 'cancelled',
-      result: reason,
-      redactionCount: 0,
-    });
+    this.record(t, 'cancelled', reason);
     return t;
   }
   cancelForRestart() {
@@ -216,16 +186,7 @@ export class ApprovalService {
         t.cancellationReason = 'CANCELLED_RESTART';
         this.repo.put(t);
         this.volatilePayloads.delete(t.id);
-        this.audit.append({
-          actor: t.actor,
-          sessionId: t.sessionId,
-          workspaceId: t.workspaceId,
-          operation: t.operation.family,
-          risk: t.risk,
-          decision: 'cancelled',
-          result: 'CANCELLED_RESTART',
-          redactionCount: 0,
-        });
+        this.record(t, 'cancelled', 'CANCELLED_RESTART');
       }
     this.volatilePayloads.clear();
   }
@@ -248,60 +209,24 @@ export class ApprovalService {
       t.state = 'CONTEXT_CHANGED';
       this.repo.put(t);
       this.volatilePayloads.delete(t.id);
-      this.audit.append({
-        actor: t.actor,
-        sessionId: t.sessionId,
-        workspaceId: t.workspaceId,
-        operation: t.operation.family,
-        risk: t.risk,
-        decision: 'resume_rejected',
-        result: 'APPROVAL_CONTEXT_CHANGED',
-        redactionCount: 0,
-      });
+      this.record(t, 'resume_rejected', 'APPROVAL_CONTEXT_CHANGED');
       throw Object.assign(new Error(valid.reason), { code: 'APPROVAL_CONTEXT_CHANGED' });
     }
     t.state = 'EXECUTING';
     this.repo.put(t);
-    this.audit.append({
-      actor: t.actor,
-      sessionId: t.sessionId,
-      workspaceId: t.workspaceId,
-      operation: t.operation.family,
-      risk: t.risk,
-      decision: 'resume',
-      result: 'EXECUTING',
-      redactionCount: 0,
-    });
+    this.record(t, 'resume', 'EXECUTING');
     try {
       const result = await execute(t);
       t.state = 'SUCCEEDED';
       this.repo.put(t);
       this.volatilePayloads.delete(t.id);
-      this.audit.append({
-        actor: t.actor,
-        sessionId: t.sessionId,
-        workspaceId: t.workspaceId,
-        operation: t.operation.family,
-        risk: t.risk,
-        decision: 'resume',
-        result: 'SUCCEEDED',
-        redactionCount: 0,
-      });
+      this.record(t, 'resume', 'SUCCEEDED');
       return result;
     } catch (e) {
       t.state = 'FAILED';
       this.repo.put(t);
       this.volatilePayloads.delete(t.id);
-      this.audit.append({
-        actor: t.actor,
-        sessionId: t.sessionId,
-        workspaceId: t.workspaceId,
-        operation: t.operation.family,
-        risk: t.risk,
-        decision: 'resume',
-        result: 'FAILED',
-        redactionCount: 0,
-      });
+      this.record(t, 'resume', 'FAILED');
       throw e;
     }
   }

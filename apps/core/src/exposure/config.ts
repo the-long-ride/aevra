@@ -52,6 +52,10 @@ function adminFields(input: ExposureConfig) {
   };
 }
 
+function trustedProxyField(input: ExposureConfig) {
+  return input.trustedProxyClientIp === true ? { trustedProxyClientIp: true as const } : {};
+}
+
 function localProtocolField(input: ExposureConfig) {
   return input.localProtocol ? { localProtocol: resolveLocalProtocol(input) } : {};
 }
@@ -66,13 +70,20 @@ export function validateExposureConfig(input: ExposureConfig): ExposureConfig {
     ...input,
     publicUrl: normalizePublicUrl(input.publicUrl),
     ...adminFields(input),
+    ...trustedProxyField(input),
   };
+  if (config.trustedProxyClientIp !== true) delete config.trustedProxyClientIp;
   if (!config.publicUrl) delete config.publicUrl;
   if (!config.adminPublicUrl) delete config.adminPublicUrl;
   if (!config.trustedAdminOrigins?.length) delete config.trustedAdminOrigins;
 
   if (input.provider === 'local') {
-    return { provider: 'local', ...localProtocolField(input), ...adminFields(config) };
+    return {
+      provider: 'local',
+      ...localProtocolField(input),
+      ...adminFields(config),
+      ...trustedProxyField(input),
+    };
   }
 
   if (input.provider === 'direct') {
@@ -91,6 +102,7 @@ export function validateExposureConfig(input: ExposureConfig): ExposureConfig {
       ...localProtocolField(input),
       publicUrl: config.publicUrl,
       ...adminFields(config),
+      ...trustedProxyField(input),
     };
   }
 

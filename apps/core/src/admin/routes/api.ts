@@ -11,6 +11,7 @@ import { handleSessionConnectorRoutes } from './session-connector-routes.js';
 import { handleSettingsRoutes } from './settings-routes.js';
 import type { AdminApiContext, AdminRouteHandler } from './types.js';
 import { handleWorkspaceRoutes } from './workspace-routes.js';
+import { handleYoloPolicyRoutes } from './yolo-policy-routes.js';
 
 export type { AdminApiContext } from './types.js';
 
@@ -23,6 +24,7 @@ const handlers: AdminRouteHandler[] = [
   handleSessionConnectorRoutes,
   handleOperationRoutes,
   handlePowerRoutes,
+  handleYoloPolicyRoutes,
   handleSettingsRoutes,
   handleAccessRoutes,
 ];

@@ -58,13 +58,13 @@ test('worker dispatcher executes file read search create write move and delete o
     writeFileSync(path.join(root, 'src', 'a.txt'), 'alpha\nbeta\n');
 
     const listed = await ok(root, { kind: 'file.list', path: '/src' });
-    assert.ok(listed.some((entry: any) => entry.name === 'a.txt'));
+    assert.ok(listed.entries.some((entry: any) => entry.name === 'a.txt'));
 
     const read = await ok(root, { kind: 'file.read', path: '/src/a.txt', offset: 0, length: 5 });
     assert.equal(read.content, 'alpha');
 
     const searched = await ok(root, { kind: 'file.search', path: '/src', query: 'beta' });
-    assert.ok(searched.length > 0);
+    assert.ok(searched.hits.length > 0);
 
     const multi = await ok(root, {
       kind: 'search.multi',

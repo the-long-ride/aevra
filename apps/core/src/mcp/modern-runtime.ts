@@ -23,6 +23,8 @@ export interface McpHookEmitter {
 }
 
 interface ModernRuntimeDependencies {
+  /** Honor forwarded client-IP headers because a trusted proxy was declared. */
+  trustForwardedClientIp?: boolean;
   runtime: ModernRuntime;
   diagnostics: McpDiagnostics;
   activity: McpActivityRecorder;
@@ -108,8 +110,9 @@ export async function handleModernRuntimeRequest(
     return;
   }
 
-  const resolution = deps.runtime.sessions.getOrCreateForIdentity?.(identity, remoteIp(req));
-  const session = resolution?.session ?? deps.runtime.sessions.create(identity, remoteIp(req));
+  const clientIp = remoteIp(req, deps.trustForwardedClientIp === true);
+  const resolution = deps.runtime.sessions.getOrCreateForIdentity?.(identity, clientIp);
+  const session = resolution?.session ?? deps.runtime.sessions.create(identity, clientIp);
   const mode =
     resolution?.mode ??
     (resolution ? (resolution.created === true ? 'created' : 'existing') : 'created');

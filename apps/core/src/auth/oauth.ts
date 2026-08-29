@@ -1,16 +1,19 @@
 import type {
   OAuthAuthorizationRequestRecord,
-  OAuthClientRecord,
   OAuthRepository,
 } from '../../../../packages/store/src/oauth.js';
 import type { VerifiedRemoteIdentity } from './cloudflare.js';
+import {
+  listOAuthClients,
+  registerOAuthClient,
+  type DynamicClientRegistrationInput,
+} from './oauth-clients.js';
 import {
   SUPPORTED_SCOPES,
   base64urlSha256,
   normalizeScope,
   resolvedResource,
   safeEqualText,
-  validateRedirectUri,
 } from './oauth-helpers.js';
 
 export interface OAuthServiceOptions {
@@ -23,15 +26,7 @@ export interface OAuthServiceOptions {
   refreshTokenTtlMs?: number;
 }
 
-export interface DynamicClientRegistrationInput {
-  client_name?: string;
-  redirect_uris?: string[];
-  token_endpoint_auth_method?: string;
-  grant_types?: string[];
-  response_types?: string[];
-  application_type?: string;
-}
-
+export type { DynamicClientRegistrationInput } from './oauth-clients.js';
 export interface AuthorizationRequestInput {
   client_id: string;
   redirect_uri: string;
@@ -66,19 +61,6 @@ export interface OAuthTokenResponse {
   expires_in: number;
   scope: string;
   refresh_token?: string;
-}
-
-function publicClient(record: OAuthClientRecord, applicationType?: string) {
-  return {
-    client_id: record.clientId,
-    client_name: record.clientName,
-    redirect_uris: record.redirectUris,
-    token_endpoint_auth_method: record.tokenEndpointAuthMethod,
-    grant_types: record.grantTypes,
-    response_types: record.responseTypes,
-    ...(applicationType ? { application_type: applicationType } : {}),
-    client_id_issued_at: Math.floor(Date.parse(record.createdAt) / 1000),
-  };
 }
 
 export class AevraOAuthService {
@@ -144,42 +126,11 @@ export class AevraOAuthService {
   }
 
   registerClient(input: DynamicClientRegistrationInput) {
-    const redirectUris = Array.isArray(input.redirect_uris) ? input.redirect_uris.map(String) : [];
-    if (!redirectUris.length) throw new Error('redirect_uris must contain at least one URI');
-    const unique = [...new Set(redirectUris.map(validateRedirectUri))];
-    const authMethod = input.token_endpoint_auth_method ?? 'none';
-    if (authMethod !== 'none')
-      throw new Error(
-        'only public OAuth clients with token_endpoint_auth_method=none are supported',
-      );
-    const applicationType =
-      input.application_type == null ? undefined : String(input.application_type);
-    if (applicationType && !['native', 'web'].includes(applicationType))
-      throw new Error('application_type must be native or web');
-    if (
-      input.grant_types &&
-      input.grant_types.some(
-        (value) => !['authorization_code', 'refresh_token'].includes(String(value)),
-      )
-    )
-      throw new Error('unsupported OAuth grant type');
-    if (input.response_types && input.response_types.some((value) => String(value) !== 'code'))
-      throw new Error('unsupported OAuth response type');
-    const record = this.repo.registerClient({
-      clientName: String(input.client_name ?? 'MCP client').trim() || 'MCP client',
-      redirectUris: unique,
-    });
-    return publicClient(record, applicationType);
+    return registerOAuthClient(this.repo, input);
   }
 
   listClients() {
-    return this.repo.listClients().map((record) => ({
-      clientId: record.clientId,
-      clientName: record.clientName,
-      actor: `oauth:${record.clientName}`,
-      redirectUris: [...record.redirectUris],
-      createdAt: record.createdAt,
-    }));
+    return listOAuthClients(this.repo);
   }
 
   beginAuthorization(

@@ -1,4 +1,5 @@
 import { redactText } from '../../../../packages/security/src/dlp.js';
+import { stripControlCharacters } from '../../../../packages/security/src/untrusted.js';
 import type { FrozenOperationTicket } from './approval-service.js';
 
 export interface ApprovalPresentation {
@@ -6,10 +7,21 @@ export interface ApprovalPresentation {
   action: string;
   target: string;
   preview?: string;
+  /** True when the preview omits part of the text that will actually execute. */
+  truncated?: boolean;
+  /** Original character count, so a caller can state exactly how much is hidden. */
+  previewFullLength?: number;
 }
 
+/**
+ * Previews for text that executes verbatim get a far larger budget than labels.
+ * A short cap is an approval-spoofing primitive: a benign prefix plus padding
+ * pushes the real payload past the ellipsis where the approver cannot see it.
+ */
+const SCRIPT_PREVIEW_MAX = 4000;
+
 function clean(value: unknown, max = 180) {
-  let text = String(value ?? '')
+  let text = stripControlCharacters(String(value ?? ''))
     .replace(/\s+/g, ' ')
     .trim();
   text = redactText(text).text;
@@ -19,10 +31,20 @@ function clean(value: unknown, max = 180) {
   if (text.length > max) text = `${text.slice(0, Math.max(0, max - 1))}…`;
   return text;
 }
+
+/** Builds a preview for text that will be executed, reporting anything it had to cut. */
+function executablePreview(value: unknown) {
+  const source = stripControlCharacters(String(value ?? ''));
+  const preview = clean(source, SCRIPT_PREVIEW_MAX);
+  return source.length > SCRIPT_PREVIEW_MAX
+    ? { preview, truncated: true, previewFullLength: source.length }
+    : { preview };
+}
+
 function commandPreview(command: any) {
   const executable = clean(command?.executable ?? '', 64),
-    args = Array.isArray(command?.args) ? command.args.map((v: unknown) => clean(v, 100)) : [];
-  return clean([executable, ...args].filter(Boolean).join(' '));
+    args = Array.isArray(command?.args) ? command.args.map((v: unknown) => clean(v, 512)) : [];
+  return clean([executable, ...args].filter(Boolean).join(' '), SCRIPT_PREVIEW_MAX);
 }
 function executionTarget(mode: unknown) {
   return mode === 'host' ? 'Host workspace' : 'Strict sandbox';
@@ -163,7 +185,7 @@ export function presentApproval(ticket: FrozenOperationTicket): ApprovalPresenta
       title: 'Run shell script',
       action: `Run ${clean(payload.shell || family.split(':')[1] || 'shell', 40)}`,
       target: executionTarget(args.executionMode ?? payload.executionMode),
-      ...(script ? { preview: clean(script, 180) } : {}),
+      ...(script ? executablePreview(script) : {}),
     };
   }
   if (payload.tool === 'command_run' || command)

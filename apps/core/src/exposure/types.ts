@@ -9,6 +9,13 @@ export interface ExposureConfig {
   publicUrl?: string;
   adminPublicUrl?: string;
   trustedAdminOrigins?: string[];
+  /**
+   * Declares that a trusted reverse proxy in front of Aevra overwrites the client-IP
+   * header, so `cf-connecting-ip` / `true-client-ip` / `x-real-ip` may be believed.
+   * Off by default: without a declared proxy those headers are client-controlled, and
+   * rate limiting and the audit trail key on the address they carry.
+   */
+  trustedProxyClientIp?: boolean;
   direct?: {
     host: string;
   };

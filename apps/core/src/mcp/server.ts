@@ -38,6 +38,8 @@ export interface McpIngressServerOptions {
   oauth?: AevraOAuthService;
   activity?: McpActivityLog;
   hooks?: McpHookEmitter;
+  /** Honor forwarded client-IP headers because a trusted proxy was declared. */
+  trustForwardedClientIp?: () => boolean;
 }
 
 const LEGACY_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] as const;
@@ -132,6 +134,22 @@ export class McpIngressServer {
     this.diagnostics.stopped();
   }
 
+  /** Whether a declared upstream proxy makes forwarded client-IP headers believable. */
+  trustsForwardedClientIp(): boolean {
+    return this.options.trustForwardedClientIp?.() === true;
+  }
+
+  private connectorUrlWarned = false;
+
+  /** Warns once per process that URL-borne connector tokens are deprecated. */
+  private warnConnectorUrlDeprecation() {
+    if (this.connectorUrlWarned) return;
+    this.connectorUrlWarned = true;
+    console.warn(
+      '[aevra] Connector tokens in the URL path are deprecated: proxies, CDNs, and error pages log request lines. Use the Authorization: Bearer header instead.',
+    );
+  }
+
   private async handle(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', this.url());
     const path = url.pathname;
@@ -149,6 +167,12 @@ export class McpIngressServer {
       res.end('Not Found');
       return;
     }
+    if (connectorMatch) {
+      // The credential sits in the request line, so keep it out of shared caches.
+      // Aevra itself never records the path, but proxies and error pages do.
+      res.setHeader('cache-control', 'no-store');
+      this.warnConnectorUrlDeprecation();
+    }
     this.diagnostics.recordInbound(req.method ?? 'GET');
 
     if (this.safeMode()) {
@@ -161,6 +185,7 @@ export class McpIngressServer {
       connectors: this.connectors,
       oauth: this.options.oauth,
       plainMcpEnabled: this.options.plainMcpEnabled,
+      trustForwardedClientIp: this.trustsForwardedClientIp(),
     });
     if (!identity) return;
 
@@ -203,6 +228,7 @@ export class McpIngressServer {
     this.diagnostics.recordMethod(body?.method);
     if (isModernRequest(req, body)) {
       await handleModernRuntimeRequest(req, res, identity, body, {
+        trustForwardedClientIp: this.trustsForwardedClientIp(),
         runtime: this.runtime!,
         diagnostics: this.diagnostics,
         activity: this.activity,
@@ -247,7 +273,10 @@ export class McpIngressServer {
     identity: VerifiedRemoteIdentity,
     body: any,
   ) {
-    const session = this.runtime!.sessions.create(identity, remoteIp(req));
+    const session = this.runtime!.sessions.create(
+      identity,
+      remoteIp(req, this.trustsForwardedClientIp()),
+    );
     this.diagnostics.recordIdentity(identity.actor, session.id);
     this.activity.session(identity.actor, session.id, 'initialize');
     res.setHeader('mcp-session-id', session.id);

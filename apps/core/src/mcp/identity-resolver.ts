@@ -21,6 +21,8 @@ interface IdentityResolverOptions {
   connectors?: ConnectorAdmission;
   oauth?: AevraOAuthService;
   plainMcpEnabled?: boolean;
+  /** Honor forwarded client-IP headers because a trusted proxy was declared. */
+  trustForwardedClientIp?: boolean;
 }
 
 export async function resolveMcpIdentity(
@@ -30,7 +32,12 @@ export async function resolveMcpIdentity(
   options: IdentityResolverOptions,
 ): Promise<VerifiedRemoteIdentity | null> {
   if (connectorToken) {
-    const outcome = await verifyConnector(options.connectors, connectorToken, req);
+    const outcome = await verifyConnector(
+      options.connectors,
+      connectorToken,
+      req,
+      options.trustForwardedClientIp,
+    );
     if (outcome.kind === 'rate-limited') {
       sendJson(res, 429, { error: 'rate_limited' });
       return null;
@@ -72,7 +79,12 @@ async function verifyBearerToken(
       // Fall through to static connector verification.
     }
   }
-  const connector = await verifyConnector(options.connectors, token, req);
+  const connector = await verifyConnector(
+    options.connectors,
+    token,
+    req,
+    options.trustForwardedClientIp,
+  );
   return connector.kind === 'admitted' ? connector.identity : null;
 }
 
@@ -80,9 +92,10 @@ async function verifyConnector(
   connectors: ConnectorAdmission | undefined,
   token: string,
   req: IncomingMessage,
+  trustForwardedClientIp = false,
 ): Promise<ConnectorAdmissionOutcome> {
   if (!connectors) return { kind: 'denied' };
-  return connectors.verify(token, remoteIp(req));
+  return connectors.verify(token, remoteIp(req, trustForwardedClientIp));
 }
 
 function unauthorized(res: ServerResponse, oauth?: AevraOAuthService) {

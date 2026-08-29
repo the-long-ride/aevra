@@ -24,6 +24,7 @@ function applyUnifiedPatch(source: string, patch: string) {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const out = [...lines];
   let offset = 0;
+  let applied = 0;
   const rows = patch.replace(/\r\n/g, '\n').split('\n');
   for (let i = 0; i < rows.length; i++) {
     const match = rows[i]!.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
@@ -46,6 +47,14 @@ function applyUnifiedPatch(source: string, patch: string) {
     }
     out.splice(start, oldChunk.length, ...newChunk);
     offset += newChunk.length - oldChunk.length;
+    applied++;
+  }
+  // Every non-header row is skipped, so a patch without a parseable "@@" header
+  // would otherwise leave the file untouched and still report success.
+  if (applied === 0) {
+    throw Object.assign(new Error('Patch contains no parseable @@ hunk header'), {
+      code: 'INVALID_REQUEST',
+    });
   }
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
   return out.join(eol);

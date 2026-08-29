@@ -65,10 +65,25 @@ export function sendOAuthJson(res: ServerResponse, status: number, value: unknow
   sendJson(res, status, value);
 }
 
-export function remoteIp(req: IncomingMessage): string {
-  return typeof req.headers['cf-connecting-ip'] === 'string'
-    ? req.headers['cf-connecting-ip']
-    : (req.socket.remoteAddress ?? 'unknown');
+const FORWARDED_CLIENT_IP_HEADERS = ['cf-connecting-ip', 'true-client-ip', 'x-real-ip'] as const;
+
+/**
+ * Returns the peer address for rate limiting and audit.
+ *
+ * Forwarded client-IP headers are attacker-controlled unless a trusted proxy is
+ * known to overwrite them, so they are ignored unless the caller explicitly opts
+ * in. Honoring them by default let a remote client mint a fresh rate-limit bucket
+ * per request and write an arbitrary origin address into the audit trail.
+ * PublicGateway strips these headers on the way through regardless.
+ */
+export function remoteIp(req: IncomingMessage, trustForwardedClientIp = false): string {
+  if (trustForwardedClientIp) {
+    for (const header of FORWARDED_CLIENT_IP_HEADERS) {
+      const value = req.headers[header];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+  }
+  return req.socket.remoteAddress ?? 'unknown';
 }
 
 export function bearerToken(req: IncomingMessage) {

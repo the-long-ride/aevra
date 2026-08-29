@@ -13,6 +13,7 @@ import { nativeMultiSearch } from '../../../packages/executor/src/native-search.
 import { runHookProcess } from '../../../packages/executor/src/hook-process.js';
 import {
   gitStatus,
+  gitAdd,
   gitDiff,
   gitLog,
   gitBranch,
@@ -116,6 +117,7 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
       return { ok: true, value: processRuntime.start(op.command, cwd, op.lifecycle) };
     }
     if (op.kind === 'git.status') return { ok: true, value: await gitStatus(cwd) };
+    if (op.kind === 'git.add') return { ok: true, value: await gitAdd(cwd, op.args) };
     if (op.kind === 'git.diff') return { ok: true, value: await gitDiff(cwd, op.args) };
     if (op.kind === 'git.log') return { ok: true, value: await gitLog(cwd, op.args) };
     if (op.kind === 'git.branch') return { ok: true, value: await gitBranch(cwd, op.args) };
