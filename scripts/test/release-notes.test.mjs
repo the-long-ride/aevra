@@ -131,9 +131,13 @@ test('generateReleaseNotes extracts real repository CHANGELOG.md for current ver
 
   assert.match(notes, /\*\*npm\*\*:/);
   assert.match(notes, /npm install -g @the-long-ride\/aevra@latest/);
-  assert.match(notes, /Host System Capabilities Detection/);
-  assert.match(
-    notes,
-    /\*\*Full Changelog\*\*:\s*https:\/\/github\.com\/the-long-ride\/aevra\/compare\/v0\.1\.2\.\.\.v0\.1\.3/,
+  const section = parseChangelogSections(changelogContent).find(
+    (candidate) => candidate.version === pkg.version,
+  );
+  assert.ok(section, `missing changelog section for ${pkg.version}`);
+  assert.ok(notes.includes(section.body));
+  assert.ok(
+    notes.includes(`compare/v${section.prevVersion}...v${pkg.version}`),
+    'release notes must link to the previous changelog version',
   );
 });

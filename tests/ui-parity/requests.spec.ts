@@ -23,10 +23,11 @@ for (const surface of ADMIN_SURFACES) {
     await installAdminApi(page, { approvals: [commandApproval] });
     await page.goto(surface.path);
     await page.locator('#open-requests').click();
+    const drawer = page.locator('.request-drawer[aria-hidden="false"]');
 
-    await expect(page.getByText('ChatGPT requests commands.run')).toBeVisible();
-    await expect(page.getByText('Saved matcher')).toBeVisible();
-    await expect(page.getByText('git:status:--short')).toBeVisible();
+    await expect(drawer.getByText('ChatGPT requests commands.run')).toBeVisible();
+    await expect(drawer.getByText('Saved matcher')).toBeVisible();
+    await expect(drawer.getByText('git:status:--short')).toBeVisible();
     for (const label of [
       'Deny',
       'Run once',
@@ -34,7 +35,7 @@ for (const surface of ADMIN_SURFACES) {
       'Always in workspace',
       'Always globally',
     ]) {
-      await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible();
+      await expect(drawer.getByRole('button', { name: label, exact: true })).toBeVisible();
     }
   });
 
@@ -44,15 +45,18 @@ for (const surface of ADMIN_SURFACES) {
     });
     await page.goto(surface.path);
     await page.locator('#open-requests').click();
+    const drawer = page.locator('.request-drawer[aria-hidden="false"]');
 
-    await expect(page.getByRole('button', { name: 'Deny', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Run once', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Allow this session', exact: true })).toHaveCount(
+    await expect(drawer.getByRole('button', { name: 'Deny', exact: true })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Run once', exact: true })).toBeVisible();
+    await expect(
+      drawer.getByRole('button', { name: 'Allow this session', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      drawer.getByRole('button', { name: 'Always in workspace', exact: true }),
+    ).toHaveCount(0);
+    await expect(drawer.getByRole('button', { name: 'Always globally', exact: true })).toHaveCount(
       0,
     );
-    await expect(
-      page.getByRole('button', { name: 'Always in workspace', exact: true }),
-    ).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Always globally', exact: true })).toHaveCount(0);
   });
 }
