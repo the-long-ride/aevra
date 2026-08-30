@@ -22,6 +22,13 @@ test('windows-style path survives entropy heuristic', () => {
   assert.equal(redactText(v).text, v);
 });
 
+test('versioned mixed-case paths remain readable', () => {
+  const windows = 'wrote C:/Users/operator/MyProjectVersion2026/packages/security/src/dlp.ts';
+  const posix = 'wrote /srv/releases/CustomerPortalV2026Blue/assets/app.js';
+  assert.equal(redactText(windows).text, windows);
+  assert.equal(redactText(posix).text, posix);
+});
+
 // A base64 payload can contain '/', and the heuristic used to skip every slash-bearing
 // candidate outright, so such a payload passed through unredacted. The fixture is
 // derived at runtime so no credential-shaped literal sits in the file.

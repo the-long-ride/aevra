@@ -127,6 +127,18 @@ test('Escape key calls onDismiss', async () => {
   expect(onDismiss).toHaveBeenCalledTimes(1);
 });
 
+test('approval modal receives focus and keeps Tab navigation inside the dialog', async () => {
+  const user = userEvent.setup();
+  installApiFixtures();
+  renderModal(makeData());
+
+  const dialog = screen.getByRole('dialog', { name: 'Approval request' });
+  expect(dialog).toHaveFocus();
+
+  await user.tab({ shift: true });
+  expect(screen.getByRole('button', { name: 'Always globally' })).toHaveFocus();
+});
+
 test('OAuth approval modal shows allow and deny buttons', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures({ oauth: [oauthRequest] });

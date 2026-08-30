@@ -1,6 +1,6 @@
 {
   "name": "@the-long-ride/aevra",
-  "version": "0.1.3",
+  "version": "1.0.4",
   "type": "module",
   "workspaces": [
     "apps/web-react"

@@ -1,5 +1,5 @@
 import type { ApprovalItem, OauthRequestItem } from '@aevra/admin-contracts';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDialog } from '../../components/Dialog';
 import { actionsForApproval } from './request-actions';
 import {
@@ -168,6 +168,13 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
   const [current, setCurrent] = useState<'oauth' | 'approval'>(() =>
     oauthItem ? 'oauth' : 'approval',
   );
+  const dialogRef = useRef<HTMLElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const dismissRef = useRef(onDismiss);
+
+  useEffect(() => {
+    dismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   // Keep displayed card in sync when data changes (e.g. item resolved, next one shown)
   useEffect(() => {
@@ -177,20 +184,42 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
     else if (approvalItem) setCurrent('approval');
   }, [oauthItem, approvalItem, current]);
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
+  useEffect(() => {
+    previousFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onDismiss();
+        dismissRef.current();
+        return;
       }
-    },
-    [onDismiss],
-  );
+      if (event.key !== 'Tab') return;
 
-  useEffect(() => {
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (!focusable.length) return;
+
+      const index = focusable.indexOf(document.activeElement as HTMLElement);
+      if (event.shiftKey && index <= 0) {
+        event.preventDefault();
+        focusable.at(-1)?.focus();
+      } else if (!event.shiftKey && (index === -1 || index === focusable.length - 1)) {
+        event.preventDefault();
+        focusable[0]?.focus();
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousFocus.current?.focus();
+    };
+  }, []);
 
   if (!oauthItem && !approvalItem) return null;
 
@@ -207,10 +236,12 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
       }}
     >
       <article
+        ref={dialogRef}
         className="approval-modal"
         role="dialog"
         aria-modal="true"
         aria-label="Approval request"
+        tabIndex={-1}
       >
         <div className="approval-modal-toolbar">
           <span className="approval-modal-label">

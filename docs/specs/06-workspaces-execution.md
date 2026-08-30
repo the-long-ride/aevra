@@ -1,6 +1,6 @@
 # 06 — Workspaces & Execution
 
-**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `0.1.3`
+**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `1.0.4`
 
 A **workspace** is a registered host folder the AI may work in. Registration happens **only** in the localhost Web UI — the remote surface can never create or mutate roots.
 

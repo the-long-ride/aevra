@@ -1,6 +1,6 @@
 # 04 — Connectors
 
-**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `0.1.3`
+**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `1.0.4`
 
 A **connector** is a named admission credential for one AI client — the thing that makes "works with any web AI" true, because the client needs no auth capability at all: the credential _is_ the URL.
 

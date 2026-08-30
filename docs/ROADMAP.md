@@ -1,6 +1,6 @@
 # Aevra Roadmap & Weak-Points Map
 
-**Date:** 2026-08-28 · **Baseline:** Aevra `0.1.3` · **Derived from:** Fast Lane batch tools, system capability detection, local transport protocol options and validation, Web UI polish, and full test suite verification.
+**Date:** 2026-08-30 · **Baseline:** Aevra `1.0.4` · **Derived from:** Fast Lane batch tools, system capability detection, local transport protocol options and validation, Web UI polish, and full test suite verification.
 
 This file tracks remaining product/architecture gaps only. Delivered work belongs in `CHANGELOG.md`.
 

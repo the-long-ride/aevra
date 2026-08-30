@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.4] - 2026-08-30
+
+- Restored missing runtime modules and fixed strict typecheck/build failures.
+- Hardened OAuth client-IP handling, DLP path detection, and approval-modal keyboard focus.
+- Added YOLO policy and onboarding/settings UI integrations with regression coverage.
+
 All notable changes to this project are documented here.
 
 ## [Unreleased]

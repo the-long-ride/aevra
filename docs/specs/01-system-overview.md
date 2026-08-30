@@ -1,6 +1,6 @@
 # 01 — System Overview
 
-**Audience:** engineers & AI agents · **Scope:** the whole product in one view · **Verified against:** `0.1.3`
+**Audience:** engineers & AI agents · **Scope:** the whole product in one view · **Verified against:** `1.0.4`
 
 Aevra is a **local, workspace-scoped MCP execution gateway**. An AI web client (Claude.ai, ChatGPT, Gemini CLI, anything MCP-capable) connects over HTTPS; Aevra decides what that client may do, and an isolated Worker does it.
 

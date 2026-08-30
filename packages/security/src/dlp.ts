@@ -32,6 +32,19 @@ function hasBlobSegment(candidate: string) {
     );
   });
 }
+
+function looksLikePath(candidate: string) {
+  const segments = candidate.split('/').filter(Boolean);
+  return (
+    segments.length >= 3 &&
+    (/\.(?:[A-Za-z0-9]{1,8})$/.test(candidate) ||
+      segments.some((segment) =>
+        ['Users', 'home', 'srv', 'var', 'tmp', 'packages', 'src', 'assets', 'docs'].includes(
+          segment,
+        ),
+      ))
+  );
+}
 export interface DlpResult {
   text: string;
   redactionCount: number;
@@ -61,7 +74,7 @@ export function redactText(
     if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(m)) return m;
     // A slash used to grant blanket immunity, so any encoded payload containing '/'
     // passed through. Judge slash-bearing runs per segment instead.
-    if (m.includes('/') ? !hasBlobSegment(m) : entropy(m) < 3.5) return m;
+    if (m.includes('/') ? looksLikePath(m) || !hasBlobSegment(m) : entropy(m) < 3.5) return m;
     count++;
     return '[REDACTED]';
   });

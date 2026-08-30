@@ -16,7 +16,6 @@ import { handleModernRuntimeRequest, type McpHookEmitter } from './modern-runtim
 import { MODERN_PROTOCOL_VERSION, isModernRequest } from './modern-protocol.js';
 import { handleOAuthRoute } from './oauth-routes.js';
 import { aevraServerInfo } from './server-info.js';
-
 export type McpRequestHandler = (
   request: IncomingMessage,
   response: ServerResponse,
@@ -159,7 +158,8 @@ export class McpIngressServer {
       res.end(JSON.stringify({ ok: true }));
       return;
     }
-    if (await handleOAuthRoute(req, res, url, this.options.oauth)) return;
+    if (await handleOAuthRoute(req, res, url, this.options.oauth, this.trustsForwardedClientIp()))
+      return;
 
     const connectorMatch = path.match(/^\/mcp\/([A-Za-z0-9_-]+)$/);
     if (path !== '/mcp' && !connectorMatch) {

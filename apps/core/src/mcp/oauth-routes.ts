@@ -140,6 +140,7 @@ export async function handleOAuthRoute(
   res: ServerResponse,
   url: URL,
   oauth?: AevraOAuthService,
+  trustForwardedClientIp = false,
 ): Promise<boolean> {
   if (!oauth) return false;
   const path = url.pathname;
@@ -166,7 +167,7 @@ export async function handleOAuthRoute(
   }
 
   if (path === '/oauth/register' && method === 'POST') {
-    if (!registrationLimiter.allow(remoteIp(req))) {
+    if (!registrationLimiter.allow(remoteIp(req, trustForwardedClientIp))) {
       sendOAuthJson(res, 429, { error: 'rate_limited' });
       return true;
     }
@@ -195,7 +196,7 @@ export async function handleOAuthRoute(
           code_challenge_method: url.searchParams.get('code_challenge_method') ?? '',
           state: url.searchParams.get('state') ?? undefined,
         },
-        remoteIp(req),
+        remoteIp(req, trustForwardedClientIp),
       );
       sendHtml(res, 200, authorizationPage(pending.id, pending.pairingCode));
     } catch (error) {

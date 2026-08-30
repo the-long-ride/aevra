@@ -14,8 +14,8 @@ import {
   type JsonSchema,
 } from './registry-schema-parts.js';
 
-export { emptySchema } from './registry-schema-parts.js';
 export type { JsonSchema } from './registry-schema-parts.js';
+export { emptySchema } from './registry-schema-parts.js';
 
 export const inputSchemas: Record<string, JsonSchema> = {
   aevra_status: emptySchema,
