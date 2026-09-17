@@ -23,6 +23,11 @@ import {
 import { resolveCapabilityPath } from '../../../packages/security/src/path-policy.js';
 import { snapshotFile, restoreFile } from '../../../packages/executor/src/recovery.js';
 import { processRuntime } from './process-runtime.js';
+import { dispatchBrowserOperation, isBrowserOperation } from './browser-dispatch.js';
+import { dispatchDesktopOperation, isDesktopOperation } from './desktop-dispatch.js';
+import { desktopRuntime } from './desktop-runtime.js';
+import { dispatchMcpUpstreamOperation, isMcpUpstreamOperation } from './mcp-upstream-dispatch.js';
+import { mcpUpstreamRuntime } from './mcp-upstream-runtime.js';
 import { DockerBackend } from '../../../packages/executor/src/docker.js';
 import { PodmanBackend } from '../../../packages/executor/src/podman.js';
 
@@ -34,16 +39,24 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
     if (op.kind === 'file.read') {
       return {
         ok: true,
-        value: await fileRead(op.path, roots, { offset: op.offset, length: op.length }),
+        value: await fileRead(
+          op.path,
+          roots,
+          { offset: op.offset, length: op.length },
+          op.protectedGlobs,
+        ),
       };
     }
     if (op.kind === 'file.search') {
-      return { ok: true, value: await fileSearch(op.path, op.query, roots) };
+      return {
+        ok: true,
+        value: await fileSearch(op.path, op.query, roots, undefined, op.protectedGlobs),
+      };
     }
     if (op.kind === 'search.multi') {
       return {
         ok: true,
-        value: await nativeMultiSearch(op.queries, roots, op.maxResultsPerQuery),
+        value: await nativeMultiSearch(op.queries, roots, op.maxResultsPerQuery, op.protectedGlobs),
       };
     }
     if (op.kind === 'hook.run') return { ok: true, value: await runHookProcess(op) };
@@ -72,6 +85,29 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
     if (op.kind === 'process.stop') return { ok: true, value: processRuntime.stop(op.processId) };
     if (op.kind === 'process.restart') {
       return { ok: true, value: processRuntime.restart(op.processId) };
+    }
+
+    // Browser operations resolve no filesystem path, so they route before
+    // capability-root resolution rather than through it.
+    // Awaited, not just returned: a bare `return promise` inside try/catch
+    // settles after the catch is out of scope, so driver rejections would
+    // escape as unhandled instead of becoming typed worker errors.
+    if (isBrowserOperation(op)) return await dispatchBrowserOperation(op);
+
+    // Desktop operations resolve no filesystem path either, and follow the
+    // same reasoning as the browser branch above: awaited so a driver
+    // rejection becomes a typed worker error instead of an unhandled
+    // rejection escaping the try/catch. dispatchDesktopOperation returns the
+    // raw result (or throws), so it is wrapped into a WorkerResult here the
+    // same way every other branch in this function wraps its own value.
+    if (isDesktopOperation(op)) {
+      return { ok: true, value: await dispatchDesktopOperation(op, desktopRuntime.registry()) };
+    }
+    if (isMcpUpstreamOperation(op)) {
+      return {
+        ok: true,
+        value: await dispatchMcpUpstreamOperation(op, mcpUpstreamRuntime.registry()),
+      };
     }
 
     const cwd = (await resolveCapabilityPath('/', roots, 'command')).canonicalHostPath;
@@ -138,11 +174,17 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
       error: { code: 'CAPABILITY_REQUIRED', message: `Operation ${op.kind} is not enabled yet` },
     };
   } catch (e) {
+    // `details` is forwarded only when the thrown error actually carries one
+    // (so far only `DesktopDriverError` on the input-refused path does, to
+    // carry the window identity and gate verdict through to the MCP tool
+    // layer's audit call) - every other branch's errors are unaffected.
+    const details = (e as any)?.details;
     return {
       ok: false,
       error: {
         code: (e as any)?.code ?? 'INVALID_REQUEST',
         message: e instanceof Error ? e.message : String(e),
+        ...(details ? { details } : {}),
       },
     };
   }

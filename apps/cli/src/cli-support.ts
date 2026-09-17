@@ -8,8 +8,10 @@ export function usageText(): string {
     '  aevra setup',
     '  aevra service install|start|stop|restart|status',
     '  aevra connectors list|create <name>|revoke <id>',
+    '  aevra mcp list|add <name> --transport …|remove <id>|test <id>',
     '  aevra sessions revoke-others --yes',
     '  aevra audit clear --yes',
+    '  aevra extension install [--dir <path>] [--yes]',
     '  aevra status [--json]',
     '  aevra backup verify <file>|restore <file> [--yes]',
     '  aevra completion bash|zsh|powershell',
@@ -81,8 +83,10 @@ export function completionText(shell: 'bash' | 'zsh' | 'powershell'): string {
     'setup',
     'service',
     'connectors',
+    'mcp',
     'sessions',
     'audit',
+    'extension',
     'status',
     'backup',
     'completion',
@@ -128,7 +132,7 @@ _aevra "$@"
     @('--ui') | Where-Object { $_ -like "$wordToComplete*" }
     return
   }
-  @('start','ui','setup','service','connectors','sessions','audit','status','backup','completion','--version','-v','--help','-h') | Where-Object { $_ -like "$wordToComplete*" }
+  @('start','ui','setup','service','connectors','mcp','sessions','audit','extension','status','backup','completion','--version','-v','--help','-h') | Where-Object { $_ -like "$wordToComplete*" }
 }
 `;
 }

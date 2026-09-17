@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+
+// Read rather than hard-coded: this doubles as the check that the version the
+// CLI reports is the one the package publishes, which is also the tag
+// `aevra extension install` asks for its archive under.
+const packagedVersion = JSON.parse(readFileSync('package.json', 'utf8')).version;
 
 test('CLI executes when launched through a linked package path', () => {
   const compiledRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -23,11 +28,11 @@ test('CLI executes when launched through a linked package path', () => {
 
     const versionResult = spawnSync(process.execPath, [cliPath, '--version'], { encoding: 'utf8' });
     assert.equal(versionResult.status, 0, versionResult.stderr);
-    assert.equal(versionResult.stdout.trim(), '1.0.4');
+    assert.equal(versionResult.stdout.trim(), packagedVersion);
 
     const shortVersionResult = spawnSync(process.execPath, [cliPath, '-v'], { encoding: 'utf8' });
     assert.equal(shortVersionResult.status, 0, shortVersionResult.stderr);
-    assert.equal(shortVersionResult.stdout.trim(), '1.0.4');
+    assert.equal(shortVersionResult.stdout.trim(), packagedVersion);
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

@@ -16,6 +16,10 @@ const READ_ONLY_TOOLS = [
   'process_status',
   'process_wait',
   'process_logs',
+  'desktop_status',
+  'desktop_windows',
+  'desktop_describe',
+  'desktop_capture',
 ] as const satisfies readonly StableToolName[];
 
 const MUTATING_TOOLS = [
@@ -26,6 +30,12 @@ const MUTATING_TOOLS = [
   'process_stop',
   'process_restart',
   'git_push',
+  'desktop_connect',
+  'desktop_disconnect',
+  'desktop_click',
+  'desktop_type',
+  'desktop_key',
+  'desktop_scroll',
 ] as const satisfies readonly StableToolName[];
 
 test('stable tool vocabulary includes read and policy tools but no root mutation', () => {

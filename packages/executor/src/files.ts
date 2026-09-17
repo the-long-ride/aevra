@@ -4,6 +4,7 @@ import { readdir, readFile, stat, writeFile, mkdir, rename, rm } from 'node:fs/p
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { CapabilityRoot } from '../../protocol/src/index.js';
+import type { ProtectedGlob } from '../../protocol/src/worker.js';
 import { resolveCapabilityPath } from '../../security/src/path-policy.js';
 import {
   classifySensitivity,
@@ -11,6 +12,7 @@ import {
   maxSensitivity,
   type Sensitivity,
 } from '../../security/src/sensitive.js';
+import { compileProtectedGlobs, type CompiledProtection } from './protected-globs.js';
 
 export const MAX_FULL_FILE_BYTES = 16 * 1024 * 1024;
 export const MAX_RANGE_READ_CHARACTERS = 1024 * 1024;
@@ -44,7 +46,10 @@ function logicalForRoot(root: CapabilityRoot, fullPath: string) {
   return `${prefix === '/' ? '' : prefix}/${relative}`.replace(/\/+/g, '/') || '/';
 }
 
-async function buildHardLinkSensitivityIndex(roots: CapabilityRoot[]) {
+async function buildHardLinkSensitivityIndex(
+  roots: CapabilityRoot[],
+  userPatterns?: CompiledProtection,
+) {
   const index = new Map<string, Sensitivity>();
   for (const root of roots) {
     const walk = async (dir: string) => {
@@ -69,7 +74,10 @@ async function buildHardLinkSensitivityIndex(roots: CapabilityRoot[]) {
         }
         if (info.nlink <= 1) continue;
         const key = inodeKey(info);
-        const sensitivity = classifySensitivity({ path: logicalForRoot(root, full) });
+        const sensitivity = classifySensitivity({
+          path: logicalForRoot(root, full),
+          ...(userPatterns ? { userPatterns } : {}),
+        });
         index.set(key, maxSensitivity(index.get(key) ?? 'NORMAL', sensitivity));
       }
     };
@@ -84,13 +92,15 @@ async function effectiveSensitivity(
   roots: CapabilityRoot[],
   info?: { dev: number; ino: number; nlink: number } | null,
   hardLinkIndex?: Map<string, Sensitivity>,
+  userPatterns?: CompiledProtection,
 ) {
+  const extra = userPatterns ? { userPatterns } : {};
   let sensitivity = maxSensitivity(
-    classifySensitivity({ path: logicalPath }),
-    classifySensitivity({ path: canonicalHostPath }),
+    classifySensitivity({ path: logicalPath, ...extra }),
+    classifySensitivity({ path: canonicalHostPath, ...extra }),
   );
   if (info && info.nlink > 1) {
-    const index = hardLinkIndex ?? (await buildHardLinkSensitivityIndex(roots));
+    const index = hardLinkIndex ?? (await buildHardLinkSensitivityIndex(roots, userPatterns));
     sensitivity = maxSensitivity(sensitivity, index.get(inodeKey(info)) ?? 'NORMAL');
   }
   return sensitivity;
@@ -105,6 +115,10 @@ async function existingInfo(file: string) {
   }
 }
 
+// Mutations are authorized against the manifest by `SecurityGuard` on the core
+// side, which holds the compiled patterns already; this check stays on the
+// built-in rules deliberately, as the second opinion that does not depend on
+// anything the caller supplied.
 async function assertMutationAllowed(
   logicalPath: string,
   canonicalHostPath: string,
@@ -173,10 +187,19 @@ export async function fileRead(
   logicalPath: string,
   roots: CapabilityRoot[],
   range?: { offset?: number; length?: number },
+  protectedGlobs?: ProtectedGlob[],
 ) {
+  const userPatterns = compileProtectedGlobs(protectedGlobs);
   const r = await resolveCapabilityPath(logicalPath, roots, 'read');
   const info = await stat(r.canonicalHostPath);
-  const sensitivity = await effectiveSensitivity(r.logicalPath, r.canonicalHostPath, roots, info);
+  const sensitivity = await effectiveSensitivity(
+    r.logicalPath,
+    r.canonicalHostPath,
+    roots,
+    info,
+    undefined,
+    userPatterns,
+  );
   if (sensitivity === 'SECRET') denySecret(r.logicalPath);
   const ranged = range?.offset !== undefined || range?.length !== undefined;
   if (ranged) {
@@ -206,7 +229,13 @@ export async function fileSearch(
   query: string,
   roots: CapabilityRoot[],
   max = 100,
+  protectedGlobs?: ProtectedGlob[],
 ) {
+  // Compiled once for the whole walk: this classifies every candidate file, so
+  // a per-file compile would sit in the inner loop. Without it, a workspace's
+  // declared `protectedPaths` covered the authorization of the search ROOT and
+  // nothing else, and a declared-SECRET file's contents came back as hits.
+  const userPatterns = compileProtectedGlobs(protectedGlobs);
   const r = await resolveCapabilityPath(logicalPath, roots, 'read');
   const hits: Array<{ path: string; line: number; text: string }> = [];
   let hardLinks: Promise<Map<string, Sensitivity>> | undefined;
@@ -223,13 +252,14 @@ export async function fileSearch(
       if (!entry.isFile()) continue;
       const info = await stat(full);
       if (info.size >= 1024 * 1024) continue;
-      if (info.nlink > 1) hardLinks ??= buildHardLinkSensitivityIndex(roots);
+      if (info.nlink > 1) hardLinks ??= buildHardLinkSensitivityIndex(roots, userPatterns);
       const sensitivity = await effectiveSensitivity(
         candidateLogical,
         full,
         roots,
         info,
         hardLinks ? await hardLinks : undefined,
+        userPatterns,
       );
       if (sensitivity === 'SECRET') continue;
       let source: string;

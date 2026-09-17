@@ -5,6 +5,7 @@ import type {
 } from '../../../apps/core/src/approvals/approval-service.js';
 import { renderInstructionPrompt } from './instruction-prompt.js';
 import { AevraToolError } from './errors.js';
+import { splitProxyName, splitProxyResourceUri } from './upstream-names.js';
 
 const SKILL_READ_TOOLS = new Set(['skills_list', 'skill_read', 'instructions_read']);
 const SKILL_FAMILY = 'skills:read';
@@ -12,10 +13,11 @@ const SKILL_SCOPE = 'local-skills';
 
 export interface SkillReadableMcpService {
   call(sessionId: string, name: string, args?: any): Promise<any>;
-  resourcesList?(sessionId: string): { resources: any[] };
+  resourcesList?(sessionId: string): { resources: any[] } | Promise<{ resources: any[] }>;
   resourceRead?(sessionId: string, uri: string): Promise<any>;
-  promptsList?(): { prompts: any[] };
-  promptGet?(sessionId: string): Promise<any>;
+  promptsList?(): { prompts: any[] } | Promise<{ prompts: any[] }>;
+  promptGet?(sessionId: string, name?: string, args?: unknown): Promise<any>;
+  upstreamToolDefinitions?(): unknown[] | Promise<unknown[]>;
 }
 
 type AccessResult =
@@ -55,7 +57,7 @@ export class SessionSkillAccessGate {
     return this.inner.call(sessionId, name, args);
   }
 
-  resourcesList(sessionId: string) {
+  async resourcesList(sessionId: string) {
     const lease = this.sessions.activeLease(sessionId);
     const workspaceCanReadSkills = lease?.capabilities.includes('skills.read') ?? false;
     if (
@@ -65,10 +67,19 @@ export class SessionSkillAccessGate {
     ) {
       return { resources: [] };
     }
-    return this.inner.resourcesList?.(sessionId) ?? { resources: [] };
+    return (await this.inner.resourcesList?.(sessionId)) ?? { resources: [] };
+  }
+
+  async upstreamToolDefinitions() {
+    return (await this.inner.upstreamToolDefinitions?.()) ?? [];
   }
 
   async resourceRead(sessionId: string, uri: string) {
+    if (splitProxyResourceUri(String(uri))) {
+      const proxiedRead = this.inner.resourceRead?.(sessionId, uri);
+      if (proxiedRead) return proxiedRead;
+      throw new AevraToolError('INVALID_REQUEST', 'Upstream resources are unavailable');
+    }
     if (!this.sessions.activeLease(sessionId)) {
       const access = await this.ensureSkillAccess(sessionId);
       if (!access.granted)
@@ -93,11 +104,16 @@ export class SessionSkillAccessGate {
     };
   }
 
-  promptsList() {
-    return this.inner.promptsList?.() ?? { prompts: [] };
+  async promptsList() {
+    return (await this.inner.promptsList?.()) ?? { prompts: [] };
   }
 
-  async promptGet(sessionId: string) {
+  async promptGet(sessionId: string, name = '', args: unknown = {}) {
+    if (splitProxyName(name)) {
+      const proxiedPrompt = this.inner.promptGet?.(sessionId, name, args);
+      if (proxiedPrompt) return proxiedPrompt;
+      throw new AevraToolError('INVALID_REQUEST', 'Upstream prompts are unavailable');
+    }
     if (!this.sessions.activeLease(sessionId)) {
       const access = await this.ensureSkillAccess(sessionId);
       if (!access.granted)

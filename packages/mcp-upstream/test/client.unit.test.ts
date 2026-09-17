@@ -121,9 +121,18 @@ test('catalog follows cursors for every declared list', async () => {
   const client = new UpstreamClient(transport);
   await client.connect();
   const catalog = await client.catalog();
-  assert.deepEqual(catalog.tools.map((tool) => tool.name), ['first', 'second']);
-  assert.deepEqual(catalog.resources.map((resource) => resource.uri), ['repo://first', 'repo://second']);
-  assert.deepEqual(catalog.prompts.map((prompt) => prompt.name), ['first-prompt', 'second-prompt']);
+  assert.deepEqual(
+    catalog.tools.map((tool) => tool.name),
+    ['first', 'second'],
+  );
+  assert.deepEqual(
+    catalog.resources.map((resource) => resource.uri),
+    ['repo://first', 'repo://second'],
+  );
+  assert.deepEqual(
+    catalog.prompts.map((prompt) => prompt.name),
+    ['first-prompt', 'second-prompt'],
+  );
   assert.deepEqual(
     transport.calls.filter((call) => call.method === 'tools/list'),
     [

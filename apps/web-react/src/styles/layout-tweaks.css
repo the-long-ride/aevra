@@ -57,3 +57,83 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/*
+ * Small-screen behaviour that is not specific to one feature.
+ *
+ * Everything below fixes the same underlying problem in different places: this
+ * admin UI shows identifiers - command matchers, globs, URLs, workspace roots -
+ * that have no spaces in them, and an unbreakable string is wider than a phone.
+ * Left alone it widens its container, the container widens the grid, and the
+ * whole page scrolls sideways.
+ */
+@media (max-width: 760px) {
+  code,
+  pre,
+  .request-preview,
+  .request-saved-matcher code,
+  .mono,
+  [class*='-path'],
+  [class*='-target'] {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* A grid track defaults to min-content, which such a string can force wide. */
+  .page > *,
+  .settings-grid > *,
+  .dashboard-grid > * {
+    min-width: 0;
+  }
+
+  .actions button,
+  .compact-settings-actions button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Comfortable touch targets without inflating dense table controls. */
+  .panel button,
+  .modal button,
+  .request-actions button {
+    min-height: 40px;
+  }
+
+  .dt-pages button,
+  .dt-pager button {
+    min-height: 32px;
+  }
+
+  /*
+   * The approval modal is the one surface that appears unprompted, so it has to
+   * be reachable one-handed rather than floating 12vh down a short screen.
+   */
+  .approval-modal-backdrop {
+    align-items: flex-end;
+    padding-top: 0;
+  }
+
+  .approval-modal {
+    width: 100vw;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  .approval-modal-actions button {
+    flex: 1 1 140px;
+  }
+}
+
+/* Tablet: two-column feature grids have too little room to stay side by side. */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .compact-control-grid,
+  .settings-modal-grid,
+  .permission-bulk {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guide-layout {
+    grid-template-columns: 1fr;
+  }
+}

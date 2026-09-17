@@ -75,10 +75,7 @@ test('case-insensitive duplicate applications collapse to one entry', () => {
 
 test('a non-string application entry is still rejected rather than sanitized away', () => {
   const service = new DesktopPolicyService(fakeSettings());
-  assert.throws(
-    () => service.update({ applications: ['ok.exe', 42 as never] }),
-    /desktop policy/i,
-  );
+  assert.throws(() => service.update({ applications: ['ok.exe', 42 as never] }), /desktop policy/i);
 });
 
 test('an invalid mode is rejected rather than stored', () => {

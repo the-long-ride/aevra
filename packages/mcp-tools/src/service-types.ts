@@ -12,6 +12,7 @@ import type { SecurityGuard } from '../../../apps/core/src/security/security-gua
 import type { SessionManager } from '../../../apps/core/src/sessions/session-manager.js';
 import type { SkillsService } from '../../../apps/core/src/skills/skills-service.js';
 import type { WorkspaceService } from '../../../apps/core/src/workspaces/workspace-service.js';
+import type { UpstreamRegistryService } from './upstream-port.js';
 
 export interface WorkerGateway {
   execute(input: {
@@ -32,6 +33,12 @@ export interface SettingsReader {
   get<T>(key: string, defaultValue: T): T;
 }
 
+export interface ManifestSummary {
+  commands: Record<string, string>;
+  protectedPathsSummary: { sensitive: number; secret: number };
+  warning: string | null;
+}
+
 export interface McpToolDependencies {
   operations?: OperationService;
   resumableOperations?: ResumableOperationService;
@@ -49,6 +56,32 @@ export interface McpToolDependencies {
   metrics?: MetricsSink;
   settings?: SettingsReader;
   systemCapabilities?: SystemCapabilitySnapshot;
+  // Structural on purpose: mcp-tools must not depend on the core pairing
+  // class for two accessors.
+  browserPairing?: {
+    epoch(): number;
+    pairedExtensionId(): string | null;
+  };
+  // Structural for the same reason as browserPairing: mcp-tools must not
+  // depend on a core class for one accessor.
+  browserPolicy?: {
+    snapshot(): {
+      aevraPorts: number[];
+      aevraOrigins: string[];
+      loopbackClass: 'BLOCKED' | 'SENSITIVE' | 'NORMAL';
+      blockedHosts: string[];
+      sensitiveHosts: string[];
+    };
+  };
+  // Structural for the same reason as browserPairing/browserPolicy: mcp-tools
+  // must not depend on a core class for one accessor.
+  manifests?: {
+    summarize(hostRoot: string | null): ManifestSummary;
+    // Serialisable form of the same rules, for operations the executor
+    // re-classifies on the far side of the worker boundary.
+    globsFor?(workspaceId: string): Array<{ glob: string; class: 'SENSITIVE' | 'SECRET' }>;
+  };
+  upstreams?: UpstreamRegistryService;
 }
 
 export type McpDependencies = McpToolDependencies;
@@ -64,4 +97,10 @@ export interface McpRuntimeContext {
   oneTimeCapabilities: Set<string>;
   processStart: (sessionId: string, args: any) => Promise<any>;
   callInner: (sessionId: string, name: string, args: any) => Promise<any>;
+  proxyOperation: (sessionId: string, operation: McpProxyOperation) => Promise<unknown>;
 }
+
+export type McpProxyOperation =
+  | { kind: 'tool'; name: string; args: unknown }
+  | { kind: 'resource'; uri: string }
+  | { kind: 'prompt'; name: string; args: unknown };

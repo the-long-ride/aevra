@@ -174,3 +174,41 @@ test('renders nothing when there are no pending requests', () => {
   );
   expect(container.firstChild).toBeNull();
 });
+
+test('a decision that fails keeps the modal open and says why', async () => {
+  installApiFixtures({
+    mutationResponses: {
+      'POST /api/approvals/approval-1/approve': new Response(
+        JSON.stringify({ error: { message: 'approval service unavailable' } }),
+        { status: 503, headers: { 'content-type': 'application/json' } },
+      ),
+    },
+  });
+  const onActioned = vi.fn().mockResolvedValue(undefined);
+  renderModal(makeData(), onActioned);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Run once' }));
+
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/unavailable/i));
+  // Nothing was recorded, so the request stays actionable instead of silently
+  // vanishing, and the buttons come back for a retry.
+  expect(onActioned).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Run once' })).toBeEnabled();
+});
+
+test('a second click cannot post a second decision for the same request', async () => {
+  const fetchMock = installApiFixtures();
+  const onActioned = vi.fn().mockResolvedValue(undefined);
+  renderModal(makeData(), onActioned);
+
+  const allow = screen.getByRole('button', { name: 'Run once' });
+  await userEvent.click(allow);
+  await userEvent.click(allow);
+
+  await waitFor(() => expect(onActioned).toHaveBeenCalledTimes(1));
+  const approvePosts = fetchMock.mock.calls.filter(
+    ([url, init]: any[]) =>
+      String(url).endsWith('/approve') && String(init?.method).toUpperCase() === 'POST',
+  );
+  expect(approvePosts).toHaveLength(1);
+});

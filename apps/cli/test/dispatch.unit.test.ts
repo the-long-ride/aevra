@@ -11,6 +11,7 @@ const commands: Array<[keyof CliDispatchHandlers, AevraCommand]> = [
   ['setup', { command: 'setup' }],
   ['service', { command: 'service', action: 'status' }],
   ['connectors', { command: 'connectors', action: 'list' }],
+  ['mcp', { command: 'mcp', action: 'list' }],
   ['status', { command: 'status', json: false }],
   ['backup', { command: 'backup', action: 'verify', file: 'backup.db', yes: false }],
   ['audit', { command: 'audit', action: 'clear', yes: true }],

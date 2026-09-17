@@ -161,6 +161,8 @@ async function resumeCapabilityRequest(
       const once = ticket.decisionScope === 'once';
       if (once) context.oneTimeCapabilities.add(key);
       try {
+        if (original.proxy && context.proxyOperation)
+          return await context.proxyOperation(sessionId, original.proxy);
         return await context.callInner(sessionId, String(original.tool), original.args ?? {});
       } finally {
         if (once) context.oneTimeCapabilities.delete(key);
@@ -186,6 +188,7 @@ async function executeFrozen(
     if (!workspace) {
       throw new AevraToolError('NOT_FOUND', 'Workspace not found');
     }
+    const manifest = context.deps.manifests?.summarize(workspace.hostRoot ?? null);
     const session = context.sessions.get(sessionId)!;
     const profileId = String(
       payload.profileId ?? (session.actor.startsWith('oauth:') ? 'read-only' : 'developer'),
@@ -198,7 +201,7 @@ async function executeFrozen(
           'Workspace grant could not be restored',
         );
       }
-      return workspaceResult(workspace, lease.capabilities);
+      return workspaceResult(workspace, lease.capabilities, manifest);
     }
 
     const result = await context.sessions.switchWorkspace(
@@ -213,7 +216,7 @@ async function executeFrozen(
         'Workspace admission still requires local approval',
       );
     }
-    return workspaceResult(workspace, result.lease.capabilities);
+    return workspaceResult(workspace, result.lease.capabilities, manifest);
   }
 
   if (payload.tool === 'command_run') {

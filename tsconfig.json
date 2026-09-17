@@ -12,5 +12,6 @@
     "outDir": "dist",
     "noCheck": true
   },
-  "include": ["apps/**/*.ts", "packages/**/*.ts", "tests/**/*.ts"]
+  "include": ["apps/**/*.ts", "packages/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["apps/extension"]
 }

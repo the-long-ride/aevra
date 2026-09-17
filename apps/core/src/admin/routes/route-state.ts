@@ -35,6 +35,8 @@ export const GUIDE_CHAPTERS = [
     file: '16-safe-command-matchers.md',
   },
   { slug: 'tunnels', title: 'Tunnels and public HTTPS', file: '17-tunnels.md' },
+  { slug: 'browser-control', title: 'Browser control', file: '18-browser-control.md' },
+  { slug: 'mcp-upstreams', title: 'MCP servers', file: '20-mcp-upstreams.md' },
 ] as const;
 
 export const DEFAULT_ONBOARDING = {

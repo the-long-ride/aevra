@@ -66,6 +66,29 @@ describe('React admin shell', () => {
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
   });
 
+  test('offers browser control immediately left of Requests when no extension is paired', async () => {
+    installApiFixtures({ browserPaired: false });
+    render(<App />);
+    const suggestion = await screen.findByRole('button', {
+      name: 'Aevra can control your browser',
+    });
+    const requests = screen.getByRole('button', { name: /Requests/ });
+    expect(
+      suggestion.compareDocumentPosition(requests) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(suggestion.nextElementSibling).toBe(requests);
+  });
+
+  test('does not offer browser control once an extension is paired', async () => {
+    render(<App />);
+    await screen.findByRole('button', { name: /Requests/ });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Aevra can control your browser' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
   test('shows version, runtime health, requests count, and safe mode from status', async () => {
     installApiFixtures();
     render(<App />);
@@ -128,5 +151,50 @@ describe('React admin shell', () => {
 
     expect(await screen.findByTestId('react-admin-root')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Workspaces' })).toBeInTheDocument();
+  });
+
+  test('the approval modal closes even when the refresh that follows the decision fails', async () => {
+    // The decision POST succeeds; loadRequests then fails. Before the fix the
+    // close was sequenced after that refresh, so the modal stayed on screen with
+    // no way out except reloading the page.
+    const user = userEvent.setup();
+    let approved = false;
+    const fetchMock = installApiFixtures({
+      approvals: [
+        {
+          id: 'approval-1',
+          state: 'PENDING',
+          actor: 'connector:ChatGPT',
+          risk: 'MEDIUM',
+          workspaceId: 'ws-1',
+          sessionId: 'session-1',
+          operation: { family: 'git:status', capability: 'commands.run' },
+          payload: {},
+          presentation: {
+            title: 'ChatGPT requests commands.run',
+            action: 'Run command',
+            target: 'git status',
+          },
+        },
+      ],
+    });
+    const passthrough = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input: any, init?: any) => {
+      const url = String(typeof input === 'string' ? input : input.url);
+      const method = String(init?.method ?? 'GET').toUpperCase();
+      if (method === 'POST' && url.endsWith('/approve')) {
+        approved = true;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (approved && url === '/api/approvals') throw new Error('network lost');
+      return passthrough(input, init);
+    });
+
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Run once' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Approval request' })).toBeNull(),
+    );
   });
 });

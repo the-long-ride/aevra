@@ -21,7 +21,13 @@ export type AevraErrorCode =
   | 'VAULT_LOCKED'
   | 'SKILL_NOT_FOUND'
   | 'SKILL_PATH_ESCAPE'
-  | 'SKILL_FILE_TOO_LARGE';
+  | 'SKILL_FILE_TOO_LARGE'
+  | 'BROWSER_UNAVAILABLE'
+  | 'BROWSER_NOT_CONNECTED'
+  | 'BROWSER_ORIGIN_BLOCKED'
+  | 'BROWSER_REF_STALE'
+  | 'BROWSER_CREDENTIAL_FIELD_REFUSED'
+  | 'BROWSER_TIMEOUT';
 export type Capability =
   | 'files.read'
   | 'files.search'
@@ -35,7 +41,10 @@ export type Capability =
   | 'skills.read'
   | 'skills.write'
   | 'instructions.read'
-  | 'instructions.write';
+  | 'instructions.write'
+  | 'browser.control'
+  | 'desktop.control'
+  | 'mcp.proxy';
 export type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type CommandEffect =
   'READ_ONLY' | 'BUILD_OUTPUT' | 'SOURCE_MUTATION' | 'REPOSITORY_STATE' | 'UNKNOWN';

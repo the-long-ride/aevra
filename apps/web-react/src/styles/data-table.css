@@ -158,3 +158,25 @@
     margin-left: 0;
   }
 }
+
+@media (max-width: 640px) {
+  /*
+   * A flat 560px floor meant every table scrolled sideways on a phone even when
+   * it held two short columns. Narrow the floor so small tables fit; wide ones
+   * still scroll inside .dt-scroll rather than widening the page.
+   */
+  .data-table,
+  .simple-table {
+    min-width: 380px;
+  }
+
+  .dt-foot,
+  .dt-footer {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dt-filters {
+    grid-template-columns: 1fr;
+  }
+}

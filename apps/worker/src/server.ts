@@ -5,12 +5,14 @@ import {
   type WorkerResult,
 } from '../../../packages/protocol/src/worker.js';
 import { dispatchWorkerOperation } from './dispatcher.js';
+import { browserRuntime } from './browser-runtime.js';
 export async function startWorkerServer(input: {
   endpoint: string;
   secret: Buffer;
   daemonInstanceId: string;
 }) {
   const signer = new HmacEnvelopeSigner(input.secret, input.daemonInstanceId);
+  browserRuntime.configure({ secret: input.secret });
   const server = createIpcServer(input.endpoint, input.secret, input.daemonInstanceId, {
     async health() {
       return { ready: true, pid: process.pid };

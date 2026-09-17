@@ -82,7 +82,7 @@ test('read-only workspace capability unlocks passive skill discovery without leg
     'admitted',
   );
 
-  assert.equal(f.gate.resourcesList(session.id).resources.length, 1);
+  assert.equal((await f.gate.resourcesList(session.id)).resources.length, 1);
   assert.equal(f.approvals.list().length, 0);
 
   const resource = await f.gate.resourceRead(session.id, 'aevra://skill/workspace/demo');

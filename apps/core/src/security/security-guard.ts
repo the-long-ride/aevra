@@ -3,6 +3,7 @@ import {
   classifySensitivity,
   type Sensitivity,
 } from '../../../../packages/security/src/sensitive.js';
+import type { ManifestPattern } from '../workspaces/manifest-service.js';
 
 export type ResourceSecurityDecision = 'allow' | 'approval-required' | 'deny';
 export type ResourceOperation = 'read' | 'search' | 'write' | 'patch' | 'move' | 'delete';
@@ -32,10 +33,26 @@ interface SecurityWorkspaceReader {
   getLocal(workspaceId: string): unknown | null;
 }
 
+export interface ManifestPatternSource {
+  patternsFor(workspaceId: string): ManifestPattern[];
+}
+
+// classifySensitivity returns on the FIRST userPatterns match, so a SECRET
+// pattern must be tried before a SENSITIVE one or a path matching both is
+// silently downgraded to readable. Sorting here — rather than only
+// documenting the requirement on ManifestPatternSource implementers — makes
+// this guarantee hold regardless of what order any collaborator returns
+// patterns in; a security invariant should not depend on every caller
+// remembering a convention.
+function secretsFirst(patterns: ManifestPattern[]): ManifestPattern[] {
+  return [...patterns].sort((a, b) => (a.class === b.class ? 0 : a.class === 'SECRET' ? -1 : 1));
+}
+
 export class SecurityGuard {
   constructor(
     private sessions: SecuritySessionReader,
     private workspaces: SecurityWorkspaceReader,
+    private manifests?: ManifestPatternSource,
   ) {}
 
   authorizeResource(input: ResourceAuthorizationInput): ResourceAuthorizationResult {
@@ -51,7 +68,10 @@ export class SecurityGuard {
       throw Object.assign(new Error('Workspace not found'), { code: 'NOT_FOUND' });
     }
 
-    const sensitivity = classifySensitivity({ path: input.logicalPath });
+    const sensitivity = classifySensitivity({
+      path: input.logicalPath,
+      userPatterns: secretsFirst(this.manifests?.patternsFor(lease.workspaceId) ?? []),
+    });
     const base = {
       workspaceId: lease.workspaceId,
       capability: input.capability,

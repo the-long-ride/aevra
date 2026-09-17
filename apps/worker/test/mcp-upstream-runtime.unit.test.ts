@@ -194,8 +194,10 @@ test('a timed-out stdio session is reinitialized before recovery calls', async (
   ].join('');
   let now = 1_000_000;
   const registry = new UpstreamSessionRegistry({
-    createClient: (config) =>
-      new UpstreamClient(new StdioTransport({ ...config, deadlineMs: 500 })),
+    createClient: (config) => {
+      if (config.transport !== 'stdio') throw new Error('expected stdio transport');
+      return new UpstreamClient(new StdioTransport({ ...config, deadlineMs: 500 }));
+    },
     now: () => now,
   });
   const config = {

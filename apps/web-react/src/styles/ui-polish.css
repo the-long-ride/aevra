@@ -219,6 +219,66 @@
   font-size: 9px;
 }
 
+.runtime-chart-point {
+  fill: var(--success);
+  stroke: var(--canvas);
+  stroke-width: 1.5;
+  cursor: crosshair;
+  opacity: 0;
+  vector-effect: non-scaling-stroke;
+  transition: opacity 0.12s;
+}
+
+.runtime-chart-point:hover {
+  opacity: 1;
+}
+
+.runtime-chart-tooltip {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+  min-width: 110px;
+  padding: 6px 9px;
+  border: 1px solid var(--hairline);
+  background: var(--canvas);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.runtime-chart-tooltip-time {
+  color: var(--mute);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.runtime-chart-tooltip-count {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.runtime-chart-tooltip-entries {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--hairline);
+}
+
+.runtime-chart-tooltip-entry {
+  overflow: hidden;
+  max-width: 200px;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-chart-tooltip-more {
+  color: var(--mute);
+  font-size: 10px;
+}
+
 .active-connections-toolbar {
   margin-bottom: 10px;
   border: 1px solid var(--hairline);

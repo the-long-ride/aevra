@@ -18,14 +18,23 @@ export async function handleJsonRpc(
   const id = body?.id ?? null;
   try {
     if (body?.method === 'tools/list')
-      return { jsonrpc: '2.0', id, result: { tools: toolDefinitions() } };
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          tools: [
+            ...toolDefinitions(),
+            ...((await (service as any).upstreamToolDefinitions?.()) ?? []),
+          ],
+        },
+      };
     if (body?.method === 'resources/list')
       return {
         jsonrpc: '2.0',
         id,
         result: {
           resources: (service as any).resourcesList
-            ? (service as any).resourcesList(sessionId).resources
+            ? (await (service as any).resourcesList(sessionId)).resources
             : [],
         },
       };
@@ -60,12 +69,22 @@ export async function handleJsonRpc(
         jsonrpc: '2.0',
         id,
         result: {
-          prompts: (service as any).promptsList ? (service as any).promptsList().prompts : [],
+          prompts: (service as any).promptsList
+            ? (await (service as any).promptsList()).prompts
+            : [],
         },
       };
     if (body?.method === 'prompts/get') {
       try {
-        return { jsonrpc: '2.0', id, result: await (service as any).promptGet(sessionId) };
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: await (service as any).promptGet(
+            sessionId,
+            String(body.params?.name ?? ''),
+            body.params?.arguments ?? {},
+          ),
+        };
       } catch (e) {
         const x = asToolError(e);
         return {

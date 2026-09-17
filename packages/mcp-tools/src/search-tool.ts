@@ -3,6 +3,7 @@ import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { authorizeCapability } from './authorization.js';
 import { AevraToolError } from './errors.js';
 import type { JsonSchema } from './registry-input-schemas.js';
+import { protectedGlobsFor } from './protected-paths.js';
 import { requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
@@ -90,7 +91,16 @@ export async function searchTool(context: McpRuntimeContext, sessionId: string, 
 
   const lease = requiredLease(context, sessionId);
   const maxResultsPerQuery = Math.max(1, Math.min(200, Number(args.maxResultsPerQuery) || 50));
-  const operation: WorkerOperation = { kind: 'search.multi', queries, maxResultsPerQuery };
+  // The capability gate above authorized the search, not each file the walk
+  // will open. The workspace's declared protected paths travel with the
+  // operation so the executor applies them to every candidate hit.
+  const protectedGlobs = protectedGlobsFor(context, lease.workspaceId);
+  const operation: WorkerOperation = {
+    kind: 'search.multi',
+    queries,
+    maxResultsPerQuery,
+    ...(protectedGlobs ? { protectedGlobs } : {}),
+  };
   const result = await context.worker.execute({
     sessionId,
     workspaceId: lease.workspaceId,

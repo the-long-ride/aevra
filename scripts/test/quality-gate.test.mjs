@@ -50,7 +50,16 @@ test('quality gate parallelizes Linux validation and keeps a Windows portability
   assert.match(workflow, /npm run test:coverage:web/);
   assert.match(workflow, /npm run test:ui-parity:only/);
   assert.match(workflow, /npm run test:portability/);
-  assert.match(workflow, /playwright install --with-deps chromium/);
+  const nodeCoverage = workflow.slice(
+    workflow.indexOf('  node-coverage:'),
+    workflow.indexOf('  web-coverage:'),
+  );
+  const windowsPortability = workflow.slice(
+    workflow.indexOf('  windows-portability:'),
+    workflow.indexOf('  desktop-helper:'),
+  );
+  assert.match(nodeCoverage, /playwright install --with-deps chromium/);
+  assert.match(windowsPortability, /playwright install chromium/);
   assert.doesNotMatch(workflow, /npm run test:gate/);
   assert.doesNotMatch(workflow, /ci-skip|Exclude unchanged|mv packages\/executor\/test/);
 });
@@ -96,4 +105,38 @@ test('release publishes only an exact SHA already validated by the quality workf
   assert.doesNotMatch(releaseWorkflow, /playwright install/);
   assert.doesNotMatch(releaseWorkflow, /npm run test:gate/);
   assert.doesNotMatch(releaseWorkflow, /npm run build/);
+});
+
+test('the gate builds and publishes the extension archive the CLI asks for', () => {
+  assert.match(workflow, /npm run test:extension/);
+  assert.match(workflow, /npm run build:extension/);
+  assert.match(workflow, /name: aevra-extension/);
+  assert.match(workflow, /aevra-extension\.zip/);
+  assert.match(workflow, /if-no-files-found: error/);
+});
+
+test('the release attaches the extension the gate built, never a fresh build', () => {
+  const releaseWorkflow = readFileSync('.github/workflows/release.yml', 'utf8');
+  // The no-rebuild rule above is what forces this: the asset has to come out of
+  // the run that already passed at the release SHA.
+  assert.match(releaseWorkflow, /gh run download/);
+  assert.match(releaseWorkflow, /--name aevra-extension/);
+  assert.match(releaseWorkflow, /gh release upload/);
+  assert.match(releaseWorkflow, /aevra-extension\.zip/);
+});
+
+test('nothing signs a crx, because a browser would refuse to install one', () => {
+  const releaseWorkflow = readFileSync('.github/workflows/release.yml', 'utf8');
+  const packer = readFileSync('scripts/pack-extension.mjs', 'utf8');
+  for (const source of [workflow, releaseWorkflow]) {
+    assert.doesNotMatch(source, /\.crx/);
+    assert.doesNotMatch(source, /CRX_PRIVATE_KEY|AEVRA_CRX_KEY/);
+  }
+  // Matched on what the packer does rather than on the word: its comment
+  // explains why there is no signed package, and that explanation should stay.
+  assert.doesNotMatch(packer, /aevra-extension\.crx/);
+  assert.doesNotMatch(packer, /createSign|generateKeyPair|privateKey/);
+  // A stored, sorted, fixed-timestamp archive is byte-identical for identical
+  // input, which is what lets a published download be checked against source.
+  assert.match(readFileSync('scripts/lib/zip.mjs', 'utf8'), /0x0021/);
 });

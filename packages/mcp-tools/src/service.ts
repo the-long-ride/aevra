@@ -10,7 +10,9 @@ import {
   resourceRead,
   resourcesList,
 } from './basic-tools.js';
+import { BROWSER_TOOL_NAMES, handleBrowserTool } from './browser-tools.js';
 import { commandTool, shellTool } from './command-tools.js';
+import { DESKTOP_TOOL_NAMES, handleDesktopTool } from './desktop-tools.js';
 import { AevraToolError } from './errors.js';
 import { FAST_LANE_TOOL_NAMES, isFastLaneTool } from './fast-lane-schemas.js';
 import { handleFastLaneTool } from './fast-lane-tools.js';
@@ -25,7 +27,19 @@ import {
 } from './process-change-tools.js';
 import { searchTool } from './search-tool.js';
 import { resolveWorkspaceLease } from './service-helpers.js';
-import type { McpRuntimeContext, McpToolDependencies, WorkerGateway } from './service-types.js';
+import type {
+  McpProxyOperation,
+  McpRuntimeContext,
+  McpToolDependencies,
+  WorkerGateway,
+} from './service-types.js';
+import {
+  proxyPromptEntries,
+  proxyResourceEntries,
+  proxyToolDefinitions,
+} from './upstream-catalog.js';
+import { callUpstreamTool, getUpstreamPrompt, readUpstreamResource } from './upstream-proxy.js';
+import { splitProxyName, splitProxyResourceUri } from './upstream-names.js';
 
 const TARGETED_WORKSPACE_TOOLS = new Set([
   ...FILE_TOOL_NAMES,
@@ -37,6 +51,8 @@ const TARGETED_WORKSPACE_TOOLS = new Set([
   'process_start',
   'process_list',
   'change_begin',
+  ...BROWSER_TOOL_NAMES,
+  ...DESKTOP_TOOL_NAMES,
 ]);
 
 function needsWorkspaceTarget(name: string, args: any) {
@@ -144,6 +160,13 @@ export class McpToolService {
       deps: this.deps,
       oneTimeCapabilities: this.oneTimeCapabilities,
       callInner: (sessionId, name, args) => this.callInner(sessionId, name, args),
+      proxyOperation: (sessionId, operation: McpProxyOperation) => {
+        if (operation.kind === 'tool')
+          return callUpstreamTool(this.context(), sessionId, operation.name, operation.args);
+        if (operation.kind === 'resource')
+          return readUpstreamResource(this.context(), sessionId, operation.uri);
+        return getUpstreamPrompt(this.context(), sessionId, operation.name, operation.args);
+      },
       processStart: (sessionId, args) => processStart(this.context(workspaceId), sessionId, args),
     };
   }
@@ -169,22 +192,34 @@ export class McpToolService {
     if (PROCESS_CHANGE_TOOL_NAMES.has(name)) {
       return handleProcessChangeTool(context, sessionId, name, args);
     }
-    throw new AevraToolError('CAPABILITY_REQUIRED', `Tool ${name} is not enabled`);
+    if (BROWSER_TOOL_NAMES.has(name)) return handleBrowserTool(context, sessionId, name, args);
+    if (DESKTOP_TOOL_NAMES.has(name)) return handleDesktopTool(context, sessionId, name, args);
+    return callUpstreamTool(context, sessionId, name, args);
   }
 
-  resourcesList(sessionId: string) {
-    return resourcesList(this.context(), sessionId);
+  async upstreamToolDefinitions() {
+    await this.deps.upstreams?.reconcileChanged?.();
+    return proxyToolDefinitions(this.deps.upstreams);
+  }
+
+  async resourcesList(sessionId: string) {
+    await this.deps.upstreams?.reconcileChanged?.();
+    const local = resourcesList(this.context(), sessionId);
+    return { resources: [...local.resources, ...proxyResourceEntries(this.deps.upstreams)] };
   }
 
   async resourceRead(sessionId: string, uri: string) {
+    if (splitProxyResourceUri(uri)) return readUpstreamResource(this.context(), sessionId, uri);
     return resourceRead(this.context(), sessionId, uri);
   }
 
-  promptsList() {
-    return promptsList();
+  async promptsList() {
+    await this.deps.upstreams?.reconcileChanged?.();
+    return { prompts: [...promptsList().prompts, ...proxyPromptEntries(this.deps.upstreams)] };
   }
 
-  async promptGet(sessionId: string) {
+  async promptGet(sessionId: string, name = '', args: unknown = {}) {
+    if (splitProxyName(name)) return getUpstreamPrompt(this.context(), sessionId, name, args);
     const session = this.sessions.get(sessionId);
     const context = { sessionId, actor: session?.actor, subject: session?.subject };
     const prompt = await promptGet(this.context(), sessionId);

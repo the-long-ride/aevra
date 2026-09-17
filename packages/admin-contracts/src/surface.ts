@@ -39,6 +39,7 @@ export const ADMIN_SURFACE = {
     workspaces: ['add', 'details', 'remove', 'add-mount', 'remove-mount', 'save-admission'],
     sessions: ['switch-workspace', 'revoke', 'revoke-all-others'],
     processes: ['stop', 'restart', 'forget'],
+    browser: ['pair', 'disconnect-all'],
     changes: ['rename', 'commit', 'rollback'],
     audit: ['export-json', 'export-jsonl', 'clear'],
     settings: [

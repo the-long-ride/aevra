@@ -1,3 +1,5 @@
+import { normalizeLogicalPath } from './logical-path.js';
+
 export type Sensitivity = 'NORMAL' | 'SENSITIVE' | 'SECRET';
 export interface SensitivityInput {
   path: string;
@@ -23,9 +25,16 @@ export function maxSensitivity(...values: Sensitivity[]): Sensitivity {
 
 export function classifySensitivity(input: SensitivityInput): Sensitivity {
   if (input.explicit) return input.explicit;
-  for (const rule of input.userPatterns ?? []) if (rule.pattern.test(input.path)) return rule.class;
+  // Normalised BEFORE the patterns are tried, not after. These globs are
+  // anchored (`^/?...$`), and the caller's `path` is whatever spelling a tool
+  // call supplied - so `./aevra.json`, `sub/../aevra.json` and `aevra.json/`
+  // all used to miss a pattern that `aevra.json` matched, while naming the
+  // same file. That turned every declared `protectedPaths` entry into a
+  // speed bump anyone could step around by rewriting the argument.
+  const canonical = normalizeLogicalPath(input.path);
+  for (const rule of input.userPatterns ?? []) if (rule.pattern.test(canonical)) return rule.class;
   if (input.mountPolicy) return input.mountPolicy;
-  const p = input.path.toLowerCase().replaceAll('\\', '/'),
+  const p = canonical.toLowerCase(),
     base = p.split('/').pop() ?? '';
   if (
     base === '.env' ||

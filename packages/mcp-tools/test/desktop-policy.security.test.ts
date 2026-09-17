@@ -208,7 +208,11 @@ test('desktop_apps includes the path when exposeExecutablePaths is true', async 
 
 test('desktop_apps falls back to the raw exe basename for an allowlisted app not currently detected', async () => {
   const ctx = desktopContext({
-    settingsPolicy: { mode: 'allowlist', applications: ['portable.exe'], unattributedInput: 'deny' },
+    settingsPolicy: {
+      mode: 'allowlist',
+      applications: ['portable.exe'],
+      unattributedInput: 'deny',
+    },
   });
   const result: any = await handleDesktopTool(ctx.value, 's1', 'desktop_apps', {});
   assert.deepEqual(result.apps, [{ name: 'portable.exe', version: null }]);

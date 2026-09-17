@@ -114,6 +114,15 @@ export async function installAdminApi(page: Page, options: FixtureOptions = {}) 
     ['/api/workspaces', [{ id: 'ws-1', name: 'Aevra', hostRoot: '/repo' }]],
     ['/api/workspaces/ws-1/mounts', options.mounts ?? []],
     ['/api/dashboard/runtime', dashboardSnapshot()],
+    [
+      '/api/browser/policy',
+      {
+        loopbackClass: 'SENSITIVE',
+        blockedHosts: [],
+        sensitiveHosts: [],
+        aevraPorts: [47830, 47831, 47832, 47833],
+      },
+    ],
     ['/api/permissions', options.permissions ?? []],
     ['/api/admin-sessions', options.adminSessions ?? []],
     ['/api/sessions', options.sessions ?? []],

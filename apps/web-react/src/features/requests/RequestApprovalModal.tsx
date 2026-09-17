@@ -48,11 +48,32 @@ function ApprovalModalCard({
     Boolean(item.sessionId) &&
     (item.actor.startsWith('connector:') || item.actor.startsWith('oauth:'));
 
-  const perform = async (scope: import('@aevra/admin-contracts').ApprovalScope | null) => {
-    if (scope) await approveRequest(item.id, scope);
-    else await denyRequest(item.id);
-    await onActioned();
+  // A decision is in flight, or it failed. Both have to be visible: the buttons
+  // POST to an endpoint that rejects a second decision on the same request, so an
+  // unguarded double click turned a successful approval into a visible error.
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const decide = async (act: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setFailure(null);
+    try {
+      await act();
+      await onActioned();
+    } catch (error) {
+      // Stay open so the decision can be retried - closing here would hide the
+      // fact that nothing was recorded.
+      setFailure(error instanceof Error ? error.message : 'The decision could not be recorded.');
+      setBusy(false);
+    }
   };
+
+  const perform = (scope: import('@aevra/admin-contracts').ApprovalScope | null) =>
+    decide(async () => {
+      if (scope) await approveRequest(item.id, scope);
+      else await denyRequest(item.id);
+    });
 
   const enableYolo = async () => {
     const confirmed = await dialog.confirm({
@@ -62,8 +83,7 @@ function ApprovalModalCard({
       confirmTone: 'yolo',
     });
     if (!confirmed) return;
-    await enableYoloRequest(item.id);
-    await onActioned();
+    await decide(() => enableYoloRequest(item.id));
   };
 
   return (
@@ -95,6 +115,7 @@ function ApprovalModalCard({
             type="button"
             className={action.scope === 'once' ? 'primary' : ''}
             data-surface-id={`approval-modal:${action.id}`}
+            disabled={busy}
             onClick={() => void perform(action.scope)}
           >
             {action.label}
@@ -106,12 +127,18 @@ function ApprovalModalCard({
             className="yolo-action"
             data-surface-id="approval-modal:yolo-session"
             title="Allow this connector session to skip future approval prompts"
+            disabled={busy}
             onClick={() => void enableYolo()}
           >
             Enable YOLO
           </button>
         ) : null}
       </div>
+      {failure ? (
+        <p className="approval-modal-failure" role="alert">
+          {failure}
+        </p>
+      ) : null}
     </>
   );
 }
@@ -123,6 +150,22 @@ function OauthModalCard({
   item: OauthRequestItem;
   onActioned(): Promise<void>;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const decide = async (allow: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    setFailure(null);
+    try {
+      await decideOauth(item.id, allow);
+      await onActioned();
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : 'The decision could not be recorded.');
+      setBusy(false);
+    }
+  };
+
   return (
     <>
       <div className="approval-modal-head">
@@ -139,7 +182,8 @@ function OauthModalCard({
         <button
           type="button"
           data-surface-id="approval-modal:oauth-deny"
-          onClick={() => void decideOauth(item.id, false).then(onActioned)}
+          disabled={busy}
+          onClick={() => void decide(false)}
         >
           Deny
         </button>
@@ -147,11 +191,17 @@ function OauthModalCard({
           type="button"
           className="primary"
           data-surface-id="approval-modal:oauth-allow"
-          onClick={() => void decideOauth(item.id, true).then(onActioned)}
+          disabled={busy}
+          onClick={() => void decide(true)}
         >
           Allow
         </button>
       </div>
+      {failure ? (
+        <p className="approval-modal-failure" role="alert">
+          {failure}
+        </p>
+      ) : null}
     </>
   );
 }

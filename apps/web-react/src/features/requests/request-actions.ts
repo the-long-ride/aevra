@@ -6,6 +6,8 @@ export interface ApprovalAction {
   scope: ApprovalScope | null;
 }
 
+const PERSISTABLE_CAPABILITIES = new Set(['commands.run', 'browser.control', 'desktop.control']);
+
 export function actionsForApproval(item: ApprovalItem): ApprovalAction[] {
   const deny: ApprovalAction = { id: 'deny', label: 'Deny', scope: null };
   const once: ApprovalAction = {
@@ -14,7 +16,7 @@ export function actionsForApproval(item: ApprovalItem): ApprovalAction[] {
     scope: 'once',
   };
   if (item.risk === 'CRITICAL') return [deny, once];
-  if (item.operation.capability !== 'commands.run') return [deny, once];
+  if (!PERSISTABLE_CAPABILITIES.has(item.operation.capability)) return [deny, once];
   return [
     deny,
     once,

@@ -46,7 +46,7 @@ test('connectors list prints empty state', async () => {
   assert.deepEqual(state.logs, ['No connectors.']);
 });
 
-test('connectors create prints one-time public URL when hostname exists', async () => {
+test('connectors create prints the endpoint and the bearer header, never a token in the URL', async () => {
   const calls: Array<{
     path: string;
     init?: { method?: string; headers?: Record<string, string>; body?: string };
@@ -56,8 +56,8 @@ test('connectors create prints one-time public URL when hostname exists', async 
     if (path === '/api/connectors') {
       return response({ id: 'c1', name: 'ChatGPT', token: 'secret' });
     }
-    if (path === '/api/cloudflare/status') {
-      return response({ hostname: 'mcp.example.com' });
+    if (path === '/api/exposure/status') {
+      return response({ publicUrl: 'https://mcp.example.com' });
     }
     throw new Error(`unexpected ${path}`);
   });
@@ -71,8 +71,60 @@ test('connectors create prints one-time public URL when hostname exists', async 
   assert.equal(code, 0);
   assert.equal(calls[0]!.init?.method, 'POST');
   assert.match(calls[0]!.init?.body ?? '', /ChatGPT/);
-  assert.match(state.logs.join('\n'), /https:\/\/mcp\.example\.com\/mcp\/secret/);
+  const output = state.logs.join('\n');
+  assert.match(output, /https:\/\/mcp\.example\.com\/mcp$/m);
+  assert.match(output, /Authorization: Bearer secret/);
+  // The token-in-path form is deprecated in core and told against in the
+  // manual; printing it here is what taught operators to use it.
+  assert.equal(output.includes('/mcp/secret'), false);
   assert.match(state.logs.at(-1)!, /shown only once/);
+});
+
+test('connectors create reads the endpoint from exposure, not from Cloudflare', async () => {
+  // An ngrok/direct/external deployment has no Cloudflare hostname, and used
+  // to be told to "configure a Cloudflare hostname" it does not need.
+  const paths: string[] = [];
+  const state = fixture(async (_config, path) => {
+    paths.push(path);
+    if (path === '/api/connectors') {
+      return response({ id: 'c1', name: 'ngrok', token: 'secret' });
+    }
+    if (path === '/api/exposure/status') {
+      return response({ provider: 'ngrok', publicUrl: 'https://tidy-otter.ngrok.app/' });
+    }
+    throw new Error(`unexpected ${path}`);
+  });
+
+  const code = await runConnectorsCommand(
+    {},
+    { command: 'connectors', action: 'create', name: 'ngrok' },
+    state.dependencies,
+  );
+
+  assert.equal(code, 0);
+  assert.equal(paths.includes('/api/cloudflare/status'), false);
+  // Trailing slash on publicUrl must not produce a double slash.
+  assert.match(state.logs.join('\n'), /https:\/\/tidy-otter\.ngrok\.app\/mcp$/m);
+});
+
+test('connectors create still prints the token when no endpoint is configured', async () => {
+  const state = fixture(async (_config, path) => {
+    if (path === '/api/connectors') {
+      return response({ id: 'c1', name: 'local', token: 'secret' });
+    }
+    return response({ provider: 'local' });
+  });
+
+  const code = await runConnectorsCommand(
+    {},
+    { command: 'connectors', action: 'create', name: 'local' },
+    state.dependencies,
+  );
+
+  assert.equal(code, 0);
+  const output = state.logs.join('\n');
+  assert.match(output, /configure Remote Access/i);
+  assert.match(output, /Authorization: Bearer secret/);
 });
 
 test('connectors revoke calls delete', async () => {

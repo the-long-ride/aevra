@@ -2,6 +2,8 @@ import { vi } from 'vitest';
 
 export interface FixtureOptions {
   onboardingCompleted?: boolean;
+  /** Defaults to paired, so the browser-setup prompt stays out of every other case. */
+  browserPaired?: boolean;
   approvals?: unknown[];
   oauth?: unknown[];
   routes?: Record<string, unknown>;
@@ -203,6 +205,15 @@ export function installApiFixtures(options: FixtureOptions = {}) {
       },
     ],
     ['/api/permissions', []],
+    [
+      '/api/browser',
+      {
+        extensionId: options.browserPaired === false ? null : 'a'.repeat(32),
+        epoch: 1,
+        pairedAt: options.browserPaired === false ? null : '2026-08-19T00:00:00Z',
+        pendingCode: false,
+      },
+    ],
     ['/api/admin-sessions', []],
     ['/api/sessions', []],
     ['/api/processes', []],

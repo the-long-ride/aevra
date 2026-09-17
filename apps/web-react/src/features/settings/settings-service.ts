@@ -1,6 +1,7 @@
 import type { ExposureStatus, KeepAwakeStatus, WorkspaceSummary } from '@aevra/admin-contracts';
 import { requestJson } from '../../services/api-client';
 import type { YoloMode } from './YoloPolicySettings';
+import type { BrowserControlState } from './BrowserControlSettings';
 
 export interface HookSetting {
   id: string;
@@ -29,6 +30,7 @@ export interface SettingsData {
   profiles: Array<Record<string, unknown>>;
   secretRefs: Array<Record<string, unknown> | string>;
   workspaces: WorkspaceSummary[];
+  browser: BrowserControlState;
 }
 
 export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> {
@@ -45,6 +47,7 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
     profiles,
     secretRefs,
     workspaces,
+    browser,
   ] = await Promise.all([
     requestJson<Record<string, unknown>>('/api/settings', options),
     requestJson<ExposureStatus>('/api/exposure/status', options),
@@ -61,6 +64,14 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
     requestJson<Array<Record<string, unknown>>>('/api/environment-profiles', options),
     requestJson<Array<Record<string, unknown> | string>>('/api/secret-references', options),
     requestJson<WorkspaceSummary[]>('/api/workspaces', options),
+    // Tolerated like the YOLO route: a core built without browser control
+    // must not blank the whole Settings page.
+    requestJson<BrowserControlState>('/api/browser', options).catch(() => ({
+      extensionId: null,
+      epoch: 0,
+      pairedAt: null,
+      pendingCode: false,
+    })),
   ]);
   return {
     adminSettings,
@@ -74,6 +85,7 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
     profiles,
     secretRefs,
     workspaces,
+    browser,
   };
 }
 

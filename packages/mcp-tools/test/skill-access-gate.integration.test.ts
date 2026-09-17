@@ -111,7 +111,7 @@ test('one local approval unlocks passive resources but actual reads still use de
   const f = fixture();
   const session = f.sessions.create(f.identity);
   assert.deepEqual(
-    f.gate.resourcesList(session.id),
+    await f.gate.resourcesList(session.id),
     { resources: [] },
     'passive resource discovery must not reveal the local skill inventory or trigger approval',
   );
@@ -130,7 +130,7 @@ test('one local approval unlocks passive resources but actual reads still use de
     requestId: pending.id,
   })) as any;
   assert.equal(granted.status, 'skill_access_granted');
-  assert.equal(f.gate.resourcesList(session.id).resources.length, 1);
+  assert.equal((await f.gate.resourcesList(session.id)).resources.length, 1);
   assert.equal(
     (await f.gate.resourceRead(session.id, 'aevra://skill/user/demo')).contents[0]?.text,
     'skill body',
@@ -169,7 +169,7 @@ test('SessionSkillAccessGate URI validation YOLO access and promptsList', async 
   const f = fixture();
   const session = f.sessions.create(f.identity);
 
-  assert.equal(f.gate.promptsList().prompts.length, 1);
+  assert.equal((await f.gate.promptsList()).prompts.length, 1);
 
   await assert.rejects(
     () => f.gate.call('unknown-session', 'skills_list', {}),

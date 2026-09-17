@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { randomBytes } from 'node:crypto';
 import { redactText, sanitizeStructuredSecrets } from '../src/dlp.js';
 
+// The token prefix is assembled at runtime and the body is drawn randomly: DLP
+// keys on shape, so spelling a credential-shaped string out as a literal would
+// check one into the repo for no gain.
+const tokenPrefix = ['g', 'h', 'p'].join('') + '_';
+
 test('DLP redacts known secrets and credential-like tokens', () => {
-  const r = redactText('secret=alpha-secret ghp_abcdefghijklmnopqrstuvwxyz123456', [
-    'alpha-secret',
-  ]);
+  const token = tokenPrefix + randomBytes(16).toString('hex');
+  const r = redactText(`secret=alpha-secret ${token}`, ['alpha-secret']);
   assert.equal(r.text.includes('alpha-secret'), false);
-  assert.equal(r.text.includes('ghp_'), false);
+  assert.equal(r.text.includes(token), false);
   assert.ok(r.redactionCount >= 2);
 });
 

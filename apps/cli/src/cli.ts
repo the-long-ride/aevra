@@ -23,8 +23,10 @@ import {
 } from './admin-session.js';
 import { parseAevraArgs } from './args.js';
 import { runBackupCommand } from './commands/backup-command.js';
+import { runExtensionCommand } from './commands/extension-command.js';
 import { runConnectorsCommand } from './commands/connectors-command.js';
 import { runMaintenanceCommand } from './commands/maintenance-command.js';
+import { runMcpCommand } from './commands/mcp-command.js';
 import { runServiceCommand } from './commands/service-command.js';
 import { runSetupCommand } from './commands/setup-command.js';
 import { runStartCommand } from './commands/start-command.js';
@@ -38,6 +40,7 @@ import {
   usageText,
 } from './cli-support.js';
 import { dispatchCommand } from './dispatch.js';
+import { extensionInstallDependencies } from './extension-install.js';
 import { localAdminBase, localAdminFetch } from './local-client.js';
 import { runStart } from './run.js';
 
@@ -201,6 +204,13 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
           error: console.error,
           formatError: formatCliError,
         }),
+      mcp: (current) =>
+        runMcpCommand(config, current, {
+          api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
+          log: console.log,
+          error: console.error,
+          formatError: formatCliError,
+        }),
       status: (current) =>
         runStatusCommand(config, current, {
           fetch: (currentConfig, apiPath) =>
@@ -210,6 +220,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
           formatError: formatCliError,
         }),
       backup: (current) => runBackup(config, current),
+      extension: (current) => runExtensionCommand(current, extensionInstallDependencies(config)),
       audit: (current) =>
         runMaintenanceCommand(config, current, {
           api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),

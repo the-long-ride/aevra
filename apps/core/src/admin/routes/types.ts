@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { SystemCapabilitySnapshot } from '../../../../../packages/protocol/src/index.js';
 import type { KeepAwakeService } from '../../power/keep-awake-service.js';
+import type { UpstreamRegistryService } from '../../mcp-upstream/upstream-registry-service.js';
 
 export interface AdminApiContext {
   workspaces?: any;
@@ -25,6 +26,10 @@ export interface AdminApiContext {
   database?: any;
   activity?: any;
   power?: Pick<KeepAwakeService, 'status' | 'configure'>;
+  browser?: any;
+  browserPolicy?: any;
+  desktopPolicy?: any;
+  mcpUpstreams?: UpstreamRegistryService;
   systemCapabilities?: () => SystemCapabilitySnapshot;
   mcpDiagnostics?: () => unknown;
   safeMode?: () => boolean;

@@ -22,6 +22,42 @@ for (const surface of ADMIN_SURFACES) {
     }
   });
 
+  test(`${surface.name} Settings exposes the browser control panel and kill switch`, async ({
+    page,
+  }) => {
+    await installAdminApi(page);
+    await page.goto(surface.path);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Browser control' })).toBeVisible();
+    await expect(page.locator('[data-surface-id="browser:pair"]')).toBeVisible();
+    await expect(page.locator('[data-surface-id="browser:disconnect-all"]')).toBeVisible();
+  });
+
+  test(`${surface.name} Settings exposes the local-page origin policy selector`, async ({
+    page,
+  }) => {
+    await installAdminApi(page);
+    await page.goto(surface.path);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+
+    const fieldset = page.getByRole('group', {
+      name: 'Local pages (localhost and 127.0.0.1)',
+    });
+    await expect(fieldset).toBeVisible();
+
+    // The fixture reports loopbackClass SENSITIVE, so that choice is the one checked.
+    await expect(fieldset.getByRole('radio', { name: /Refuse/ })).not.toBeChecked();
+    await expect(fieldset.getByRole('radio', { name: /Ask every time/ })).toBeChecked();
+    await expect(fieldset.getByRole('radio', { name: /Allow/ })).not.toBeChecked();
+
+    // Aevra's own ports are shown as a fixed statement, never a control the operator can edit.
+    await expect(
+      page.getByText("Aevra's own ports (47830, 47831, 47832, 47833) are always refused.", {
+        exact: false,
+      }),
+    ).toBeVisible();
+  });
+
   test(`${surface.name} Guide copies the selected-platform safe matcher catalog`, async ({
     page,
   }) => {

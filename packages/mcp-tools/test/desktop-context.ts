@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { DesktopWindowIdentity } from '../../../packages/protocol/src/desktop.js';
 
 /**
  * Minimal runtime context for the desktop tool gate. The worker is a stub
@@ -30,7 +31,11 @@ export function desktopContext(
   } = {},
 ) {
   const attackerTitle = options.title ?? DETERMINISTIC_FIXTURE;
-  const window = { windowId: 'w1', processName: 'notepad.exe', title: attackerTitle };
+  const window: DesktopWindowIdentity = {
+    windowId: 'w1',
+    processName: 'notepad.exe',
+    title: attackerTitle,
+  };
   const worker: any = {
     calls: [] as any[],
     execute: async (input: any) => {

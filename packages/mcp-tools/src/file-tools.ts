@@ -9,6 +9,7 @@ import {
 import { markUntrusted } from '../../security/src/untrusted.js';
 import { authorizeCapability, authorizeImmutableSecurityApproval, gated } from './authorization.js';
 import { AevraToolError } from './errors.js';
+import { protectedGlobsFor } from './protected-paths.js';
 import { argsHash, requiredLease, unavailable } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
@@ -267,6 +268,13 @@ async function readTool(
 ) {
   const lease = requiredLease(context, sessionId);
   const roots = context.workspaces.capabilityRoots(lease.workspaceId);
+  // `resourceSecurity` above authorized ONE path - the argument. A search walks
+  // to files it never named, and the executor re-classifies each one with the
+  // built-in rules unless the workspace's declared protected paths travel with
+  // the operation. Sent on the read too, so the executor's second opinion and
+  // core's authorization agree about what is protected.
+  const protectedGlobs = protectedGlobsFor(context, lease.workspaceId);
+  const protection = protectedGlobs ? { protectedGlobs } : {};
   const operation: WorkerOperation =
     name === 'file_list'
       ? { kind: 'file.list', path: String(args.path ?? '/') }
@@ -276,11 +284,13 @@ async function readTool(
             path: String(args.path),
             ...(args.offset !== undefined ? { offset: Math.max(0, Number(args.offset) || 0) } : {}),
             ...(args.length !== undefined ? { length: Math.max(0, Number(args.length) || 0) } : {}),
+            ...protection,
           }
         : {
             kind: 'file.search',
             path: String(args.path ?? '/'),
             query: String(args.query ?? ''),
+            ...protection,
           };
   const result = await context.worker.execute({
     sessionId,
