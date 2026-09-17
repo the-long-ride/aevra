@@ -68,10 +68,10 @@ test('WindowsDesktopDriver: a ref minted before the helper dies is refused after
 // happened -- the caller needs `ok` and a conservative delta, not an exception
 // that makes a landed click indistinguishable from one that never fired.
 test('WindowsDesktopDriver: a failed trailing screenState still returns the completed action, marked unreliable', async () => {
-  // Short deadline: this failure is manufactured by the fake helper never
-  // answering the second screenState call, so the call must time out for
-  // real -- keep the deadline small to keep the suite fast.
-  const helper = makeHelper('driver-fail-second-state', 150);
+  // The failure is manufactured by the fake helper never answering the second
+  // screenState call. Keep the deadline bounded, but leave enough room for a
+  // fresh Node child to start on a busy CI worker.
+  const helper = makeHelper('driver-fail-second-state', 1000);
   const driver = new WindowsDesktopDriver(helper);
   try {
     await driver.connect();
@@ -93,7 +93,7 @@ test('WindowsDesktopDriver: a failed trailing screenState still returns the comp
 // REVIEW FIX: a failure of the LEADING screenState must still reject --
 // nothing has happened yet at that point, so there is no outcome to preserve.
 test('WindowsDesktopDriver: a failed leading screenState still rejects act()', async () => {
-  const helper = makeHelper('driver-fail-first-state', 150);
+  const helper = makeHelper('driver-fail-first-state', 1000);
   const driver = new WindowsDesktopDriver(helper);
   try {
     await driver.connect();
@@ -112,7 +112,7 @@ test('WindowsDesktopDriver: a failed leading screenState still rejects act()', a
 // must return distinct objects, and mutating the first must not leak into
 // the second.
 test('WindowsDesktopDriver: the unreliable delta is a fresh object each time, not a shared reference', async () => {
-  const helper = makeHelper('driver-fail-second-state', 150);
+  const helper = makeHelper('driver-fail-second-state', 1000);
   const driver = new WindowsDesktopDriver(helper);
   try {
     await driver.connect();

@@ -117,9 +117,16 @@ export class CdpDriver implements BrowserDriver {
 
   async navigate(request: NavigateRequest): Promise<NavigateResult> {
     const client = this.require();
-    const result = await client.send<{ frameId: string; errorText?: string }>('Page.navigate', {
-      url: request.url,
-    });
+    let result: { frameId: string; errorText?: string } = { frameId: '' };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      result = await client.send<{ frameId: string; errorText?: string }>('Page.navigate', {
+        url: request.url,
+      });
+      if (!result.errorText?.includes('ERR_ABORTED') || attempt === 2) break;
+      // Chromium can report a provisional navigation as aborted while the
+      // target is still settling after a newly opened page becomes usable.
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+    }
     if (result.errorText) {
       throw new BrowserDriverError('BROWSER_UNAVAILABLE', result.errorText);
     }
