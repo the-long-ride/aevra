@@ -1,6 +1,6 @@
 # Aevra Software Specs
 
-For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.0.4`.
+For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.0.5`.
 
 | #   | File                                               | Answers the question                                      |
 | --- | -------------------------------------------------- | --------------------------------------------------------- |
@@ -13,6 +13,13 @@ For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Ve
 | 07  | [state-migration](07-state-migration.md)           | What lives on disk and how does the Aevra schema evolve?  |
 | 08  | [audit-recovery](08-audit-recovery.md)             | How are actions recorded and crashes recovered?           |
 | 09  | [configuration](09-configuration.md)               | Every env var, port, CLI command in one table?            |
+
+Release feature contracts:
+
+- [Browser control](../browser-control.md) and [browser user manual](../user-manual/18-browser-control.md)
+- [Desktop control user manual](../user-manual/19-desktop-control.md)
+- [MCP upstream servers user manual](../user-manual/20-mcp-upstreams.md)
+- [Workspace manifest design](2026-09-12-aevra-manifest-design.md)
 
 **Reading order:** top to bottom. **How-to counterparts:** [`../user-manual/`](../user-manual/README.md).
 

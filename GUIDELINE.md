@@ -2,6 +2,11 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
+The current release is **1.0.5**. It includes browser control, Windows desktop
+control, MCP upstream servers, and workspace manifests. The feature-specific
+manuals and canonical specs linked below are the source of truth for detailed
+contracts and security limitations.
+
 ---
 
 ## 1. Prerequisites & System Requirements
@@ -59,14 +64,17 @@ setx AEVRA_PASSWORD "YourSecurePassword"
 
 ### Optional Configuration Variables
 
-| Variable            | Default                 | Purpose                                                              |
-| ------------------- | ----------------------- | -------------------------------------------------------------------- |
-| `AEVRA_PUBLIC_PORT` | `47830`                 | Public HTTPS Gateway port (direct HTTPS / reverse proxy destination) |
-| `AEVRA_ADMIN_PORT`  | `47831`                 | Localhost-only Admin API and React Web UI port                       |
-| `AEVRA_MCP_PORT`    | `47832`                 | Localhost-only MCP data plane JSON-RPC port                          |
-| `AEVRA_STATE_DIR`   | Platform default        | Override path for database, secrets vault, and logs                  |
-| `AEVRA_TLS_CERT`    | Auto-generated cert PEM | Custom TLS certificate for HTTPS listeners                           |
-| `AEVRA_TLS_KEY`     | Auto-generated key PEM  | Custom TLS private key                                               |
+| Variable                      | Default                 | Purpose                                                              |
+| ----------------------------- | ----------------------- | -------------------------------------------------------------------- |
+| `AEVRA_PUBLIC_PORT`           | `47830`                 | Public HTTPS Gateway port (direct HTTPS / reverse proxy destination) |
+| `AEVRA_ADMIN_PORT`            | `47831`                 | Localhost-only Admin API and React Web UI port                       |
+| `AEVRA_MCP_PORT`              | `47832`                 | Localhost-only MCP data plane JSON-RPC port                          |
+| `AEVRA_BROWSER_PORT`          | `47833`                 | Loopback WebSocket port used by the paired browser extension         |
+| `AEVRA_ADMIN_PUBLIC_URL`      | unset                   | Canonical remote Admin HTTPS URL when explicitly exposed             |
+| `AEVRA_TRUSTED_ADMIN_ORIGINS` | empty                   | Additional exact HTTPS Admin origins, comma-separated                |
+| `AEVRA_STATE_DIR`             | Platform default        | Override path for database, secrets vault, and logs                  |
+| `AEVRA_TLS_CERT`              | Auto-generated cert PEM | Custom TLS certificate for HTTPS listeners                           |
+| `AEVRA_TLS_KEY`               | Auto-generated key PEM  | Custom TLS private key                                               |
 
 ### Starting the Server
 
@@ -101,6 +109,60 @@ Aevra exposes a standard MCP endpoint (`/mcp`) that can be accessed either **dir
 3. In Claude.ai or your client settings, add a Custom Connector / MCP Server:
    - **Name**: `Aevra`
    - **Server URL**: `https://<your-aevra-host>/mcp/<token>` (or `https://<your-aevra-host>/mcp` with `Authorization: Bearer <token>`)
+
+### Browser control (1.0.5)
+
+Grant the `browser.control` capability explicitly; it is off by default and
+is not implied by `network`. Install the version-matched MV3 archive with
+`aevra extension install`, load its unpacked folder in Chrome or Edge, then
+pair it from **Settings → Browser control** using the single-use code. Keep the
+folder at a stable path because Chromium derives the unpacked extension id from
+that path. CDP is available as an alternative with a separate browser profile
+and `--remote-debugging-port`.
+
+Browser control refuses page-script evaluation, credential fields, privileged
+URLs, Aevra's own Admin UI, sensitive screenshots, and navigation URLs carrying
+secret-shaped data. **Disconnect all browsers** revokes the token epoch and
+drops both transports immediately. Full procedure: [Browser control](docs/user-manual/18-browser-control.md).
+
+### Desktop control (Windows only, 1.0.5)
+
+Build the helper from `helper/` with `cargo build --release`, grant the
+`desktop.control` capability, and run Aevra in a real interactive Windows 10/11
+session. The shipped helper is unsigned and there is no macOS or Linux helper;
+those platforms report `DESKTOP_HELPER_NOT_INSTALLED`.
+
+Use `desktop_describe` before input so actions target accessibility references,
+not stale coordinates. Screen reads remain available when attribution is
+missing, while input is refused for unattributable, elevated, terminal,
+credential, and password-manager windows by default. Typed text is never logged,
+screenshots are audited by hash only, and input actions remain approval-gated.
+Read [Desktop control](docs/user-manual/19-desktop-control.md) before enabling it.
+
+### MCP upstream servers
+
+Register HTTP, SSE, or stdio servers under **Settings → MCP servers**, or use
+the `aevra mcp add/list/test/remove` commands. Store credentials in **Secret
+references** first; upstream registration accepts a secret-reference id, not a
+raw token. A server is catalogued before it is stored, its tools are exposed
+under a namespaced name, and calls require a selected workspace.
+
+The configured risk tier applies to every upstream tool. Upstream annotations
+are advisory and cannot bypass approval. Temporary outages remain visible as
+degraded; catalog changes pause serving until the operator reviews and
+acknowledges the diff. Calls are not automatically replayed after a disconnect.
+See [MCP servers](docs/user-manual/20-mcp-upstreams.md).
+
+### Workspace manifest (`aevra.json`)
+
+Place an optional `aevra.json` at a workspace root to publish literal `test`,
+`build`, `lint`, or `run` command suggestions and declare `protectedPaths` in
+`sensitive` and `secret` buckets. The manifest is cached by file metadata, warns
+instead of silently disabling protection when malformed, and protects itself
+from mutation. Commands are untrusted advisory text: running one still uses
+the normal `shell_run` policy. Declared paths apply to file operations and
+search hits; they do not expand shell-command authorization. See [Workspace &
+execution spec](docs/specs/06-workspaces-execution.md) and the [manifest design](docs/specs/2026-09-12-aevra-manifest-design.md).
 
 ---
 
@@ -142,6 +204,9 @@ The codebase enforces strict isolation boundaries checked by automated tests:
 3. **MCP Tools (`packages/mcp-tools`)**: Implements standard MCP 2.0 tool handlers without importing Worker executor internals directly.
 4. **Web UI (`apps/web-react`)**: React 19 single-page application communicating exclusively with the Admin REST API.
 5. **Store & Security (`packages/store`, `packages/security`)**: SQLite persistence (`node:sqlite`), encryption vaults, DLP redaction, and `SecurityGuard` data boundaries.
+6. **Browser & Extension (`packages/browser`, `apps/extension`)**: CDP and MV3 transports behind one browser-driver contract, with pairing and revocation handled by Core/Worker.
+7. **Desktop & Helper (`packages/desktop`, `helper/`)**: Windows accessibility/input helper supervised by the Worker and guarded by window identity and policy.
+8. **MCP Upstream (`packages/mcp-upstream`, `apps/core`, `apps/worker`)**: Downstream transport, catalog review, namespace projection, credential isolation, and audited calls.
 
 ### Quality Gate Commands
 
@@ -170,6 +235,8 @@ npm run test:integration     # Multi-component integration tests
 npm run test:security        # Security boundary, DLP, and path-traversal tests
 npm run test:web             # React Web UI Vitest suite
 npm run test:coverage        # V8 coverage report (enforces >= 85% floor)
+npm run test:extension       # MV3 extension unit and coverage suite
+npm run build:extension      # Package the version-matched extension archive
 npm run test:ui-parity       # Playwright browser UI parity tests
 ```
 
@@ -195,15 +262,18 @@ The state folder stores:
 
 ## 8. Troubleshooting Common Issues
 
-| Issue / Error Code           | Cause                                                        | Solution                                                                                        |
-| ---------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `401 unauthorized` on `/mcp` | Connection missing valid OAuth or Bearer token               | Authorize via OAuth dialog or pass valid `Authorization: Bearer <token>` connector header.      |
-| `ADMIN_CREDENTIALS_REQUIRED` | `AEVRA_USERNAME` or `AEVRA_PASSWORD` not set at startup      | Export both environment variables before launching `aevra start`.                               |
-| `SESSION_WORKSPACE_REQUIRED` | Client connected but has not selected an admitted workspace  | Call `workspace_select` with a registered workspace ID or name.                                 |
-| `CAPABILITY_REQUIRED`        | Current capability profile or lease denies the operation     | Upgrade workspace profile in Admin UI or approve step-up permission in Requests.                |
-| `APPROVAL_PENDING`           | High-risk or sensitive operation requires local confirmation | Open `aevra ui`, click Allow on the request ticket, then call `approval_wait`.                  |
-| `APPROVAL_CONTEXT_CHANGED`   | State changed while approval was pending                     | Re-issue the tool call against the current repository / workspace state.                        |
-| `WORKSPACE_ESCAPE`           | Path attempts traversal outside registered capability root   | Ensure files and links resolve inside workspace boundaries or configure an external mount.      |
-| `EXECUTOR_UNAVAILABLE`       | Docker/Podman container sandbox backend unavailable          | Start Docker/Podman or explicitly configure host execution permission in workspace settings.    |
-| `MERGE_CONFLICT`             | Concurrent conflicting writes on overlapping lines           | Aevra wrote nothing; re-read latest content via `file_read` and apply resolved patch.           |
-| `SAFE_MODE`                  | Database integrity check failed on startup                   | Admin UI remains open in read-only diagnostic mode to export data and restore database backups. |
+| Issue / Error Code             | Cause                                                        | Solution                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `401 unauthorized` on `/mcp`   | Connection missing valid OAuth or Bearer token               | Authorize via OAuth dialog or pass valid `Authorization: Bearer <token>` connector header.                      |
+| `ADMIN_CREDENTIALS_REQUIRED`   | `AEVRA_USERNAME` or `AEVRA_PASSWORD` not set at startup      | Export both environment variables before launching `aevra start`.                                               |
+| `SESSION_WORKSPACE_REQUIRED`   | Client connected but has not selected an admitted workspace  | Call `workspace_select` with a registered workspace ID or name.                                                 |
+| `CAPABILITY_REQUIRED`          | Current capability profile or lease denies the operation     | Upgrade workspace profile in Admin UI or approve step-up permission in Requests.                                |
+| `APPROVAL_PENDING`             | High-risk or sensitive operation requires local confirmation | Open `aevra ui`, click Allow on the request ticket, then call `approval_wait`.                                  |
+| `APPROVAL_CONTEXT_CHANGED`     | State changed while approval was pending                     | Re-issue the tool call against the current repository / workspace state.                                        |
+| `WORKSPACE_ESCAPE`             | Path attempts traversal outside registered capability root   | Ensure files and links resolve inside workspace boundaries or configure an external mount.                      |
+| `EXECUTOR_UNAVAILABLE`         | Docker/Podman container sandbox backend unavailable          | Start Docker/Podman or explicitly configure host execution permission in workspace settings.                    |
+| `MERGE_CONFLICT`               | Concurrent conflicting writes on overlapping lines           | Aevra wrote nothing; re-read latest content via `file_read` and apply resolved patch.                           |
+| `SAFE_MODE`                    | Database integrity check failed on startup                   | Admin UI remains open in read-only diagnostic mode to export data and restore database backups.                 |
+| `BROWSER_ORIGIN_BLOCKED`       | Browser reached an Aevra or otherwise blocked origin         | Use an allowed origin and review **Settings → Browser control**; approvals cannot override structural refusals. |
+| `DESKTOP_HELPER_NOT_INSTALLED` | Desktop helper is unavailable on this platform               | Use Windows 10/11 with the helper built from `helper/`; macOS and Linux are not shipped targets in 1.0.5.       |
+| `UPSTREAM_CATALOG_CHANGED`     | A downstream MCP server changed its advertised catalog       | Review the catalog diff in **Settings → MCP servers** and acknowledge it before calls resume.                   |

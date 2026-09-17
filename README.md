@@ -62,11 +62,18 @@ Execution Worker (filesystem · git · commands · sandbox · processes · hooks
 
 ## Core Features
 
-- **41 Discoverable MCP Tools & Fast Lane Interfaces**: Streamlined public toolset featuring batch file reads, mutations, command execution, workspace management, Git operations, durable processes, and change sets (with singular primitives safely delegated internally).
+- **60 Built-in Discoverable MCP Tools & Fast Lane Interfaces**: Streamlined public toolset featuring batch file reads, mutations, command execution, workspace management, Git operations, durable processes, change sets, browser control, and desktop control (with singular primitives safely delegated internally). MCP upstream tools are added dynamically under namespaced names.
 - **Host System Capabilities & Status**: MCP `aevra_status` exposes host toolchain snapshots, available shells, and execution defaults directly to models and the Admin UI.
 - **Dynamic Resources & Instruction Prompts**: Serves context files seamlessly via MCP resources (`aevra://skill/<source>/<name>`) and instruction prompts (`aevra-instructions` parsed from `AGENTS.md` / `CLAUDE.md`).
 - **React 19 Admin Dashboard**: Single-page dark theme dashboard featuring live System Capabilities breakdown, Transport Validation status, real-time MCP activity monitoring with sanitized payloads, and interactive runtime modals.
 - **Out-of-Process Worker Sandbox**: Execution worker runs in an isolated child process communicating over authenticated local IPC, with Docker and Podman container sandboxing support.
+- **Browser Control**: Nine `browser_*` tools drive a real browser — reading pages, clicking, typing, and navigating — through the same capability, risk, approval, DLP, and audit controls that govern files and commands, over either the Aevra extension or the Chrome DevTools Protocol. No page-script evaluation, and credential fields are never typed into. See [docs/browser-control.md](docs/browser-control.md).
+
+  Install it with `aevra extension install`, which fetches the archive matching your version, asks where to unzip it, and prints the load-unpacked steps - or download `aevra-extension.zip` from the [latest release](https://github.com/the-long-ride/aevra/releases/latest) yourself. Full walkthrough in the [browser control guide](docs/user-manual/18-browser-control.md). The web UI and `aevra status` both say so when no extension is paired.
+
+- **Desktop Control (Windows)**: Ten `desktop_*` tools read windows and accessibility trees, capture the screen on demand, and drive clicks, typing, keys, and scrolling through the `desktop.control` capability, window gate, approvals, DLP, and audit. See [docs/user-manual/19-desktop-control.md](docs/user-manual/19-desktop-control.md); macOS and Linux currently report `DESKTOP_HELPER_NOT_INSTALLED`.
+- **MCP Upstreams**: Register HTTP, SSE, or stdio MCP servers from the Admin UI or `aevra mcp`, keep credentials in secret references, and republish reviewed tools under namespaced names. Catalog changes pause serving until acknowledged, and upstream annotations are advisory only. See [docs/user-manual/20-mcp-upstreams.md](docs/user-manual/20-mcp-upstreams.md).
+- **Workspace Manifest**: An optional `aevra.json` advertises workspace commands and declares sensitive/secret protected paths. Commands remain advisory and protected paths feed the existing file-tool security boundary; the manifest protects itself from silent replacement. See [the manifest design](docs/specs/2026-09-12-aevra-manifest-design.md).
 
 ---
 

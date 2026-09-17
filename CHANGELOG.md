@@ -1,5 +1,180 @@
 # Changelog
 
+## [1.0.5] - 2026-09-15
+
+### Added - desktop control (Windows)
+
+- **Desktop control (Windows only)**: ten `desktop_*` MCP tools let an agent
+  read the windows that are open, read one window's accessibility tree, take a
+  screenshot, and click, type, press keys, and scroll - through the same
+  capability, risk, approval, DLP, and audit gate that governs files, commands,
+  and the browser. Gated by a new `desktop.control` capability, off by default
+  and not implied by any other capability. macOS and Linux are not implemented:
+  there is no helper binary for them, so `desktop_connect` there reports
+  `DESKTOP_HELPER_NOT_INSTALLED`.
+- **Tree-first perception**: `desktop_describe` returns named elements as
+  `ref_<generation>_<index>` handles and `desktop_click` takes a ref, so a task
+  costs a fraction of a screenshot-per-step loop. `desktop_capture` returns
+  pixels only when asked, as a size-capped JPEG. A ref from an earlier describe,
+  or from before a helper restart, is refused as `DESKTOP_REF_STALE` rather than
+  rebound to whatever now occupies that index. Every action returns a delta
+  (`focusChanged`, `newWindow`, `subtreeChanged`) so the screen need not be
+  re-read after each step.
+- **Reads and input fail differently, on purpose**: screen reading is always
+  permitted; input is refused whenever Aevra cannot say which application would
+  receive it. A window whose owning executable cannot be read - the secure
+  desktop, a UAC consent prompt, some elevated processes - is `unattributable`
+  and gets no input unless the policy opts in with
+  `unattributedInput: 'allow'`. The default policy also denies input to
+  terminals, password managers, and credential dialogs. Input into a more
+  privileged window is refused by Windows itself (UIPI) and is reported as
+  `DESKTOP_INPUT_REFUSED`, never as success.
+- **A local helper process**: a Rust binary supervised over line-delimited JSON
+  with a deadline, a restart, and a generation counter that invalidates every
+  outstanding element reference when it restarts. It reports four independent
+  capabilities at connect - `capture`, `tree`, `attribution`, `input` - so the
+  model learns what the host can do once instead of discovering it through
+  failures.
+- **Desktop DLP and audit**: typed text never reaches the audit log or an
+  approval row, only its length; screenshots are audited by content hash and
+  never persisted; window titles and accessible names pass through redaction and
+  are marked untrusted; every action records the gate verdict and the deciding
+  rule, reads included.
+
+### Added - workspace manifest
+
+- **aevra.json**: a workspace can declare its own build/test commands and its
+  own protected paths (`protectedPaths.sensitive` / `protectedPaths.secret`, a
+  small auditable glob dialect). Declared paths are enforced by the same
+  sensitivity machinery as the built-in `.env`/`id_rsa`/`.pem` rules, on reads
+  and on search hits as well as on mutations. `aevra.json` protects itself, so
+  an agent cannot disarm the file by overwriting it.
+
+### Added - MCP upstream servers
+
+- **MCP upstream proxy**: operators can register HTTP, SSE, or stdio MCP
+  servers from the Admin UI or `aevra mcp`, with credentials referenced by
+  secret id rather than stored in a tool or catalog response. Upstream tools,
+  prompts, and resources are republished under collision-resistant namespaced
+  names, while upstream calls remain workspace-scoped and audited.
+- **Catalog review and degraded state**: a server is connected and its catalog
+  is fingerprinted before registration is stored. Temporary outages keep the
+  server visible as degraded; a changed catalog moves to Needs review and stops
+  serving until an operator acknowledges the added, removed, and changed
+  entries. Upstream `readOnlyHint` and `destructiveHint` annotations are shown
+  as advisory only and cannot lower the configured risk tier.
+- **Safe reconnect behavior**: a dropped upstream call fails rather than being
+  silently replayed. Reconnect validates the catalog before serving calls again;
+  sampling is not proxied.
+
+### Security - review follow-ups
+
+- **Desktop input is approval-gated.** `desktop_click` is MEDIUM, `desktop_type`
+  and `desktop_key` are HIGH, and all three now reach an approval instead of
+  running unattended for the life of a `desktop.control` lease.
+  `desktop_scroll` stays LOW. The window gate answers which window may receive
+  input; it never answered whether the input should happen at all.
+- **The browser origin policy covers Aevra off loopback.** The rule blocking
+  Aevra's own listener ports applied only to loopback origins, so the same
+  admin surface reached over a LAN address, the public gateway, or a managed
+  tunnel classified NORMAL and was drivable. The port rule is now
+  unconditional, and every origin Aevra is currently reachable at is blocked by
+  hostname, read live from exposure config rather than stored.
+- **Declared protected paths reach the executor.** `file_search` and `search`
+  authorize their search root, then let the executor classify each hit - which
+  knew only the built-in rules. A workspace's declared globs now travel with
+  the read operation, so a declared-SECRET file is no longer returned as an
+  ordinary search hit.
+- **Protected-path matching is spelling-independent.** Patterns were tested
+  against the raw path a tool call supplied, so `./aevra.json`,
+  `sub/../aevra.json` and `aevra.json/` all evaded a glob that `aevra.json`
+  matched. Paths are normalised before classification.
+- **Typed text is scanned for secrets.** `browser_act_many`'s `type` and
+  `select` values go through the same DLP pass as a navigation URL; typing a
+  secret into an attacker's form was the same exfiltration a URL scan exists to
+  stop.
+- **The extension socket bounds a frame.** A declared 64-bit frame length is
+  capped and an over-cap frame drops the socket, rather than buffering whatever
+  the peer claims is coming.
+
+### Known limitations - desktop control
+
+- The helper binary is unsigned. The protection for Aevra's own admin UI is
+  also partial: that UI is a web page, so at window granularity its identity is
+  the browser's process; the mitigation is an exact window-title refusal, which
+  a page can influence and which is blind to a background tab. Keep approvals
+  on a device the agent is not driving.
+- `desktop_capture` maps to clickable coordinates only for the primary monitor;
+  the result carries no origin, so window and secondary-monitor captures cannot
+  be turned back into coordinates.
+- No human-takeover abort, and no per-click approval prompt.
+
+### Added - browser control
+
+- **Browser control**: nine `browser_*` MCP tools let an agent read pages,
+  click, type, and navigate through the same capability, risk, approval, DLP,
+  and audit gate that governs files and commands. Two transports share one tool
+  surface - the Aevra MV3 extension, which keeps the logged-in sessions you
+  already have, and the Chrome DevTools Protocol for a browser you started
+  yourself. A single table-driven conformance suite runs against both drivers
+  and an in-memory fake, so the transports cannot drift apart in behaviour.
+  Gated by a new `browser.control` capability, off by default and not implied by
+  `network`.
+- **Extension pairing and kill switch**: `Settings → Browser control` mints a
+  single-use pairing code and stores a MAC'd token the worker verifies offline.
+  **Disconnect all browsers** bumps a revocation epoch that invalidates every
+  issued token and drops live sockets immediately, not on the next operation.
+- **`aevra extension install [--dir <path>] [--yes]`**: downloads the extension
+  archive published for the running version, asks where to unzip it, and prints
+  the load-unpacked steps. The extension ships as `aevra-extension.zip` of plain
+  compiled JavaScript; there is no `.crx`, because a Chromium browser refuses to
+  install one that did not come from its own web store.
+- **Browser control discovery**: the web UI shows a prompt beside Requests, and
+  `aevra status` reports a line, when no extension is paired. Both stay silent
+  when one is paired or when Aevra cannot tell.
+- User manual chapter 18, _Browser control_, covers installing the extension,
+  choosing the profile it drives, pairing, and the CDP alternative.
+
+### Security
+
+- **Navigation URLs are DLP-scanned across the path**, not only the query and
+  fragment. The shared redaction pass grants slash-bearing runs some immunity so
+  real filesystem paths survive tool output, which meant a secret placed in a
+  URL path passed through; path segments are now judged one at a time.
+- **`browser_tabs {action:'open'}` is treated as a navigation.** It sends the
+  browser to a URL exactly as `browser_navigate` does, but risk keyed on the
+  tool name, so it skipped both the blocked-origin refusal and the DLP scan and
+  was tiered LOW. Risk now keys on whether the operation navigates.
+- **No page-script evaluation on any transport**, enforced by a source test.
+  Credential fields (password, one-time-code, payment) are refused in the page
+  and again in the worker, and approval cannot override it. `chrome://`,
+  `chrome-extension://`, `devtools://`, `file://`, `view-source:` and Aevra's
+  own admin UI are refused outright rather than ticketed.
+- **The extension archive is treated as hostile input.** `aevra extension
+install` rejects absolute paths, `..` and `.` segments, backslashes, and
+  control characters in entry names, resolves every path against the
+  destination, verifies entry checksums, and bounds inflation by the size the
+  archive declares. Nothing is written until the whole archive has been read and
+  validated, and an existing install is removed only after that, so a failed or
+  hostile download cannot leave a half-extracted tree or an unpaired browser.
+
+### Fixed
+
+- **Browser operations are serialized per session.** A tab is shared mutable
+  state with no transactions, so two concurrent `browser_act_many` batches
+  interleaved their clicks. Connect, disconnect, and status stay outside the
+  queue so the kill switch still reaches a wedged session.
+- **Vision-mode coordinates match the screenshot.** Boxes were reported in CSS
+  pixels while the screenshot was captured in device pixels, so every coordinate
+  click landed short on a HiDPI display. Snapshots now report
+  `devicePixelRatio` and put boxes and `{x, y}` in the screenshot's own space.
+- **Console logs work on the extension transport.** The buffer existed but
+  nothing filled it, so `browser_logs {kind:'console'}` always returned empty.
+- `RequestActivityChart` is split into geometry, viewport, and rendering, taking
+  it from 411 lines to 175.
+
+All notable changes to this project are documented here.
+
 ## [1.0.4] - 2026-08-30
 
 - Restored missing runtime modules and fixed strict typecheck/build failures.
