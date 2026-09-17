@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Aevra Browser Control</title>
+    <style>
+      body {
+        font:
+          14px system-ui,
+          sans-serif;
+        margin: 24px;
+        max-width: 420px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+      }
+      input {
+        font: inherit;
+        letter-spacing: 2px;
+        padding: 8px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      input#port {
+        letter-spacing: normal;
+      }
+      button {
+        font: inherit;
+        margin-top: 12px;
+        padding: 8px 16px;
+      }
+      #status {
+        margin-top: 16px;
+      }
+      .hint {
+        color: #555;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pair with Aevra</h1>
+    <p>Open the Browser panel in the Aevra web UI and generate a pairing code.</p>
+    <form id="pair">
+      <label for="code">Pairing code</label>
+      <input id="code" name="code" maxlength="8" autocomplete="off" required />
+      <label for="port">Admin port</label>
+      <input id="port" name="port" type="number" min="1" max="65535" value="47831" />
+      <p class="hint">Change this only if you set AEVRA_ADMIN_PORT.</p>
+      <button type="submit">Pair</button>
+    </form>
+    <p id="status" role="status"></p>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

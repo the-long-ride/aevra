@@ -1,0 +1,49 @@
+.browser-suggestion {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.browser-suggestion:hover {
+  color: var(--fg);
+  border-style: solid;
+}
+
+.browser-setup-modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 24px;
+  max-width: 520px;
+  width: calc(100% - 32px);
+}
+
+.browser-setup-modal h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.browser-setup-modal p {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.browser-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.browser-setup-modal .button-link {
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 6px 14px;
+  text-decoration: none;
+}
+
+.browser-setup-modal .button-link:hover {
+  border-color: var(--fg);
+}
