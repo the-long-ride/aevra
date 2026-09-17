@@ -1,0 +1,40 @@
+import { renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, expect, it, vi } from 'vitest';
+import { requestJson } from '../../services/api-client';
+import { useBrowserExtension } from './use-browser-extension';
+
+vi.mock('../../services/api-client', () => ({ requestJson: vi.fn() }));
+
+const request = vi.mocked(requestJson);
+
+beforeEach(() => request.mockReset());
+
+it('reports a paired extension', async () => {
+  request.mockResolvedValue({ extensionId: 'a'.repeat(32), pairedAt: '2026-01-01T00:00:00Z' });
+  const { result } = renderHook(() => useBrowserExtension());
+  await waitFor(() => expect(result.current).toBe('paired'));
+});
+
+it('reports a missing extension when nothing is paired', async () => {
+  request.mockResolvedValue({ extensionId: null, pairedAt: null });
+  const { result } = renderHook(() => useBrowserExtension());
+  await waitFor(() => expect(result.current).toBe('missing'));
+});
+
+it('stays unknown when the route is unavailable', async () => {
+  request.mockRejectedValue(new Error('BROWSER_UNAVAILABLE'));
+  const { result } = renderHook(() => useBrowserExtension());
+  await waitFor(() => expect(request).toHaveBeenCalled());
+  expect(result.current).toBe('unknown');
+});
+
+it('asks core once and aborts the request when unmounted mid-flight', async () => {
+  request.mockImplementation(() => new Promise(() => {}));
+  const { unmount } = renderHook(() => useBrowserExtension());
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+
+  const options = request.mock.calls[0]![1] as { signal: AbortSignal };
+  expect(options.signal.aborted).toBe(false);
+  unmount();
+  expect(options.signal.aborted).toBe(true);
+});
