@@ -4,11 +4,13 @@ Complete Remote Access first so Aevra has an effective HTTPS endpoint that ChatG
 
 ## In Aevra
 
-Open **Onboarding > Connect an AI > ChatGPT** and copy the displayed MCP endpoint. For a public deployment it has this shape:
+Open the dashboard **Onboarding > Connect an AI** block and copy the displayed **MCP endpoint**. The same value is one endpoint for every client; there is no per-provider screen. For a public deployment it has this shape:
 
 ```text
 https://<effective-public-host>/mcp
 ```
+
+If the block reads `Configure Remote Access first`, finish Remote Access before continuing. `aevra status` prints the same endpoint as `Public` — append `/mcp` to it.
 
 Authentication is **OAuth**. Do not place an Admin password or connector secret in the URL.
 

@@ -1,6 +1,6 @@
 # 06 — Workspaces & Execution
 
-**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `1.0.4`
+**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `1.0.5`
 
 A **workspace** is a registered host folder the AI may work in. Registration happens **only** in the localhost Web UI — the remote surface can never create or mutate roots.
 
@@ -21,6 +21,24 @@ The model-facing file tools batch even single-item work so clients do not need t
 - Every individual mutation delegates through the same security-sensitive primitive used by singular internal operations, preserving approvals, sensitivity handling, recovery journaling, conflict detection, and workspace mutation locks.
 
 The singular primitives `file_read`, `file_create`, `file_write`, and `file_patch` remain internal implementation operations and are not advertised through MCP `tools/list`.
+
+## Workspace manifest (`aevra.json`)
+
+An optional `<workspaceRoot>/aevra.json` may declare literal command suggestions
+(`test`, `build`, `lint`, `run`) and protected path patterns in
+`protectedPaths.sensitive` and `protectedPaths.secret`. The manifest is parsed
+and cached by file metadata, includes an implicit sensitive rule for itself,
+and returns a visible warning with safe defaults when it is missing, malformed,
+oversized, or contains an invalid glob. Secret patterns are evaluated before
+sensitive patterns so the stricter class cannot be shadowed.
+
+Commands are advisory untrusted text. If a client chooses to run one, it still
+uses the normal `shell_run` policy, risk tier, and approval path. Protected
+patterns feed the existing file-resource sensitivity classifier, including
+search hits, so secret matches are denied and sensitive mutations require
+approval. This release intentionally does not expand the manifest boundary to
+shell command contents; `shell_run cat protected/file` remains governed by
+command policy rather than file-resource classification.
 
 ## Command execution & system capabilities
 

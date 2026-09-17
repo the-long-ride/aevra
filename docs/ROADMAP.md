@@ -1,6 +1,6 @@
 # Aevra Roadmap & Weak-Points Map
 
-**Date:** 2026-08-30 · **Baseline:** Aevra `1.0.4` · **Derived from:** Fast Lane batch tools, system capability detection, local transport protocol options and validation, Web UI polish, and full test suite verification.
+**Date:** 2026-09-15 · **Baseline:** Aevra `1.0.5` · **Derived from:** shipped browser control, Windows desktop control, the workspace manifest, and the security review of all three.
 
 This file tracks remaining product/architecture gaps only. Delivered work belongs in `CHANGELOG.md`.
 
@@ -12,14 +12,8 @@ This file tracks remaining product/architecture gaps only. Delivered work belong
 4. **Workspace roots are local host paths.** SSH/network/remote-root execution is intentionally unspecified until containment, credential, latency, and recovery semantics are designed.
 5. **The daemon is deliberately single-user.** Admin credentials protect one local owner's control plane; a true multi-user/tenant authority model is not yet designed.
 6. **Keep-awake support is platform dependent.** Unsupported or unavailable platform inhibitors degrade safely to an explicit unavailable state; broader platform coverage is future work.
-
-## Recently closed in 0.1.3
-
-- Host system capabilities detection across 11 toolchain categories and shell families with platform-specific recommended shell resolution.
-- Configurable local gateway transport protocol (`localProtocol: https|http`) with strict loopback HTTPS for internal Admin and MCP listeners, interactive CLI setup, and runtime transport validation modal.
-- Fast Lane batch tools (`file_read_many`, `file_write_many`, `command_run_many`) as primary model-facing interfaces while retaining singular primitives internally.
-- Simplified 40-tool discoverable MCP surface.
-- React Admin Web UI polish (System Capabilities panel, Transport Validation modal, accessible keyboard-navigable Dropdown, refactored activity stream hook).
+7. **Desktop control can reach what browser control refuses.** Input is approval-gated now, but an approved `desktop_type` into a browser's address bar still reaches a URL without passing `classifyOrigin` or the navigation DLP scan, and an approved click inside an editor still reaches its integrated terminal without passing command policy. The window gate works at process granularity, and a browser or an editor is exactly what a desktop agent needs to drive. Closing this needs cross-surface policy, not another denylist entry.
+8. **The manifest's protected paths do not bind `shell_run`.** They are enforced on file tools and on search hits. A command that reads the same file is governed by command policy alone. Either wire the manifest into command authorization or say plainly in the manifest docs that it is a file-tool boundary.
 
 ## Not yet specified
 
@@ -27,9 +21,18 @@ This file tracks remaining product/architecture gaps only. Delivered work belong
 - Dynamic MCP tool-list change notifications.
 - Remote workspace mounts and their containment/recovery model.
 - Additional MCP transport variants when required by supported clients.
+- **MCP client `roots` protocol.** Naming hazard: `roots` already means `CapabilityRoot` across `mcp-tools`; the MCP concept needs a different identifier.
+- **Advanced MCP gateway behavior beyond the shipped upstream proxy.** Basic HTTP/SSE/stdio upstream registration, namespaced catalog projection, review, and audited calls now ship in 1.0.5. Sampling proxying, richer downstream negotiation, and other gateway extensions remain unspecified.
+- Progress notifications, request cancellation, and elicitation.
+- An HTTP request tool, a workspace manifest schema beyond commands/protected paths, and non-text file extraction (pdf/docx/xlsx/image).
+- File and workspace MCP resources, `subscribe`, and `listChanged`. Resources expose skills only today.
+- Per-profile `tools/list` filtering. Every tool is listed regardless of the active profile.
+- Desktop control on macOS (AX + CGEvent) and Linux (AT-SPI + XTest on X11; portal-only, read-only on Wayland). Only the Windows helper exists today.
+- Desktop helper distribution and Authenticode signing. The binary is built from source and unsigned, so SmartScreen warns.
+- Human-takeover abort for desktop control: grabbing the mouse mid-action currently stops nothing. Needs a low-level input hook.
+- Multi-monitor screen capture. `DesktopCaptureResult` carries no origin, so only the primary monitor is coordinate-mappable.
 
 ## Out of scope
 
-- Browser extension or DOM automation.
 - Bypassing AI-client product limits.
 - Running as SYSTEM/root or automatic privilege elevation.

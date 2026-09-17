@@ -18,3 +18,6 @@
 16. [Explore Aevra](15-explore.md)
 17. [Safe command matchers](16-safe-command-matchers.md)
 18. [Tunnels and public HTTPS](17-tunnels.md)
+19. [Browser control](18-browser-control.md)
+20. [Desktop control](19-desktop-control.md)
+21. [MCP servers](20-mcp-upstreams.md)

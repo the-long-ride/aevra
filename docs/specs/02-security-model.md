@@ -1,6 +1,6 @@
 # 02 — Security Model
 
-**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.0.4`
+**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.0.5`
 
 Security is two questions: **who gets in** (admission) and **what may they do** (authority). They never mix.
 
@@ -33,7 +33,9 @@ Dynamic client registration is open by design but bounded: `client_name` is stri
 
 ## Authority — capabilities
 
-A lease carries a profile: **Minimal**, **Read Only**, **Safe Dev**, **Power Dev**, **Full Workspace**, or **Custom**. Capability vocabulary: `files.read` `files.search` `git.read` `files.write` `files.delete` `commands.run` `git.commit` `git.push` `network` `skills.read` `skills.write` `instructions.read` `instructions.write`.
+A lease carries a profile: **Minimal**, **Read Only**, **Safe Dev**, **Power Dev**, **Full Workspace**, or **Custom**. Capability vocabulary: `files.read` `files.search` `git.read` `files.write` `files.delete` `commands.run` `git.commit` `git.push` `network` `skills.read` `skills.write` `instructions.read` `instructions.write` `browser.control`.
+
+`browser.control` is off by default, is in no built-in profile, and is **not** implied by `network`: driving a browser reaches the user's logged-in sessions, which network access alone does not.
 
 Tool visibility ≠ authorization: every operation is re-checked against the active lease.
 
@@ -52,6 +54,36 @@ Remembered scopes: run once · this session · always this workspace · always a
 **Platform caveat — Windows hosts using WSL bash.** Spawning WSL `bash` from Windows rewrites the command string before bash parses it: a bare `$NAME` is substituted (empty when unset) even inside single quotes, while `\$NAME` survives. Aevra passes argv to child processes unmodified, so this is a platform interop artifact rather than an Aevra defect — but the consequence belongs here, because on that platform the string rendered in the approval preview is not necessarily the string bash executes. Scripts read from a file are unaffected and are the reliable form.
 
 **What the approver sees is what runs.** Previews are stripped of Unicode control and format characters — ANSI escapes, zero-width spaces, and bidi overrides — so text cannot render differently from how it will execute. Text that executes verbatim gets a 4000-character preview budget, and any remaining truncation is reported explicitly via `truncated` and `previewFullLength` rather than hidden behind an ellipsis.
+
+## Browser control
+
+Behind `browser.control`, the `browser_*` tools drive a real browser. Risk is
+decided by the origin the operation lands on, not by the tool name: reads on a
+normal origin are LOW, input is MEDIUM, anything on a sensitive origin (banking,
+mail, cloud consoles, identity providers, or any page carrying a password field)
+is HIGH and takes a ticket, and any operation that **sends the browser
+somewhere** is treated as a navigation - including `browser_tabs {action:'open'}`.
+
+Four refusals are structural rather than policy, and no approval overrides them:
+
+- **No page-script evaluation.** There is no `browser_evaluate` on any transport;
+  a source test enforces its absence. Every action is a typed operation.
+- **No typing into credential fields.** Password, one-time-code, and payment
+  fields are refused in the page and again in the Worker.
+- **No privileged surfaces.** `chrome://`, `chrome-extension://`, `devtools://`,
+  `file://`, `view-source:`, and Aevra's own Admin UI are refused outright, never
+  ticketed - otherwise an agent could re-permission itself through the UI it is
+  driving.
+- **No navigation carrying secret-shaped data.** Navigate URLs are DLP-scanned
+  across query, fragment, and path.
+
+Screenshots of sensitive origins are refused because pixels cannot be redacted.
+Page text, snapshots, and logs return under the same untrusted-content marker as
+file reads: a page instructing the agent is data, not a command.
+
+Pairing mints a MAC'd token the Worker verifies offline; the Worker pins the
+extension's origin. **Disconnect all browsers** bumps a revocation epoch that
+invalidates every issued token and drops live sockets immediately.
 
 ## Prompt-injection posture
 

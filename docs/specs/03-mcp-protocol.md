@@ -1,6 +1,6 @@
 # 03 — MCP Protocol
 
-**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.0.4`
+**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.0.5`
 
 ## Transport
 
@@ -10,25 +10,27 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 
 ## Session lifecycle
 
-1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.0.4"}`.
+1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.0.5"}`.
 2. Every subsequent `POST` carries that header; `DELETE` disconnects. The session's admission identity (actor + subject + durable OAuth connection when present) must match on every call.
 3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
 4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
 
-## Tool vocabulary (41 discoverable tools)
+## Tool vocabulary (60 discoverable tools)
 
-| Group      | Tools                                                                                                          |
-| ---------- | -------------------------------------------------------------------------------------------------------------- |
-| Status     | `aevra_status` (reports session, leases, capabilities, and `execution.system` host capability snapshot)        |
-| Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                        |
-| Files      | `file_list` `file_read_many` `file_search` `search` `file_write_many` `file_move` `file_delete`                |
-| Command    | `command_run_many` `shell_run`                                                                                 |
-| Git        | `git_status` `git_add` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                               |
-| Processes  | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart` |
-| Operations | `operation_get` `operation_list`                                                                               |
-| Changes    | `change_begin` `change_status` `change_commit` `change_rollback`                                               |
-| Approvals  | `approval_status` `approval_wait` `approval_cancel`                                                            |
-| Skills     | `skills_list` `skill_read` `skill_write` `instructions_read` `instructions_write`                              |
+| Group      | Tools                                                                                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | `aevra_status` (reports session, leases, capabilities, and `execution.system` host capability snapshot)                                                                      |
+| Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                                                                                      |
+| Files      | `file_list` `file_read_many` `file_search` `search` `file_write_many` `file_move` `file_delete`                                                                              |
+| Command    | `command_run_many` `shell_run`                                                                                                                                               |
+| Git        | `git_status` `git_add` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                                                                                             |
+| Processes  | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart`                                                               |
+| Operations | `operation_get` `operation_list`                                                                                                                                             |
+| Changes    | `change_begin` `change_status` `change_commit` `change_rollback`                                                                                                             |
+| Approvals  | `approval_status` `approval_wait` `approval_cancel`                                                                                                                          |
+| Skills     | `skills_list` `skill_read` `skill_write` `instructions_read` `instructions_write`                                                                                            |
+| Browser    | `browser_connect` `browser_status` `browser_disconnect` `browser_tabs` `browser_navigate` `browser_snapshot` `browser_read` `browser_act_many` `browser_logs`                |
+| Desktop    | `desktop_connect` `desktop_status` `desktop_disconnect` `desktop_windows` `desktop_describe` `desktop_capture` `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` |
 
 The public MCP discovery surface exposes batch tools as the normal interface for file reads, file mutations, and bounded commands, including single-item operations:
 
@@ -52,6 +54,68 @@ Use `command_run_many` for one or more commands only when each command is expect
 
 `process_wait` returning `state:"running"` is not a timeout error; the client may call it again. Native MCP Tasks can be added later behind negotiated client support, but Aevra's compatibility workflow does not depend on experimental task support.
 
+### Browser pattern
+
+`browser_connect {transport:'extension'|'cdp', cdpPort?}` attaches one session
+per Worker; `browser_status` answers even when nothing is attached, which is when
+a caller most needs to ask. `browser_snapshot` returns an accessibility tree of
+`ref_<version>_<index>` handles, or, in `mode:'vision'`, a screenshot plus
+labelled boxes and the `devicePixelRatio` those boxes and any `{x, y}` action
+coordinates are expressed in. Each snapshot takes the next version, so a ref from
+an older one is refused as `BROWSER_REF_STALE` rather than silently rebound to a
+different element. `browser_act_many` runs an ordered batch, and page operations
+are serialized per session so two batches cannot interleave on one tab.
+
+### Desktop pattern
+
+`desktop_connect` starts a local helper process and returns four independent
+capability booleans - `capture`, `tree`, `attribution`, `input` - so a model
+learns once what the host can do instead of discovering it through failures;
+`desktop_status` answers even when nothing is connected. Perception is
+tree-first: `desktop_describe` returns one window's accessibility tree as
+`ref_<generation>_<index>` handles and `desktop_capture` returns pixels only
+when asked. A ref from an earlier describe, or from before a helper restart,
+is refused as `DESKTOP_REF_STALE` rather than rebound to whatever now sits at
+that index. The four input tools map to one worker operation, and each action
+returns a delta (`focusChanged`, `newWindow`, `subtreeChanged`) so the caller
+need not re-read the screen after every step.
+
+Reads and input fail differently, deliberately. Capture and describe are
+always permitted. Input is evaluated against the focused window's process
+identity by `evaluateWindowGate`, and a window with no readable executable is
+`unattributable` and refused unless the policy opts in with
+`unattributedInput: 'allow'`. Input into a more privileged window is refused
+by Windows itself (UIPI) and surfaces as `DESKTOP_INPUT_REFUSED`, never as
+success. Typed text never reaches the audit log or an approval row - only its
+length - and a screenshot is audited by content hash, never stored.
+
+Desktop error codes: `DESKTOP_NOT_CONNECTED` - `DESKTOP_HELPER` -
+`DESKTOP_HELPER_NOT_INSTALLED` - `DESKTOP_DRIVER_DIED` - `DESKTOP_REF_STALE` -
+`DESKTOP_INPUT_REFUSED` - `DESKTOP_TIMEOUT`
+
+Windows only today: the helper exists for no other platform, so
+`desktop_connect` elsewhere reports `DESKTOP_HELPER_NOT_INSTALLED`.
+Browser error codes: `BROWSER_NOT_CONNECTED` · `BROWSER_UNAVAILABLE` ·
+`BROWSER_REF_STALE` · `BROWSER_CREDENTIAL_FIELD_REFUSED` ·
+`BROWSER_ORIGIN_BLOCKED` · `BROWSER_TIMEOUT`
+
+### MCP upstream pattern
+
+Operators register HTTP, SSE, or stdio downstream MCP servers through the Admin
+UI or `aevra mcp`. Credentials are referenced by secret id and are resolved
+only in the Worker connection path; they never appear in catalogs, status, or
+tool results. Each server is catalogued before it is stored, and its tools,
+prompts, and resources are republished under a validated namespace such as
+`github__tool`, `github__prompt`, or `mcp+github://`.
+
+The configured upstream risk tier applies to every projected tool. Downstream
+`readOnlyHint` and `destructiveHint` values are advisory and cannot lower that
+tier. Temporary outages remain visible as degraded. A changed catalog enters
+Needs review and stops serving until the operator acknowledges the diff. A
+disconnect just before a call fails rather than replaying it; reconnect must
+validate the catalog first. These dynamic upstream entries are additional to
+the 60 built-in tools listed above.
+
 ## Error codes
 
 `CAPABILITY_REQUIRED` · `SESSION_WORKSPACE_REQUIRED` · `WORKSPACE_ESCAPE` · `WRITE_CONFLICT` · `MERGE_CONFLICT` · `APPROVAL_PENDING` · `APPROVAL_DENIED` · `APPROVAL_TIMEOUT` · `APPROVAL_CONTEXT_CHANGED` · `EXECUTOR_UNAVAILABLE` · `RECOVERY_REQUIRED` · `EXECUTION_OUTCOME_UNKNOWN` · `INVALID_REQUEST` · `UNAUTHORIZED` · `NOT_FOUND` · `VAULT_LOCKED` · `SKILL_NOT_FOUND` · `SKILL_PATH_ESCAPE` · `SKILL_FILE_TOO_LARGE`
@@ -60,6 +124,6 @@ HTTP-level: `401` admission failure · `405` bad method · `503` safe mode · `5
 
 **Boundaries:** admission mechanics (`02`, `04`); what each tool _does_ (`06`, manual).
 
-**Related:** [`04-connectors`](04-connectors.md) · [`05-skills-instructions`](05-skills-instructions.md)
+**Related:** [`04-connectors`](04-connectors.md) · [`05-skills-instructions`](05-skills-instructions.md) · [`06-workspaces-execution`](06-workspaces-execution.md)
 
 **Next →** [`04-connectors`](04-connectors.md)
