@@ -28,9 +28,11 @@ test('a real Chromium completes a multi-step task through the CDP driver', async
   const sitePort = (site.address() as { port: number }).port;
 
   const profile = mkdtempSync(path.join(os.tmpdir(), 'aevra-e2e-'));
+  const linuxArgs = process.platform === 'linux' ? ['--no-sandbox', '--disable-dev-shm-usage'] : [];
   const child = spawn(
     chromium.executablePath(),
     [
+      ...linuxArgs,
       '--headless=new',
       '--remote-debugging-port=0',
       `--user-data-dir=${profile}`,

@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { after } from 'node:test';
+import os from 'node:os';
+import path from 'node:path';
 import { chromium } from '@playwright/test';
 import { runDriverConformance } from './conformance.js';
 import { CdpDriver } from '../src/cdp-driver.js';
@@ -15,7 +18,8 @@ const PAGE = `<!doctype html><title>Invoices</title><body>
 let server: Server | undefined;
 let browser: ChildProcess | undefined;
 let startUrl = '';
-const port = 47921;
+let port = 0;
+let profile = '';
 
 async function ensureFixtures(): Promise<void> {
   if (startUrl) return;
@@ -26,21 +30,53 @@ async function ensureFixtures(): Promise<void> {
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   startUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}/`;
+  profile = mkdtempSync(path.join(os.tmpdir(), 'aevra-cdp-'));
+  const linuxArgs = process.platform === 'linux' ? ['--no-sandbox', '--disable-dev-shm-usage'] : [];
   browser = spawn(
     chromium.executablePath(),
-    [`--remote-debugging-port=${port}`, '--headless=new', '--no-first-run', 'about:blank'],
-    { stdio: 'ignore' },
+    [
+      ...linuxArgs,
+      '--remote-debugging-port=0',
+      `--user-data-dir=${profile}`,
+      '--headless=new',
+      '--no-first-run',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'ignore', 'pipe'] },
   );
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  port = await new Promise<number>((resolve, reject) => {
+    let stderr = '';
+    const timer = setTimeout(
+      () => reject(new Error('Chromium did not report a debug port')),
+      20_000,
+    );
+    browser!.stderr!.on('data', (chunk) => {
+      const text = String(chunk);
+      stderr = `${stderr}${text}`.slice(-2_000);
+      const match = /ws:\/\/127\.0\.0\.1:(\d+)\//.exec(text);
+      if (!match) return;
+      clearTimeout(timer);
+      resolve(Number(match[1]));
+    });
+    browser!.once('exit', () => {
+      clearTimeout(timer);
+      const detail = stderr.trim() ? `: ${stderr.trim()}` : '';
+      reject(new Error(`Chromium exited before reporting a debug port${detail}`));
+    });
+  });
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
-      const probe = await fetch(`http://127.0.0.1:${port}/json/version`);
-      if (probe.ok) return;
+      const listed = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as Array<{
+        type: string;
+        webSocketDebuggerUrl?: string;
+      }>;
+      if (listed.some((target) => target.type === 'page' && target.webSocketDebuggerUrl)) return;
     } catch {
-      /* not up yet */
+      /* endpoint not serving yet */
     }
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error('Chromium did not expose a CDP endpoint');
+  throw new Error('Chromium did not expose a debuggable page target');
 }
 
 runDriverConformance('CdpDriver', async () => {
@@ -70,4 +106,12 @@ after(async () => {
     server.close(() => resolve());
   });
   server = undefined;
+  if (profile) {
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+      /* the OS reclaims it */
+    }
+    profile = '';
+  }
 });
