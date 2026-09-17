@@ -157,8 +157,16 @@
     grid-template-columns: 1fr;
   }
 
+  /*
+   * Stack the head. It inherits `display: flex` with the default row
+   * direction from .panel-head, so a button given `width: 100%` here became a
+   * full-width flex item sitting beside the heading - overlapping the title and
+   * stretching to the height of its wrapped lines.
+   */
   .compact-panel-head {
+    flex-direction: column;
     align-items: stretch;
+    gap: 8px;
   }
 
   .compact-panel-head > button {
@@ -168,4 +176,31 @@
 
 .settings-grid.settings-grid-compact .execution-panel {
   grid-column: auto;
+}
+
+.browser-origin-policy fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (min-width: 901px) {
+  .browser-origin-policy fieldset {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+  }
+}
+
+.browser-origin-policy fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.browser-origin-policy fieldset input[type='radio'] {
+  width: 8px;
+  height: 8px;
+  margin: 0;
 }

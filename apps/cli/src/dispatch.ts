@@ -14,9 +14,11 @@ export interface CliDispatchHandlers {
   setup: Handler<'setup'>;
   service: Handler<'service'>;
   connectors: Handler<'connectors'>;
+  mcp: Handler<'mcp'>;
   status: Handler<'status'>;
   backup: Handler<'backup'>;
   audit: Handler<'audit'>;
+  extension: Handler<'extension'>;
   sessions: Handler<'sessions'>;
   completion: Handler<'completion'>;
 }
@@ -40,12 +42,16 @@ export async function dispatchCommand(
       return handlers.service(command);
     case 'connectors':
       return handlers.connectors(command);
+    case 'mcp':
+      return handlers.mcp(command);
     case 'status':
       return handlers.status(command);
     case 'backup':
       return handlers.backup(command);
     case 'audit':
       return handlers.audit(command);
+    case 'extension':
+      return handlers.extension(command);
     case 'sessions':
       return handlers.sessions(command);
     case 'completion':

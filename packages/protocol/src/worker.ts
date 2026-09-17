@@ -6,6 +6,20 @@ import type {
   NetworkPolicy,
   ProcessLifecycle,
 } from './index.js';
+import type {
+  BrowserActionInput,
+  BrowserLogKind,
+  BrowserReadFormat,
+  BrowserSnapshotMode,
+  BrowserTabAction,
+  BrowserTransport,
+} from './browser.js';
+import { BROWSER_OPERATION_KINDS } from './browser.js';
+import type { DesktopPolicy } from './desktop.js';
+import { DESKTOP_OPERATION_KINDS } from './desktop.js';
+import type { McpUpstreamCall } from './mcp-upstream.js';
+import { MCP_UPSTREAM_OPERATION_KINDS } from './mcp-upstream.js';
+import type { UpstreamTransportConfig } from '../../mcp-upstream/src/transport.js';
 
 export type SearchQueryMode = 'text' | 'regex' | 'files';
 export interface NativeSearchQuery {
@@ -14,14 +28,40 @@ export interface NativeSearchQuery {
   path: string;
 }
 
+/**
+ * One workspace-declared protected path, in the only shape that survives the
+ * worker IPC boundary.
+ *
+ * The core `SecurityGuard` authorizes against compiled `RegExp`s, and a RegExp
+ * does not cross JSON. The executor re-classifies every file it opens as
+ * defense in depth, and without the source glob it can apply only the built-in
+ * rules - so a manifest-declared `protectedPaths` entry stopped at the
+ * authorization layer and never reached the code that actually reads bytes.
+ * That gap was visible in `file_search`, which authorizes the search ROOT and
+ * then lets the executor decide each hit: a declared-SECRET file's contents
+ * came back anyway. Carrying the glob text on the operation lets the executor
+ * compile its own copy and apply the same rule to every candidate.
+ */
+export interface ProtectedGlob {
+  glob: string;
+  class: 'SENSITIVE' | 'SECRET';
+}
+
 export type WorkerOperation =
   | { kind: 'file.list'; path: string }
-  | { kind: 'file.read'; path: string; offset?: number; length?: number }
-  | { kind: 'file.search'; path: string; query: string }
+  | {
+      kind: 'file.read';
+      path: string;
+      offset?: number;
+      length?: number;
+      protectedGlobs?: ProtectedGlob[];
+    }
+  | { kind: 'file.search'; path: string; query: string; protectedGlobs?: ProtectedGlob[] }
   | {
       kind: 'search.multi';
       queries: NativeSearchQuery[];
       maxResultsPerQuery: number;
+      protectedGlobs?: ProtectedGlob[];
     }
   | {
       kind: 'hook.run';
@@ -63,6 +103,51 @@ export type WorkerOperation =
   | { kind: 'process.restart'; processId: string }
   | { kind: 'recovery.snapshot'; path: string; destination: string }
   | { kind: 'recovery.restore'; snapshot: string; path: string }
+  | {
+      kind: 'browser.connect';
+      transport: BrowserTransport;
+      cdpPort?: number;
+      tabId?: string;
+      epoch?: number;
+      extensionId?: string;
+    }
+  | { kind: 'browser.tabs'; action: BrowserTabAction; url?: string; tabId?: string }
+  | { kind: 'browser.navigate'; tabId?: string; url: string; waitUntil: 'load' | 'idle' }
+  | { kind: 'browser.snapshot'; tabId?: string; mode: BrowserSnapshotMode; maxNodes: number }
+  | {
+      kind: 'browser.read';
+      tabId?: string;
+      ref?: string;
+      selector?: string;
+      format: BrowserReadFormat;
+    }
+  | { kind: 'browser.act'; tabId?: string; actions: BrowserActionInput[]; stopOnError: boolean }
+  | { kind: 'browser.logs'; tabId?: string; logKind: BrowserLogKind; limit: number; since?: string }
+  | { kind: 'browser.disconnect'; epoch?: number; all?: boolean }
+  | { kind: 'browser.status'; epoch?: number }
+  | { kind: 'desktop.connect' }
+  | { kind: 'desktop.status' }
+  | { kind: 'desktop.disconnect' }
+  | { kind: 'desktop.apps' }
+  | { kind: 'desktop.windows' }
+  | { kind: 'desktop.describe'; windowId?: string; maxNodes: number; interactiveOnly: boolean }
+  | { kind: 'desktop.capture'; windowId?: string }
+  | {
+      kind: 'desktop.act';
+      op: 'click' | 'type' | 'key' | 'scroll';
+      ref?: string;
+      x?: number;
+      y?: number;
+      text?: string;
+      keys?: string;
+      deltaY?: number;
+      policy: DesktopPolicy;
+    }
+  | { kind: 'mcp.upstream.connect'; upstreamId: string; config: UpstreamTransportConfig }
+  | { kind: 'mcp.upstream.disconnect'; upstreamId?: string }
+  | { kind: 'mcp.upstream.status'; upstreamId?: string }
+  | { kind: 'mcp.upstream.catalog'; upstreamId: string }
+  | { kind: 'mcp.upstream.call'; upstreamId: string; call: McpUpstreamCall }
   | { kind: 'sandbox.inspect' };
 
 export interface OperationEnvelope {
@@ -89,7 +174,7 @@ export type WorkerResult =
       error: { code: AevraErrorCode; message: string; details?: Record<string, unknown> };
     };
 
-const kinds = new Set([
+const kinds = new Set<string>([
   'file.list',
   'file.read',
   'file.search',
@@ -118,6 +203,9 @@ const kinds = new Set([
   'recovery.snapshot',
   'recovery.restore',
   'sandbox.inspect',
+  ...BROWSER_OPERATION_KINDS,
+  ...DESKTOP_OPERATION_KINDS,
+  ...MCP_UPSTREAM_OPERATION_KINDS,
 ]);
 
 function obj(v: unknown): Record<string, unknown> {

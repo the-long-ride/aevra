@@ -98,9 +98,9 @@ export function modernDiscoverResult(baseUrl?: string) {
     resultType: 'complete',
     supportedVersions: [MODERN_PROTOCOL_VERSION],
     capabilities: {
-      tools: { listChanged: false },
-      resources: { listChanged: false },
-      prompts: { listChanged: false },
+      tools: { listChanged: true },
+      resources: { listChanged: true },
+      prompts: { listChanged: true },
     },
     instructions: aevraServerInfo(baseUrl).description,
     ttlMs: CACHE_TTL_MS,

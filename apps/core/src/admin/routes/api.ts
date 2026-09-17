@@ -2,9 +2,12 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { handleAccessRoutes } from './access-routes.js';
 import { handleActivityRoutes } from './activity-routes.js';
 import { handleApprovalPermissionRoutes } from './approval-permission-routes.js';
+import { handleBrowserRoutes } from './browser-routes.js';
 import { handleConnectionRoutes } from './connection-routes.js';
+import { handleDesktopRoutes } from './desktop-routes.js';
 import { sendAdminResponse } from './http.js';
 import { handleLocalFilesystemRoutes } from './local-filesystem-routes.js';
+import { handleMcpUpstreamRoutes } from './mcp-upstream-routes.js';
 import { handleOperationRoutes } from './operation-routes.js';
 import { handlePowerRoutes } from './power-routes.js';
 import { handleSessionConnectorRoutes } from './session-connector-routes.js';
@@ -24,6 +27,9 @@ const handlers: AdminRouteHandler[] = [
   handleSessionConnectorRoutes,
   handleOperationRoutes,
   handlePowerRoutes,
+  handleBrowserRoutes,
+  handleDesktopRoutes,
+  handleMcpUpstreamRoutes,
   handleYoloPolicyRoutes,
   handleSettingsRoutes,
   handleAccessRoutes,

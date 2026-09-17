@@ -24,6 +24,7 @@ test('permission form renders every capability as a switch including skills and 
     'network',
     'skills.write',
     'instructions.write',
+    'mcp.proxy',
   ]) {
     expect(screen.getByRole('switch', { name: capability })).toBeInTheDocument();
   }

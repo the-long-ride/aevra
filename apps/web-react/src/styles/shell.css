@@ -236,6 +236,7 @@
 
 .page {
   display: grid;
+  min-width: 0;
   gap: 16px;
   width: min(100%, 1180px);
   margin: 0 auto;

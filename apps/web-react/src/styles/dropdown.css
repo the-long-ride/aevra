@@ -41,7 +41,7 @@
 }
 
 .dropdown-menu {
-  position: absolute;
+  position: fixed;
   z-index: 100;
   top: calc(100% + 3px);
   left: 0;

@@ -115,8 +115,8 @@ test('transformed tool input is dispatched through normal authorization again', 
 
 test('service resources and prompts surface dispatch', async () => {
   const { instance } = service();
-  assert.deepEqual(instance.resourcesList('s1'), { resources: [] });
-  assert.ok(instance.promptsList().prompts.length > 0);
+  assert.deepEqual(await instance.resourcesList('s1'), { resources: [] });
+  assert.ok((await instance.promptsList()).prompts.length > 0);
   const prompt = (await instance.promptGet('s1')) as any;
   assert.ok(prompt.messages);
 });

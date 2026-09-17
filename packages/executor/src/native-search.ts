@@ -1,7 +1,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { CapabilityRoot } from '../../protocol/src/index.js';
-import type { WorkerOperation } from '../../protocol/src/worker.js';
+import type { ProtectedGlob, WorkerOperation } from '../../protocol/src/worker.js';
 import { resolveCapabilityPath } from '../../security/src/path-policy.js';
 import { runCommand } from './commands.js';
 import { fileRead } from './files.js';
@@ -269,21 +269,27 @@ function logicalCandidate(baseLogical: string, baseHost: string, candidate: stri
   return `${prefix === '/' ? '' : prefix}/${clean}`.replace(/\/+/g, '/') || '/';
 }
 
+// Every candidate a native backend proposes is re-opened through fileRead,
+// which is what applies capability roots and sensitivity policy to it. The
+// workspace's declared protected paths have to ride along to that call:
+// without them fileRead falls back to the built-in rules alone, and a
+// manifest-declared SECRET file comes back as an ordinary hit.
 async function safeHit(
   candidate: Candidate,
   query: SearchQuery,
   base: { logicalPath: string; canonicalHostPath: string },
   roots: CapabilityRoot[],
+  protectedGlobs?: ProtectedGlob[],
 ) {
   if (!candidate.path) return null;
   const logicalPath = logicalCandidate(base.logicalPath, base.canonicalHostPath, candidate.path);
   try {
     if (query.mode === 'files') {
-      await fileRead(logicalPath, roots, { offset: 0, length: 0 });
+      await fileRead(logicalPath, roots, { offset: 0, length: 0 }, protectedGlobs);
       return { path: logicalPath };
     }
     if (!candidate.line) return null;
-    const read = await fileRead(logicalPath, roots);
+    const read = await fileRead(logicalPath, roots, undefined, protectedGlobs);
     const text = String(read.content ?? '').split(/\r?\n/)[candidate.line - 1] ?? '';
     return { path: logicalPath, line: candidate.line, text: text.slice(0, 400) };
   } catch {
@@ -291,13 +297,18 @@ async function safeHit(
   }
 }
 
-async function oneSearch(query: SearchQuery, roots: CapabilityRoot[], max: number) {
+async function oneSearch(
+  query: SearchQuery,
+  roots: CapabilityRoot[],
+  max: number,
+  protectedGlobs?: ProtectedGlob[],
+) {
   const base = await resolveCapabilityPath(query.path || '/', roots, 'read');
   try {
     const native = await nativeCandidates(query, base.canonicalHostPath);
     const hits: Array<Record<string, unknown>> = [];
     for (const candidate of unique(native.candidates)) {
-      const hit = await safeHit(candidate, query, base, roots);
+      const hit = await safeHit(candidate, query, base, roots, protectedGlobs);
       if (hit) hits.push(hit);
       if (hits.length >= max) break;
     }
@@ -324,7 +335,12 @@ export async function nativeMultiSearch(
   queries: SearchOperation['queries'],
   roots: CapabilityRoot[],
   maxResultsPerQuery = 50,
+  protectedGlobs?: ProtectedGlob[],
 ) {
   const max = Math.max(1, Math.min(200, maxResultsPerQuery));
-  return { results: await Promise.all(queries.map((query) => oneSearch(query, roots, max))) };
+  return {
+    results: await Promise.all(
+      queries.map((query) => oneSearch(query, roots, max, protectedGlobs)),
+    ),
+  };
 }

@@ -1,10 +1,13 @@
 ﻿import { useCallback, useEffect, useState } from 'react';
 import { PageState } from '../../components/PageState';
+import { BrowserControlSettings } from './BrowserControlSettings';
 import { CommandPolicySettings } from './CommandPolicySettings';
+import { DesktopControlSettings } from './DesktopControlSettings';
 import { EnvironmentProfilesSettings } from './EnvironmentProfilesSettings';
 import { ExecutionSettings } from './ExecutionSettings';
 import { HooksSettings } from './HooksSettings';
 import { KeepAwakeSettings } from './KeepAwakeSettings';
+import { McpUpstreamsSettings } from './McpUpstreamsSettings';
 import { NetworkPolicySettings } from './NetworkPolicySettings';
 import { RemoteAccessSettings } from './RemoteAccessSettings';
 import { SecretReferencesSettings } from './SecretReferencesSettings';
@@ -51,6 +54,9 @@ export function SettingsPage() {
         />
         <ExecutionSettings execution={data.execution} onChanged={refresh} />
         <YoloPolicySettings mode={data.yolo.mode} onChanged={refresh} />
+        <BrowserControlSettings status={data.browser} onChanged={refresh} />
+        <DesktopControlSettings />
+        <McpUpstreamsSettings />
         <section className="panel settings-compact-panel configuration-panel">
           <div className="panel-head compact-panel-head">
             <div>

@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { DesktopControlSettings, type DesktopPolicySnapshot, type DetectedApp } from './DesktopControlSettings';
+import {
+  DesktopControlSettings,
+  type DesktopPolicySnapshot,
+  type DetectedApp,
+} from './DesktopControlSettings';
 
 const policy: DesktopPolicySnapshot = {
   mode: 'denylist',

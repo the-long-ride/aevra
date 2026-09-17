@@ -91,3 +91,36 @@ jobs:
           else
             gh release create "$TAG" --target "$RELEASE_SHA" --title "$TAG" --notes-file release-notes.md
           fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+
+      # Taken from the quality-gate run that already passed at this exact SHA
+      # rather than rebuilt here. A release must ship the artifact CI validated,
+      # not a second build of the same commit that nothing checked.
+      - name: Download the extension the quality gate built
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_SHA="$(git rev-parse HEAD)"
+          RUN_ID="$(
+            gh api \
+              --method GET \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/quality-gate.yml/runs" \
+              -f head_sha="$RELEASE_SHA" \
+              -f status=completed \
+              -f per_page=100 \
+              --jq '[.workflow_runs[] | select(.conclusion == "success" and .event == "push")] | .[0].id'
+          )"
+          echo "Taking the extension from quality-gate run $RUN_ID"
+          gh run download "$RUN_ID" --name aevra-extension --dir extension-artifact
+          test -f extension-artifact/aevra-extension.zip
+
+      # `aevra extension install` asks for exactly this asset name at the running
+      # version's tag, so the name and the tag are a contract with the CLI.
+      - name: Attach the browser extension to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            extension-artifact/aevra-extension.zip \
+            --clobber

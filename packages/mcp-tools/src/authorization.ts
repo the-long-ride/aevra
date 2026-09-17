@@ -20,11 +20,12 @@ export async function workspaceSelect(context: McpRuntimeContext, sessionId: str
     String(args.workspace ?? args.name ?? args.id ?? ''),
   );
   if (!workspace) throw new AevraToolError('NOT_FOUND', 'Workspace not found');
+  const manifest = context.deps.manifests?.summarize(workspace.hostRoot ?? null);
 
   const session = context.sessions.get(sessionId)!;
   const active = context.sessions.activeLease(sessionId);
   if (active?.workspaceId === workspace.id) {
-    return workspaceResult(workspace, active.capabilities);
+    return workspaceResult(workspace, active.capabilities, manifest);
   }
 
   const bindings = session.actor.startsWith('connector:')
@@ -43,7 +44,7 @@ export async function workspaceSelect(context: McpRuntimeContext, sessionId: str
     drainTimeoutMs,
   );
   if (admission.status === 'admitted') {
-    return workspaceResult(workspace, admission.lease.capabilities);
+    return workspaceResult(workspace, admission.lease.capabilities, manifest);
   }
   if (!context.approvals) {
     throw new AevraToolError('APPROVAL_PENDING', 'Local approval service unavailable');
@@ -86,7 +87,7 @@ export async function authorizeImmutableSecurityApproval(
   context: McpRuntimeContext,
   sessionId: string,
   capability: Capability,
-  original: { tool: string; args: any },
+  original: { tool: string; args: any; proxy?: unknown },
   family: string,
   risk: RiskTier = 'HIGH',
 ): Promise<CapabilityGate> {
@@ -140,7 +141,7 @@ export async function authorizeCapability(
   context: McpRuntimeContext,
   sessionId: string,
   capability: Capability,
-  original: { tool: string; args: any },
+  original: { tool: string; args: any; proxy?: unknown },
   permissionMatcher: string,
   risk: RiskTier,
 ): Promise<CapabilityGate> {

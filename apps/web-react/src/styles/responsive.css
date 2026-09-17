@@ -1,0 +1,38 @@
+/*
+ * Cross-cutting responsive rules.
+ *
+ * These live apart from the component sheets on purpose: each one fixes the same
+ * class of problem - a row that will not wrap, or a string that will not break -
+ * in several unrelated features at once.
+ */
+@media (max-width: 760px) {
+  /*
+   * Each of these is a flex row holding a text block and one or more actions,
+   * and none of them wrapped. Below roughly 760px the actions and the heading
+   * competed for one line; the text won and the button was squeezed to a sliver
+   * or pushed out of the panel. Let the row wrap, and let the text block shrink
+   * instead of forcing overflow.
+   */
+  .panel-head,
+  .panel-toolbar,
+  .section-heading,
+  .actions,
+  .remote-actions,
+  .modal-inline-foot {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .panel-head > div,
+  .panel-toolbar > div,
+  .section-heading > div {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .panel-head > button,
+  .panel-toolbar > button,
+  .section-heading > button {
+    flex: 0 0 auto;
+  }
+}

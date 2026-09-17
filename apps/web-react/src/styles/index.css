@@ -12,6 +12,8 @@
 @import url('./settings.css');
 @import url('./auth.css');
 @import url('./layout-tweaks.css');
+@import url('./responsive.css');
 @import url('./requests.css');
 @import url('./workspaces.css');
+@import url('./browser-control.css');
 @import url('./ui-polish.css');

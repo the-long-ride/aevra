@@ -24,7 +24,7 @@
       "paths": {
         "@aevra/admin-contracts": ["packages/admin-contracts/src/index.ts"]
       },
-      "ignoreDependencies": ["@vitest/coverage-v8", "c8", "jsdom", "vitest"]
+      "ignoreDependencies": ["@types/chrome", "@vitest/coverage-v8", "c8", "jsdom", "vitest"]
     },
     "apps/web-react": {
       "paths": {

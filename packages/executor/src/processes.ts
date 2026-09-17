@@ -10,6 +10,7 @@ import type {
 } from '../../protocol/src/index.js';
 import { redactText } from '../../security/src/dlp.js';
 import { buildChildEnvironment } from './environment.js';
+import { resolveExecutable, windowsShimCommand } from './spawn-target.js';
 
 const MAX_WAIT_MS = 30_000;
 
@@ -44,6 +45,7 @@ interface Entry {
   marker?: string;
   logPath?: string;
   resultPath?: string;
+  spawnError?: string;
 }
 
 interface PersistedProcessResult {
@@ -84,11 +86,14 @@ export class ManagedProcessRuntime {
     const secrets = Object.values(command.env);
     const redact = (value: string) => this.redact(redactText(value, secrets).text);
     const id = `proc_${randomUUID()}`;
-    const child = spawn(command.executable, command.args, {
+    const resolved = resolveExecutable(command.executable);
+    const shim = windowsShimCommand(resolved, command.args);
+    const child = spawn(shim?.executable ?? resolved, shim?.args ?? command.args, {
       cwd,
       env: buildChildEnvironment(command.env),
       shell: false,
       windowsHide: true,
+      ...(shim ? { windowsVerbatimArguments: true } : {}),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const log = new BoundedLog();
@@ -109,6 +114,7 @@ export class ManagedProcessRuntime {
       stopRequested: false,
     };
     child.once('exit', (code, signal) => this.complete(entry, code, signal));
+    this.failOnSpawnError(entry, child, log);
     this.entries.set(id, entry);
     return this.statusValue(entry);
   }
@@ -155,6 +161,7 @@ export class ManagedProcessRuntime {
       logPath,
       resultPath,
     };
+    this.failOnSpawnError(entry, child);
     this.entries.set(id, entry);
     return this.statusValue(entry);
   }
@@ -238,6 +245,30 @@ export class ManagedProcessRuntime {
         entry.child.kill('SIGTERM');
       }
     }
+  }
+
+  /**
+   * A spawn that never starts emits 'error', never 'exit'. Without this the
+   * entry kept its initial `running` state forever and `statusValue` reported
+   * `pid: 0`, so a process that was never created read back as a healthy
+   * running one - `process_logs` stayed empty and `process_wait` never
+   * returned. Record the failure instead, and put the reason in the log so the
+   * caller can see it.
+   */
+  private failOnSpawnError(entry: Entry, child: ChildProcess, log?: BoundedLog) {
+    child.once('error', (error: NodeJS.ErrnoException) => {
+      if (entry.state !== 'running') return;
+      const reason =
+        error.code === 'ENOENT'
+          ? `executable not found: ${entry.command.executable}`
+          : (error.message ?? 'process failed to start');
+      log?.append(reason);
+      entry.state = 'failed';
+      entry.exitCode = null;
+      entry.signal = null;
+      entry.finishedAt = new Date().toISOString();
+      entry.spawnError = reason;
+    });
   }
 
   private complete(entry: Entry, code: number | null, signal: string | null) {

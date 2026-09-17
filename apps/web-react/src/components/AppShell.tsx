@@ -3,6 +3,7 @@ import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { useMcpActivityEntries } from '../hooks/use-mcp-activity';
+import { BrowserSuggestion } from '../features/browser/BrowserSuggestion';
 import type { Theme } from '../hooks/theme-state';
 
 export function isVersionOutdated(current?: string, latest?: string): boolean {
@@ -179,6 +180,7 @@ export function AppShell({
           >
             [{theme}]
           </button>
+          <BrowserSuggestion />
           <button
             type="button"
             id="open-requests"

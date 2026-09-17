@@ -42,10 +42,17 @@ function AuthenticatedApp({ theme, onToggleTheme }: { theme: Theme; onToggleThem
   }, []);
 
   const handleModalActioned = useCallback(async () => {
-    if (drawerRefreshRef.current) {
-      await drawerRefreshRef.current();
-    }
+    // Close first, refresh second. The decision has already been recorded by the
+    // time this runs, so the modal is showing a question that is no longer open.
+    // Awaiting the refresh before closing meant any failure inside loadRequests -
+    // it fans out to three endpoints - skipped the close entirely and stranded the
+    // dialog on screen until the page was reloaded.
     setApprovalModalData(null);
+    try {
+      await drawerRefreshRef.current?.();
+    } catch {
+      // The drawer polls every 2.2s and will pick the new state up on its own.
+    }
   }, []);
 
   const handleModalDismiss = useCallback(() => {

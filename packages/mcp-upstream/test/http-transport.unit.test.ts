@@ -194,10 +194,14 @@ test('HTTP preserves multiline JSON data in normal CRLF events', async () => {
 
 test('closing HTTP aborts an in-flight request and rejects it', async () => {
   const originalFetch = globalThis.fetch;
-  let resolveFetch: ((response: Response) => void) | null = null;
+  let resolveFetch: ((response: Response) => void) | undefined;
   let signal: AbortSignal | undefined;
+  const releaseFetch = (response: Response) => {
+    const resolve = resolveFetch;
+    if (resolve) resolve(response);
+  };
   globalThis.fetch = (async (_input, init) => {
-    signal = init?.signal;
+    signal = init?.signal ?? undefined;
     return new Promise<Response>((resolve) => {
       resolveFetch = resolve;
     });
@@ -217,7 +221,7 @@ test('closing HTTP aborts an in-flight request and rejects it', async () => {
       (error: UpstreamError) => error.code === 'UPSTREAM_DIED',
     );
     assert.equal(signal?.aborted, true);
-    resolveFetch?.(new Response('{"jsonrpc":"2.0","id":1,"result":{}}'));
+    releaseFetch(new Response('{"jsonrpc":"2.0","id":1,"result":{}}'));
     await pending.catch(() => {});
   } finally {
     globalThis.fetch = originalFetch;

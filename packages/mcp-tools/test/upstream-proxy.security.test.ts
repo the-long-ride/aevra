@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resumeApproval } from '../src/approval-resume.js';
-import { callUpstreamTool, getUpstreamPrompt, readUpstreamResource } from '../src/upstream-proxy.js';
+import {
+  callUpstreamTool,
+  getUpstreamPrompt,
+  readUpstreamResource,
+} from '../src/upstream-proxy.js';
 import { upstreamService } from './upstream-context.js';
 
 const SECRET_SHAPED = createHash('sha256').update('mcp-upstream-dlp-fixture').digest('hex');

@@ -15,6 +15,7 @@
     ".coverage-dist",
     "coverage",
     "apps/web-react",
-    "tests/ui-parity"
+    "tests/ui-parity",
+    "apps/extension"
   ]
 }

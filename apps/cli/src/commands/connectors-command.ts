@@ -16,6 +16,31 @@ export interface ConnectorsCommandDependencies<Config> {
   formatError(error: unknown): string;
 }
 
+/**
+ * The endpoint a connector token is actually used against, read from the
+ * provider-neutral exposure status rather than from Cloudflare's.
+ *
+ * This used to read `/api/cloudflare/status`, which meant a deployment on
+ * ngrok, a direct bind, or an external fronting proxy printed no host at all
+ * and told the operator to "configure a Cloudflare hostname" they did not
+ * need. `publicUrl` is the same value `aevra status` reports and the same one
+ * the Web UI shows, so all three now agree.
+ */
+async function mcpEndpoint<Config>(
+  config: Config,
+  dependencies: ConnectorsCommandDependencies<Config>,
+): Promise<string> {
+  try {
+    const response = await dependencies.api(config, '/api/exposure/status');
+    if (!response.ok) return '';
+    const value = (await response.json()) as { publicUrl?: unknown };
+    const publicUrl = typeof value.publicUrl === 'string' ? value.publicUrl : '';
+    return publicUrl ? `${publicUrl.replace(/\/+$/, '')}/mcp` : '';
+  } catch {
+    return '';
+  }
+}
+
 export async function runConnectorsCommand<Config>(
   config: Config,
   command: ConnectorsCommand,
@@ -62,21 +87,15 @@ export async function runConnectorsCommand<Config>(
         token: string;
       };
 
-      let host = '';
-      try {
-        const cloudflare = await dependencies.api(config, '/api/cloudflare/status');
-        const value = (await cloudflare.json()) as { hostname?: unknown };
-        host = typeof value.hostname === 'string' ? value.hostname : '';
-      } catch {
-        host = '';
-      }
+      const endpoint = await mcpEndpoint(config, dependencies);
 
       dependencies.log(`[aevra] Connector created: ${created.name} (${created.id})`);
       dependencies.log(
-        host
-          ? `[aevra] URL: https://${host}/mcp/${created.token}`
-          : `[aevra] Token path: /mcp/${created.token} (configure a Cloudflare hostname for a full URL)`,
+        endpoint
+          ? `[aevra] URL: ${endpoint}`
+          : '[aevra] URL: configure Remote Access to get a reachable endpoint (aevra setup)',
       );
+      dependencies.log(`[aevra] Header: Authorization: Bearer ${created.token}`);
       dependencies.log('[aevra] Copy it now — the token is shown only once.');
       return 0;
     }

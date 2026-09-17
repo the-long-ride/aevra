@@ -20,6 +20,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // The management and settings specs drive whole pages through many
+    // mocked requests. They sit near 3s uninstrumented, and v8 coverage
+    // roughly doubles that, so vitest's 5s default trips them.
+    testTimeout: 20_000,
     coverage: {
       provider: 'v8',
       thresholds: {

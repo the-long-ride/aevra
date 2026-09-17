@@ -31,6 +31,7 @@ function httpRecord(overrides: Partial<UpstreamRecord> = {}): UpstreamRecord {
     createdAt: 't0',
     updatedAt: 't0',
     ...overrides,
+    pendingCatalog: overrides.pendingCatalog ?? null,
   };
 }
 
@@ -49,9 +50,7 @@ test('any header name works', async () => {
     vault({ sr_1: TOKEN }),
   );
   assert.equal(resolved.config.transport, 'sse');
-  assert.deepEqual(resolved.config.transport === 'stdio' ? null : resolved.config.headers, {
-    'X-API-Key': TOKEN,
-  });
+  assert.deepEqual(resolved.config.headers, { 'X-API-Key': TOKEN });
 });
 test('a stdio credential resolves into the child environment', async () => {
   const resolved = await resolveUpstreamTransport(

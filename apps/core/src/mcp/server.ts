@@ -286,9 +286,9 @@ export class McpIngressServer {
       result: {
         protocolVersion: legacyProtocol(body.params?.protocolVersion),
         capabilities: {
-          tools: { listChanged: false },
-          resources: { listChanged: false },
-          prompts: { listChanged: false },
+          tools: { listChanged: true },
+          resources: { listChanged: true },
+          prompts: { listChanged: true },
         },
         serverInfo: aevraServerInfo(this.options.oauth?.issuer),
       },

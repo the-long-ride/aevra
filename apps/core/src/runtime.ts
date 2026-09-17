@@ -1,12 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CoreConfig } from './config.js';
 import { createRuntimeRepositories } from './runtime-repositories.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { SkillsService } from './skills/skills-service.js';
 import { SecurityGuard } from './security/security-guard.js';
+import { ManifestService } from './workspaces/manifest-service.js';
 import { IpRateLimiter } from './mcp/rate-limit.js';
 import { createConnectorAdmission } from './mcp/connector-admission.js';
 import { McpActivityLog } from './mcp/activity-log.js';
@@ -34,22 +34,24 @@ import { ProcessService } from './processes/process-service.js';
 import { McpToolService } from '../../../packages/mcp-tools/src/service.js';
 import {
   closeRuntimeResource,
+  createBrowserOriginPolicyService,
+  createBrowserPairingService,
+  createDesktopPolicyService,
+  createMcpUpstreams,
+  createRuntimeDataServices,
   createRuntimeWorkerManager,
   resolveRuntimeSystemCapabilities,
   resolveRuntimeTls,
   runtimeWorkerGateway,
 } from './runtime-support.js';
 import { SessionSkillAccessGate } from '../../../packages/mcp-tools/src/skill-access-gate.js';
-import { BackupService } from './backup/backup-service.js';
-import { ConfigExportService } from './config/export-service.js';
-import { EncryptedVault } from '../../../packages/secrets/src/vault.js';
-import { CommandSecretStore } from '../../../packages/secrets/src/platform.js';
-import { EnvironmentService } from './secrets/environment-service.js';
 import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
 import { RuntimeExposureWiring } from './exposure/runtime-wiring.js';
 import type { KeepAwakeService } from './power/keep-awake-service.js';
 import { createRuntimeKeepAwakeService } from './power/runtime-keep-awake.js';
 export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
+// Same values as CommandEffect, kept as a runtime array purely to answer `.includes(value)` for an operator override read out of settings.
+const EFFECTS = ['READ_ONLY', 'BUILD_OUTPUT', 'SOURCE_MUTATION', 'REPOSITORY_STATE', 'UNKNOWN'];
 export async function createCoreRuntime(
   config: CoreConfig,
   deps: RuntimeDependencies = {},
@@ -140,7 +142,7 @@ export async function createCoreRuntime(
           audit = new AuditService(auditRepo),
           permissions = new PermissionEngine(permissionRepo),
           reads = new ReadVersionCache(),
-          security = new SecurityGuard(sessions, workspaces);
+          security = new SecurityGuard(sessions, workspaces, new ManifestService(workspaces));
         operationRepo.setConnectionResolver(
           (sessionId) => sessions.connectionIdentity(sessionId)?.connectionId,
         );
@@ -175,15 +177,7 @@ export async function createCoreRuntime(
         operations.setCommandEffectResolver((family, defaultEffect) => {
           const overrides = settings.get<Record<string, string>>('command.family.overrides', {});
           const value = overrides[family];
-          return [
-            'READ_ONLY',
-            'BUILD_OUTPUT',
-            'SOURCE_MUTATION',
-            'REPOSITORY_STATE',
-            'UNKNOWN',
-          ].includes(value)
-            ? (value as any)
-            : defaultEffect;
+          return EFFECTS.includes(value) ? (value as any) : defaultEffect;
         });
         operations.setExecutionSettingsResolver(() =>
           settings.get('execution.settings', { sandboxBackend: 'auto', cachePolicy: 'workspace' }),
@@ -207,7 +201,22 @@ export async function createCoreRuntime(
             sessions.grantConnectionWorkspace(ticket.sessionId, ticket.workspaceId, 'read-only');
         });
         const metrics = new MetricsService();
+        const browserPairing = createBrowserPairingService(settings, wm, workerGateway);
+        // Every route Aevra's own control plane answers on, so the browser
+        // policy can refuse all of them. Read through the outer `let` on each
+        // call: exposure wiring does not exist yet at this point, and its
+        // public URL changes when the operator reconfigures remote access.
+        const browserPolicy = createBrowserOriginPolicyService(settings, config, () => [
+          exposureWiring?.gatewayUrl(),
+          exposureWiring?.publicUrl(),
+          exposureWiring?.adminPublicUrl(),
+          ...(exposureWiring?.trustedAdminOrigins() ?? []),
+        ]);
+        const desktopPolicy = createDesktopPolicyService(settings);
         const activity = new McpActivityLog();
+        const dataServices = await createRuntimeDataServices(config, db);
+        const { vault, environment, databaseAdmin } = dataServices;
+        const mcpUpstreams = createMcpUpstreams(db, workerGateway, dataServices.secretStore);
         const tools = new McpToolService(sessions, workspaces, workerGateway, reads, approvals, {
           operations,
           resumableOperations,
@@ -222,6 +231,9 @@ export async function createCoreRuntime(
           metrics,
           settings,
           systemCapabilities,
+          browserPolicy,
+          manifests: new ManifestService(workspaces),
+          upstreams: mcpUpstreams,
         });
         const remoteTools = new SessionSkillAccessGate(tools, sessions, approvals);
         const bootstrap = new AdminBootstrapService(raw);
@@ -238,18 +250,7 @@ export async function createCoreRuntime(
           gatewayTrustSecret,
         );
         const localTls = tls.serverOptions;
-        const vault = new EncryptedVault(path.join(config.stateDir, 'secrets.vault')),
-          platformSecrets = new CommandSecretStore(process.platform),
-          secretStore = (await platformSecrets.probe()) ? platformSecrets : vault,
-          environment = new EnvironmentService(raw, secretStore),
-          configExport = new ConfigExportService(raw),
-          backup = new BackupService(db, path.join(config.stateDir, 'backups'));
         const staticDir = fileURLToPath(new URL('../../web', import.meta.url));
-        const databaseAdmin = {
-          configExport: (portable: boolean) => configExport.export(portable),
-          configPreview: (v: any) => configExport.previewImport(v),
-          backup: () => backup.create('daily'),
-        };
         const oauth = exposureWiring.oauth;
         admin = new AdminServer(
           config.adminHost,
@@ -300,6 +301,10 @@ export async function createCoreRuntime(
               metrics,
               activity,
               power: keepAwake,
+              browser: browserPairing,
+              browserPolicy,
+              desktopPolicy,
+              mcpUpstreams,
               systemCapabilities: () => systemCapabilities,
               mcpDiagnostics: () => mcp?.diagnosticsSnapshot() ?? null,
               safeMode: () => safeMode,

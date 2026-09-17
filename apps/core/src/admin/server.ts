@@ -195,12 +195,26 @@ export class AdminServer {
       if (handled) return;
     }
 
-    if (url.pathname.startsWith('/api/') && !this.isAdmin(req)) {
+    // The extension pairs before any admin session exists, so this one route
+    // is reachable unauthenticated. It stays safe because it is loopback-only
+    // and still requires the single-use pairing code shown in the web UI.
+    const extensionPairing =
+      url.pathname === '/api/browser/pair' &&
+      req.method === 'POST' &&
+      isLoopback(req.socket.remoteAddress);
+
+    if (url.pathname.startsWith('/api/') && !extensionPairing && !this.isAdmin(req)) {
       json(res, 401, { error: 'admin session required' });
       return;
     }
 
-    if (url.pathname.startsWith('/api/') && !sameOrigin(req, url, trustedOrigins)) {
+    // An MV3 service worker sends Origin: chrome-extension://<id>, which can
+    // never be same-origin; the loopback check above is the wall for it.
+    if (
+      url.pathname.startsWith('/api/') &&
+      !extensionPairing &&
+      !sameOrigin(req, url, trustedOrigins)
+    ) {
       json(res, 403, {
         error: {
           code: 'CSRF_REJECTED',

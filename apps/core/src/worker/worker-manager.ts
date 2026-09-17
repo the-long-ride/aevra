@@ -7,6 +7,7 @@ import { SocketWorkerClient, type WorkerClient } from '../../../../packages/ipc/
 import { HmacEnvelopeSigner } from '../../../../packages/ipc/src/envelope.js';
 import type { CapabilityRoot, ExecutionMode } from '../../../../packages/protocol/src/index.js';
 import type { WorkerOperation, WorkerResult } from '../../../../packages/protocol/src/worker.js';
+import { deriveBrowserTokenKey } from '../../../../packages/security/src/browser-token-key.js';
 
 export interface AuthorizedWorkerInput {
   sessionId: string;
@@ -39,6 +40,7 @@ export class WorkerManager {
   private child?: ChildProcess;
   private client?: SocketWorkerClient;
   private signer?: HmacEnvelopeSigner;
+  private secret?: Buffer;
   readonly daemonInstanceId = randomUUID();
   constructor(
     private endpoint: string,
@@ -49,7 +51,7 @@ export class WorkerManager {
     if (this.client) return this.client;
     if (process.platform !== 'win32' && existsSync(this.endpoint))
       rmSync(this.endpoint, { force: true });
-    const secret = randomBytes(32);
+    const secret = (this.secret = randomBytes(32));
     this.signer = new HmacEnvelopeSigner(secret, this.daemonInstanceId);
     const entry = this.options.entryPath ?? defaultWorkerEntry();
     if (!existsSync(entry))
@@ -123,6 +125,18 @@ export class WorkerManager {
       `Execution Worker did not become ready: ${reason}${workerDiagnostics(stderr, stdout)}`,
     );
   }
+  /**
+   * Only the derived browser-token key ever leaves this class. The raw secret
+   * signs operation envelopes and must not be reachable from a route handler.
+   */
+  browserTokenKey(): Buffer {
+    if (!this.secret) {
+      throw Object.assign(new Error('Execution Worker unavailable'), {
+        code: 'EXECUTOR_UNAVAILABLE',
+      });
+    }
+    return deriveBrowserTokenKey(this.secret);
+  }
   async execute(input: AuthorizedWorkerInput): Promise<WorkerResult> {
     if (!this.client || !this.signer)
       throw Object.assign(new Error('Execution Worker unavailable'), {
@@ -161,6 +175,7 @@ export class WorkerManager {
     await this.client?.close();
     this.client = undefined;
     this.signer = undefined;
+    this.secret = undefined;
     await this.stopChild();
     if (process.platform !== 'win32') rmSync(this.endpoint, { force: true });
   }
@@ -168,6 +183,7 @@ export class WorkerManager {
     await this.client?.close();
     this.client = undefined;
     this.signer = undefined;
+    this.secret = undefined;
     await this.stopChild();
     if (process.platform !== 'win32') rmSync(this.endpoint, { force: true });
   }

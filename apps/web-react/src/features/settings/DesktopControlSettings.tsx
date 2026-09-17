@@ -86,7 +86,11 @@ export function DesktopControlSettings({
 
   if (!policy) {
     return (
-      <section className="panel settings-compact-panel desktop-control-panel wide" role="region" aria-label="Desktop control">
+      <section
+        className="panel settings-compact-panel desktop-control-panel wide"
+        role="region"
+        aria-label="Desktop control"
+      >
         <div className="compact-settings-copy">
           <h3>Desktop control</h3>
         </div>
@@ -111,9 +115,7 @@ export function DesktopControlSettings({
   const toggleApp = (exeBasename: string, checked: boolean) => {
     const applications = checked
       ? [...policy.applications, exeBasename]
-      : policy.applications.filter(
-          (entry) => entry.toLowerCase() !== exeBasename.toLowerCase(),
-        );
+      : policy.applications.filter((entry) => entry.toLowerCase() !== exeBasename.toLowerCase());
     void submit({ applications });
   };
 
@@ -130,7 +132,11 @@ export function DesktopControlSettings({
   );
 
   return (
-    <section className="panel settings-compact-panel desktop-control-panel wide" role="region" aria-label="Desktop control">
+    <section
+      className="panel settings-compact-panel desktop-control-panel wide"
+      role="region"
+      aria-label="Desktop control"
+    >
       <div className="compact-settings-copy">
         <h3>Desktop control</h3>
         <span>Restrict which apps computer use can see and act on.</span>
@@ -146,7 +152,8 @@ export function DesktopControlSettings({
             disabled={busy}
             onChange={() => void submit({ mode: 'denylist' })}
           />
-          Allow all apps <span className="section-note">Only a few sensitive apps stay blocked.</span>
+          Allow all apps{' '}
+          <span className="section-note">Only a few sensitive apps stay blocked.</span>
         </label>
         <label>
           <input
@@ -159,8 +166,8 @@ export function DesktopControlSettings({
           />
           Only these apps{' '}
           <span className="section-note">
-            Computer use is refused for anything not checked below. Switching mode clears the
-            list, because an allow list and a block list cannot mean the same thing.
+            Computer use is refused for anything not checked below. Switching mode clears the list,
+            because an allow list and a block list cannot mean the same thing.
           </span>
         </label>
       </fieldset>

@@ -57,7 +57,7 @@ test('stderr is captured for operator diagnostics', async () => {
 });
 
 test('a hung call rejects on its deadline instead of wedging the queue', async () => {
-  const stdio = transport('hang', 50);
+  const stdio = transport('hang', 500);
   try {
     await stdio.connect();
     await assert.rejects(stdio.request('tools/list'), (error: UpstreamError) => {

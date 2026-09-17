@@ -16,7 +16,34 @@ export function createIpcServer(
     let ready = false;
     let challengeB = '';
     const decoder = new FrameDecoder();
-    socket.on('data', async (chunk) => {
+    const write = (frame: Record<string, unknown>) => {
+      if (!socket.destroyed) socket.write(encodeFrame(frame));
+    };
+    /**
+     * Answers one request without blocking the frames behind it.
+     *
+     * The decode loop used to `await` each handler inline, so a single long
+     * `execute` - a build, a test run - stalled every other frame on the
+     * connection, health probes included, for as long as it ran.
+     */
+    const dispatch = (f: any) => {
+      if (f.type === 'health') {
+        void handler
+          .health()
+          .then((health) => write({ requestId: f.requestId, health }))
+          .catch((error) => write({ requestId: f.requestId, error: String(error) }));
+        return;
+      }
+      if (f.type === 'execute') {
+        void handler
+          .execute(f.envelope)
+          .then((result) => write({ requestId: f.requestId, result }))
+          .catch((error) => write({ requestId: f.requestId, error: String(error) }));
+        return;
+      }
+      write({ requestId: f.requestId, error: 'unknown request' });
+    };
+    socket.on('data', (chunk) => {
       try {
         for (const f0 of decoder.push(chunk)) {
           const f = f0 as any;
@@ -27,15 +54,13 @@ export function createIpcServer(
               typeof f.challengeA === 'string'
             ) {
               challengeB = randomBytes(16).toString('hex');
-              socket.write(
-                encodeFrame({
-                  type: 'helloAck',
-                  daemonInstanceId,
-                  challengeA: f.challengeA,
-                  challengeB,
-                  mac: handshakeMac(secret, daemonInstanceId, f.challengeA, challengeB),
-                }),
-              );
+              write({
+                type: 'helloAck',
+                daemonInstanceId,
+                challengeA: f.challengeA,
+                challengeB,
+                mac: handshakeMac(secret, daemonInstanceId, f.challengeA, challengeB),
+              });
               continue;
             }
             if (
@@ -49,13 +74,7 @@ export function createIpcServer(
             socket.destroy();
             return;
           }
-          if (f.type === 'health')
-            socket.write(encodeFrame({ requestId: f.requestId, health: await handler.health() }));
-          else if (f.type === 'execute')
-            socket.write(
-              encodeFrame({ requestId: f.requestId, result: await handler.execute(f.envelope) }),
-            );
-          else socket.write(encodeFrame({ requestId: f.requestId, error: 'unknown request' }));
+          dispatch(f);
         }
       } catch {
         socket.destroy();

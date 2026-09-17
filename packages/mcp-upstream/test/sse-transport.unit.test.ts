@@ -135,7 +135,7 @@ test('CRLF endpoint events complete the SSE handshake', async () => {
     await sse.close();
     assert.equal(postUrl, 'https://upstream.example.test/post');
   } finally {
-    stream?.close();
+    closeStream(stream);
     globalThis.fetch = originalFetch;
   }
 });
@@ -166,7 +166,7 @@ test('an idle SSE disconnect rejects new requests immediately', async () => {
   try {
     const sse = new SseTransport({ url: 'https://upstream.example.test/sse', deadlineMs: 20 });
     await sse.connect();
-    stream?.close();
+    closeStream(stream);
     stream = null;
     await new Promise((resolve) => setImmediate(resolve));
     await assert.rejects(sse.request('tools/list'), (error: UpstreamError) => {
@@ -175,7 +175,7 @@ test('an idle SSE disconnect rejects new requests immediately', async () => {
     });
     await sse.close();
   } finally {
-    stream?.close();
+    closeStream(stream);
     globalThis.fetch = originalFetch;
   }
 });
@@ -206,8 +206,8 @@ for (const terminal of ['close', 'stream-end']) {
   test(`SSE ${terminal} cancels a stalled POST promptly`, async () => {
     const original = globalThis.fetch;
     const encoder = new TextEncoder();
-    let stream!: ReadableStreamDefaultController<Uint8Array>;
-    let release!: (response: Response) => void;
+    let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let release: ((response: Response) => void) | undefined;
     let posted!: () => void;
     let signal: AbortSignal | null | undefined;
     const started = new Promise<void>((resolve) => {
@@ -225,7 +225,7 @@ for (const terminal of ['close', 'stream-end']) {
         );
       const message = JSON.parse(String(init?.body));
       if (message.method === 'initialize') {
-        stream.enqueue(
+        stream?.enqueue(
           encoder.encode(
             `data: ${JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } })}\n\n`,
           ),
@@ -235,7 +235,7 @@ for (const terminal of ['close', 'stream-end']) {
       if (message.method === 'notifications/initialized')
         return new Response(null, { status: 202 });
       if (release) {
-        stream.enqueue(
+        stream?.enqueue(
           encoder.encode(
             `data: ${JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { ok: true } })}\n\n`,
           ),
@@ -256,7 +256,7 @@ for (const terminal of ['close', 'stream-end']) {
       pending.catch(() => {});
       await started;
       if (terminal === 'close') await transport.close();
-      else stream.close();
+      else closeStream(stream);
       await assert.rejects(
         Promise.race([
           pending,
@@ -265,9 +265,9 @@ for (const terminal of ['close', 'stream-end']) {
         (error: UpstreamError) => error.code === 'UPSTREAM_DIED',
       );
       assert.equal(signal?.aborted, true);
-      if (terminal === 'close') stream.close();
+      if (terminal === 'close') closeStream(stream);
       await transport.connect();
-      release(new Response(null, { status: 500 }));
+      release?.(new Response(null, { status: 500 }));
       assert.deepEqual(await transport.request('tools/call'), { ok: true });
     } finally {
       release?.(new Response(null, { status: 202 }));
@@ -295,3 +295,6 @@ test('an idle connected stream remains usable after the startup deadline', async
     await server.close();
   }
 });
+function closeStream(stream: ReadableStreamDefaultController<Uint8Array> | null | undefined) {
+  stream?.close();
+}

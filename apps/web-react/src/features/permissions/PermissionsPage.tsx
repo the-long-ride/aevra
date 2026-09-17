@@ -30,6 +30,9 @@ const CAPABILITIES = [
   'network',
   'skills.write',
   'instructions.write',
+  'browser.control',
+  'desktop.control',
+  'mcp.proxy',
 ] as const;
 
 async function load(signal: AbortSignal) {

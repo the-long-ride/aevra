@@ -68,7 +68,7 @@
 
 .execution-warning,
 .warning {
-  margin: 0;
+  margin: 0 0 10px;
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--warning) 48%, transparent);
   border-radius: 4px;
@@ -355,20 +355,63 @@ pre {
     max-width: none;
   }
 
-  .dt-toolbar,
-  .dt-filters {
+  .dt-toolbar {
     align-items: stretch;
+  }
+
+  .dt-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    width: 100%;
+    gap: 8px 10px;
   }
 
   .dt-filter,
   .dt-size {
-    flex: 1 1 140px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    flex: initial;
+    width: 100%;
+  }
+
+  .dt-size {
+    max-width: 160px;
+  }
+
+  .dt-filter .dropdown,
+  .dt-size .dropdown {
+    width: 100%;
+    min-width: 0;
   }
 
   .dt-filter select,
   .dt-size select {
     min-width: 0;
     width: 100%;
+  }
+
+  .dt-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .dt-pagination {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    gap: 6px;
+  }
+
+  .dt-pages {
+    justify-content: center;
+  }
+
+  .dt-pages button {
+    min-height: 34px;
+    padding: 4px 10px;
   }
 
   .data-table,
@@ -433,6 +476,14 @@ pre {
 
 .management-modal-body > .panel-toolbar {
   flex: 0 0 auto;
+}
+
+.management-modal-body > .permission-modal-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 @media (max-width: 760px) {

@@ -41,6 +41,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
       - name: Pre-pull sandbox image
         run: docker pull node:22-alpine
       - name: Install Podman
@@ -59,6 +60,27 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run test:coverage:web
+
+  extension:
+    name: Extension coverage (85%) and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:extension
+      # The archive is plain compiled JavaScript, so this artifact is also how a
+      # reviewer loads the branch's extension without building it themselves.
+      - run: npm run build:extension
+      - uses: actions/upload-artifact@v7
+        with:
+          name: aevra-extension
+          path: apps/extension/build/aevra-extension.zip
+          if-no-files-found: error
 
   browser-parity:
     name: Build and browser parity
@@ -86,4 +108,17 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npx playwright install chromium
       - run: npm run test:portability
+
+  desktop-helper:
+    name: Desktop helper (Rust)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: helper
+    steps:
+      - uses: actions/checkout@v7
+      - run: cargo build --locked
+      - run: cargo test --locked

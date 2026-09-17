@@ -193,6 +193,39 @@ CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_family_status ON oauth_refre
     sql: `
 ALTER TABLE operations ADD COLUMN connection_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_operations_connection_updated ON operations(connection_id,updated_at);
+    `,
+  },
+  {
+    version: 11,
+    name: '011_mcp_upstreams',
+    sql: `
+CREATE TABLE IF NOT EXISTS mcp_upstreams(
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  transport TEXT NOT NULL,
+  config_json TEXT NOT NULL,
+  auth_json TEXT NOT NULL DEFAULT '{}',
+  risk TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  catalog_fingerprint TEXT,
+  state TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL);
+`,
+  },
+  {
+    version: 12,
+    name: '012_mcp_upstream_catalog_review',
+    sql: `
+ALTER TABLE mcp_upstreams ADD COLUMN catalog_json TEXT;
+    ALTER TABLE mcp_upstreams ADD COLUMN pending_catalog_diff_json TEXT;
+`,
+  },
+  {
+    version: 13,
+    name: '013_mcp_upstream_pending_catalog',
+    sql: `
+ALTER TABLE mcp_upstreams ADD COLUMN pending_catalog_json TEXT;
 `,
   },
 ];

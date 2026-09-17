@@ -27,7 +27,7 @@ export interface PermissionSummary {
 }
 
 const scopeScore: Record<RuleScope, number> = { global: 1, workspace: 2, session: 3, once: 4 };
-const capabilityOrder: Capability[] = [
+export const capabilityOrder: Capability[] = [
   'files.read',
   'files.search',
   'git.read',
@@ -41,6 +41,9 @@ const capabilityOrder: Capability[] = [
   'network',
   'skills.write',
   'instructions.write',
+  'browser.control',
+  'desktop.control',
+  'mcp.proxy',
 ];
 
 function matcherScore(m: string) {

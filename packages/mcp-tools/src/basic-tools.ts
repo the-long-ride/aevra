@@ -1,6 +1,7 @@
 import { authorizeCapability, gated, workspaceSelect } from './authorization.js';
 import { renderInstructionPrompt } from './instruction-prompt.js';
 import { AevraToolError } from './errors.js';
+import { markUntrusted } from '../../security/src/untrusted.js';
 import { argsHash, sessionLeases, unavailable, workspaceRoot } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
@@ -81,6 +82,15 @@ async function authorizeWrite(
     {},
     execute,
   );
+}
+
+// `workspace_current` returns the public WorkspaceRemoteView (no hostRoot),
+// so it needs its own getLocal() lookup to compute manifest info — unlike
+// workspace_select's callers, which already hold the full local record.
+function withManifest<T extends { id: string }>(context: McpRuntimeContext, workspace: T) {
+  const local = context.workspaces.getLocal(workspace.id);
+  const manifest = context.deps.manifests?.summarize(local?.hostRoot ?? null);
+  return manifest ? { ...workspace, manifest: markUntrusted(manifest) } : workspace;
 }
 
 export async function handleBasicTool(
@@ -258,18 +268,14 @@ export async function handleBasicTool(
     if (!leases.length) return { status: 'none', workspace: null };
     const remote = context.workspaces.listRemote();
     if (leases.length === 1) {
-      return (
-        remote.find((workspace) => workspace.id === leases[0]!.workspaceId) ?? {
-          status: 'none',
-          workspace: null,
-        }
-      );
+      const found = remote.find((workspace) => workspace.id === leases[0]!.workspaceId);
+      return found ? withManifest(context, found) : { status: 'none', workspace: null };
     }
     return {
       status: 'multiple',
-      workspaces: remote.filter((workspace) =>
-        leases.some((lease) => lease.workspaceId === workspace.id),
-      ),
+      workspaces: remote
+        .filter((workspace) => leases.some((lease) => lease.workspaceId === workspace.id))
+        .map((workspace) => withManifest(context, workspace)),
     };
   }
   return workspaceSelect(context, sessionId, args);
