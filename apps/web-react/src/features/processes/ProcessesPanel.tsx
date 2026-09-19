@@ -139,10 +139,21 @@ export function ProcessesPanel({ contained = false }: { contained?: boolean }) {
                 <button
                   type="button"
                   className="danger-button"
+                  aria-label="Forget"
+                  title="Forget"
                   data-surface-id="processes:forget"
-                  onClick={() => void mutate(row.id, 'forget')}
+                  onClick={async () => {
+                    const confirmed = await dialog.confirm({
+                      title: 'Forget process',
+                      message: 'Remove this process from the list? This cannot be undone.',
+                      confirmLabel: 'Forget',
+                      confirmTone: 'danger',
+                    });
+                    if (!confirmed) return;
+                    void mutate(row.id, 'forget');
+                  }}
                 >
-                  Forget
+                  [x]
                 </button>
               </div>
             ),

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useDialog } from '../../components/Dialog';
 import { requestJson } from '../../services/api-client';
 import {
   McpUpstreamEditModal,
@@ -77,6 +78,7 @@ export function McpUpstreamsSettings({
     [error, setError] = useState(''),
     [formError, setFormError] = useState(''),
     [results, setResults] = useState<Record<string, string>>({});
+  const dialog = useDialog();
   const refresh = useCallback(async () => {
     try {
       setUpstreams(await load());
@@ -99,6 +101,16 @@ export function McpUpstreamsSettings({
     } finally {
       setBusy(false);
     }
+  };
+  const handleRemove = async (upstream: UpstreamSummary) => {
+    const confirmed = await dialog.confirm({
+      title: 'Remove MCP server',
+      message: `Remove "${upstream.name}"? This cannot be undone.`,
+      confirmLabel: 'Remove',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
+    void run(() => remove(upstream.id));
   };
   const submit = async (draft: UpstreamDraft) => {
     if (busy) return;
@@ -230,10 +242,12 @@ export function McpUpstreamsSettings({
               </button>
               <button
                 type="button"
+                className="danger-button"
                 disabled={busy}
-                onClick={() => void run(() => remove(upstream.id))}
+                aria-label={`Remove ${upstream.name}`}
+                onClick={() => void handleRemove(upstream)}
               >
-                Remove {upstream.name}
+                [x]
               </button>
             </div>
           </li>

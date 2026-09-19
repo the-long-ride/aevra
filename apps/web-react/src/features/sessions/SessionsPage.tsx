@@ -40,6 +40,13 @@ export function SessionsPage() {
   const data = resource.data;
 
   const revokeRemote = async (id: string) => {
+    const confirmed = await dialog.confirm({
+      title: 'Revoke session',
+      message: 'Revoke this remote MCP session? This cannot be undone.',
+      confirmLabel: 'Revoke',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
     await requestJson(`/api/sessions/${encodeURIComponent(id)}/revoke`, {
       method: 'POST',
       body: '{}',
@@ -64,6 +71,13 @@ export function SessionsPage() {
   };
 
   const revokeLocal = async (idHash: string) => {
+    const confirmed = await dialog.confirm({
+      title: 'Revoke admin session',
+      message: 'Revoke this local admin session? This cannot be undone.',
+      confirmLabel: 'Revoke',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
     await requestJson(`/api/admin-sessions/${encodeURIComponent(idHash)}/revoke`, {
       method: 'POST',
       body: '{}',
@@ -140,10 +154,13 @@ export function SessionsPage() {
                   </button>
                   <button
                     type="button"
+                    className="danger-button"
+                    aria-label="Revoke"
+                    title="Revoke"
                     data-surface-id="sessions:revoke"
                     onClick={() => void revokeRemote(row.id)}
                   >
-                    Revoke
+                    [x]
                   </button>
                 </div>
               ),
@@ -171,8 +188,14 @@ export function SessionsPage() {
               sortable: false,
               search: false,
               render: (row) => (
-                <button type="button" onClick={() => void revokeLocal(row.idHash)}>
-                  Revoke
+                <button
+                  type="button"
+                  className="danger-button"
+                  aria-label="Revoke"
+                  title="Revoke"
+                  onClick={() => void revokeLocal(row.idHash)}
+                >
+                  [x]
                 </button>
               ),
             },

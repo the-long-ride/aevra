@@ -109,15 +109,59 @@ test('falls back to Confirm mode and hidden details for sparse connections', () 
   expect(within(dialog).getByText('active')).toBeInTheDocument();
 });
 
-test('removes a granted workspace through the delete endpoint', async () => {
+test('removes a granted workspace through the delete endpoint after confirmation', async () => {
   const user = userEvent.setup();
   const fetchMock = installApiFixtures();
   const { onChanged } = renderModal();
 
   await user.click(screen.getByRole('button', { name: 'Remove' }));
+  const confirmDialog = screen.getByRole('dialog', { name: 'Remove workspace grant' });
+  expect(confirmDialog).toHaveTextContent('Remove access to "Aevra"');
+  await user.click(within(confirmDialog).getByRole('button', { name: 'Remove' }));
+
   await waitFor(() =>
     expect(
       mutationCall(fetchMock, '/api/sessions/ses-chatgpt/workspace/ws-1', 'DELETE'),
+    ).toBeTruthy(),
+  );
+  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+});
+
+test('cancelling workspace removal does not delete', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures();
+  const { onChanged } = renderModal();
+
+  await user.click(screen.getByRole('button', { name: 'Remove' }));
+  const confirmDialog = screen.getByRole('dialog', { name: 'Remove workspace grant' });
+  await user.click(within(confirmDialog).getByRole('button', { name: 'Cancel' }));
+
+  expect(
+    mutationCall(fetchMock, '/api/sessions/ses-chatgpt/workspace/ws-1', 'DELETE'),
+  ).toBeUndefined();
+  expect(onChanged).not.toHaveBeenCalled();
+});
+
+test('durable OAuth connection manages workspaces via connection endpoint and shows origins', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures();
+  const { onChanged } = renderModal({
+    id: 'conn-123',
+    connectionId: 'conn-123',
+    sessionId: undefined,
+    recentOrigins: [{ remoteIp: '10.0.0.1', lastSeenAt: '2026-09-17T20:00:00.000Z' }],
+  });
+
+  expect(screen.getByText('Recent runner origins')).toBeInTheDocument();
+  expect(screen.getByText('10.0.0.1')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Remove' }));
+  const confirmDialog = screen.getByRole('dialog', { name: 'Remove workspace grant' });
+  await user.click(within(confirmDialog).getByRole('button', { name: 'Remove' }));
+
+  await waitFor(() =>
+    expect(
+      mutationCall(fetchMock, '/api/connections/conn-123/workspaces/ws-1', 'DELETE'),
     ).toBeTruthy(),
   );
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
@@ -231,4 +275,61 @@ test('backdrop and close button dismiss the modal without mutations', async () =
 
   await user.click(document.querySelector('.modal-backdrop') as HTMLElement);
   expect(onClose).toHaveBeenCalledTimes(2);
+});
+
+test('durable OAuth connection allows changing profile on existing workspace grant', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures();
+  const { onChanged } = renderModal({
+    id: 'conn-123',
+    connectionId: 'conn-123',
+    sessionId: undefined,
+    workspaceIds: ['ws-1'],
+    workspaces: ['Aevra'],
+    workspaceGrants: [{ workspaceId: 'ws-1', profileId: 'read-only' }],
+  });
+
+  const profileDropdown = screen.getByLabelText('Profile for Aevra');
+  expect(profileDropdown).toBeInTheDocument();
+  await user.click(profileDropdown);
+  await user.click(screen.getByRole('option', { name: 'Developer' }));
+
+  await waitFor(() =>
+    expect(mutationCall(fetchMock, '/api/connections/conn-123/workspaces', 'POST')).toBeTruthy(),
+  );
+  const call = mutationCall(fetchMock, '/api/connections/conn-123/workspaces', 'POST');
+  expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+    workspaceId: 'ws-1',
+    profileId: 'developer',
+  });
+  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+});
+
+test('durable OAuth connection sends selected profile when granting a new workspace', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures();
+  const { onChanged } = renderModal({
+    id: 'conn-123',
+    connectionId: 'conn-123',
+    sessionId: undefined,
+    workspaceIds: [],
+    workspaces: [],
+    workspaceGrants: [],
+  });
+
+  const grantProfileDropdown = screen.getByLabelText('Grant profile');
+  expect(grantProfileDropdown).toBeInTheDocument();
+  await user.click(grantProfileDropdown);
+  await user.click(screen.getByRole('option', { name: 'Coding Session' }));
+
+  await user.click(grantControls().confirm);
+  await waitFor(() =>
+    expect(mutationCall(fetchMock, '/api/connections/conn-123/workspaces', 'POST')).toBeTruthy(),
+  );
+  const call = mutationCall(fetchMock, '/api/connections/conn-123/workspaces', 'POST');
+  expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+    workspaceId: 'ws-1',
+    profileId: 'coding-session',
+  });
+  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
 });

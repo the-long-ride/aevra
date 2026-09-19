@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { Dropdown } from '../../components/Dropdown';
 import { patchJson } from './settings-service';
 import { SettingsFormModal } from './SettingsFormModal';
@@ -15,6 +16,7 @@ export function CommandPolicySettings({
   families: Record<string, string>;
   onChanged(): Promise<void>;
 }) {
+  const dialog = useDialog();
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -22,6 +24,20 @@ export function CommandPolicySettings({
   const close = () => {
     setError('');
     setCreating(false);
+  };
+
+  const handleRemove = async (family: string) => {
+    const confirmed = await dialog.confirm({
+      title: 'Remove command-family override',
+      message: `Remove the override for "${family}"? This cannot be undone.`,
+      confirmLabel: 'Remove',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
+    const next = { ...families };
+    delete next[family];
+    await patchJson('/api/policy/command-families', next);
+    await onChanged();
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -68,14 +84,13 @@ export function CommandPolicySettings({
             render: (row) => (
               <button
                 type="button"
+                className="danger-button"
+                aria-label="Remove"
+                title="Remove"
                 data-surface-id="settings:remove-command-family"
-                onClick={() => {
-                  const next = { ...families };
-                  delete next[row.family];
-                  void patchJson('/api/policy/command-families', next).then(onChanged);
-                }}
+                onClick={() => void handleRemove(row.family)}
               >
-                Remove
+                [x]
               </button>
             ),
           },

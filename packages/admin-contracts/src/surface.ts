@@ -6,6 +6,7 @@ export const ADMIN_SURFACE = {
     { id: 'sessions', label: 'Sessions' },
     { id: 'audit', label: 'Audit' },
     { id: 'settings', label: 'Settings' },
+    { id: 'data', label: 'Data' },
     { id: 'guide', label: 'Guide' },
   ],
   dashboardSections: [
@@ -58,6 +59,7 @@ export const ADMIN_SURFACE = {
     guide: ['select-chapter', 'copy-matcher', 'copy-all-matchers'],
     connections: ['create-connector', 'revoke-connector'],
     remoteAccess: ['authenticate', 'test-endpoint', 'save', 'copy-endpoint'],
+    data: ['backup', 'import'],
   },
 } as const;
 

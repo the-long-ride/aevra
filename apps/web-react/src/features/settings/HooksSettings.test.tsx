@@ -215,6 +215,8 @@ test('hook table enables disables and deletes hooks through mutations', async ()
 
   const pausedRow = within(table!).getByText('Paused hook').closest('tr') as HTMLElement;
   await user.click(within(pausedRow).getByRole('button', { name: 'Delete' }));
+  const deleteHookDialog = screen.getByRole('dialog', { name: 'Delete hook' });
+  await user.click(within(deleteHookDialog).getByRole('button', { name: 'Delete' }));
   await waitFor(() => expect(mutationCall(fetchMock, '/api/hooks/hook-2', 'DELETE')).toBeTruthy());
   expect(onChanged).toHaveBeenCalledTimes(3);
 });

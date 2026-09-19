@@ -5,6 +5,7 @@ import { DialogProvider } from '../components/Dialog';
 import { AdminAuthGate } from '../features/auth/AdminAuthGate';
 import { AuditPage } from '../features/audit/AuditPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
+import { DataPage } from '../features/data/DataPage';
 import { GuidePage } from '../features/guide/GuidePage';
 import { PermissionsPage } from '../features/permissions/PermissionsPage';
 import { RequestApprovalModal } from '../features/requests/RequestApprovalModal';
@@ -25,6 +26,7 @@ const pageRegistry: Record<AdminPageId, ComponentType> = {
   sessions: SessionsPage,
   audit: AuditPage,
   settings: SettingsPage,
+  data: DataPage,
   guide: GuidePage,
 };
 
@@ -39,6 +41,16 @@ function AuthenticatedApp({ theme, onToggleTheme }: { theme: Theme; onToggleThem
 
   const handleNewPending = useCallback((data: RequestsData) => {
     setApprovalModalData(data);
+  }, []);
+
+  const handlePendingSync = useCallback((data: RequestsData) => {
+    setApprovalModalData((current) => {
+      if (!current) return null;
+      const pendingItems = data.approvals.filter((item) => item.state === 'PENDING');
+      const count = pendingItems.length + data.oauth.length;
+      if (count === 0) return null;
+      return data;
+    });
   }, []);
 
   const handleModalActioned = useCallback(async () => {
@@ -82,6 +94,7 @@ function AuthenticatedApp({ theme, onToggleTheme }: { theme: Theme; onToggleThem
         onClose={() => setRequestsOpen(false)}
         onPendingCountChange={setPendingCount}
         onNewPending={handleNewPending}
+        onPendingSync={handlePendingSync}
         refreshRef={drawerRefreshRef}
       />
       {approvalModalData ? (

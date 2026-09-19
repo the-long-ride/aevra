@@ -42,9 +42,9 @@ export async function denyRequest(id: string) {
   });
 }
 
-export async function decideOauth(id: string, allow: boolean) {
+export async function decideOauth(id: string, allow: boolean, options?: { renewable?: boolean }) {
   await requestJson(`/api/oauth/requests/${encodeURIComponent(id)}/${allow ? 'approve' : 'deny'}`, {
     method: 'POST',
-    body: '{}',
+    body: JSON.stringify(options ?? {}),
   });
 }

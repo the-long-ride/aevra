@@ -7,8 +7,8 @@ export interface RequestPoint {
 
 export const BASE_WIDTH = 720;
 export const HEIGHT = 180;
-export const LEFT = 34;
-export const RIGHT = 12;
+export const LEFT = 14;
+export const RIGHT = 4;
 export const TOP = 12;
 export const BOTTOM = 28;
 export const DEFAULT_WINDOW_MS = 10 * 60_000;
@@ -51,14 +51,24 @@ export function buildRequestHistory(entries: McpActivityEntry[], generatedAt: st
   events.sort((a, b) => a.timestamp - b.timestamp || b.delta - a.delta);
   const points: RequestPoint[] = [{ timestamp: start, active: 0 }];
   let active = 0;
+  let lastEventTime = start;
   for (const event of events) {
     active = Math.max(0, active + event.delta);
+    lastEventTime = event.timestamp;
     const previous = points[points.length - 1];
     if (previous?.timestamp === event.timestamp) previous.active = active;
     else points.push({ timestamp: event.timestamp, active });
   }
-  if (points[points.length - 1]?.timestamp !== end) {
-    points.push({ timestamp: end, active });
+
+  // When active requests are running, extend to present (`end`).
+  // When idle, cap trailing timeline to 30s after the last event so past requests
+  // are cleanly visible instead of being squished by an endless flatline.
+  const trailingPaddingMs = 30_000;
+  const effectiveEnd =
+    active > 0 || events.length === 0 ? end : Math.min(end, lastEventTime + trailingPaddingMs);
+
+  if (points[points.length - 1]?.timestamp !== effectiveEnd) {
+    points.push({ timestamp: effectiveEnd, active });
   }
   return points;
 }

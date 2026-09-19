@@ -7,6 +7,7 @@ import { PageState } from '../../components/PageState';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
 import { AddWorkspaceModal } from './AddWorkspaceModal';
+import { CopyIcon, DetailIcon } from './WorkspaceIcons';
 
 interface WorkspaceMount extends Record<string, unknown> {
   id: string;
@@ -169,28 +170,34 @@ export function WorkspacesPage() {
               sortable: false,
               search: false,
               render: (row) => (
-                <div className="actions">
+                <div className="actions workspace-row-actions">
                   <button
                     type="button"
+                    aria-label={copiedId === row.id ? 'Copied' : 'Copy ID'}
+                    title={copiedId === row.id ? 'Copied' : 'Copy ID'}
                     data-surface-id="workspaces:copy-id"
                     onClick={() => void copyWorkspaceId(row.id)}
                   >
-                    {copiedId === row.id ? 'Copied' : 'Copy ID'}
+                    {copiedId === row.id ? 'Copied' : <CopyIcon />}
                   </button>
                   <button
                     type="button"
+                    aria-label="Details"
+                    title="Details"
                     data-surface-id="workspaces:details"
                     onClick={() => setSelectedId(row.id)}
                   >
-                    Details
+                    <DetailIcon />
                   </button>
                   <button
                     type="button"
                     className="danger-button"
+                    aria-label="Remove"
+                    title="Remove"
                     data-surface-id="workspaces:remove"
                     onClick={() => void removeWorkspace(row)}
                   >
-                    Remove
+                    [x]
                   </button>
                 </div>
               ),

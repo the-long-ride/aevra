@@ -48,7 +48,13 @@ export function BrowserOriginPolicy({
   const [sensitive, setSensitive] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const adopt = (next: OriginPolicySnapshot) => {
     setPolicy(next);
@@ -74,7 +80,7 @@ export function BrowserOriginPolicy({
     if (busy) return;
     setBusy(true);
     setError('');
-    setSaved(false);
+    setToast(null);
     try {
       adopt(
         await save({
@@ -83,7 +89,7 @@ export function BrowserOriginPolicy({
           sensitiveHosts: parseHosts(sensitive),
         }),
       );
-      setSaved(true);
+      setToast('// Origin policy saved.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -101,21 +107,36 @@ export function BrowserOriginPolicy({
 
   return (
     <div className="browser-origin-policy">
-      <fieldset>
+      <fieldset className="console-fieldset">
         <legend>Local pages (localhost and 127.0.0.1)</legend>
-        {LOOPBACK_CHOICES.map((choice) => (
-          <label key={choice.value}>
-            <input
-              type="radio"
-              name="loopbackClass"
-              value={choice.value}
-              checked={policy.loopbackClass === choice.value}
-              disabled={busy}
-              onChange={() => void submit(choice.value)}
-            />
-            {choice.label} <span className="section-note">{choice.hint}</span>
-          </label>
-        ))}
+        <div
+          className="console-radio-group"
+          role="radiogroup"
+          aria-label="Local pages (localhost and 127.0.0.1)"
+        >
+          {LOOPBACK_CHOICES.map((choice) => {
+            const isSelected = policy.loopbackClass === choice.value;
+            return (
+              <label
+                key={choice.value}
+                className={`console-radio-option${isSelected ? ' is-selected' : ''}${busy ? ' is-disabled' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="loopbackClass"
+                  value={choice.value}
+                  checked={isSelected}
+                  disabled={busy}
+                  onChange={() => void submit(choice.value)}
+                />
+                <span>{choice.label}</span>
+              </label>
+            );
+          })}
+        </div>
+        <p className="section-note console-radio-hint">
+          {LOOPBACK_CHOICES.find((c) => c.value === policy.loopbackClass)?.hint}
+        </p>
       </fieldset>
       <p className="section-note">
         Aevra&apos;s own ports ({policy.aevraPorts.join(', ')}) are always refused. That rule is not
@@ -146,7 +167,13 @@ export function BrowserOriginPolicy({
           Save host lists
         </button>
       </div>
-      {saved ? <p className="inline-result">Origin policy saved.</p> : null}
+      {toast ? (
+        <div className="toast-stack">
+          <div className="toast success" role="status">
+            {toast}
+          </div>
+        </div>
+      ) : null}
       {error ? (
         <p role="alert" className="inline-result warning-text">
           {error}

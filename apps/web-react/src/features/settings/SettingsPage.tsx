@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PageState } from '../../components/PageState';
 import { BrowserControlSettings } from './BrowserControlSettings';
 import { CommandPolicySettings } from './CommandPolicySettings';
@@ -53,7 +53,6 @@ export function SettingsPage() {
           onSave={(mode) => patchJson('/api/power/keep-awake', { mode }).then(refresh)}
         />
         <ExecutionSettings execution={data.execution} onChanged={refresh} />
-        <YoloPolicySettings mode={data.yolo.mode} onChanged={refresh} />
         <BrowserControlSettings status={data.browser} onChanged={refresh} />
         <DesktopControlSettings />
         <McpUpstreamsSettings />
@@ -85,6 +84,7 @@ export function SettingsPage() {
         />
         <EnvironmentProfilesSettings profiles={data.profiles} onChanged={refresh} />
         <SecretReferencesSettings secretRefs={data.secretRefs} onChanged={refresh} />
+        <YoloPolicySettings mode={data.yolo.mode} onChanged={refresh} />
         <HooksSettings hooks={data.hooks} onChanged={refresh} />
       </div>
     </>

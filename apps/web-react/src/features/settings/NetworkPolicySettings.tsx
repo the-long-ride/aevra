@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { WorkspaceSummary } from '@aevra/admin-contracts';
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { Dropdown } from '../../components/Dropdown';
 import { deleteResource, postJson } from './settings-service';
 import { SettingsFormModal } from './SettingsFormModal';
@@ -14,6 +15,7 @@ export function NetworkPolicySettings({
   workspaces: WorkspaceSummary[];
   onChanged(): Promise<void>;
 }) {
+  const dialog = useDialog();
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -21,6 +23,18 @@ export function NetworkPolicySettings({
   const close = () => {
     setError('');
     setCreating(false);
+  };
+
+  const handleRemove = async (id: string) => {
+    const confirmed = await dialog.confirm({
+      title: 'Remove network rule',
+      message: 'Remove this network rule? This cannot be undone.',
+      confirmLabel: 'Remove',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
+    await deleteResource(`/api/policy/network-rules/${id}`);
+    await onChanged();
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -71,12 +85,13 @@ export function NetworkPolicySettings({
             render: (row) => (
               <button
                 type="button"
+                className="danger-button"
+                aria-label="Remove"
+                title="Remove"
                 data-surface-id="settings:remove-network-rule"
-                onClick={() =>
-                  void deleteResource(`/api/policy/network-rules/${String(row.id)}`).then(onChanged)
-                }
+                onClick={() => void handleRemove(String(row.id))}
               >
-                Remove
+                [x]
               </button>
             ),
           },

@@ -1,5 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { DialogProvider } from '../../components/Dialog';
 import { McpUpstreamsSettings, type UpstreamSummary } from './McpUpstreamsSettings';
 
 const active: UpstreamSummary = {
@@ -35,14 +37,16 @@ function mount(upstreams: UpstreamSummary[] = [active]) {
     }),
     acknowledge = vi.fn().mockResolvedValue({ ...active, state: 'active' });
   render(
-    <McpUpstreamsSettings
-      load={() => Promise.resolve(upstreams)}
-      create={create}
-      update={update}
-      remove={remove}
-      test={test}
-      acknowledge={acknowledge}
-    />,
+    <DialogProvider>
+      <McpUpstreamsSettings
+        load={() => Promise.resolve(upstreams)}
+        create={create}
+        update={update}
+        remove={remove}
+        test={test}
+        acknowledge={acknowledge}
+      />
+    </DialogProvider>,
   );
   return { create, update, remove, test, acknowledge };
 }
@@ -71,8 +75,11 @@ describe('McpUpstreamsSettings', () => {
     expect(await screen.findByText(/github-mcp 1\.2\.3/)).toBeTruthy();
   });
   it('removes a server', async () => {
+    const user = userEvent.setup();
     const { remove } = mount();
-    fireEvent.click(await screen.findByRole('button', { name: /remove github/i }));
+    await user.click(await screen.findByRole('button', { name: /remove github/i }));
+    const removeDialog = screen.getByRole('dialog', { name: 'Remove MCP server' });
+    await user.click(within(removeDialog).getByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(remove).toHaveBeenCalledWith('u1'));
   });
   it('edits an existing server through the update endpoint', async () => {

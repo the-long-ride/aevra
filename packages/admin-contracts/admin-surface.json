@@ -25,6 +25,10 @@
       "label": "Settings"
     },
     {
+      "id": "data",
+      "label": "Data"
+    },
+    {
       "id": "guide",
       "label": "Guide"
     }
@@ -78,6 +82,7 @@
     ],
     "guide": ["select-chapter", "copy-matcher", "copy-all-matchers"],
     "connections": ["create-connector", "revoke-connector"],
-    "remoteAccess": ["authenticate", "test-endpoint", "save", "copy-endpoint"]
+    "remoteAccess": ["authenticate", "test-endpoint", "save", "copy-endpoint"],
+    "data": ["backup", "import"]
   }
 }

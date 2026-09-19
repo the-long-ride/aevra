@@ -142,6 +142,20 @@ export async function installAdminApi(page: Page, options: FixtureOptions = {}) 
     ['/api/secret-references', []],
     ['/api/hooks', []],
     [
+      '/api/config/export',
+      {
+        version: 1,
+        portable: false,
+        workspaces: [{ id: 'ws-1', name: 'Aevra', hostRoot: '/repo' }],
+        mounts: [],
+        rules: [],
+        profiles: [],
+        environmentProfiles: [],
+      },
+    ],
+    ['/api/config/import-preview', { adds: 0, changes: 0, pathRemaps: 0, secretReconnects: 0 }],
+    ['/api/config/import', { ok: true, workspaces: 0, mounts: 0, rules: 0 }],
+    [
       '/api/power/keep-awake',
       {
         mode: 'remote-connections',

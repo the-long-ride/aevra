@@ -96,4 +96,65 @@ describe('AppShell version update button', () => {
       screen.queryByRole('button', { name: 'Click to copy update command' }),
     ).not.toBeInTheDocument();
   });
+
+  test('shows browser chip with red dot when not installed, and opens setup modal on click', async () => {
+    const user = userEvent.setup();
+    render(
+      <AppShell
+        page="dashboard"
+        status={{ version: '1.0.5', core: 'ready' }}
+        theme="dark"
+        pendingCount={0}
+        requestsOpen={false}
+        onNavigate={vi.fn()}
+        onToggleTheme={vi.fn()}
+        onOpenRequests={vi.fn()}
+      >
+        <div>Content</div>
+      </AppShell>,
+    );
+
+    const browserChip = screen.getByRole('button', {
+      name: /Browser extension not installed/i,
+    });
+    expect(browserChip).toBeInTheDocument();
+    expect(browserChip).toHaveAttribute('data-state', 'error');
+
+    await user.click(browserChip);
+    expect(screen.getByRole('dialog', { name: 'Browser control' })).toBeInTheDocument();
+  });
+
+  test('shows extension mismatch update notice when installed extension version differs', async () => {
+    document.documentElement.setAttribute('data-aevra-extension-installed', 'true');
+    document.documentElement.setAttribute('data-aevra-extension-version', '0.1.0');
+
+    render(
+      <AppShell
+        page="dashboard"
+        status={{ version: '1.0.5', core: 'ready' }}
+        theme="dark"
+        pendingCount={0}
+        requestsOpen={false}
+        onNavigate={vi.fn()}
+        onToggleTheme={vi.fn()}
+        onOpenRequests={vi.fn()}
+      >
+        <div>Content</div>
+      </AppShell>,
+    );
+
+    const mismatchBtn = await screen.findByRole('button', {
+      name: 'Extension update recommended',
+    });
+    expect(mismatchBtn).toBeInTheDocument();
+    expect(mismatchBtn).toHaveTextContent('ext v0.1.0 ≠ v1.0.5 (update)');
+
+    const browserChip = screen.getByRole('button', {
+      name: /Browser extension installed \(v0.1.0\)/i,
+    });
+    expect(browserChip).toHaveAttribute('data-state', 'ok');
+
+    document.documentElement.removeAttribute('data-aevra-extension-installed');
+    document.documentElement.removeAttribute('data-aevra-extension-version');
+  });
 });

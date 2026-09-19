@@ -115,12 +115,14 @@ export function RequestDrawer({
   onClose,
   onPendingCountChange,
   onNewPending,
+  onPendingSync,
   refreshRef,
 }: {
   open: boolean;
   onClose(): void;
   onPendingCountChange(count: number): void;
   onNewPending?(data: RequestsData): void;
+  onPendingSync?(data: RequestsData): void;
   refreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 }) {
   const [data, setData] = useState<RequestsData | null>(null);
@@ -149,7 +151,8 @@ export function RequestDrawer({
       }
       prevPendingIds.current = currentIds;
     }
-  }, [onPendingCountChange, onNewPending]);
+    onPendingSync?.(next);
+  }, [onPendingCountChange, onNewPending, onPendingSync]);
 
   useEffect(() => {
     if (refreshRef) refreshRef.current = refresh;

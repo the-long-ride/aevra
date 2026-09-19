@@ -149,3 +149,29 @@
     width: 100%;
   }
 }
+
+.workspace-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.workspace-row-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px 6px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.workspace-action-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  fill: currentColor;
+  flex-shrink: 0;
+}
