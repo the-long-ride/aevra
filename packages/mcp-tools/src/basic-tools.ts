@@ -2,7 +2,13 @@ import { authorizeCapability, gated, workspaceSelect } from './authorization.js'
 import { renderInstructionPrompt } from './instruction-prompt.js';
 import { AevraToolError } from './errors.js';
 import { markUntrusted } from '../../security/src/untrusted.js';
-import { argsHash, sessionLeases, unavailable, workspaceRoot } from './service-helpers.js';
+import {
+  argsHash,
+  isTicketAuthorizedForSession,
+  sessionLeases,
+  unavailable,
+  workspaceRoot,
+} from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
 export const BASIC_TOOL_NAMES = new Set([
@@ -103,35 +109,28 @@ export async function handleBasicTool(
     const session = context.sessions.get(sessionId)!;
     const leases = sessionLeases(context, sessionId);
     const lease = leases.length === 1 ? leases[0]! : null;
+    const summarize = (workspaceId: string, caps: any[]) =>
+      context.deps.permissions?.summary({
+        workspaceId,
+        actor: session.actor,
+        sessionId,
+        baselineCapabilities: caps,
+      }) ?? { effectiveCapabilities: [...caps], commandMatchers: [] };
     const baselineCapabilities = lease?.capabilities ?? [];
     const summary = lease
-      ? (context.deps.permissions?.summary({
-          workspaceId: lease.workspaceId,
-          actor: session.actor,
-          sessionId,
-          baselineCapabilities,
-        }) ?? {
-          effectiveCapabilities: [...baselineCapabilities],
-          commandMatchers: [],
-        })
+      ? summarize(lease.workspaceId, baselineCapabilities)
       : { effectiveCapabilities: [], commandMatchers: [] };
     const remote = context.workspaces.listRemote();
     const workspaces = leases.map((item) => {
-      const baseline = item.capabilities;
-      const itemSummary = context.deps.permissions?.summary({
-        workspaceId: item.workspaceId,
-        actor: session.actor,
-        sessionId,
-        baselineCapabilities: baseline,
-      }) ?? { effectiveCapabilities: [...baseline], commandMatchers: [] };
+      const itemSummary = summarize(item.workspaceId, item.capabilities);
       return {
-        ...(remote.find((workspace) => workspace.id === item.workspaceId) ?? {
+        ...(remote.find((w) => w.id === item.workspaceId) ?? {
           id: item.workspaceId,
           name: item.workspaceId,
         }),
         leaseId: item.id,
         expiresAt: item.expiresAt,
-        baselineCapabilities: [...baseline],
+        baselineCapabilities: [...item.capabilities],
         effectiveCapabilities: itemSummary.effectiveCapabilities,
         commandMatchers: itemSummary.commandMatchers,
       };
@@ -243,15 +242,27 @@ export async function handleBasicTool(
 
   if (name === 'approval_status') {
     if (!context.approvals) return { status: 'unavailable' };
-    return context.approvals.status(String(args.requestId)) ?? { status: 'not_found' };
+    const t = context.approvals.status(String(args.requestId));
+    return t && isTicketAuthorizedForSession(context, sessionId, t) ? t : { status: 'not_found' };
   }
   if (name === 'approval_cancel') {
     if (!context.approvals) return { status: 'unavailable' };
+    const t = context.approvals.status(String(args.requestId));
+    if (!t || !isTicketAuthorizedForSession(context, sessionId, t)) return { status: 'not_found' };
     return context.approvals.cancel(String(args.requestId)) ?? { status: 'not_found' };
   }
   if (name === 'approval_wait') {
     const { resumeApproval } = await import('./approval-resume.js');
-    return resumeApproval(context, sessionId, String(args.requestId));
+    try {
+      return await resumeApproval(context, sessionId, String(args.requestId));
+    } catch (e: any) {
+      const isUnauth =
+        e?.code === 'APPROVAL_UNAUTHORIZED' ||
+        e?.message === 'OAuth connection changed' ||
+        e?.message === 'session changed';
+      if (isUnauth) return null;
+      throw e;
+    }
   }
 
   if (name === 'workspace_list') {
@@ -271,12 +282,8 @@ export async function handleBasicTool(
       const found = remote.find((workspace) => workspace.id === leases[0]!.workspaceId);
       return found ? withManifest(context, found) : { status: 'none', workspace: null };
     }
-    return {
-      status: 'multiple',
-      workspaces: remote
-        .filter((workspace) => leases.some((lease) => lease.workspaceId === workspace.id))
-        .map((workspace) => withManifest(context, workspace)),
-    };
+    const matching = remote.filter((w) => leases.some((l) => l.workspaceId === w.id));
+    return { status: 'multiple', workspaces: matching.map((w) => withManifest(context, w)) };
   }
   return workspaceSelect(context, sessionId, args);
 }

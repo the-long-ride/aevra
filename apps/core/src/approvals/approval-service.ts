@@ -5,6 +5,13 @@ import type { AuditService } from '../audit/audit-service.js';
 import { notifySystem } from '../../../../packages/notifications/src/notify.js';
 import { recordTicketDecision } from './approval-audit.js';
 import { presentApproval } from './request-presentation.js';
+import {
+  assertTicketOwnership,
+  isTicketOwnedByCaller,
+  type CallerApprovalIdentity,
+} from './approval-ownership.js';
+
+export { assertTicketOwnership, isTicketOwnedByCaller, type CallerApprovalIdentity };
 
 export type ApprovalState =
   | 'PENDING'
@@ -31,6 +38,8 @@ export interface FrozenOperationTicket {
   createdAt?: string;
   cancellationReason?: string;
   decisionScope?: string;
+  connectionId?: string;
+  connectionSubject?: string;
 }
 export interface ApprovalConfig {
   fastWaitMs: number;
@@ -43,7 +52,7 @@ export type ResumeRevalidator = (
 export type ApprovedHandler = (ticket: FrozenOperationTicket) => void;
 export type SessionIdentityResolver = (
   sessionId: string,
-) => { actor: string; subject: string } | null;
+) => { actor: string; subject: string; connectionId?: string } | null;
 
 export class ApprovalService {
   private approvedHandler?: ApprovedHandler;
@@ -83,9 +92,19 @@ export class ApprovalService {
         };
     }
     const lifetime = this.config.lifetimeByRiskMs[input.risk] ?? this.config.lifetimeMs;
+    const sessionIdentity = this.sessionIdentityResolver?.(input.sessionId);
+    const isOAuth = (sessionIdentity?.actor ?? input.actor ?? '').startsWith('oauth:');
+    const connectionId = isOAuth
+      ? (sessionIdentity?.connectionId ?? (input as any).connectionId)
+      : undefined;
+    const connectionSubject = isOAuth
+      ? (connectionId ?? sessionIdentity?.subject ?? input.connectionSubject)
+      : undefined;
     const t: FrozenOperationTicket = {
       ...input,
       id: `req_${randomUUID()}`,
+      ...(connectionId ? { connectionId } : {}),
+      ...(connectionSubject ? { connectionSubject } : {}),
       state: 'PENDING',
       expiresAt: new Date(Date.now() + lifetime).toISOString(),
       createdAt: new Date().toISOString(),
@@ -112,12 +131,15 @@ export class ApprovalService {
   }
 
   list() {
-    return (this.repo.list().filter(Boolean) as FrozenOperationTicket[]).map((ticket) => ({
-      ...ticket,
-      presentation: presentApproval(ticket),
-    }));
+    return (this.repo.list().filter(Boolean) as FrozenOperationTicket[]).map((ticket) => {
+      const current = this.status(ticket.id) ?? ticket;
+      return {
+        ...current,
+        presentation: presentApproval(current),
+      };
+    });
   }
-  status(id: string): FrozenOperationTicket | null {
+  status(id: string, caller?: CallerApprovalIdentity): FrozenOperationTicket | null {
     const t = this.repo.get(id) as FrozenOperationTicket | null;
     if (t && ['PENDING', 'APPROVED'].includes(t.state) && Date.parse(t.expiresAt) <= Date.now()) {
       t.state = 'EXPIRED';
@@ -125,6 +147,8 @@ export class ApprovalService {
       this.volatilePayloads.delete(t.id);
       this.record(t, 'expired', 'APPROVAL_TIMEOUT');
     }
+    if (!t) return null;
+    if (caller && !isTicketOwnedByCaller(caller, t)) return null;
     return t;
   }
   approve(id: string, scope = 'once') {
@@ -169,8 +193,9 @@ export class ApprovalService {
     this.record(t, 'denied', 'APPROVAL_DENIED');
     return t;
   }
-  cancel(id: string, reason = 'client_cancelled') {
+  cancel(id: string, reason = 'client_cancelled', caller?: CallerApprovalIdentity) {
     const t = this.required(id);
+    if (caller) assertTicketOwnership(caller, t);
     if (!['PENDING', 'APPROVED'].includes(t.state)) throw new Error(`Cannot cancel ${t.state}`);
     t.state = 'CANCELLED';
     t.cancellationReason = reason;
@@ -180,14 +205,21 @@ export class ApprovalService {
     return t;
   }
   cancelForRestart() {
-    for (const t of this.repo.list().filter(Boolean) as FrozenOperationTicket[])
+    for (const t of this.repo.list().filter(Boolean) as FrozenOperationTicket[]) {
       if (['PENDING', 'APPROVED'].includes(t.state)) {
         t.state = 'CANCELLED';
         t.cancellationReason = 'CANCELLED_RESTART';
         this.repo.put(t);
         this.volatilePayloads.delete(t.id);
         this.record(t, 'cancelled', 'CANCELLED_RESTART');
+      } else if (t.state === 'EXECUTING') {
+        t.state = 'INTERRUPTED';
+        t.cancellationReason = 'INTERRUPTED_RESTART';
+        this.repo.put(t);
+        this.volatilePayloads.delete(t.id);
+        this.record(t, 'interrupted', 'INTERRUPTED_RESTART');
       }
+    }
     this.volatilePayloads.clear();
   }
 
@@ -195,10 +227,13 @@ export class ApprovalService {
     id: string,
     revalidate: ResumeRevalidator,
     execute: (ticket: FrozenOperationTicket) => Promise<T>,
+    postClaimCheck?: (ticket: FrozenOperationTicket) => { ok: boolean; reason?: string },
   ) {
     const stored = this.required(id);
     if (stored.state === 'EXPIRED')
       throw Object.assign(new Error('APPROVAL_TIMEOUT'), { code: 'APPROVAL_TIMEOUT' });
+    if (stored.state === 'EXECUTING') return stored as any;
+    if (['SUCCEEDED', 'FAILED', 'INTERRUPTED'].includes(stored.state)) return stored as any;
     if (stored.state !== 'APPROVED')
       throw Object.assign(new Error(`Approval is ${stored.state}`), {
         code: stored.state === 'DENIED' ? 'APPROVAL_DENIED' : 'APPROVAL_PENDING',
@@ -206,25 +241,49 @@ export class ApprovalService {
     const t = this.withVolatilePayload(stored);
     const valid = await revalidate(t);
     if (!valid.ok) {
-      t.state = 'CONTEXT_CHANGED';
-      this.repo.put(t);
-      this.volatilePayloads.delete(t.id);
-      this.record(t, 'resume_rejected', 'APPROVAL_CONTEXT_CHANGED');
+      if (
+        valid.reason === 'OAuth connection changed' ||
+        valid.reason === 'session changed' ||
+        valid.reason === 'unauthorized'
+      ) {
+        throw Object.assign(new Error(valid.reason), { code: 'APPROVAL_UNAUTHORIZED' });
+      }
+      const transitioned = this.repo.transitionContextChanged
+        ? this.repo.transitionContextChanged(id, new Date().toISOString())
+        : false;
+      if (transitioned) {
+        t.state = 'CONTEXT_CHANGED';
+        this.volatilePayloads.delete(t.id);
+        this.record(t, 'resume_rejected', 'APPROVAL_CONTEXT_CHANGED');
+      }
       throw Object.assign(new Error(valid.reason), { code: 'APPROVAL_CONTEXT_CHANGED' });
     }
+    const claimed = this.repo.claimExecution(id, new Date().toISOString());
+    if (!claimed) {
+      const fresh = this.status(id);
+      return (fresh ?? t) as any;
+    }
     t.state = 'EXECUTING';
-    this.repo.put(t);
     this.record(t, 'resume', 'EXECUTING');
+    if (postClaimCheck) {
+      const post = postClaimCheck(t);
+      if (!post.ok) {
+        this.repo.transitionExecution(id, 'FAILED', new Date().toISOString());
+        this.volatilePayloads.delete(t.id);
+        this.record(t, 'resume_rejected', post.reason ?? 'APPROVAL_CONTEXT_CHANGED');
+        throw Object.assign(new Error(post.reason ?? 'authority changed'), {
+          code: 'APPROVAL_CONTEXT_CHANGED',
+        });
+      }
+    }
     try {
       const result = await execute(t);
-      t.state = 'SUCCEEDED';
-      this.repo.put(t);
+      this.repo.transitionExecution(id, 'SUCCEEDED', new Date().toISOString());
       this.volatilePayloads.delete(t.id);
       this.record(t, 'resume', 'SUCCEEDED');
       return result;
     } catch (e) {
-      t.state = 'FAILED';
-      this.repo.put(t);
+      this.repo.transitionExecution(id, 'FAILED', new Date().toISOString());
       this.volatilePayloads.delete(t.id);
       this.record(t, 'resume', 'FAILED');
       throw e;
@@ -256,6 +315,14 @@ export class ApprovalService {
           !['PENDING', 'APPROVED'].includes(ticket.state)
         )
           return false;
+        if (
+          (ticket.connectionSubject && ticket.connectionSubject === current.subject) ||
+          (ticket.connectionId &&
+            current.connectionId &&
+            ticket.connectionId === current.connectionId)
+        ) {
+          return true;
+        }
         const existing = this.sessionIdentityResolver!(ticket.sessionId);
         return Boolean(
           existing && existing.actor === current.actor && existing.subject === current.subject,

@@ -132,8 +132,9 @@ function isOAuthSurface(path: string) {
 }
 
 // Dynamic client registration is unauthenticated by design (RFC 7591 open
-// registration), so bound how fast one address can create clients.
-const registrationLimiter = new IpRateLimiter(3, 1 / 60);
+// registration): 30 per-IP burst with 1/min refill, plus 60 global burst with 1/sec refill.
+const perIpRegistrationLimiter = new IpRateLimiter(30, 1 / 60);
+const globalRegistrationLimiter = new IpRateLimiter(60, 1);
 
 export async function handleOAuthRoute(
   req: IncomingMessage,
@@ -167,7 +168,13 @@ export async function handleOAuthRoute(
   }
 
   if (path === '/oauth/register' && method === 'POST') {
-    if (!registrationLimiter.allow(remoteIp(req, trustForwardedClientIp))) {
+    const ip = remoteIp(req, trustForwardedClientIp);
+    if (!perIpRegistrationLimiter.allow(ip) || !globalRegistrationLimiter.allow('global')) {
+      const retryAfter = Math.max(
+        perIpRegistrationLimiter.retryAfterSeconds(ip),
+        globalRegistrationLimiter.retryAfterSeconds('global'),
+      );
+      res.setHeader('retry-after', String(retryAfter));
       sendOAuthJson(res, 429, { error: 'rate_limited' });
       return true;
     }

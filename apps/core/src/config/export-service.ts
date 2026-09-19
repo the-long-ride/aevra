@@ -57,4 +57,95 @@ export class ConfigExportService {
       ),
     };
   }
+  import(value: any) {
+    if (!value || typeof value !== 'object') {
+      throw new Error('Invalid backup payload');
+    }
+    let workspacesCount = 0;
+    let mountsCount = 0;
+    let rulesCount = 0;
+
+    if (Array.isArray(value.workspaces)) {
+      try {
+        const stmt = this.db.prepare(`
+          INSERT INTO workspaces (id, name, description, host_root)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            description = excluded.description,
+            host_root = COALESCE(excluded.host_root, workspaces.host_root)
+        `);
+        for (const w of value.workspaces) {
+          if (w && w.id && w.name) {
+            (stmt as any).run?.(w.id, w.name, w.description ?? '', w.hostRoot ?? null);
+            workspacesCount++;
+          }
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    if (Array.isArray(value.mounts)) {
+      try {
+        const stmt = this.db.prepare(`
+          INSERT INTO external_mounts (id, workspace_id, logical_path, host_root, capabilities_json, sensitivity_policy_id)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            workspace_id = excluded.workspace_id,
+            logical_path = excluded.logical_path,
+            host_root = COALESCE(excluded.host_root, external_mounts.host_root),
+            capabilities_json = excluded.capabilities_json,
+            sensitivity_policy_id = excluded.sensitivity_policy_id
+        `);
+        for (const m of value.mounts) {
+          if (m && m.id && m.workspaceId && m.logicalPath) {
+            (stmt as any).run?.(
+              m.id,
+              m.workspaceId,
+              m.logicalPath,
+              m.hostRoot ?? null,
+              JSON.stringify(m.capabilities ?? []),
+              m.sensitivityPolicyId ?? null,
+            );
+            mountsCount++;
+          }
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    if (Array.isArray(value.rules)) {
+      try {
+        const stmt = this.db.prepare(`
+          INSERT OR REPLACE INTO permission_rules (id, capability, effect, matcher, scope, workspace_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const r of value.rules) {
+          if (r && r.id) {
+            (stmt as any).run?.(
+              r.id,
+              r.capability ?? 'files.read',
+              r.effect ?? 'allow',
+              r.matcher ?? '*',
+              r.scope ?? 'global',
+              r.workspace_id ?? r.workspaceId ?? null,
+              r.created_at ?? r.createdAt ?? new Date().toISOString(),
+            );
+            rulesCount++;
+          }
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    return {
+      ok: true,
+      workspaces: workspacesCount,
+      mounts: mountsCount,
+      rules: rulesCount,
+    };
+  }
 }

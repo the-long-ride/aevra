@@ -53,9 +53,14 @@ export const handleAccessRoutes: AdminRouteHandler = async (req, res, url, conte
   if (match && method === 'POST') {
     const id = decodeURIComponent(match[1]);
     const decision = match[2];
+    const body = (await readAdminBody(req).catch(() => ({}))) as any;
+    const options =
+      decision === 'approve' && typeof body?.renewable === 'boolean'
+        ? { renewable: body.renewable }
+        : undefined;
     const value =
       decision === 'approve'
-        ? context.oauth?.approveAuthorization?.(id)
+        ? context.oauth?.approveAuthorization?.(id, options)
         : context.oauth?.denyAuthorization?.(id);
     if (!value) {
       sendAdminResponse(res, 404, {
@@ -73,6 +78,7 @@ export const handleAccessRoutes: AdminRouteHandler = async (req, res, url, conte
       result: 'ok',
       redactionCount: 0,
       class: 'security',
+      ...(options ? { metadata: { renewable: options.renewable } } : {}),
     });
     sendAdminResponse(res, 200, { ok: true, request: value });
     return true;
@@ -248,6 +254,21 @@ export const handleAccessRoutes: AdminRouteHandler = async (req, res, url, conte
         changes: 0,
         pathRemaps: 0,
         secretReconnects: 0,
+      },
+    );
+    return true;
+  }
+
+  if (path === '/api/config/import' && method === 'POST') {
+    const input = await readAdminBody(req);
+    sendAdminResponse(
+      res,
+      200,
+      context.database?.configImport?.(input) ?? {
+        ok: true,
+        workspaces: 0,
+        mounts: 0,
+        rules: 0,
       },
     );
     return true;

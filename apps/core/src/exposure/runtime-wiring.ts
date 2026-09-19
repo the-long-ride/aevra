@@ -38,6 +38,7 @@ export class RuntimeExposureWiring {
     private readonly tls: LocalTlsMaterial,
     cloudflareOverride?: CloudflareManager,
     private readonly gatewayTrustSecret?: string,
+    audit?: import('../auth/oauth.js').OAuthAuditLogger,
   ) {
     this.cloudflare = cloudflareOverride ?? new CloudflareManagerImpl(settings);
     const initialExposureConfig = loadExposureConfig(settings);
@@ -47,6 +48,7 @@ export class RuntimeExposureWiring {
       resource: `${provisionalBase}/mcp`,
       accessTokenTtlMs: config.oauthAccessTokenTtlMs,
       refreshTokenTtlMs: config.oauthRefreshTokenTtlMs,
+      audit,
     });
     const exposure = new ExposureService({
       cloudflare: this.cloudflare,

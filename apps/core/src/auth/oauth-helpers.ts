@@ -65,3 +65,28 @@ export function resolvedResource(requested: string | undefined, expected: string
   }
   return expected;
 }
+
+export function buildProtectedResourceMetadata(resource: string, issuer: string) {
+  return {
+    resource,
+    authorization_servers: [issuer],
+    bearer_methods_supported: ['header'],
+    scopes_supported: [...SUPPORTED_SCOPES],
+  };
+}
+
+export function buildAuthorizationServerMetadata(issuer: string) {
+  return {
+    issuer,
+    authorization_endpoint: `${issuer}/oauth/authorize`,
+    token_endpoint: `${issuer}/oauth/token`,
+    registration_endpoint: `${issuer}/oauth/register`,
+    revocation_endpoint: `${issuer}/oauth/revoke`,
+    scopes_supported: [...SUPPORTED_SCOPES],
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code', 'refresh_token'],
+    token_endpoint_auth_methods_supported: ['none'],
+    code_challenge_methods_supported: ['S256'],
+    authorization_response_iss_parameter_supported: true,
+  };
+}

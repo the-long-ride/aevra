@@ -2,34 +2,27 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { eqHash, hash, secret } from './oauth-crypto.js';
 import { OAuthConnectionStore } from './oauth-connection-store.js';
+import {
+  OAuthConnectionOriginsRepository,
+  type ConnectionOriginRecord,
+} from './oauth-connection-origins.js';
 import { clientFromRow } from './oauth-records.js';
 import { OAuthTokenStore, type RefreshRotationResult } from './oauth-token-store.js';
+export type { ConnectionOriginRecord } from './oauth-connection-origins.js';
+export type { RefreshRotationResult } from './oauth-token-store.js';
+export type * from './oauth-records.js';
 import type {
   OAuthAuthorizationCodeRecord,
   OAuthAuthorizationRequestRecord,
   OAuthClientRecord,
-  OAuthConnectionRecord,
   OAuthGrantRecord,
   OAuthRefreshFamilyRecord,
-  OAuthRefreshTokenRecord,
-  OAuthTokenRecord,
 } from './oauth-records.js';
-
-export type {
-  OAuthAuthorizationCodeRecord,
-  OAuthAuthorizationRequestRecord,
-  OAuthClientRecord,
-  OAuthConnectionRecord,
-  OAuthGrantRecord,
-  OAuthRefreshFamilyRecord,
-  OAuthRefreshTokenRecord,
-  OAuthTokenRecord,
-  RefreshRotationResult,
-};
 
 export class OAuthRepository {
   private connections: OAuthConnectionStore;
   private tokens: OAuthTokenStore;
+  private origins: OAuthConnectionOriginsRepository;
 
   constructor(
     private db: DatabaseSync,
@@ -37,6 +30,7 @@ export class OAuthRepository {
   ) {
     this.connections = new OAuthConnectionStore(db, now);
     this.tokens = new OAuthTokenStore(db, now);
+    this.origins = new OAuthConnectionOriginsRepository(db);
   }
 
   registerClient(input: { clientName: string; redirectUris: string[] }): OAuthClientRecord {
@@ -95,11 +89,13 @@ export class OAuthRepository {
       codeChallengeMethod: 'S256';
       state?: string;
       remoteIp?: string;
+      renewable?: boolean;
     },
     ttlMs: number,
   ): OAuthAuthorizationRequestRecord {
     const createdAt = this.now();
     const expiresAt = new Date(createdAt.getTime() + ttlMs);
+    const renewable = input.renewable ?? true;
     const record: OAuthAuthorizationRequestRecord = {
       id: `oauth_req_${randomUUID()}`,
       clientId: input.clientId,
@@ -112,12 +108,13 @@ export class OAuthRepository {
       remoteIp: input.remoteIp,
       pairingCode: randomBytes(4).toString('hex').toUpperCase(),
       status: 'PENDING',
+      renewable,
       createdAt: createdAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
     };
     this.db
       .prepare(
-        'INSERT INTO oauth_authorization_requests(id,client_id,redirect_uri,scope,resource,code_challenge,code_challenge_method,oauth_state,remote_ip,pairing_code,status,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO oauth_authorization_requests(id,client_id,redirect_uri,scope,resource,code_challenge,code_challenge_method,oauth_state,remote_ip,pairing_code,status,renewable,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       )
       .run(
         record.id,
@@ -131,6 +128,7 @@ export class OAuthRepository {
         record.remoteIp ?? null,
         record.pairingCode,
         record.status,
+        record.renewable ? 1 : 0,
         record.createdAt,
         record.expiresAt,
       );
@@ -140,7 +138,7 @@ export class OAuthRepository {
   getAuthorizationRequest(id: string): OAuthAuthorizationRequestRecord | null {
     const row = this.db
       .prepare(
-        'SELECT id,client_id clientId,redirect_uri redirectUri,scope,resource,code_challenge codeChallenge,code_challenge_method codeChallengeMethod,oauth_state state,remote_ip remoteIp,pairing_code pairingCode,status,created_at createdAt,expires_at expiresAt,decided_at decidedAt FROM oauth_authorization_requests WHERE id=?',
+        'SELECT id,client_id clientId,redirect_uri redirectUri,scope,resource,code_challenge codeChallenge,code_challenge_method codeChallengeMethod,oauth_state state,remote_ip remoteIp,pairing_code pairingCode,status,renewable,created_at createdAt,expires_at expiresAt,decided_at decidedAt FROM oauth_authorization_requests WHERE id=?',
       )
       .get(id) as any | undefined;
     if (!row) return null;
@@ -148,7 +146,11 @@ export class OAuthRepository {
       this.db.prepare('DELETE FROM oauth_authorization_requests WHERE id=?').run(id);
       return null;
     }
-    return { ...row, codeChallengeMethod: 'S256' } as OAuthAuthorizationRequestRecord;
+    return {
+      ...row,
+      codeChallengeMethod: 'S256',
+      renewable: row.renewable !== undefined ? Boolean(row.renewable) : true,
+    } as OAuthAuthorizationRequestRecord;
   }
 
   listPendingAuthorizationRequests(): OAuthAuthorizationRequestRecord[] {
@@ -158,14 +160,18 @@ export class OAuthRepository {
     return (
       this.db
         .prepare(
-          "SELECT id,client_id clientId,redirect_uri redirectUri,scope,resource,code_challenge codeChallenge,code_challenge_method codeChallengeMethod,oauth_state state,remote_ip remoteIp,pairing_code pairingCode,status,created_at createdAt,expires_at expiresAt,decided_at decidedAt FROM oauth_authorization_requests WHERE status='PENDING' ORDER BY created_at",
+          "SELECT id,client_id clientId,redirect_uri redirectUri,scope,resource,code_challenge codeChallenge,code_challenge_method codeChallengeMethod,oauth_state state,remote_ip remoteIp,pairing_code pairingCode,status,renewable,created_at createdAt,expires_at expiresAt,decided_at decidedAt FROM oauth_authorization_requests WHERE status='PENDING' ORDER BY created_at",
         )
         .all() as any[]
-    ).map((row) => ({ ...row, codeChallengeMethod: 'S256' }));
+    ).map((row) => ({
+      ...row,
+      codeChallengeMethod: 'S256',
+      renewable: row.renewable !== undefined ? Boolean(row.renewable) : true,
+    }));
   }
 
-  approveAuthorizationRequest(id: string) {
-    return this.decideAuthorizationRequest(id, 'APPROVED');
+  approveAuthorizationRequest(id: string, options?: { renewable?: boolean }) {
+    return this.decideAuthorizationRequest(id, 'APPROVED', options);
   }
 
   denyAuthorizationRequest(id: string) {
@@ -188,9 +194,10 @@ export class OAuthRepository {
     const expiresAt = new Date(createdAt.getTime() + ttlMs);
     const actor = `oauth:${client.clientName}`;
     const subject = `oauth_grant_${randomUUID()}`;
+    const renewable = request.renewable !== false;
     this.db
       .prepare(
-        'INSERT INTO oauth_authorization_codes(code_hash,client_id,redirect_uri,scope,resource,code_challenge,actor,subject,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO oauth_authorization_codes(code_hash,client_id,redirect_uri,scope,resource,code_challenge,actor,subject,renewable,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
       )
       .run(
         hash(code),
@@ -201,6 +208,7 @@ export class OAuthRepository {
         request.codeChallenge,
         actor,
         subject,
+        renewable ? 1 : 0,
         createdAt.toISOString(),
         expiresAt.toISOString(),
       );
@@ -212,14 +220,17 @@ export class OAuthRepository {
     const codeHash = hash(code);
     const row = this.db
       .prepare(
-        'SELECT code_hash codeHash,client_id clientId,redirect_uri redirectUri,scope,resource,code_challenge codeChallenge,actor,subject,created_at createdAt,expires_at expiresAt FROM oauth_authorization_codes WHERE code_hash=?',
+        'SELECT code_hash codeHash,client_id clientId,redirect_uri redirectUri,scope,resource,code_challenge codeChallenge,actor,subject,renewable,created_at createdAt,expires_at expiresAt FROM oauth_authorization_codes WHERE code_hash=?',
       )
       .get(codeHash) as any | undefined;
     if (!row || !eqHash(codeHash, String(row.codeHash))) return null;
     this.db.prepare('DELETE FROM oauth_authorization_codes WHERE code_hash=?').run(codeHash);
     if (Date.parse(row.expiresAt) <= this.now().getTime()) return null;
     delete row.codeHash;
-    return row as OAuthAuthorizationCodeRecord;
+    return {
+      ...row,
+      renewable: row.renewable !== undefined ? Boolean(row.renewable) : true,
+    } as OAuthAuthorizationCodeRecord;
   }
 
   issueAccessToken(grant: OAuthGrantRecord, ttlMs: number) {
@@ -298,21 +309,34 @@ export class OAuthRepository {
     this.db.prepare('DELETE FROM oauth_workspace_grants WHERE subject=?').run(subject);
   }
 
+  recordConnectionOrigin(subject: string, remoteIp: string, at?: string): void {
+    this.origins.record(subject, remoteIp, at ?? this.now().toISOString());
+  }
+
+  listConnectionOrigins(subject: string, now?: string): ConnectionOriginRecord[] {
+    return this.origins.list(subject, now ?? this.now().toISOString());
+  }
+
   invalidateEphemeralForRestart() {
     this.db.exec(
       'DELETE FROM oauth_authorization_requests; DELETE FROM oauth_authorization_codes;',
     );
   }
 
-  private decideAuthorizationRequest(id: string, status: 'APPROVED' | 'DENIED') {
+  private decideAuthorizationRequest(
+    id: string,
+    status: 'APPROVED' | 'DENIED',
+    options?: { renewable?: boolean },
+  ) {
     const current = this.getAuthorizationRequest(id);
     if (!current) return null;
     const decidedAt = this.now().toISOString();
+    const renewable = options?.renewable !== undefined ? options.renewable : current.renewable;
     this.db
       .prepare(
-        "UPDATE oauth_authorization_requests SET status=?,decided_at=? WHERE id=? AND status='PENDING'",
+        "UPDATE oauth_authorization_requests SET status=?,renewable=?,decided_at=? WHERE id=? AND status='PENDING'",
       )
-      .run(status, decidedAt, id);
+      .run(status, renewable ? 1 : 0, decidedAt, id);
     return this.getAuthorizationRequest(id);
   }
 }

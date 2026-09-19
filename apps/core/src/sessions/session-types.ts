@@ -24,3 +24,9 @@ export type SessionResolution = {
   session: SecuritySession;
   mode: 'created' | 'existing' | 'resumed';
 };
+
+export interface DisconnectedIdentity {
+  actor: string;
+  subject: string;
+  connectionId?: string;
+}

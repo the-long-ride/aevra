@@ -228,6 +228,29 @@ ALTER TABLE mcp_upstreams ADD COLUMN catalog_json TEXT;
 ALTER TABLE mcp_upstreams ADD COLUMN pending_catalog_json TEXT;
 `,
   },
+  {
+    version: 14,
+    name: '014_oauth_continuity_ownership_and_origins',
+    sql: `
+ALTER TABLE pending_approvals ADD COLUMN connection_subject TEXT;
+CREATE TABLE IF NOT EXISTS oauth_connection_origins(
+  subject TEXT NOT NULL,
+  remote_ip TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  PRIMARY KEY(subject, remote_ip)
+);
+CREATE INDEX IF NOT EXISTS idx_pending_approvals_conn_state ON pending_approvals(connection_subject, state);
+CREATE INDEX IF NOT EXISTS idx_oauth_connection_origins_subject_seen ON oauth_connection_origins(subject, last_seen_at);
+`,
+  },
+  {
+    version: 15,
+    name: '015_oauth_renewable_grants',
+    sql: `
+ALTER TABLE oauth_authorization_requests ADD COLUMN renewable INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE oauth_authorization_codes ADD COLUMN renewable INTEGER NOT NULL DEFAULT 1;
+`,
+  },
 ];
 export function applyMigrations(db: DatabaseSync) {
   db.exec(
