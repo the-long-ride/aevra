@@ -1,6 +1,6 @@
 import type { DesktopPolicy, DesktopWindowIdentity } from '../../protocol/src/desktop.js';
 
-export type GateDirection = 'capture' | 'input';
+export type GateDirection = 'capture' | 'input' | 'background';
 
 export interface GateVerdict {
   allowed: boolean;
@@ -144,6 +144,9 @@ export function evaluateWindowGate(
   }
 
   if (attribution === 'unattributable') {
+    if (direction === 'background') {
+      return { allowed: false, reason: 'window identity is unavailable for background target', attribution };
+    }
     return policy.unattributedInput === 'allow'
       ? { allowed: true, reason: 'unattributedInput is set to allow', attribution }
       : { allowed: false, reason: 'window identity is unavailable', attribution };

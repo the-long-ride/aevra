@@ -24,6 +24,11 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
       windowId: stringProp('Target window id. Defaults to the focused window.'),
       maxNodes: { type: 'integer', minimum: 1, maximum: 5000 },
       interactiveOnly: { type: 'boolean', description: 'Return only interactive nodes.' },
+      mode: {
+        type: 'string',
+        enum: ['foreground', 'background'],
+        description: 'Describe mode: foreground (default) or background.',
+      },
     },
     additionalProperties: false,
   },
@@ -68,6 +73,60 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
       },
     },
     required: ['deltaY'],
+    additionalProperties: false,
+  },
+  desktop_invoke: {
+    type: 'object',
+    properties: {
+      windowId: stringProp('Target window id.'),
+      windowLeaseId: stringProp('Window lease id from desktop_describe in background mode.'),
+      snapshotId: stringProp('Snapshot id from desktop_describe in background mode.'),
+      ref: stringProp('Element ref to invoke.'),
+    },
+    required: ['windowId', 'windowLeaseId', 'snapshotId', 'ref'],
+    additionalProperties: false,
+  },
+  desktop_set_value: {
+    type: 'object',
+    properties: {
+      windowId: stringProp('Target window id.'),
+      windowLeaseId: stringProp('Window lease id from desktop_describe in background mode.'),
+      snapshotId: stringProp('Snapshot id from desktop_describe in background mode.'),
+      ref: stringProp('Element ref to set value on.'),
+      value: stringProp('Text value to set on the element.'),
+    },
+    required: ['windowId', 'windowLeaseId', 'snapshotId', 'ref', 'value'],
+    additionalProperties: false,
+  },
+  desktop_select: {
+    type: 'object',
+    properties: {
+      windowId: stringProp('Target window id.'),
+      windowLeaseId: stringProp('Window lease id from desktop_describe in background mode.'),
+      snapshotId: stringProp('Snapshot id from desktop_describe in background mode.'),
+      ref: stringProp('Element ref to select.'),
+    },
+    required: ['windowId', 'windowLeaseId', 'snapshotId', 'ref'],
+    additionalProperties: false,
+  },
+  desktop_toggle: {
+    type: 'object',
+    properties: {
+      windowId: stringProp('Target window id.'),
+      windowLeaseId: stringProp('Window lease id from desktop_describe in background mode.'),
+      snapshotId: stringProp('Snapshot id from desktop_describe in background mode.'),
+      ref: stringProp('Element ref to toggle.'),
+    },
+    required: ['windowId', 'windowLeaseId', 'snapshotId', 'ref'],
+    additionalProperties: false,
+  },
+  desktop_release_window: {
+    type: 'object',
+    properties: {
+      windowId: stringProp('Target window id.'),
+      windowLeaseId: stringProp('Window lease id to release.'),
+    },
+    required: ['windowId', 'windowLeaseId'],
     additionalProperties: false,
   },
 };

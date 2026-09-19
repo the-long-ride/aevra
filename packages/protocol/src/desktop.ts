@@ -7,9 +7,40 @@ export const DESKTOP_OPERATION_KINDS = [
   'desktop.describe',
   'desktop.capture',
   'desktop.act',
+  'desktop.backgroundAct',
+  'desktop.releaseWindow',
 ] as const;
 
 export type DesktopOperationKind = (typeof DESKTOP_OPERATION_KINDS)[number];
+
+export interface DesktopOwner {
+  sessionId: string;
+  workspaceId: string;
+}
+
+export type BackgroundAction = 'invoke' | 'setValue' | 'select' | 'toggle';
+
+export interface BackgroundTarget {
+  windowId: string;
+  snapshotId: string;
+  windowLeaseId: string;
+  ref: string;
+}
+
+export type BackgroundActionInput =
+  | (BackgroundTarget & { op: 'invoke' | 'select' | 'toggle' })
+  | (BackgroundTarget & { op: 'setValue'; value: string });
+
+export interface BackgroundActionResult {
+  ok: true;
+  outcome: 'completed';
+  window: DesktopWindowIdentity;
+  snapshotInvalidated: true;
+  requiresDescribe: true;
+  focusChanged: boolean;
+  postActionStateUnknown?: boolean;
+  toggleState?: 'off' | 'on' | 'indeterminate';
+}
 
 /** What the gate judges. Every field may be absent on an unattributable window. */
 export interface DesktopWindowIdentity {
@@ -27,6 +58,9 @@ export interface DesktopNode {
   enabled: boolean;
   focused: boolean;
   children?: DesktopNode[];
+  supportedActions?: BackgroundAction[];
+  readOnly?: boolean;
+  toggleState?: 'off' | 'on' | 'indeterminate';
 }
 
 /** Independent by design: a host may see without acting. */
@@ -35,6 +69,7 @@ export interface DesktopCapabilities {
   tree: boolean;
   attribution: boolean;
   input: boolean;
+  backgroundActions?: boolean;
 }
 
 /** Returned by every action so the caller need not re-describe. */
@@ -90,10 +125,28 @@ export interface DesktopPolicy {
   deniedTitlePatterns?: string[];
 }
 
+export interface BackgroundSnapshot {
+  window: DesktopWindowIdentity;
+  snapshotId: string;
+  windowLeaseId: string;
+  leaseExpiresAt: string; // UTC ISO timestamp
+  nodes: Array<
+    DesktopNode & {
+      supportedActions: BackgroundAction[];
+      readOnly?: boolean;
+      toggleState?: 'off' | 'on' | 'indeterminate';
+    }
+  >;
+  truncated: boolean;
+}
+
 export interface DesktopDescribeResult {
   window: DesktopWindowIdentity;
   nodes: DesktopNode[];
   truncated: boolean;
+  snapshotId?: string;
+  windowLeaseId?: string;
+  leaseExpiresAt?: string;
 }
 
 export interface DesktopCaptureResult {

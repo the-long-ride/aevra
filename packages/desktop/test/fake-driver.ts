@@ -48,4 +48,53 @@ export class FakeDesktopDriver implements DesktopDriver {
   async disconnect() {
     this.refs.clear();
   }
+
+  async targetIdentity(windowId: string) {
+    return {
+      window: { windowId, processName: 'notepad.exe', title: 'Untitled' },
+      windowInstance: { windowId, processId: 1234, processStartedAt: '2026-09-18T00:00:00Z' },
+    };
+  }
+
+  async describeBackground(request: {
+    windowId: string;
+    snapshotId: string;
+    maxNodes: number;
+    interactiveOnly: boolean;
+  }) {
+    this.refs = new Set(['ref_1_1']);
+    return {
+      window: { windowId: request.windowId, processName: 'notepad.exe', title: 'Untitled' },
+      windowInstance: { windowId: request.windowId, processId: 1234, processStartedAt: '2026-09-18T00:00:00Z' },
+      nodes: [
+        {
+          ref: 'ref_1_1',
+          role: 'button',
+          name: 'Save',
+          enabled: true,
+          focused: false,
+          supportedActions: ['invoke' as const],
+        },
+      ],
+      truncated: false,
+    };
+  }
+
+  async releaseBackgroundSnapshot(_snapshotId: string) {
+    return true;
+  }
+
+  async backgroundAct(request: {
+    snapshotId: string;
+    handle: string;
+    op: string;
+    value?: string;
+    expectedInstance: { windowId: string; processId: number; processStartedAt: string };
+  }) {
+    return {
+      ok: true,
+      outcome: 'completed',
+      focusChanged: false,
+    };
+  }
 }

@@ -232,6 +232,9 @@ pub fn describe_tree(
                 value: info.value,
                 enabled: info.enabled,
                 focused: info.focused,
+                supported_actions: None,
+                read_only: None,
+                toggle_state: None,
             });
         }
 
@@ -264,6 +267,83 @@ pub fn describe_tree(
     }
 
     Ok((nodes, truncated))
+}
+
+#[allow(clippy::type_complexity)]
+pub fn describe_background_tree(
+    automation: &IUIAutomation,
+    hwnd: HWND,
+    max_nodes: usize,
+    interactive_only: bool,
+    manager: &mut crate::background_snapshots::BackgroundSnapshotManager,
+) -> ::windows::core::Result<(IUIAutomationElement, Vec<DescribeNode>, std::collections::HashMap<String, IUIAutomationElement>, bool)> {
+    let walker = unsafe { automation.RawViewWalker() }?;
+    let root = unsafe { automation.ElementFromHandle(hwnd) }?;
+
+    let visit_cap = max_visited(max_nodes);
+
+    let mut nodes = Vec::new();
+    let mut elements = std::collections::HashMap::new();
+    let mut truncated = false;
+    let mut visited = 0usize;
+    let mut queue: VecDeque<(IUIAutomationElement, u32)> = VecDeque::new();
+    queue.push_back((root.clone(), 0));
+
+    while let Some((element, depth)) = queue.pop_front() {
+        visited += 1;
+        if visited > visit_cap {
+            truncated = true;
+            break;
+        }
+
+        let info = match read_node(&element) {
+            Ok(info) => info,
+            Err(_) => continue,
+        };
+
+        if !interactive_only || is_interactive(info.control_type) {
+            if cap_reached(nodes.len(), max_nodes) {
+                truncated = true;
+                break;
+            }
+            let handle = manager.mint_handle();
+            let patterns = crate::background_snapshots::discover_patterns(&element, info.enabled);
+            elements.insert(handle.clone(), element.clone());
+            nodes.push(DescribeNode {
+                handle,
+                role: role_for(info.control_type),
+                name: info.name,
+                value: info.value,
+                enabled: info.enabled,
+                focused: info.focused,
+                supported_actions: Some(patterns.supported_actions),
+                read_only: patterns.read_only,
+                toggle_state: patterns.toggle_state,
+            });
+        }
+
+        if depth >= MAX_DEPTH {
+            continue;
+        }
+
+        let mut child = match unsafe { walker.GetFirstChildElement(&element) } {
+            Ok(child) => child,
+            Err(_) => continue,
+        };
+        loop {
+            if queue_is_full(visited, queue.len(), visit_cap) {
+                truncated = true;
+                break;
+            }
+            queue.push_back((child.clone(), depth + 1));
+            child = match unsafe { walker.GetNextSiblingElement(&child) } {
+                Ok(next) => next,
+                Err(_) => break,
+            };
+        }
+    }
+
+    Ok((root, nodes, elements, truncated))
 }
 
 #[cfg(test)]

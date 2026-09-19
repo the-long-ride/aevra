@@ -4,6 +4,7 @@
 **Status:** Approved design, ready for implementation planning
 **Target version:** 1.1.0
 **Supersedes nothing. Extends:** `docs/superpowers/specs/2026-09-05-aevra-browser-control-design.md`
+**Extended by:** `docs/specs/2026-09-18-background-desktop-automation-design.md` (background semantic automation without foreground input injection)
 
 ---
 

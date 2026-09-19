@@ -47,8 +47,9 @@ through a series of failures.
   a locked screen, has nothing to read or click; capture refuses a blank
   screen rather than returning a black rectangle.
 
-## The ten tools
+## The tools
 
+### Foreground control tools
 | Tool                                                          | What it does                                                |
 | ------------------------------------------------------------- | ----------------------------------------------------------- |
 | `desktop_connect`                                             | Starts the helper and reports its capabilities              |
@@ -57,7 +58,32 @@ through a series of failures.
 | `desktop_windows`                                             | Lists visible top-level windows with their process identity |
 | `desktop_describe`                                            | Accessibility tree of one window, as `ref_N` handles        |
 | `desktop_capture`                                             | A screenshot, only when asked for                           |
-| `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` | Input                                                       |
+| `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` | Foreground input injection (requires window focus)          |
+
+### Background automation tools
+| Tool                     | What it does                                                                           |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `desktop_invoke`         | Invokes button or menu item in a background window without focus                       |
+| `desktop_set_value`      | Sets text value directly via UIA ValuePattern (never injects keystrokes)               |
+| `desktop_select`         | Selects a list/combo item via UIA SelectionItemPattern without opening dropdowns       |
+| `desktop_toggle`         | Toggles checkbox/switch via UIA TogglePattern                                          |
+| `desktop_release_window` | Releases an active window lease before its 60-second TTL expires                       |
+
+## Background desktop automation
+
+Background desktop automation allows models to interact with supported Windows applications without stealing window focus, moving your mouse, or modifying the system clipboard.
+
+### How it works
+1. **Acquire and Describe**: Call `desktop_describe` with `windowId` and `mode: 'background'`. This grants a 60-second exclusive `windowLeaseId` to your session and workspace and takes a native UIA snapshot.
+2. **Execute Semantic Action**: Call `desktop_invoke`, `desktop_set_value`, `desktop_select`, or `desktop_toggle` passing the element `ref` and `windowLeaseId`.
+3. **Single-Snapshot Invalidation**: Because background mutations can alter control hierarchies, every mutating action invalidates the snapshot. To perform another action, call `desktop_describe` again to get a fresh snapshot.
+4. **Release or Timeout**: Call `desktop_release_window` when finished, or allow the lease to expire after 60 seconds.
+
+### Focus change detection & safety
+- If an action triggers a modal dialog or focus change, Aevra suspends the lease and returns `focusChanged: true`. Subsequent actions against that lease will be refused with `DESKTOP_FOCUS_CHANGED` until you re-describe the target.
+- Password fields strictly refuse inspection and background input.
+- Read-only fields cannot receive `desktop_set_value`.
+- If an application is minimized to the system notification area (tray), it has no mapped top-level window; restore its window before attempting background automation.
 
 ## How a model is meant to use it
 
@@ -111,16 +137,8 @@ Things worth knowing before relying on it:
 permitted. Input is refused whenever Aevra cannot say which application
 would receive it.
 
-- **It cannot type into an elevated window.** Windows itself refuses input
-  injection from an unelevated process into a more privileged one (UIPI),
-  and Aevra runs unelevated. A UAC consent prompt is therefore a hard stop,
-  enforced by the operating system rather than by a setting. Aevra reports
-  it as `DESKTOP_INPUT_REFUSED` rather than as success.
-- **It refuses input to a window it cannot attribute.** A window whose
-  owning executable cannot be read - the secure desktop, some elevated
-  processes - has no process identity, and input to it is refused. You can
-  opt out with `unattributedInput: 'allow'` in the desktop policy, which
-  means "type into windows I cannot identify"; do not do that casually.
+- **It cannot drive elevated windows or secure desktops.** Under Windows [User Interface Privilege Isolation (UIPI)](https://learn.microsoft.com/en-us/previous-versions/dotnet/articles/bb625963(v=msdn.10)), unelevated processes cannot inject window messages or cross-integrity synthetic input into elevated applications. Furthermore, secure desktops (e.g. `Winlogon`, UAC elevation prompts, screensavers) isolate UI Automation from standard interactive sessions. Aevra actively checks token elevation, token integrity levels, and thread desktops, returning `DESKTOP_INPUT_REFUSED`.
+- **It refuses input to a window it cannot attribute.** A window whose owning executable cannot be verified has no process identity, and input to it is refused. For foreground control, `unattributedInput: 'allow'` is an explicit opt-in policy; for background automation, unattributed windows are strictly and unconditionally refused.
 - **It refuses input to a denylisted application.** By default that covers
   terminals and shells (`cmd.exe`, `powershell.exe`, `pwsh.exe`,
   `WindowsTerminal.exe`, `conhost.exe`), password managers (1Password,
@@ -168,6 +186,18 @@ machine it is not driving.
   as untrusted content, not as instructions.
 - **Every action records the gate verdict and the rule that decided it**,
   including reads - so a screenshot leaves a row in the audit trail too.
+
+## Configuring allowed applications in the Web UI
+
+In `Settings → Desktop control`, operators can configure which applications the model can interact with:
+
+- **Application access modes (`Apps computer use can touch`):**
+  - `Allow all apps`: Allows input to any attributed application not covered by built-in refusals.
+  - `Only these apps`: Strict allowlist. Only selected and manually registered applications may receive input.
+  - `Deny all apps`: Full input lockdown; screen reading remains permitted.
+- **Application picker:** Under `Only these apps`, detected applications are presented in a searchable, filterable, and paginated table with individual toggles and status indicators (`Allowed` / `Blocked`).
+- **Custom applications with path:** If an application is missing from auto-detection, click `+ Add custom app with path` to register it by executable path (e.g. `C:\Tools\app.exe`), display name, and optional version. Custom records can be edited or deleted (`[x]`) with confirmation at any time.
+- **Show file paths to the AI:** An optional toggle to provide full executable paths to the AI during window discovery when detailed path context is required.
 
 ## Turning it off
 

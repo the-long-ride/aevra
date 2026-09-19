@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleDesktopTool } from '../src/desktop-tools.js';
+import { toolDefinitions } from '../src/registry.js';
 import { desktopContext } from './desktop-context.js';
 
 test('desktop_click by coordinate is audited with the coordinate as target', async () => {
@@ -101,4 +102,60 @@ test('desktop_windows reports the full executablePath when the policy opts in', 
   ctx.window.executablePath = 'C:\\Windows\\System32\\notepad.exe';
   const result: any = await handleDesktopTool(ctx.value, 's1', 'desktop_windows', {});
   assert.equal(result.result[0].executablePath, 'C:\\Windows\\System32\\notepad.exe');
+});
+
+test('toolDefinitions exposes all background desktop tools with correct schema and annotations', () => {
+  const defs = toolDefinitions();
+  const byName = new Map(defs.map((d) => [d.name, d]));
+
+  const backgroundTools = [
+    'desktop_invoke',
+    'desktop_set_value',
+    'desktop_select',
+    'desktop_toggle',
+    'desktop_release_window',
+  ] as const;
+
+  for (const name of backgroundTools) {
+    const def = byName.get(name);
+    assert.ok(def, `Expected toolDefinition for ${name}`);
+    assert.ok(def.description);
+    assert.equal(def.inputSchema.type, 'object');
+    if (name !== 'desktop_release_window') {
+      assert.equal(def.annotations.destructiveHint, true);
+      assert.equal(def.annotations.openWorldHint, true);
+    }
+  }
+});
+
+test('desktop_invoke, desktop_select, desktop_toggle succeed and audit properly', async () => {
+  for (const tool of ['desktop_invoke', 'desktop_select', 'desktop_toggle'] as const) {
+    const ctx = desktopContext({ yolo: true });
+    const result: any = await handleDesktopTool(ctx.value, 's1', tool, {
+      windowId: 'w1',
+      windowLeaseId: 'lease-1',
+      snapshotId: 'snap-1',
+      ref: 'ref_1_1',
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.outcome, 'completed');
+    const entry = ctx.auditEntries.find((e: any) => e.tool === tool);
+    assert.ok(entry, `expected audit entry for ${tool}`);
+    assert.equal(entry.target, 'w1:ref_1_1');
+    assert.equal(entry.result, 'SUCCEEDED');
+  }
+});
+
+test('desktop_release_window succeeds and audits properly', async () => {
+  const ctx = desktopContext({ yolo: true });
+  const result: any = await handleDesktopTool(ctx.value, 's1', 'desktop_release_window', {
+    windowId: 'w1',
+    windowLeaseId: 'lease-1',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.released, true);
+  const entry = ctx.auditEntries.find((e: any) => e.tool === 'desktop_release_window');
+  assert.ok(entry);
+  assert.equal(entry.target, 'window:w1');
+  assert.equal(entry.result, 'SUCCEEDED');
 });

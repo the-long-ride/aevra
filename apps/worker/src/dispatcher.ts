@@ -1,4 +1,5 @@
 import type { VerifiedEnvelope, WorkerResult } from '../../../packages/protocol/src/worker.js';
+import type { DesktopOwner } from '../../../packages/protocol/src/desktop.js';
 import {
   fileList,
   fileRead,
@@ -101,7 +102,11 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
     // raw result (or throws), so it is wrapped into a WorkerResult here the
     // same way every other branch in this function wraps its own value.
     if (isDesktopOperation(op)) {
-      return { ok: true, value: await dispatchDesktopOperation(op, desktopRuntime.registry()) };
+      const owner: DesktopOwner = {
+        sessionId: envelope.sessionId,
+        workspaceId: envelope.workspaceId,
+      };
+      return { ok: true, value: await dispatchDesktopOperation(op, desktopRuntime.registry(), owner) };
     }
     if (isMcpUpstreamOperation(op)) {
       return {

@@ -1,11 +1,10 @@
 //! Real input synthesis via `SendInput`.
 //!
-//! **Why `SendInput` and not UI Automation's `InvokePattern`** (task 9c
-//! ruling): `Invoke` drives the application through the accessibility API,
-//! which bypasses UIPI. This design deliberately relies on Windows refusing
-//! to let an unelevated process inject input into an elevated window -- that
-//! refusal is what makes a UAC dialog a hard stop rather than a policy
-//! decision someone can misconfigure.
+//! **Foreground input synthesis rationale**: foreground tools use `SendInput`
+//! and `SetCursorPos` with physical desktop coordinates. Note that UI Automation
+//! also enforces integrity levels and UIPI unless UIAccess is explicitly granted,
+//! but background automation uses dedicated UIA semantic patterns with explicit
+//! token integrity, elevation, desktop, and ancestry validation in `target_guard.rs`.
 //!
 //! The sink and the cursor mover are INJECTED rather than called directly.
 //! That is not ceremony: the guarantee this module exists to provide is that

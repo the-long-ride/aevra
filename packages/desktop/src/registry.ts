@@ -1,4 +1,5 @@
 import type { DesktopCapabilities } from '../../protocol/src/desktop.js';
+import { BackgroundDesktopState } from './background-state.js';
 import { DesktopDriverError, type DesktopDriver } from './driver.js';
 
 export interface DesktopRegistryDeps {
@@ -12,18 +13,25 @@ export interface DesktopRegistryStatus {
 
 /**
  * Owns the single live desktop session. There is one cursor and one focused
- * window on the machine, so - unlike the browser registry - there is no epoch
- * and no extension pairing to track, only "is a driver attached right now".
+ * window on the machine, serialized through the global queue.
  */
 export class DesktopSessionRegistry {
   private driver: DesktopDriver | null = null;
   private capabilities: DesktopCapabilities | null = null;
   private queue: Promise<unknown> = Promise.resolve();
+  private epochValue = 1;
+  readonly backgroundState = new BackgroundDesktopState();
 
   constructor(private readonly deps: DesktopRegistryDeps) {}
 
+  epoch(): number {
+    return this.epochValue;
+  }
+
   async connect(): Promise<DesktopCapabilities> {
     await this.disconnect();
+    this.epochValue++;
+    this.backgroundState.reset();
     const driver = await this.deps.createDriver();
     const capabilities = await driver.connect();
     this.driver = driver;
@@ -48,8 +56,17 @@ export class DesktopSessionRegistry {
    * Connect, disconnect, and status stay outside the queue so the kill switch
    * reaches a wedged session instead of waiting behind it.
    */
-  run<T>(operation: (driver: DesktopDriver) => Promise<T>): Promise<T> {
-    const next = this.queue.then(() => operation(this.require()));
+  run<T>(operation: (driver: DesktopDriver, epoch: number) => Promise<T>): Promise<T> {
+    const enqueuedEpoch = this.epochValue;
+    const next = this.queue.then(() => {
+      if (this.epochValue !== enqueuedEpoch || !this.driver) {
+        throw new DesktopDriverError(
+          'DESKTOP_NOT_CONNECTED',
+          'Desktop session epoch changed or disconnected while queued',
+        );
+      }
+      return operation(this.require(), enqueuedEpoch);
+    });
     // The chain must survive a rejected operation, otherwise one failure would
     // poison every later one queued behind it.
     this.queue = next.then(
@@ -67,6 +84,8 @@ export class DesktopSessionRegistry {
     const driver = this.driver;
     this.driver = null;
     this.capabilities = null;
+    this.epochValue++;
+    this.backgroundState.reset();
     if (!driver) return;
     try {
       await driver.disconnect();

@@ -53,6 +53,7 @@ pub struct WindowsBackend {
     /// gone behind another would be clicked straight through to whatever is
     /// now on top of it.
     described_window: RefCell<Option<isize>>,
+    background_snapshots: RefCell<crate::background_snapshots::BackgroundSnapshotManager>,
 }
 
 impl WindowsBackend {
@@ -94,6 +95,7 @@ impl WindowsBackend {
             automation: RefCell::new(None),
             handle_table: RefCell::new(HandleTable::new()),
             described_window: RefCell::new(None),
+            background_snapshots: RefCell::new(crate::background_snapshots::BackgroundSnapshotManager::new()),
         }
     }
 
@@ -136,7 +138,7 @@ impl WindowsBackend {
         let element = unsafe { automation.GetFocusedElement() }.ok()?;
         let name = unsafe { element.CurrentName() }.ok()?;
         let control_type = unsafe { element.CurrentControlType() }.ok()?;
-        Some(format!("{}|{}", name.to_string(), control_type.0))
+        Some(format!("{}|{}", name, control_type.0))
     }
 }
 
@@ -281,7 +283,7 @@ impl DesktopBackend for WindowsBackend {
         // claiming one this binary cannot deliver would defeat the whole
         // point of a capability record, which is that the model can trust
         // what it says and stop guessing.
-        Capabilities { capture: true, tree: true, attribution: true, input: true }
+        Capabilities { capture: true, tree: true, attribution: true, input: true, background_actions: Some(true) }
     }
 
     fn windows(&self) -> Vec<WindowIdentity> {
@@ -345,7 +347,14 @@ impl DesktopBackend for WindowsBackend {
             &mut table,
         )
         .map_err(|err| format!("failed to read the accessibility tree: {err:?}"))?;
-        Ok(DescribeResult { window, nodes, truncated })
+        Ok(DescribeResult {
+            window,
+            nodes,
+            truncated,
+            snapshot_id: None,
+            window_lease_id: None,
+            lease_expires_at: None,
+        })
     }
 
     fn capture(&self, request: CaptureRequest) -> Result<CaptureResult, String> {
@@ -370,5 +379,53 @@ impl DesktopBackend for WindowsBackend {
             described_window: *self.described_window.borrow(),
         };
         act::perform(&context, &request)
+    }
+
+    fn target_identity(&self, request: crate::backend::TargetIdentityRequest) -> Result<crate::backend::TargetIdentityResult, String> {
+        let hwnd = resolve_target_hwnd(Some(&request.window_id))?;
+        let window = Self::identity_for(hwnd);
+        let window_instance = crate::target_guard::native::get_window_instance(hwnd)
+            .map_err(|err| format!("DESKTOP_TARGET_CHANGED: {err}"))?;
+        crate::target_guard::native::check_security(window_instance.process_id)
+            .map_err(|err| format!("DESKTOP_INPUT_REFUSED: {err}"))?;
+        Ok(crate::backend::TargetIdentityResult { window, window_instance })
+    }
+
+    fn describe_background(&self, request: crate::backend::DescribeBackgroundRequest) -> Result<crate::backend::DescribeBackgroundResult, String> {
+        let hwnd = resolve_target_hwnd(Some(&request.window_id))?;
+        let window = Self::identity_for(hwnd);
+        let window_instance = crate::target_guard::native::get_window_instance(hwnd)
+            .map_err(|err| format!("DESKTOP_TARGET_CHANGED: {err}"))?;
+        crate::target_guard::native::check_security(window_instance.process_id)
+            .map_err(|err| format!("DESKTOP_INPUT_REFUSED: {err}"))?;
+
+        let automation = self.automation()?;
+        let mut manager = self.background_snapshots.borrow_mut();
+        let (root, nodes, elements, truncated) = uia::describe_background_tree(
+            &automation,
+            hwnd,
+            request.max_nodes,
+            request.interactive_only,
+            &mut manager,
+        )
+        .map_err(|err| format!("failed to read the accessibility tree: {err:?}"))?;
+
+        manager.store_snapshot(request.snapshot_id, window_instance.clone(), root, elements);
+
+        Ok(crate::backend::DescribeBackgroundResult {
+            window,
+            window_instance,
+            nodes,
+            truncated,
+        })
+    }
+
+    fn release_background_snapshot(&self, request: crate::backend::ReleaseBackgroundSnapshotRequest) -> Result<bool, String> {
+        Ok(self.background_snapshots.borrow_mut().release_snapshot(&request.snapshot_id))
+    }
+
+    fn background_act(&self, request: crate::backend::BackgroundActRequest) -> Result<crate::backend::BackgroundActResult, String> {
+        let automation = self.automation()?;
+        crate::background::execute_background_act(&automation, &self.background_snapshots.borrow(), &request)
     }
 }

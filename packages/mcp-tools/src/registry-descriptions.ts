@@ -75,4 +75,9 @@ export const toolDescriptions: Partial<Record<AevraToolName, string>> = {
   desktop_type: 'Type text into an element ref or the focused desktop element.',
   desktop_key: 'Send a key or key combination to the focused desktop window.',
   desktop_scroll: 'Scroll an element ref or the focused desktop window.',
+  desktop_invoke: 'Invoke a supported UI element in a background desktop window.',
+  desktop_set_value: 'Set text value on a supported UI element in a background desktop window.',
+  desktop_select: 'Select an item element in a background desktop window.',
+  desktop_toggle: 'Toggle the check or toggle state of an element in a background desktop window.',
+  desktop_release_window: 'Release an acquired background desktop window lease.',
 };
