@@ -75,6 +75,11 @@ export const STABLE_TOOL_NAMES = [
   'desktop_type',
   'desktop_key',
   'desktop_scroll',
+  'desktop_invoke',
+  'desktop_set_value',
+  'desktop_select',
+  'desktop_toggle',
+  'desktop_release_window',
 ] as const;
 export type AevraToolName = (typeof STABLE_TOOL_NAMES)[number];
 
@@ -274,6 +279,10 @@ const destructive = new Set<AevraToolName>([
   'desktop_type',
   'desktop_key',
   'desktop_scroll',
+  'desktop_invoke',
+  'desktop_set_value',
+  'desktop_select',
+  'desktop_toggle',
 ]);
 // `openWorld` marks a tool whose effect reaches outside the workspace
 // sandbox this codebase can see and reason about. The four desktop input
@@ -292,6 +301,10 @@ const openWorld = new Set<AevraToolName>([
   'desktop_type',
   'desktop_key',
   'desktop_scroll',
+  'desktop_invoke',
+  'desktop_set_value',
+  'desktop_select',
+  'desktop_toggle',
 ]);
 
 export function toolDefinitions(): ToolDescriptor[] {
