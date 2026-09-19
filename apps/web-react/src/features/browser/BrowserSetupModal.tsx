@@ -28,7 +28,9 @@ export function BrowserSetupModal({
   const cleanAevra = (aevraVersion ?? '').replace(/^v/, '').trim();
   const cleanExt = (extVersion ?? '').replace(/^v/, '').trim();
   const isMismatch = Boolean(isInstalled && cleanExt && cleanAevra && cleanExt !== cleanAevra);
-  const downloadUrl = cleanAevra ? browserExtensionZipUrl(cleanAevra) : BROWSER_EXTENSION_DOWNLOAD_URL;
+  const downloadUrl = cleanAevra
+    ? browserExtensionZipUrl(cleanAevra)
+    : BROWSER_EXTENSION_DOWNLOAD_URL;
 
   return (
     <div

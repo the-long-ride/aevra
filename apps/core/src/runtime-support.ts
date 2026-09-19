@@ -214,3 +214,24 @@ export async function createRuntimeDataServices(config: CoreConfig, db: AevraDat
     },
   };
 }
+
+export async function syncBrowserPairingStatus(
+  browserPairing: BrowserPairingService,
+  workerGateway: WorkerGateway,
+): Promise<void> {
+  const initialPairing = browserPairing.state();
+  if (initialPairing.extensionId) {
+    await workerGateway
+      .execute({
+        sessionId: 'admin:browser',
+        workspaceId: 'system',
+        roots: [],
+        operation: {
+          kind: 'browser.status',
+          epoch: initialPairing.epoch,
+          extensionId: initialPairing.extensionId,
+        },
+      })
+      .catch(() => {});
+  }
+}

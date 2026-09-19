@@ -1,8 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  BackgroundActionInput,
-  DesktopWindowIdentity,
-} from '../../protocol/src/desktop.js';
+import type { BackgroundActionInput, DesktopWindowIdentity } from '../../protocol/src/desktop.js';
 import type { RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { markUntrusted } from '../../security/src/untrusted.js';
@@ -101,9 +98,7 @@ export async function handleBackgroundAction(
 
   const target = `${windowId}:${ref}`;
   const auditTarget =
-    op === 'setValue'
-      ? `${target} (${String(args.value ?? '').length} chars)`
-      : target;
+    op === 'setValue' ? `${target} (${String(args.value ?? '').length} chars)` : target;
 
   const execute = async () => {
     try {
@@ -111,7 +106,9 @@ export async function handleBackgroundAction(
       const window: DesktopWindowIdentity | undefined = result?.window;
       audit(context, sessionId, name, auditTarget, risk, 'SUCCEEDED', {
         window: targetOf(window),
-        ...(result?.gateVerdict ? { gateVerdict: result.gateVerdict, gateRule: result.gateRule } : {}),
+        ...(result?.gateVerdict
+          ? { gateVerdict: result.gateVerdict, gateRule: result.gateRule }
+          : {}),
       });
       return markUntrusted(result);
     } catch (error) {

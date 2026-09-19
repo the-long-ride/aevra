@@ -20,6 +20,7 @@ import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstr
 import {
   buildAdminApiContext,
   createCoreToolService,
+  createRuntimeAdminServer,
   createRuntimeApprovalService,
 } from './admin/admin-api-context.js';
 import { LocalFilesystemService } from './admin/local-filesystem.js';
@@ -47,6 +48,7 @@ import {
   resolveRuntimeSystemCapabilities,
   resolveRuntimeTls,
   runtimeWorkerGateway,
+  syncBrowserPairingStatus,
 } from './runtime-support.js';
 import { SessionSkillAccessGate } from '../../../packages/mcp-tools/src/skill-access-gate.js';
 import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
@@ -251,26 +253,14 @@ export async function createCoreRuntime(
         const localTls = tls.serverOptions;
         const staticDir = fileURLToPath(new URL('../../web', import.meta.url));
         const oauth = exposureWiring.oauth;
-        admin = new AdminServer(
-          config.adminHost,
-          config.adminPort,
-          () =>
-            buildRuntimeHealth({
-              version: AEVRA_VERSION,
-              workerRunning: Boolean(worker),
-              mcpRunning: Boolean(mcp),
-              mcpDiagnostics: mcp?.diagnosticsSnapshot() ?? null,
-              exposure: exposureWiring?.status() ?? null,
-              safeMode,
-              connectorFailedAttempts: connectorLimiter.totalFailures(),
-            }),
+        admin = createRuntimeAdminServer(
+          config,
           {
             bootstrap,
             credentialVerifier: adminCredentialVerifier,
             controlSecret,
             staticDir,
-            ...(localTls ? { tls: localTls } : {}),
-            advertisedHost: 'localhost',
+            localTls,
             trustedOrigins: () =>
               exposureWiring?.trustedAdminOrigins() ?? config.trustedAdminOrigins,
             gatewayTrustSecret,
@@ -308,6 +298,16 @@ export async function createCoreRuntime(
               isSafeMode: () => safeMode,
             }),
           },
+          () =>
+            buildRuntimeHealth({
+              version: AEVRA_VERSION,
+              workerRunning: Boolean(worker),
+              mcpRunning: Boolean(mcp),
+              mcpDiagnostics: mcp?.diagnosticsSnapshot() ?? null,
+              exposure: exposureWiring?.status() ?? null,
+              safeMode,
+              connectorFailedAttempts: connectorLimiter.totalFailures(),
+            }),
         );
         const verifier = exposureWiring.verifier,
           connectorLimiter = new IpRateLimiter(30, 1),
@@ -335,21 +335,7 @@ export async function createCoreRuntime(
         await exposureWiring.startGateway(admin.url(), mcp.url());
         await exposureWiring.startProvider();
         await keepAwake.start();
-        const initialPairing = browserPairing.state();
-        if (initialPairing.extensionId) {
-          await workerGateway
-            .execute({
-              sessionId: 'admin:browser',
-              workspaceId: 'system',
-              roots: [],
-              operation: {
-                kind: 'browser.status',
-                epoch: initialPairing.epoch,
-                extensionId: initialPairing.extensionId,
-              },
-            })
-            .catch(() => {});
-        }
+        await syncBrowserPairingStatus(browserPairing, workerGateway);
         started = true;
       } catch (error) {
         await cleanup();

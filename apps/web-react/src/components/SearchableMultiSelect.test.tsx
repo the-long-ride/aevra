@@ -19,9 +19,7 @@ describe('SearchableMultiSelect', () => {
       />,
     );
     expect(screen.getByLabelText('Workspace IDs')).toBeInTheDocument();
-    expect(
-      screen.getByPlaceholderText('Search workspace by name…'),
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search workspace by name…')).toBeInTheDocument();
   });
 
   it('filters options by name and selects via click', async () => {

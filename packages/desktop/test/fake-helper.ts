@@ -71,12 +71,20 @@ function driverResult(method: string): unknown {
     case 'targetIdentity':
       return {
         window: FOCUSED_WINDOW,
-        windowInstance: { windowId: 'w1', processId: 1234, processStartedAt: '2026-09-18T00:00:00Z' },
+        windowInstance: {
+          windowId: 'w1',
+          processId: 1234,
+          processStartedAt: '2026-09-18T00:00:00Z',
+        },
       };
     case 'describeBackground':
       return {
         window: FOCUSED_WINDOW,
-        windowInstance: { windowId: 'w1', processId: 1234, processStartedAt: '2026-09-18T00:00:00Z' },
+        windowInstance: {
+          windowId: 'w1',
+          processId: 1234,
+          processStartedAt: '2026-09-18T00:00:00Z',
+        },
         nodes: [
           {
             handle: 'h1',

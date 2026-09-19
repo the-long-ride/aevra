@@ -1,7 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useOptionalDialog } from '../../components/Dialog';
 import { useMcpActivityEntries } from '../../hooks/use-mcp-activity';
-import { groupEntriesByConnector, showMcpActivityDetails } from './activity-detail';
+import {
+  getAnchorCoords,
+  groupEntriesByConnector,
+  showMcpActivityDetails,
+  type TooltipState,
+} from './activity-detail';
 import type { DashboardData } from './dashboard-service';
 import {
   activeEntriesAt,
@@ -17,29 +22,6 @@ import {
   type RequestPoint,
 } from './request-activity-geometry';
 import { useRequestActivityViewport } from './use-request-activity-viewport';
-
-interface TooltipState {
-  x: number;
-  y: number;
-  timestamp: number;
-  active: number;
-  pinned: boolean;
-}
-
-function getAnchorCoords(target: SVGElement, clientX?: number, clientY?: number) {
-  const rect =
-    typeof target.getBoundingClientRect === 'function' ? target.getBoundingClientRect() : null;
-  if (rect && (rect.width > 0 || rect.left > 0 || rect.top > 0)) {
-    return {
-      x: Math.round(rect.left + rect.width / 2),
-      y: Math.round(rect.top),
-    };
-  }
-  return {
-    x: clientX ?? 0,
-    y: clientY ?? 0,
-  };
-}
 
 export function RequestActivityChart({ data }: { data: DashboardData }) {
   const entries = useMcpActivityEntries();

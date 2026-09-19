@@ -102,9 +102,7 @@ test('desktop.describe accepts optional mode foreground and background', () => {
 });
 
 test('capability defaults absent backgroundActions to false for old-helper compatibility', async () => {
-  const { normalizeBackgroundCapability } = await import(
-    '../../desktop/src/background-driver.js'
-  );
+  const { normalizeBackgroundCapability } = await import('../../desktop/src/background-driver.js');
   assert.equal(
     normalizeBackgroundCapability({
       capture: true,

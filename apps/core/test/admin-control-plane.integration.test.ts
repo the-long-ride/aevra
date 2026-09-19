@@ -61,7 +61,7 @@ test('approval allow route only arms the ticket and never executes it', async ()
       throw new Error('unused');
     },
     status() {
-      return null;
+      return { id: 'req_1', state: 'PENDING' };
     },
     list() {
       return [];
@@ -72,14 +72,17 @@ test('approval allow route only arms the ticket and never executes it', async ()
     api: { approvals, executeApproval: () => executed++ } as any,
   });
   await server.start();
-  const response = await request(`${server.url()}/api/approvals/req_1/approve`, {
-    method: 'POST',
-    headers: { origin: server.url(), 'sec-fetch-site': 'same-origin' },
-  });
-  assert.equal(response.status, 200);
-  assert.equal(approved, 1);
-  assert.equal(executed, 0);
-  await server.close();
+  try {
+    const response = await request(`${server.url()}/api/approvals/req_1/approve`, {
+      method: 'POST',
+      headers: { origin: server.url(), 'sec-fetch-site': 'same-origin' },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(approved, 1);
+    assert.equal(executed, 0);
+  } finally {
+    await server.close();
+  }
 });
 
 test('workspace admission approval is always one-time and never creates an operation permission rule', async () => {
@@ -88,7 +91,7 @@ test('workspace admission approval is always one-time and never creates an opera
   let remembered = 0;
   const ticket = {
     id: 'req_workspace',
-    state: 'APPROVED',
+    state: 'PENDING',
     risk: 'MEDIUM',
     workspaceId: 'ws_1',
     actor: 'oauth:ChatGPT',
@@ -101,7 +104,7 @@ test('workspace admission approval is always one-time and never creates an opera
     },
     approve(_id: string, scope: string) {
       scopes.push(scope);
-      return ticket;
+      return { ...ticket, state: 'APPROVED' };
     },
     deny() {
       throw new Error('unused');
@@ -117,19 +120,22 @@ test('workspace admission approval is always one-time and never creates an opera
     api: { approvals, permissions } as any,
   });
   await server.start();
-  const response = await request(`${server.url()}/api/approvals/req_workspace/approve`, {
-    method: 'POST',
-    headers: {
-      origin: server.url(),
-      'sec-fetch-site': 'same-origin',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ scope: 'workspace' }),
-  });
-  assert.equal(response.status, 200);
-  assert.deepEqual(scopes, ['once']);
-  assert.equal(remembered, 0);
-  await server.close();
+  try {
+    const response = await request(`${server.url()}/api/approvals/req_workspace/approve`, {
+      method: 'POST',
+      headers: {
+        origin: server.url(),
+        'sec-fetch-site': 'same-origin',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ scope: 'workspace' }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(scopes, ['once']);
+    assert.equal(remembered, 0);
+  } finally {
+    await server.close();
+  }
 });
 
 test('admin Cloudflare workflow exposes authenticate and reachability actions', async () => {

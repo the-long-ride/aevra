@@ -180,4 +180,74 @@ describe('RequestActivityChart interactions and tooltip', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(container.querySelector('.runtime-chart-tooltip')).toBeNull();
   });
+
+  test('clicking outside dismisses pinned tooltip, and clicking on point keeps it', () => {
+    const { container } = render(
+      <DialogProvider>
+        <RequestActivityChart data={createDashboardData()} />
+      </DialogProvider>,
+    );
+
+    const points = container.querySelectorAll('.runtime-chart-point');
+    const point = points[1] ?? points[0];
+
+    // Click to pin tooltip
+    fireEvent.click(point, { clientX: 250, clientY: 120 });
+    expect(container.querySelector('.runtime-chart-tooltip')).not.toBeNull();
+
+    // PointerDown on point keeps it
+    fireEvent.pointerDown(point);
+    expect(container.querySelector('.runtime-chart-tooltip')).not.toBeNull();
+
+    // PointerDown outside dismisses it
+    fireEvent.pointerDown(document.body);
+    expect(container.querySelector('.runtime-chart-tooltip')).toBeNull();
+  });
+
+  test('viewport scrolling handles both unpinned and pinned tooltips', () => {
+    const { container } = render(
+      <DialogProvider>
+        <RequestActivityChart data={createDashboardData()} />
+      </DialogProvider>,
+    );
+
+    const viewport = container.querySelector('.runtime-request-chart-viewport') as HTMLElement;
+    const points = container.querySelectorAll('.runtime-chart-point');
+    const point = points[1] ?? points[0];
+
+    // 1. Unpinned tooltip dismissed on scroll
+    fireEvent.mouseEnter(point, { clientX: 200, clientY: 150 });
+    expect(container.querySelector('.runtime-chart-tooltip')).not.toBeNull();
+    fireEvent.scroll(viewport);
+    expect(container.querySelector('.runtime-chart-tooltip')).toBeNull();
+
+    // 2. Pinned tooltip repositions on scroll
+    fireEvent.click(point, { clientX: 250, clientY: 120 });
+    expect(container.querySelector('.runtime-chart-tooltip')).not.toBeNull();
+    fireEvent.scroll(viewport);
+    expect(container.querySelector('.runtime-chart-tooltip')).not.toBeNull();
+  });
+
+  test('wheel events and keyboard navigation interact with viewport', () => {
+    const { container } = render(
+      <DialogProvider>
+        <RequestActivityChart data={createDashboardData()} />
+      </DialogProvider>,
+    );
+
+    const section = container.querySelector('.runtime-request-chart') as HTMLElement;
+    const viewport = container.querySelector('.runtime-request-chart-viewport') as HTMLElement;
+
+    // Alt + wheel zoom in
+    fireEvent.wheel(section, { altKey: true, deltaY: -100, clientX: 200 });
+
+    // Alt + wheel zoom out
+    fireEvent.wheel(section, { altKey: true, deltaY: 100, clientX: 200 });
+
+    // Regular wheel delta scroll
+    fireEvent.wheel(section, { deltaX: 50, deltaY: 0 });
+
+    // Keyboard navigation
+    fireEvent.keyDown(viewport, { key: 'ArrowLeft' });
+  });
 });

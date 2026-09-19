@@ -80,9 +80,13 @@ export class BackgroundDesktopState {
       if (lease.scopeKey === scopeKey) {
         if (!isSameOwner(lease.owner, owner)) {
           const retryAfterMs = Math.max(1_000, lease.expiresAt - currentTime);
-          throw new DesktopDriverError('DESKTOP_WINDOW_BUSY', 'Window is owned by another session', {
-            retryAfterMs,
-          });
+          throw new DesktopDriverError(
+            'DESKTOP_WINDOW_BUSY',
+            'Window is owned by another session',
+            {
+              retryAfterMs,
+            },
+          );
         }
         existingLease = lease;
         break;
@@ -101,11 +105,9 @@ export class BackgroundDesktopState {
 
     // Check host-wide limit
     if (this.leases.size >= MAX_LEASES_HOST) {
-      throw new DesktopDriverError(
-        'DESKTOP_WINDOW_BUSY',
-        'Host window lease limit reached',
-        { retryAfterMs: 5_000 },
-      );
+      throw new DesktopDriverError('DESKTOP_WINDOW_BUSY', 'Host window lease limit reached', {
+        retryAfterMs: 5_000,
+      });
     }
 
     // Check per-owner limit
@@ -184,7 +186,10 @@ export class BackgroundDesktopState {
     const lease = this.leases.get(target.windowLeaseId);
 
     if (!lease || !isSameOwner(lease.owner, owner)) {
-      throw new DesktopDriverError('DESKTOP_LEASE_EXPIRED', 'Window lease expired or owner mismatch');
+      throw new DesktopDriverError(
+        'DESKTOP_LEASE_EXPIRED',
+        'Window lease expired or owner mismatch',
+      );
     }
 
     if (lease.suspended) {
@@ -217,7 +222,10 @@ export class BackgroundDesktopState {
 
     const handle = lease.activeSnapshot.nodes.get(target.ref);
     if (!handle) {
-      throw new DesktopDriverError('DESKTOP_REF_STALE', `Node reference not found in snapshot: ${target.ref}`);
+      throw new DesktopDriverError(
+        'DESKTOP_REF_STALE',
+        `Node reference not found in snapshot: ${target.ref}`,
+      );
     }
 
     // Successful resolution touches/renews lease TTL

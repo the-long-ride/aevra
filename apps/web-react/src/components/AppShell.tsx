@@ -163,10 +163,7 @@ export function AppShell({
   const cleanAevra = (status.version ?? '').replace(/^v/, '').trim();
   const cleanExt = (extensionInfo.version ?? '').replace(/^v/, '').trim();
   const isExtensionMismatch = Boolean(
-    extensionInfo.isInstalled &&
-    cleanExt &&
-    cleanAevra &&
-    cleanExt !== cleanAevra,
+    extensionInfo.isInstalled && cleanExt && cleanAevra && cleanExt !== cleanAevra,
   );
 
   const handleCopyUpdate = async () => {
@@ -214,7 +211,9 @@ export function AppShell({
                   aria-label="Extension update recommended"
                   onClick={() => setBrowserModalOpen(true)}
                 >
-                  <code>ext v{cleanExt} &ne; v{cleanAevra} (update)</code>
+                  <code>
+                    ext v{cleanExt} &ne; v{cleanAevra} (update)
+                  </code>
                 </button>
               ) : null}
             </strong>
