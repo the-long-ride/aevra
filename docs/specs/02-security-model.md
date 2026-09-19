@@ -24,6 +24,14 @@ Dynamic client registration is open by design but bounded: `client_name` is stri
 - Admitted identity -> fresh security session `ses_<uuid>` (client never chooses it).
 - A session holds **workspace leases** (`lease_<uuid>`, capabilities attached, idle-expiry 30 min). General session activity refreshes every currently active workspace lease, but never revives an already-expired session-only lease.
 - OAuth has a durable **connection identity** separate from an MCP session. Reconnect creates a fresh MCP session while preserving the authenticated connection subject.
+- **Multiple workspace grants per connection:** An OAuth connection can hold multiple durable workspace grants simultaneously. Granting a workspace persists in `oauth_connection_workspace_grants`; revoking one grant leaves other workspace grants intact.
+- **Dynamic runner VMs and rotating IPs:** Cloud AI providers (ChatGPT, Claude) dispatch requests across ephemeral VM pools with rotating egress IPs. Connection identity is derived strictly from cryptographic OAuth token validation, never IP address or client display headers.
+- **Independent rate-limiting boundaries:**
+  1. Authenticated OAuth requests are governed by a shared connection-level token bucket (120 burst capacity, 20/s refill) so rotating IPs cannot bypass limits while legitimate traffic is never starved by foreign callers.
+  2. Static connectors use dedicated connector rate limiting.
+  3. Unknown/invalid bearer attempts are throttled by an independent invalid-bearer bucket (30 burst, 1/s refill, returning `429` with `Retry-After`), preventing invalid-token flood attacks from exhausting valid connection or connector quotas.
+- **Atomic approval execution claims:** Approved tickets record the owning connection subject. Resuming an approved ticket atomically transitions state to `EXECUTING` via an atomic database claim, preventing duplicate executions across racing runner VMs. Unauthorized callers attempting resumption receive `APPROVAL_UNAUTHORIZED` without modifying the ticket's state, preventing ticket poisoning attacks.
+- **Request provenance and bounded origins:** Audit records capture immutable request provenance (`remoteIp`, `userAgent`, `requestId`). The last 10 unique runner IPs per connection subject are persisted with timestamps in `oauth_connection_origins` (pruned after 24 hours) for operator visibility.
 - Remembered workspace grants are **restored lazily**: creating or resuming a session records that a restore is owed, and the leases are admitted when the session first reads them. The restore runs at most once per session, so concurrent first use cannot admit a lease twice, and a session that never touches a workspace never writes lease rows. Reconnect re-arms the restore, which is what repairs leases that expired while the connection was away.
 - Remembered OAuth workspace grants and connection-level YOLO survive transport reconnects and Core restarts. Session-only grants are rebound only while their original lease is still valid.
 - Disconnecting one MCP session starts the configured reconnect grace window; revoking the OAuth connection invalidates its credentials, live sessions/leases, remembered workspace grants, and YOLO state.
@@ -33,9 +41,9 @@ Dynamic client registration is open by design but bounded: `client_name` is stri
 
 ## Authority — capabilities
 
-A lease carries a profile: **Minimal**, **Read Only**, **Safe Dev**, **Power Dev**, **Full Workspace**, or **Custom**. Capability vocabulary: `files.read` `files.search` `git.read` `files.write` `files.delete` `commands.run` `git.commit` `git.push` `network` `skills.read` `skills.write` `instructions.read` `instructions.write` `browser.control`.
+A lease carries a profile: **Minimal**, **Read Only**, **Safe Dev**, **Power Dev**, **Full Workspace**, or **Custom**. Capability vocabulary: `files.read` `files.search` `git.read` `files.write` `files.delete` `commands.run` `git.commit` `git.push` `network` `skills.read` `skills.write` `instructions.read` `instructions.write` `browser.control` `desktop.control`.
 
-`browser.control` is off by default, is in no built-in profile, and is **not** implied by `network`: driving a browser reaches the user's logged-in sessions, which network access alone does not.
+`browser.control` and `desktop.control` are off by default, are in no built-in profile, and are **not** implied by `network`: driving a browser reaches the user's logged-in web sessions, and driving the desktop reaches host applications and OS windows, which network access alone does not.
 
 Tool visibility ≠ authorization: every operation is re-checked against the active lease.
 
@@ -85,6 +93,22 @@ Pairing mints a MAC'd token the Worker verifies offline; the Worker pins the
 extension's origin. **Disconnect all browsers** bumps a revocation epoch that
 invalidates every issued token and drops live sockets immediately.
 
+## Desktop control and background automation
+
+Behind `desktop.control`, `desktop_*` tools drive local OS windows and controls through the native platform helper (Windows UIA). Desktop automation supports two operational models:
+1. **Foreground input injection:** `desktop_click`, `desktop_type`, `desktop_key`, `desktop_scroll` simulate direct user input into the focused window.
+2. **Background semantic automation:** `desktop_describe(mode: 'background')`, `desktop_invoke`, `desktop_set_value`, `desktop_select`, `desktop_toggle`, and `desktop_release_window` perform direct control pattern operations on target windows without stealing keyboard focus or moving the human operator's mouse.
+
+Safety boundaries for desktop control are strictly enforced:
+
+- **Window gate direction:** `evaluateWindowGate` enforces directional boundaries (`'input' | 'capture' | 'background'`). Read-only capture/describe are permitted across visible windows. For foreground input, windows without resolvable executable metadata are refused unless `unattributedInput: 'allow'` is explicitly configured. For background automation, unattributable windows are **strictly refused** regardless of `unattributedInput: 'allow'`.
+- **Protected surfaces & self-targeting:** The desktop helper refuses any window owned by Aevra itself (Core daemon, Admin UI, Worker, CLI) or elevated system processes, preventing an agent from re-permissioning itself or bypassing gateway boundaries.
+- **Native OS security boundaries (UIPI & window stations):** Operating System User Interface Privilege Isolation (UIPI) prevents lower-integrity workers from injecting input or sending window messages to higher-integrity processes; violations fail closed with `DESKTOP_INPUT_REFUSED`. Operations across non-interactive window stations or lock screens are refused.
+- **Background window leases:** Background semantic operations require an exclusive window lease (`sessionId`, `workspaceId`, 60-second sliding TTL). The lease prevents concurrent sessions or foreign workspaces from interleaving mutating actions on the same window (`DESKTOP_WINDOW_BUSY`). Leases are refreshed on activity and released explicitly via `desktop_release_window` or upon expiration.
+- **Generational ref invalidation:** Element references (`ref_<generation>_<index>`) are tied to a single accessibility snapshot. Any change in window structure or helper restart marks earlier references stale (`DESKTOP_REF_STALE`). In background mode, target elements undergo runtime verification (matching handle, control type, and runtime ID) immediately prior to invoking patterns (`DESKTOP_TARGET_CHANGED`).
+- **Focus change detection:** Foreground input operations verify that the target window has not lost focus between perception and actuation; unexpected focus shifts abort with `DESKTOP_FOCUS_CHANGED`.
+- **Credential masking & audit sanitization:** Password, PIN, and credential input fields are masked in accessibility trees. String values passed to `desktop_set_value` and `desktop_type` are redacted from audit logs and approval records, recording only character length and cryptographic nonce. Screenshots and pixel captures are audited solely by SHA-256 hash, never storing image binary data.
+
 ## Prompt-injection posture
 
 Aevra assumes the AI client may itself be under the influence of content it reads.
@@ -94,6 +118,14 @@ Aevra assumes the AI client may itself be under the influence of content it read
 - Command `stdout`/`stderr` is stripped of terminal control sequences before it reaches the model or an approval preview.
 
 **Limits of this posture.** A marker is an advisory, not an enforcement boundary: a model that ignores it is still free to act on injected text. Provenance marking narrows the gap between "content the operator wrote" and "content a repository supplied"; it does not close it. Approvals remain the backstop, which is why preview integrity and one-time shell approval carry the real weight.
+
+## Administrative mutations & deletion safety
+
+All administrative removals, deletions, and revocations in the Web UI are fail-safe and require explicit confirmation:
+
+- **Mandatory confirmation dialogs:** No resource is deleted on single-click. Deleting a workspace, external mount, secret reference, lifecycle hook, network rule, command-family override, MCP upstream server, permission rule, remote MCP session, local admin session, custom desktop application record, or managed process requires confirming an interactive modal (`dialog.confirm`).
+- **Standardized visual affordance:** Destructive removal buttons use the compact terminal marker `[x]` with semantic danger tone and explicit accessible labels (`aria-label` and `title`), preventing ambiguous or unintended clicks.
+- **Fail-closed operations:** Cancelling any confirmation dialog aborts the request immediately without state mutations or background side-effects.
 
 ## Fail-closed rules & SecurityGuard
 

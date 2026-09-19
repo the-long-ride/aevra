@@ -48,6 +48,10 @@ Admin session + same-origin required; safe mode blocks mutations. There is **no 
 
 Static connector-token URLs remain admission credentials. OAuth clients instead receive a durable connection subject backed by rotating access/refresh credentials. The connection can enter a reconnect grace state after transport detach, retain remembered workspace grants and connection-level YOLO across a new MCP session, and expose its recent durable mutation outcomes through `operation_get` / `operation_list`. Admin **Disconnect session** affects one MCP session; **Revoke connection** invalidates the OAuth credential family and clears its remembered authority.
 
+- **Multi-workspace durable grants:** Multiple workspaces can be granted to an OAuth connection at once. Grants can be added or removed from the Admin UI even when the connection has no active sessions attached (offline-capable). Revoking one workspace grant does not affect sibling grants.
+- **Floating-IP continuity & bounded origin tracking:** Rotating egress runner IPs from cloud AI platforms (ChatGPT, Claude) retain full connection authority upon presenting a valid OAuth bearer token. Bounded runner IP provenance is tracked in `oauth_connection_origins` (up to 10 unique remote IPs per connection subject, expired after 24 hours).
+- **Traffic rate limit isolation:** Authenticated OAuth calls share a connection token bucket (120 capacity, 20/s refill); invalid bearer attempts are throttled independently (30 burst, 1/s refill) and static connectors follow dedicated connector rate limits.
+
 Access tokens, refresh tokens, PKCE verifiers, and authorization codes are **never persisted in plaintext**: like connector tokens, only their SHA-256 hashes are stored and compared in constant time, so a durable-state dump cannot yield a usable credential. Refresh tokens rotate on use, and replaying a spent one revokes the whole family. Regression coverage: `apps/core/test/oauth-secret-persistence.unit.test.ts`.
 
 ## Deployment rule

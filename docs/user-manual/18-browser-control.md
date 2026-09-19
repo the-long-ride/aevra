@@ -84,10 +84,11 @@ only in the one you want an agent to reach.
 The extension does nothing until it holds a token from your own Aevra.
 
 1. In the Aevra web UI open **Settings → Browser control** and select
-   **Pair extension**.
+   **Pair extension**. Note: the CLI does not generate pairing codes because opening
+   the Web UI in this browser profile is what establishes trust for Aevra's self-signed TLS certificate.
 2. Copy the 8-character code. It is single-use and expires after five minutes.
-3. Open the extension's options page (**Details → Extension options** on
-   `chrome://extensions`), paste the code, and select **Pair**.
+3. Click the Aevra extension icon in your browser toolbar to open the popup, select
+   **Pair with Aevra** (or open the extension's options page), paste the code, and select **Pair**.
 
 The extension stores a MAC'd token that the Aevra worker verifies offline. It is
 never displayed or logged again after pairing.

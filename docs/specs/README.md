@@ -18,6 +18,8 @@ Release feature contracts:
 
 - [Browser control](../browser-control.md) and [browser user manual](../user-manual/18-browser-control.md)
 - [Desktop control user manual](../user-manual/19-desktop-control.md)
+- [Desktop control design](2026-09-07-aevra-desktop-control-design.md)
+- [Background desktop automation design](2026-09-18-background-desktop-automation-design.md)
 - [MCP upstream servers user manual](../user-manual/20-mcp-upstreams.md)
 - [Workspace manifest design](2026-09-12-aevra-manifest-design.md)
 

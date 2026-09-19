@@ -26,6 +26,10 @@
 - **v8 `008_oauth_workspace_grants`** - connection-subject remembered workspace/profile grants.
 - **v9 `009_oauth_connection_continuity`** - durable OAuth connections, reconnect grace, connection YOLO, refresh-token families, and rotation/revocation state.
 - **v10 `010_operation_connection_scope`** - associates durable operations with the owning OAuth connection for safe post-reconnect inspection.
+- **v11 `011_mcp_upstreams`** - upstream server registration, config, and catalog state.
+- **v12 `012_mcp_upstream_catalog_review`** - catalog diff reviews.
+- **v13 `013_mcp_upstream_pending_catalog`** - pending catalog updates.
+- **v14 `014_oauth_continuity_ownership_and_origins`** - pending approval connection subject association and bounded runner origin tracking (`oauth_connection_origins`).
 
 Migrations are applied transactionally and recorded in `schema_migrations`. Existing Aevra databases advance in version order; new databases receive the complete schema.
 

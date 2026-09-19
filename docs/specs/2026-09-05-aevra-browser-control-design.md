@@ -81,9 +81,9 @@ export interface BrowserDriver {
 
 ### 4.1 Pairing
 
-1. Web UI -> Browser panel -> **Pair extension**. Core mints an 8-character pairing code: TTL 5 minutes, single use, stored in the core store.
-2. User pastes the code into the extension's options page.
-3. Extension calls `POST http://127.0.0.1:47831/api/browser/pair {code, extensionId}` on the loopback-only admin port. The existing CSRF middleware gets a narrow `chrome-extension://` origin exemption scoped to this one route.
+1. Web UI -> **Settings → Browser control** -> **Pair extension**. Core mints an 8-character pairing code: TTL 5 minutes, single use, stored in the core store. The CLI does not mint pairing codes because opening the Web UI is required to establish browser trust for Aevra's self-signed TLS certificate.
+2. User pastes the code into the extension's in-popup pairing modal or options page.
+3. Extension calls `POST https://127.0.0.1:47831/api/browser/pair {code, extensionId}` (with fallback to `http://`) on the loopback-only admin port. The existing CSRF middleware gets a narrow `chrome-extension://` origin exemption scoped to this one route.
 4. Core returns `{token, wsUrl}`. The extension stores it in `chrome.storage.local`.
 
 The token is `{extensionId, epoch, issuedAt, expiresAt}` plus a MAC signed with the **daemon key already used for operation-envelope MACs**.

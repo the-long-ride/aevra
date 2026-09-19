@@ -15,22 +15,22 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
 4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
 
-## Tool vocabulary (60 discoverable tools)
+## Tool vocabulary (65 discoverable tools)
 
-| Group      | Tools                                                                                                                                                                        |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | `aevra_status` (reports session, leases, capabilities, and `execution.system` host capability snapshot)                                                                      |
-| Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                                                                                      |
-| Files      | `file_list` `file_read_many` `file_search` `search` `file_write_many` `file_move` `file_delete`                                                                              |
-| Command    | `command_run_many` `shell_run`                                                                                                                                               |
-| Git        | `git_status` `git_add` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                                                                                             |
-| Processes  | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart`                                                               |
-| Operations | `operation_get` `operation_list`                                                                                                                                             |
-| Changes    | `change_begin` `change_status` `change_commit` `change_rollback`                                                                                                             |
-| Approvals  | `approval_status` `approval_wait` `approval_cancel`                                                                                                                          |
-| Skills     | `skills_list` `skill_read` `skill_write` `instructions_read` `instructions_write`                                                                                            |
-| Browser    | `browser_connect` `browser_status` `browser_disconnect` `browser_tabs` `browser_navigate` `browser_snapshot` `browser_read` `browser_act_many` `browser_logs`                |
-| Desktop    | `desktop_connect` `desktop_status` `desktop_disconnect` `desktop_windows` `desktop_describe` `desktop_capture` `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` |
+| Group      | Tools                                                                                                                                                                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | `aevra_status` (reports session, leases, capabilities, and `execution.system` host capability snapshot)                                                                                                                                                  |
+| Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                                                                                                                                                                  |
+| Files      | `file_list` `file_read_many` `file_search` `search` `file_write_many` `file_move` `file_delete`                                                                                                                                                          |
+| Command    | `command_run_many` `shell_run`                                                                                                                                                                                                                           |
+| Git        | `git_status` `git_add` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                                                                                                                                                                         |
+| Processes  | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart`                                                                                                                                             |
+| Operations | `operation_get` `operation_list`                                                                                                                                                                                                                         |
+| Changes    | `change_begin` `change_status` `change_commit` `change_rollback`                                                                                                                                                                                         |
+| Approvals  | `approval_status` `approval_wait` `approval_cancel`                                                                                                                                                                                                      |
+| Skills     | `skills_list` `skill_read` `skill_write` `instructions_read` `instructions_write`                                                                                                                                                                        |
+| Browser    | `browser_connect` `browser_status` `browser_disconnect` `browser_tabs` `browser_navigate` `browser_snapshot` `browser_read` `browser_act_many` `browser_logs`                                                                                              |
+| Desktop    | `desktop_connect` `desktop_status` `desktop_disconnect` `desktop_windows` `desktop_describe` `desktop_capture` `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` `desktop_invoke` `desktop_set_value` `desktop_select` `desktop_toggle` `desktop_release_window` |
 
 The public MCP discovery surface exposes batch tools as the normal interface for file reads, file mutations, and bounded commands, including single-item operations:
 
@@ -69,29 +69,33 @@ are serialized per session so two batches cannot interleave on one tab.
 ### Desktop pattern
 
 `desktop_connect` starts a local helper process and returns four independent
-capability booleans - `capture`, `tree`, `attribution`, `input` - so a model
+capability booleans — `capture`, `tree`, `attribution`, `input` — so a model
 learns once what the host can do instead of discovering it through failures;
 `desktop_status` answers even when nothing is connected. Perception is
 tree-first: `desktop_describe` returns one window's accessibility tree as
 `ref_<generation>_<index>` handles and `desktop_capture` returns pixels only
 when asked. A ref from an earlier describe, or from before a helper restart,
 is refused as `DESKTOP_REF_STALE` rather than rebound to whatever now sits at
-that index. The four input tools map to one worker operation, and each action
-returns a delta (`focusChanged`, `newWindow`, `subtreeChanged`) so the caller
-need not re-read the screen after every step.
+that index.
 
-Reads and input fail differently, deliberately. Capture and describe are
-always permitted. Input is evaluated against the focused window's process
-identity by `evaluateWindowGate`, and a window with no readable executable is
-`unattributable` and refused unless the policy opts in with
-`unattributedInput: 'allow'`. Input into a more privileged window is refused
-by Windows itself (UIPI) and surfaces as `DESKTOP_INPUT_REFUSED`, never as
-success. Typed text never reaches the audit log or an approval row - only its
-length - and a screenshot is audited by content hash, never stored.
+Desktop automation supports both foreground simulation and background semantic patterns:
 
-Desktop error codes: `DESKTOP_NOT_CONNECTED` - `DESKTOP_HELPER` -
-`DESKTOP_HELPER_NOT_INSTALLED` - `DESKTOP_DRIVER_DIED` - `DESKTOP_REF_STALE` -
-`DESKTOP_INPUT_REFUSED` - `DESKTOP_TIMEOUT`
+1. **Foreground input:** `desktop_click`, `desktop_type`, `desktop_key`, and `desktop_scroll` simulate direct user events on the currently focused window, returning delta indicators (`focusChanged`, `newWindow`, `subtreeChanged`). If the active focus unexpectedly shifts between perception and actuation, the operation fails with `DESKTOP_FOCUS_CHANGED`.
+2. **Background semantic automation:** `desktop_describe(mode: 'background')` takes a snapshot of an unfocused background window. Semantic mutation tools (`desktop_invoke`, `desktop_set_value`, `desktop_select`, `desktop_toggle`) invoke native UIA control patterns directly without stealing focus or moving the pointer.
+3. **Background window leases:** Mutating background tools require an exclusive 60-second window lease per session/workspace. If another session holds the window, it returns `DESKTOP_WINDOW_BUSY`; if the lease lapses, it returns `DESKTOP_LEASE_EXPIRED`. The lease can be explicitly released using `desktop_release_window`.
+4. **Target verification:** Background actions verify the target element's runtime ID, control type, and owning window handle before mutating. Mismatches return `DESKTOP_TARGET_CHANGED`; unsupported UI Automation patterns return `DESKTOP_PATTERN_UNSUPPORTED`.
+
+Reads, foreground input, and background operations fail differently:
+- Capture and describe are read-only.
+- Foreground input is evaluated against the focused window's process identity by `evaluateWindowGate`; an unattributable window is refused unless `unattributedInput: 'allow'` is configured. Input into a higher-integrity window is blocked by OS UIPI (`DESKTOP_INPUT_REFUSED`).
+- Background operations strictly refuse unattributable windows regardless of `unattributedInput` setting.
+- Typed or set values are masked in audit logs and approval previews; screenshots are audited by content hash, never stored as raw images.
+
+Desktop error codes: `DESKTOP_NOT_CONNECTED` · `DESKTOP_HELPER` ·
+`DESKTOP_HELPER_NOT_INSTALLED` · `DESKTOP_DRIVER_DIED` · `DESKTOP_REF_STALE` ·
+`DESKTOP_INPUT_REFUSED` · `DESKTOP_TIMEOUT` · `DESKTOP_WINDOW_BUSY` ·
+`DESKTOP_LEASE_EXPIRED` · `DESKTOP_FOCUS_CHANGED` · `DESKTOP_PATTERN_UNSUPPORTED` ·
+`DESKTOP_TARGET_CHANGED`
 
 Windows only today: the helper exists for no other platform, so
 `desktop_connect` elsewhere reports `DESKTOP_HELPER_NOT_INSTALLED`.
