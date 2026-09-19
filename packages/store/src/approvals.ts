@@ -8,7 +8,7 @@ export class ApprovalRepository {
     const payload = sanitizeStructuredSecrets(t.payload ?? null);
     this.db
       .prepare(
-        `INSERT OR REPLACE INTO pending_approvals(id,actor,session_id,workspace_id,operation_json,expected_state_json,risk,state,expires_at,cancellation_reason,decision_scope,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT OR REPLACE INTO pending_approvals(id,actor,session_id,workspace_id,operation_json,expected_state_json,risk,state,expires_at,cancellation_reason,decision_scope,connection_subject,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         t.id,
@@ -22,6 +22,7 @@ export class ApprovalRepository {
         t.expiresAt,
         t.cancellationReason ?? null,
         t.decisionScope ?? null,
+        t.connectionSubject ?? t.connectionId ?? null,
         t.createdAt ?? now,
         now,
       );
@@ -34,6 +35,8 @@ export class ApprovalRepository {
       id: r.id,
       actor: r.actor,
       sessionId: r.session_id,
+      connectionId: r.connection_subject ?? undefined,
+      connectionSubject: r.connection_subject ?? undefined,
       workspaceId: r.workspace_id,
       operation: (() => {
         const x = JSON.parse(r.operation_json);
@@ -57,5 +60,36 @@ export class ApprovalRepository {
     return (
       this.db.prepare('SELECT id FROM pending_approvals ORDER BY created_at DESC').all() as any[]
     ).map((r) => this.get(r.id));
+  }
+
+  claimExecution(id: string, nowIso: string): boolean {
+    const res = this.db
+      .prepare(
+        "UPDATE pending_approvals SET state='EXECUTING', updated_at=? WHERE id=? AND state='APPROVED' AND expires_at>?",
+      )
+      .run(nowIso, id, nowIso);
+    return Number(res.changes) === 1;
+  }
+
+  transitionExecution(
+    id: string,
+    state: 'SUCCEEDED' | 'FAILED' | 'INTERRUPTED',
+    nowIso: string,
+  ): boolean {
+    const res = this.db
+      .prepare(
+        "UPDATE pending_approvals SET state=?, updated_at=? WHERE id=? AND state='EXECUTING'",
+      )
+      .run(state, nowIso, id);
+    return Number(res.changes) === 1;
+  }
+
+  transitionContextChanged(id: string, nowIso: string): boolean {
+    const res = this.db
+      .prepare(
+        "UPDATE pending_approvals SET state='CONTEXT_CHANGED', updated_at=? WHERE id=? AND state='APPROVED'",
+      )
+      .run(nowIso, id);
+    return Number(res.changes) === 1;
   }
 }

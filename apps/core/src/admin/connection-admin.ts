@@ -22,6 +22,15 @@ export interface AdminConnectionProjection {
   graceExpiresAt?: string;
   accessTokenLifetimeSeconds: number;
   refreshFamilyExpiresAt?: string;
+  renewable?: boolean;
+  recentOrigins?: { remoteIp: string; lastSeenAt: string }[];
+  workspaceGrants?: { workspaceId: string; profileId: string }[];
+}
+
+export interface ConnectionGrantHandler {
+  grant(input: { connectionId: string; workspaceId: string; profileId: string }): unknown;
+  remove(connectionId: string, workspaceId: string): { removed: boolean } | boolean;
+  list(connectionId: string): Array<{ workspaceId: string; profileId: string }>;
 }
 
 export class ConnectionAdminService {
@@ -33,7 +42,24 @@ export class ConnectionAdminService {
     },
     private accessTokenLifetimeSeconds: number,
     private now: () => Date = () => new Date(),
+    private grantHandler?: ConnectionGrantHandler,
+    private onRevoke?: (connectionId: string) => void,
   ) {}
+
+  setGrantHandler(handler: ConnectionGrantHandler) {
+    this.grantHandler = handler;
+  }
+
+  grantWorkspace(connectionId: string, workspaceId: string, profileId = 'read-only') {
+    if (!this.grantHandler) throw new Error('Workspace grant handler not configured');
+    return this.grantHandler.grant({ connectionId, workspaceId, profileId });
+  }
+
+  revokeWorkspace(connectionId: string, workspaceId: string): boolean {
+    if (!this.grantHandler) return false;
+    const res = this.grantHandler.remove(connectionId, workspaceId);
+    return typeof res === 'boolean' ? res : Boolean(res?.removed);
+  }
 
   list(): AdminConnectionProjection[] {
     const sessions = this.sessions.list?.() ?? [];
@@ -47,8 +73,16 @@ export class ConnectionAdminService {
       const leases = matching.flatMap((session) =>
         Array.isArray(session.leases) ? session.leases : session.lease ? [session.lease] : [],
       );
+      const origins = this.oauth.listConnectionOrigins?.(record.subject) ?? [];
+      const grants = this.grantHandler?.list(record.subject) ?? [];
+      const rememberedWorkspaceIds = grants.map((g) => g.workspaceId);
       const workspaceIds = [
-        ...new Set(leases.map((lease) => String(lease?.workspaceId ?? '')).filter(Boolean)),
+        ...new Set(
+          [
+            ...leases.map((lease) => String(lease?.workspaceId ?? '')),
+            ...rememberedWorkspaceIds,
+          ].filter(Boolean),
+        ),
       ];
       const capabilities = [
         ...new Set(leases.flatMap((lease) => lease?.capabilities ?? []).map(String)),
@@ -69,12 +103,19 @@ export class ConnectionAdminService {
         lastUsedAt: record.lastUsedAt,
         lastActivityAt,
         ...(primary?.createdAt ? { connectedAt: String(primary.createdAt) } : {}),
-        ...(primary ? { remoteIp: primary.remoteIp ?? null } : {}),
+        remoteIp: origins[0]?.remoteIp ?? primary?.remoteIp ?? null,
         workspaceIds,
         capabilities,
         ...(record.graceExpiresAt ? { graceExpiresAt: record.graceExpiresAt } : {}),
         accessTokenLifetimeSeconds: this.accessTokenLifetimeSeconds,
         ...(family?.expiresAt ? { refreshFamilyExpiresAt: family.expiresAt } : {}),
+        renewable: Boolean(
+          family &&
+          family.status === 'ACTIVE' &&
+          Date.parse(family.expiresAt) > this.now().getTime(),
+        ),
+        recentOrigins: origins,
+        workspaceGrants: grants,
       };
     });
   }
@@ -88,6 +129,7 @@ export class ConnectionAdminService {
       this.oauth.revokeConnection(connectionId, 'ADMIN_REVOKE');
       this.oauth.clearRememberedWorkspaceGrants(connectionId);
     }
+    this.onRevoke?.(connectionId);
     return true;
   }
 

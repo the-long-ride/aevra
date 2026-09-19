@@ -19,6 +19,13 @@ export class IpRateLimiter {
     return true;
   }
 
+  retryAfterSeconds(ip: string): number {
+    const b = this.bucket(ip);
+    if (b.tokens >= 1) return 0;
+    const needed = 1 - b.tokens;
+    return Math.max(1, Math.ceil(needed / this.refillPerSecond));
+  }
+
   recordFailure(ip: string) {
     const next = (this.failed.get(ip) ?? 0) + 1;
     this.failed.delete(ip);

@@ -77,8 +77,8 @@ function fixture(options: { leases?: any[]; workspaceId?: string; withSkills?: b
     worker: { execute: async () => ({ ok: true, value: {} }) },
     reads: {},
     approvals: {
-      status: (id: string) => ({ id, state: 'PENDING' }),
-      cancel: (id: string) => ({ id, state: 'CANCELLED' }),
+      status: (id: string) => ({ id, actor: 'oauth:ChatGPT', sessionId: 's1', state: 'PENDING' }),
+      cancel: (id: string) => ({ id, actor: 'oauth:ChatGPT', sessionId: 's1', state: 'CANCELLED' }),
     },
     deps: {
       skills,

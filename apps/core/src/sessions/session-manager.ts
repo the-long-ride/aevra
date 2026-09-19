@@ -6,7 +6,14 @@ import { ALL_CAPABILITIES, type CapabilityProfileService } from '../policy/capab
 import type { ConnectionStateStore } from './connection-state.js';
 import {
   detachedSessionIds,
+  detachSession,
+  disconnectSessionImmediate,
+  expireGraceSessionConnections,
+  findMatchingConnectionLeases,
+  findMatchingConnectionSessions,
+  findMatchingDetachedIdentities,
   grantRememberedWorkspaceAcrossSessions,
+  invalidateWorkspaceAccess,
   revokeConnectionSessions,
   rebindDetachedLeases,
   restoreRememberedWorkspaces,
@@ -14,7 +21,12 @@ import {
 } from './session-lease-continuity.js';
 import { connectionIdentityFor, type SessionScope } from './session-connection-scope.js';
 import { disableYoloSession, enableYoloSession, isYoloSession } from './session-yolo.js';
-import type { SecuritySession, SessionResolution, WorkspaceLease } from './session-types.js';
+import type {
+  DisconnectedIdentity,
+  SecuritySession,
+  SessionResolution,
+  WorkspaceLease,
+} from './session-types.js';
 export type { SecuritySession, SessionResolution, WorkspaceLease } from './session-types.js';
 const systemClock: Clock = { now: () => new Date() };
 
@@ -23,10 +35,7 @@ export class SessionManager {
   private leaseRows = new Map<string, WorkspaceLease>();
   private yoloSessions = new Set<string>();
   private pendingRememberedRestore = new Set<string>();
-  private disconnectedIdentities = new Map<
-    string,
-    { actor: string; subject: string; connectionId?: string }
-  >();
+  private disconnectedIdentities = new Map<string, DisconnectedIdentity>();
   constructor(
     private repo: SessionRepository,
     private profiles: CapabilityProfileService,
@@ -63,13 +72,26 @@ export class SessionManager {
   connectionState(connectionId: string) {
     return this.connections?.state(connectionId) ?? null;
   }
-  async switchWorkspace(
-    sessionId: string,
-    workspaceId: string,
-    overrideProfileId?: string,
-    _timeoutMs?: number,
-  ) {
-    return this.admitWorkspace(sessionId, workspaceId, overrideProfileId);
+  switchWorkspace(sessionId: string, workspaceId: string, profileId?: string, _timeoutMs?: number) {
+    return this.admitWorkspace(sessionId, workspaceId, profileId);
+  }
+  matchingSessions(connectionId: string) {
+    return findMatchingConnectionSessions(this.sessions.values(), connectionId);
+  }
+  matchingDetachedIdentities(connectionId: string) {
+    return findMatchingDetachedIdentities(this.disconnectedIdentities.entries(), connectionId);
+  }
+  matchingLeasesForWorkspace(connectionId: string, workspaceId: string) {
+    return findMatchingConnectionLeases({
+      sessions: this.sessions.values(),
+      disconnectedIdentities: this.disconnectedIdentities.entries(),
+      leaseRows: this.leaseRows.values(),
+      connectionId,
+      workspaceId,
+    });
+  }
+  applyLease(lease: WorkspaceLease) {
+    this.leaseRows.set(lease.id, lease);
   }
 
   create(identity: VerifiedRemoteIdentity, remoteIp?: string): SecuritySession {
@@ -99,6 +121,7 @@ export class SessionManager {
         session.connectionId === identity.connectionId,
     );
     if (existing) {
+      if (remoteIp) existing.remoteIp = remoteIp;
       this.touch(existing.id);
       this.pendingRememberedRestore.add(existing.id);
       return { session: existing, mode: 'existing' };
@@ -250,9 +273,7 @@ export class SessionManager {
   private ensureRememberedRestored(sessionId: string) {
     if (!this.pendingRememberedRestore.delete(sessionId)) return;
     const session = this.sessions.get(sessionId);
-    if (session) this.restoreMissingRememberedWorkspaces(session);
-  }
-  private restoreMissingRememberedWorkspaces(session: SecuritySession) {
+    if (!session) return;
     restoreRememberedWorkspaces(this.repo, session, (workspaceId, profileId) => {
       if (this.leaseForWorkspace(session.id, workspaceId)) return null;
       return this.admitWorkspace(session.id, workspaceId, profileId);
@@ -269,48 +290,39 @@ export class SessionManager {
     });
   }
   invalidateWorkspaceAccess(workspaceId: string) {
-    for (const lease of [...this.leaseRows.values()]) {
-      if (lease.workspaceId === workspaceId) this.revokeLease(lease.id);
-    }
-    this.repo.revokeWorkspaceLeases?.(workspaceId);
-    this.repo.forgetWorkspaceGrants?.(workspaceId);
+    invalidateWorkspaceAccess({
+      repo: this.repo,
+      leaseRows: this.leaseRows.values(),
+      workspaceId,
+      revokeLease: (id) => this.revokeLease(id),
+    });
   }
   revokeLease(id: string) {
-    const lease = this.leaseRows.get(id);
-    if (!lease) return;
-    this.leaseRows.delete(id);
+    if (!this.leaseRows.delete(id)) return;
     this.repo.revokeLease(id);
   }
   detach(sessionId: string) {
-    const session = this.sessions.get(sessionId);
-    if (!session) return;
-    if (session.actor.startsWith('oauth:') && session.connectionId && this.connections) {
-      this.disconnectedIdentities.set(sessionId, {
-        actor: session.actor,
-        subject: session.subject,
-        connectionId: session.connectionId,
-      });
-      this.connections.detach(sessionId, this.reconnectGraceMs);
-      this.repo.detach(sessionId);
-      this.yoloSessions.delete(sessionId);
-      this.pendingRememberedRestore.delete(sessionId);
-      this.sessions.delete(sessionId);
-      return;
-    }
-    this.disconnectImmediate(sessionId, session.actor.startsWith('oauth:'));
+    detachSession({
+      sessionId,
+      sessions: this.sessions,
+      disconnectedIdentities: this.disconnectedIdentities,
+      connections: this.connections,
+      repo: this.repo,
+      yoloSessions: this.yoloSessions,
+      pendingRememberedRestore: this.pendingRememberedRestore,
+      reconnectGraceMs: this.reconnectGraceMs,
+      disconnectImmediate: (id, remember) => this.disconnectImmediate(id, remember),
+    });
   }
   disconnect(sessionId: string) {
     this.detach(sessionId);
   }
   expireGraceConnections() {
-    if (!this.connections) return;
-    const expired = new Set(this.connections.expireGraceConnections());
-    if (!expired.size) return;
-    for (const [sessionId, identity] of [...this.disconnectedIdentities]) {
-      if (identity.connectionId && expired.has(identity.connectionId)) {
-        this.disconnectImmediate(sessionId, false);
-      }
-    }
+    expireGraceSessionConnections({
+      connections: this.connections,
+      disconnectedIdentities: this.disconnectedIdentities,
+      disconnectImmediate: (id, remember) => this.disconnectImmediate(id, remember),
+    });
   }
   invalidateForRestart() {
     this.sessions.clear();
@@ -322,21 +334,16 @@ export class SessionManager {
     this.repo.invalidateAll();
   }
   private disconnectImmediate(sessionId: string, rememberIdentity: boolean) {
-    const session = this.sessions.get(sessionId);
-    if (rememberIdentity && session) {
-      this.disconnectedIdentities.set(sessionId, {
-        actor: session.actor,
-        subject: session.subject,
-        ...(session.connectionId ? { connectionId: session.connectionId } : {}),
-      });
-    } else if (!rememberIdentity) {
-      this.disconnectedIdentities.delete(sessionId);
-    }
-    const leases = [...this.leaseRows.values()].filter((lease) => lease.sessionId === sessionId);
-    for (const lease of leases) this.revokeLease(lease.id);
-    this.yoloSessions.delete(sessionId);
-    this.pendingRememberedRestore.delete(sessionId);
-    this.sessions.delete(sessionId);
-    this.connections?.forgetSession(sessionId);
+    disconnectSessionImmediate({
+      sessionId,
+      rememberIdentity,
+      sessions: this.sessions,
+      disconnectedIdentities: this.disconnectedIdentities,
+      leaseRows: this.leaseRows,
+      yoloSessions: this.yoloSessions,
+      pendingRememberedRestore: this.pendingRememberedRestore,
+      connections: this.connections,
+      revokeLease: (id) => this.revokeLease(id),
+    });
   }
 }

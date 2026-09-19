@@ -78,3 +78,65 @@ test('admin can enable YOLO from a pending connector request and disable it expl
   );
   await server.close();
 });
+
+test('admin can enable YOLO from an already-approved or expired connector request', async () => {
+  const bootstrap = { validateSession: (value: string | undefined) => value === 'test' } as any;
+  let yolo = false;
+  let state = 'APPROVED';
+  const ticket = {
+    id: 'req_already_approved',
+    actor: 'oauth:ChatGPT',
+    sessionId: 'ses_approved',
+    workspaceId: 'ws_1',
+    risk: 'CRITICAL',
+    operation: { family: 'commands:pnpm-format', capability: 'commands.run' },
+  };
+  const approvals = {
+    status: () => ({ ...ticket, state }),
+    approve: (_id: string, _scope: string) => {
+      throw new Error('Should not re-approve an already approved ticket');
+    },
+  };
+  const sessions = {
+    get: (id: string) => (id === ticket.sessionId ? { id, actor: ticket.actor } : null),
+    enableYolo: (id: string) => {
+      assert.equal(id, ticket.sessionId);
+      yolo = true;
+      return { sessionId: id, enabled: true };
+    },
+  };
+  const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
+    bootstrap,
+    api: { approvals, sessions, audit: { append: () => {} } } as any,
+  });
+  await server.start();
+
+  // Enabling YOLO on an already-approved request succeeds
+  const resApproved = await request(`${server.url()}/api/approvals/${ticket.id}/yolo`, {
+    method: 'POST',
+    headers: mutationHeaders(server.url()),
+    body: '{}',
+  });
+  assert.equal(resApproved.status, 200);
+  assert.equal(yolo, true);
+
+  // Enabling YOLO on an expired request succeeds
+  state = 'EXPIRED';
+  const resExpired = await request(`${server.url()}/api/approvals/${ticket.id}/yolo`, {
+    method: 'POST',
+    headers: mutationHeaders(server.url()),
+    body: '{}',
+  });
+  assert.equal(resExpired.status, 200);
+
+  // Approving an already-approved request is idempotent and returns 200
+  state = 'APPROVED';
+  const resApproveAgain = await request(`${server.url()}/api/approvals/${ticket.id}/approve`, {
+    method: 'POST',
+    headers: mutationHeaders(server.url()),
+    body: JSON.stringify({ scope: 'once' }),
+  });
+  assert.equal(resApproveAgain.status, 200);
+
+  await server.close();
+});

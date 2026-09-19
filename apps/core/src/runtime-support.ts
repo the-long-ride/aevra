@@ -209,6 +209,7 @@ export async function createRuntimeDataServices(config: CoreConfig, db: AevraDat
     databaseAdmin: {
       configExport: (portable: boolean) => configExport.export(portable),
       configPreview: (value: any) => configExport.previewImport(value),
+      configImport: (value: any) => configExport.import(value),
       backup: () => backup.create('daily'),
     },
   };

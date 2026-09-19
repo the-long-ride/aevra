@@ -3,10 +3,9 @@ import test from 'node:test';
 import { AevraDatabase } from '../src/database.js';
 import { migrations } from '../src/migrations.js';
 
-test('013 is the newest migration and the version sequence has no gap', () => {
-  const last = migrations.at(-1);
-  assert.equal(last?.version, 13);
-  assert.equal(last?.name, '013_mcp_upstream_pending_catalog');
+test('013 is an applied migration and the version sequence has no gap', () => {
+  const m13 = migrations.find((m) => m.version === 13);
+  assert.equal(m13?.name, '013_mcp_upstream_pending_catalog');
   assert.deepEqual(
     migrations.map((migration) => migration.version),
     migrations.map((_, index) => index + 1),

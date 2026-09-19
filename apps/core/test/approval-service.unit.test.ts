@@ -131,3 +131,95 @@ test('default static connector workspace approval is normalized to read-only', a
   assert.equal((svc.status(r.requestId)?.payload as any).profileId, 'read-only');
   db.close();
 });
+
+test('approval resume execution claim prevents duplicate execution under concurrency', async () => {
+  const { db, svc } = make();
+  const repo = new ApprovalRepository(db.raw());
+  const r = await svc.request({
+    actor: 'oauth:ChatGPT',
+    sessionId: 's',
+    workspaceId: 'w',
+    operation: { family: 'git:push', capability: 'git.push', risk: 'MEDIUM', argsHash: 'h' },
+    expectedState: { head: '1' },
+    risk: 'MEDIUM',
+  });
+  svc.approve(r.requestId);
+
+  let validations = 0;
+  let release!: () => void;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const revalidate = async () => {
+    validations++;
+    if (validations === 2) release();
+    await barrier;
+    return { ok: true as const };
+  };
+  let executions = 0;
+  const execute = async () => {
+    executions++;
+    return { written: true };
+  };
+  const outcomes = await Promise.allSettled([
+    svc.resume(r.requestId, revalidate, execute),
+    svc.resume(r.requestId, revalidate, execute),
+  ]);
+  assert.equal(executions, 1);
+  assert.equal(outcomes.filter((x) => x.status === 'fulfilled').length >= 1, true);
+  assert.equal(repo.get(r.requestId)?.state, 'SUCCEEDED');
+  db.close();
+});
+
+test('cancelForRestart marks EXECUTING operations as INTERRUPTED', async () => {
+  const { db, svc } = make();
+  const repo = new ApprovalRepository(db.raw());
+  const r = await svc.request({
+    actor: 'oauth:ChatGPT',
+    sessionId: 's',
+    workspaceId: 'w',
+    operation: { family: 'git:push', capability: 'git.push', risk: 'MEDIUM', argsHash: 'h' },
+    expectedState: { head: '1' },
+    risk: 'MEDIUM',
+  });
+  svc.approve(r.requestId);
+  repo.claimExecution(r.requestId, new Date().toISOString());
+  assert.equal(repo.get(r.requestId)?.state, 'EXECUTING');
+
+  svc.cancelForRestart();
+  const fresh = repo.get(r.requestId);
+  assert.equal(fresh?.state, 'INTERRUPTED');
+  assert.equal(fresh?.cancellationReason, 'INTERRUPTED_RESTART');
+
+  let executions = 0;
+  const retryResult = await svc.resume(
+    r.requestId,
+    async () => ({ ok: true }),
+    async () => ++executions,
+  );
+  assert.equal(executions, 0);
+  assert.equal((retryResult as any).state, 'INTERRUPTED');
+  db.close();
+});
+
+test('list transitions expired tickets to EXPIRED', async () => {
+  const { db, svc } = make();
+  const repo = new ApprovalRepository(db.raw());
+  const r = await svc.request({
+    actor: 'oauth:ChatGPT',
+    sessionId: 's',
+    workspaceId: 'w',
+    operation: { family: 'git:push', capability: 'git.push', risk: 'MEDIUM', argsHash: 'h' },
+    expectedState: { head: '1' },
+    risk: 'MEDIUM',
+  });
+  const stored = repo.get(r.requestId)!;
+  stored.expiresAt = new Date(Date.now() - 1000).toISOString();
+  repo.put(stored);
+
+  const listed = svc.list();
+  const ticket = listed.find((t) => t.id === r.requestId);
+  assert.equal(ticket?.state, 'EXPIRED');
+  assert.equal(repo.get(r.requestId)?.state, 'EXPIRED');
+  db.close();
+});

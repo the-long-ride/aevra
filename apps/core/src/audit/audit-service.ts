@@ -1,9 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { AuditRepository } from '../../../../packages/store/src/audit.js';
 import type { ExecutionMode, RiskTier } from '../../../../packages/protocol/src/index.js';
+import { currentRequestProvenance } from '../mcp/request-provenance.js';
+
 export interface AuditEventInput {
   actor?: string;
   sessionId?: string;
+  connectionId?: string;
   remoteIp?: string;
   workspaceId?: string;
   tool?: string;
@@ -37,9 +40,16 @@ function clean(input: AuditEventInput) {
 export class AuditService {
   constructor(private repo: AuditRepository) {}
   append(input: AuditEventInput) {
+    const prov = currentRequestProvenance();
+    const enriched: AuditEventInput = {
+      ...input,
+      remoteIp: input.remoteIp ?? prov?.remoteIp,
+      connectionId: input.connectionId ?? prov?.connectionId,
+      actor: input.actor ?? prov?.actor,
+    };
     const createdAt = new Date().toISOString(),
       id = `evt_${randomUUID()}`,
-      event = clean(input),
+      event = clean(enriched),
       eventJson = canonical(event),
       previousHash =
         this.repo.last()?.content_hash ?? this.repo.checkpoint()?.previous_hash ?? 'GENESIS',

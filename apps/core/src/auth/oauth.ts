@@ -9,59 +9,23 @@ import {
   type DynamicClientRegistrationInput,
 } from './oauth-clients.js';
 import {
-  SUPPORTED_SCOPES,
   base64urlSha256,
+  buildAuthorizationServerMetadata,
+  buildProtectedResourceMetadata,
   normalizeScope,
   resolvedResource,
   safeEqualText,
 } from './oauth-helpers.js';
 
-export interface OAuthServiceOptions {
-  issuer: string;
-  resource: string;
-  now?: () => Date;
-  authorizationRequestTtlMs?: number;
-  authorizationCodeTtlMs?: number;
-  accessTokenTtlMs?: number;
-  refreshTokenTtlMs?: number;
-}
-
-export type { DynamicClientRegistrationInput } from './oauth-clients.js';
-export interface AuthorizationRequestInput {
-  client_id: string;
-  redirect_uri: string;
-  response_type: string;
-  scope?: string;
-  resource?: string;
-  code_challenge: string;
-  code_challenge_method: string;
-  state?: string;
-}
-
-export interface AuthorizationCodeExchangeInput {
-  grant_type: 'authorization_code';
-  client_id: string;
-  code: string;
-  redirect_uri: string;
-  code_verifier: string;
-  resource?: string;
-}
-
-export interface RefreshTokenExchangeInput {
-  grant_type: 'refresh_token';
-  client_id: string;
-  refresh_token: string;
-  resource?: string;
-  scope?: string;
-}
-
-export interface OAuthTokenResponse {
-  access_token: string;
-  token_type: 'Bearer';
-  expires_in: number;
-  scope: string;
-  refresh_token?: string;
-}
+export * from './oauth-types.js';
+import type {
+  AuthorizationCodeExchangeInput,
+  AuthorizationRequestInput,
+  OAuthAuditLogger,
+  OAuthServiceOptions,
+  OAuthTokenResponse,
+  RefreshTokenExchangeInput,
+} from './oauth-types.js';
 
 export class AevraOAuthService {
   private _issuer: string;
@@ -70,6 +34,7 @@ export class AevraOAuthService {
   private codeTtlMs: number;
   private accessTtlMs: number;
   private refreshTtlMs: number;
+  private audit?: OAuthAuditLogger;
 
   constructor(
     private repo: OAuthRepository,
@@ -81,6 +46,7 @@ export class AevraOAuthService {
     this.codeTtlMs = options.authorizationCodeTtlMs ?? 2 * 60_000;
     this.accessTtlMs = options.accessTokenTtlMs ?? 60 * 60_000;
     this.refreshTtlMs = options.refreshTokenTtlMs ?? 30 * 24 * 60 * 60_000;
+    this.audit = options.audit;
   }
 
   get issuer() {
@@ -101,28 +67,11 @@ export class AevraOAuthService {
   }
 
   protectedResourceMetadata() {
-    return {
-      resource: this.resource,
-      authorization_servers: [this.issuer],
-      bearer_methods_supported: ['header'],
-      scopes_supported: [...SUPPORTED_SCOPES],
-    };
+    return buildProtectedResourceMetadata(this.resource, this.issuer);
   }
 
   authorizationServerMetadata() {
-    return {
-      issuer: this.issuer,
-      authorization_endpoint: `${this.issuer}/oauth/authorize`,
-      token_endpoint: `${this.issuer}/oauth/token`,
-      registration_endpoint: `${this.issuer}/oauth/register`,
-      revocation_endpoint: `${this.issuer}/oauth/revoke`,
-      scopes_supported: [...SUPPORTED_SCOPES],
-      response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code', 'refresh_token'],
-      token_endpoint_auth_methods_supported: ['none'],
-      code_challenge_methods_supported: ['S256'],
-      authorization_response_iss_parameter_supported: true,
-    };
+    return buildAuthorizationServerMetadata(this.issuer);
   }
 
   registerClient(input: DynamicClientRegistrationInput) {
@@ -148,7 +97,7 @@ export class AevraOAuthService {
     if (!input.code_challenge || input.code_challenge.length < 43)
       throw new Error('PKCE code_challenge is required');
     const scope = normalizeScope(input.scope);
-    return this.repo.createAuthorizationRequest(
+    const pending = this.repo.createAuthorizationRequest(
       {
         clientId: client.clientId,
         redirectUri: input.redirect_uri,
@@ -158,9 +107,24 @@ export class AevraOAuthService {
         codeChallengeMethod: 'S256',
         state: input.state,
         remoteIp,
+        renewable: input.renewable,
       },
       this.requestTtlMs,
     );
+    this.audit?.append({
+      actor: `client:${client.clientId}`,
+      operation: 'oauth.authorize.request',
+      target: pending.id,
+      result: 'ok',
+      redactionCount: 0,
+      class: 'security',
+      metadata: {
+        clientId: client.clientId,
+        requestedScope: pending.scope,
+        remoteIp,
+      },
+    });
+    return pending;
   }
 
   authorizationStatus(id: string) {
@@ -176,8 +140,8 @@ export class AevraOAuthService {
     }));
   }
 
-  approveAuthorization(id: string) {
-    const request = this.repo.approveAuthorizationRequest(id);
+  approveAuthorization(id: string, options?: { renewable?: boolean }) {
+    const request = this.repo.approveAuthorizationRequest(id, options);
     if (!request) throw new Error('OAuth authorization request not found');
     return request;
   }
@@ -215,23 +179,67 @@ export class AevraOAuthService {
       throw new Error('PKCE code_verifier is invalid');
     if (!safeEqualText(base64urlSha256(input.code_verifier), code.codeChallenge))
       throw new Error('PKCE verification failed');
-    return this.issueGrantTokens(code);
+    const tokens = this.issueGrantTokens(code);
+    this.audit?.append({
+      actor: code.actor,
+      operation: 'oauth.token.code_exchange',
+      target: code.subject,
+      result: 'ok',
+      redactionCount: 0,
+      class: 'security',
+      metadata: {
+        clientId: code.clientId,
+        grantedScope: tokens.scope,
+        refreshIssued: Boolean(tokens.refresh_token),
+        expiresIn: tokens.expires_in,
+      },
+    });
+    return tokens;
   }
 
   exchangeRefreshToken(input: RefreshTokenExchangeInput): OAuthTokenResponse {
     if (input.grant_type !== 'refresh_token') throw new Error('unsupported grant_type');
     const resource = resolvedResource(input.resource, this.resource);
     const current = this.repo.findRefreshToken(input.refresh_token);
-    if (!current || current.clientId !== input.client_id || current.resource !== resource)
+    if (!current || current.clientId !== input.client_id || current.resource !== resource) {
+      this.audit?.append({
+        actor: input.client_id ? `client:${input.client_id}` : 'unknown',
+        operation: 'oauth.token.refresh_failed',
+        target: input.client_id,
+        result: 'rejected',
+        redactionCount: 0,
+        class: 'security',
+        metadata: { reason: 'invalid_refresh_token_binding' },
+      });
       throw new Error('invalid refresh token');
+    }
     if (current.status !== 'ACTIVE') {
+      this.audit?.append({
+        actor: current.actor,
+        operation: 'oauth.token.refresh_failed',
+        target: current.subject,
+        result: 'rejected',
+        redactionCount: 0,
+        class: 'security',
+        metadata: { reason: 'refresh_token_spent_or_inactive' },
+      });
       this.repo.rotateRefreshTokenSecurely(input.refresh_token, this.refreshTtlMs);
       throw new Error('invalid refresh token');
     }
     const requestedScope = input.scope ? normalizeScope(input.scope) : current.scope;
     const currentScopes = new Set(current.scope.split(/\s+/));
-    if (requestedScope.split(/\s+/).some((scope) => !currentScopes.has(scope)))
+    if (requestedScope.split(/\s+/).some((scope) => !currentScopes.has(scope))) {
+      this.audit?.append({
+        actor: current.actor,
+        operation: 'oauth.token.refresh_failed',
+        target: current.subject,
+        result: 'rejected',
+        redactionCount: 0,
+        class: 'security',
+        metadata: { reason: 'scope_exceeds_grant' },
+      });
       throw new Error('refresh scope exceeds original grant');
+    }
     const rotated = this.repo.rotateRefreshTokenSecurely(input.refresh_token, this.refreshTtlMs);
     if (rotated.status !== 'ROTATED') throw new Error('invalid refresh token');
     const access = this.repo.issueAccessToken(
@@ -244,6 +252,19 @@ export class AevraOAuthService {
       },
       this.accessTtlMs,
     );
+    this.audit?.append({
+      actor: current.actor,
+      operation: 'oauth.token.refresh',
+      target: current.subject,
+      result: 'ok',
+      redactionCount: 0,
+      class: 'security',
+      metadata: {
+        clientId: current.clientId,
+        grantedScope: requestedScope,
+        expiresIn: Math.floor(this.accessTtlMs / 1000),
+      },
+    });
     return {
       access_token: access.token,
       token_type: 'Bearer',
@@ -253,13 +274,14 @@ export class AevraOAuthService {
     };
   }
 
-  verifyAccessToken(token: string): VerifiedRemoteIdentity {
+  verifyAccessToken(token: string, remoteIp?: string): VerifiedRemoteIdentity {
     const record = this.repo.findAccessToken(token);
     if (!record || record.resource !== this.resource) throw new Error('invalid OAuth access token');
     const connection = this.repo.getConnection(record.subject);
     if (!connection || connection.status !== 'ACTIVE')
       throw new Error('invalid OAuth access token');
     this.repo.touchConnection(record.subject);
+    if (remoteIp) this.repo.recordConnectionOrigin(record.subject, remoteIp);
     return {
       actor: record.actor,
       subject: record.subject,
@@ -270,6 +292,14 @@ export class AevraOAuthService {
     };
   }
 
+  recordConnectionOrigin(subject: string, remoteIp: string) {
+    this.repo.recordConnectionOrigin(subject, remoteIp);
+  }
+
+  listConnectionOrigins(subject: string) {
+    return this.repo.listConnectionOrigins(subject);
+  }
+
   revoke(token: string) {
     this.repo.revokeToken(token);
   }
@@ -278,23 +308,40 @@ export class AevraOAuthService {
     this.repo.revokeConnection(subject, reason);
   }
 
+  getLatestRefreshFamily(subject: string) {
+    return this.repo.getLatestRefreshFamily(subject);
+  }
+
   private issueGrantTokens(grant: {
     clientId: string;
     actor: string;
     subject: string;
     scope: string;
     resource: string;
+    renewable?: boolean;
   }): OAuthTokenResponse {
     this.repo.ensureConnection(grant);
     const access = this.repo.issueAccessToken(grant, this.accessTtlMs);
+    const grantedScope =
+      grant.renewable === false
+        ? grant.scope
+            .split(/\s+/)
+            .filter((s) => s !== 'offline_access')
+            .join(' ')
+        : grant.scope;
     const response: OAuthTokenResponse = {
       access_token: access.token,
       token_type: 'Bearer',
       expires_in: Math.floor(this.accessTtlMs / 1000),
-      scope: grant.scope,
+      scope: grantedScope,
     };
-    if (grant.scope.split(/\s+/).includes('offline_access'))
+    const shouldIssueRefresh =
+      grant.renewable !== undefined
+        ? grant.renewable
+        : grant.scope.split(/\s+/).includes('offline_access');
+    if (shouldIssueRefresh) {
       response.refresh_token = this.repo.issueRefreshToken(grant, this.refreshTtlMs).token;
+    }
     return response;
   }
 }

@@ -12,6 +12,16 @@ export function handleActivityRoutes(
   url: URL,
   context: AdminApiContext,
 ): boolean {
+  if (url.pathname === '/api/activity' && req.method === 'GET') {
+    if (!context.activity) {
+      sendAdminResponse(res, 503, {
+        error: { code: 'ACTIVITY_UNAVAILABLE', message: 'MCP activity log is unavailable' },
+      });
+      return true;
+    }
+    sendAdminResponse(res, 200, context.activity.recent(100));
+    return true;
+  }
   if (url.pathname !== '/api/activity/stream') return false;
   if (req.method !== 'GET') {
     sendAdminResponse(res, 405, {

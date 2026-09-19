@@ -60,3 +60,41 @@ test('activity SSE route sends recent rows, streams updates, and unsubscribes on
   });
   assert.equal(chunks.length, countAfterClose);
 });
+
+test('GET /api/activity returns recent activity log entries as JSON', async () => {
+  const activity = new McpActivityLog(10);
+  activity.instant({
+    actor: 'oauth:ChatGPT',
+    sessionId: 'ses_1',
+    kind: 'session',
+    action: 'initialize',
+  });
+
+  const req = {} as any;
+  req.method = 'GET';
+  let body = '';
+  const headers = new Map<string, string>();
+  const res = {
+    statusCode: 0,
+    setHeader(name: string, value: string) {
+      headers.set(name.toLowerCase(), value);
+    },
+    end(content?: string) {
+      if (content) body = content;
+    },
+  } as any;
+
+  const handled = await handleActivityRoutes(
+    req,
+    res,
+    new URL('https://localhost/api/activity'),
+    { activity },
+  );
+
+  assert.equal(handled, true);
+  assert.equal(res.statusCode, 200);
+  const data = JSON.parse(body);
+  assert.equal(Array.isArray(data), true);
+  assert.equal(data.length, 1);
+  assert.equal(data[0].actor, 'oauth:ChatGPT');
+});

@@ -15,20 +15,19 @@ import {
 import { handleModernRuntimeRequest, type McpHookEmitter } from './modern-runtime.js';
 import { MODERN_PROTOCOL_VERSION, isModernRequest } from './modern-protocol.js';
 import { handleOAuthRoute } from './oauth-routes.js';
+import { extractRequestProvenance, withRequestProvenance } from './request-provenance.js';
 import { aevraServerInfo } from './server-info.js';
+
 export type McpRequestHandler = (
-  request: IncomingMessage,
-  response: ServerResponse,
+  req: IncomingMessage,
+  res: ServerResponse,
   identity: VerifiedRemoteIdentity,
 ) => Promise<void>;
-
 export interface McpSessionRuntime {
   sessions: any;
   service: any;
 }
-
-export type { ConnectorAdmissionOutcome };
-export type { ConnectorAdmission };
+export type { ConnectorAdmission, ConnectorAdmissionOutcome };
 
 export interface McpIngressServerOptions {
   tls?: HttpsServerOptions;
@@ -37,8 +36,9 @@ export interface McpIngressServerOptions {
   oauth?: AevraOAuthService;
   activity?: McpActivityLog;
   hooks?: McpHookEmitter;
-  /** Honor forwarded client-IP headers because a trusted proxy was declared. */
   trustForwardedClientIp?: () => boolean;
+  invalidBearerLimiter?: any;
+  connectionLimiter?: any;
 }
 
 const LEGACY_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] as const;
@@ -48,13 +48,9 @@ function protocolHeader(req: IncomingMessage) {
   return typeof value === 'string' ? value.trim() : undefined;
 }
 
-function protocolMeta(body: any) {
-  const value = body?.params?._meta?.['io.modelcontextprotocol/protocolVersion'];
-  return typeof value === 'string' ? value.trim() : undefined;
-}
-
 function requestedProtocol(req: IncomingMessage, body: any) {
-  return protocolHeader(req) ?? protocolMeta(body);
+  const meta = body?.params?._meta?.['io.modelcontextprotocol/protocolVersion'];
+  return protocolHeader(req) ?? (typeof meta === 'string' ? meta.trim() : undefined);
 }
 
 function legacyProtocol(requested: unknown) {
@@ -186,11 +182,14 @@ export class McpIngressServer {
       oauth: this.options.oauth,
       plainMcpEnabled: this.options.plainMcpEnabled,
       trustForwardedClientIp: this.trustsForwardedClientIp(),
+      invalidBearerLimiter: this.options.invalidBearerLimiter,
+      connectionLimiter: this.options.connectionLimiter,
     });
     if (!identity) return;
 
+    const prov = extractRequestProvenance(req, identity, this.trustsForwardedClientIp());
     if (this.handler) {
-      await this.handler(req, res, identity);
+      await withRequestProvenance(prov, () => this.handler!(req, res, identity));
       return;
     }
     if (!this.runtime) {
@@ -199,7 +198,7 @@ export class McpIngressServer {
     }
 
     try {
-      await this.handleRuntimeRequest(req, res, identity);
+      await withRequestProvenance(prov, () => this.handleRuntimeRequest(req, res, identity));
     } catch (error) {
       sendJson(res, (error as any)?.status ?? 400, {
         error: error instanceof Error ? error.message : String(error),

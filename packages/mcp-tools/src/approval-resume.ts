@@ -3,29 +3,16 @@ import { AevraToolError } from './errors.js';
 import { repoState } from './git-state.js';
 import {
   authorizationContext,
+  isTicketAuthorizedForSession,
   oneTimeAllowed,
   oneTimeKey,
   requiredLease,
+  sameConnection,
+  verifyTicketAuthority,
   workspaceResult,
   workspaceRoot,
 } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
-
-function sameConnection(
-  context: McpRuntimeContext,
-  currentSessionId: string,
-  ticket: FrozenOperationTicket,
-): boolean {
-  const current = context.sessions.connectionIdentity(currentSessionId);
-  const original = context.sessions.connectionIdentity(ticket.sessionId);
-  return Boolean(
-    current &&
-    original &&
-    current.actor === ticket.actor &&
-    current.actor === original.actor &&
-    current.subject === original.subject,
-  );
-}
 
 export async function resumeApproval(
   context: McpRuntimeContext,
@@ -35,51 +22,37 @@ export async function resumeApproval(
   if (!context.approvals) return null;
   const ticket = context.approvals.status(requestId);
   if (!ticket) return null;
-  if (ticket.state !== 'APPROVED') return ticket;
+  if (ticket.state !== 'APPROVED') {
+    return isTicketAuthorizedForSession(context, sessionId, ticket) ? ticket : null;
+  }
   if (ticket.operation.family === 'workspace:select') {
     return resumeWorkspaceAdmission(context, sessionId, requestId);
   }
   if ((ticket.payload as any)?.tool === 'capability_request') {
     return resumeCapabilityRequest(context, sessionId, requestId);
   }
+  return resumeGeneralApproval(context, sessionId, requestId);
+}
 
-  return context.approvals.resume(
+async function resumeGeneralApproval(
+  context: McpRuntimeContext,
+  sessionId: string,
+  requestId: string,
+) {
+  return context.approvals!.resume(
     requestId,
     async (current) => {
-      const session = context.sessions.get(sessionId);
-      const lease = context.sessions.activeLease(sessionId);
-      if (!session || session.id !== current.sessionId || session.actor !== current.actor) {
-        return { ok: false, reason: 'session changed' };
-      }
-      if (!lease || lease.workspaceId !== current.workspaceId) {
-        return { ok: false, reason: 'workspace changed' };
-      }
-
-      const currentPermission = context.deps.permissions?.decide({
-        capability: current.operation.capability,
-        matcher: current.operation.family,
-        workspaceId: lease.workspaceId,
-        actor: session.actor,
-        sessionId,
-        risk: 'LOW',
-      });
-      if (currentPermission?.outcome === 'deny') {
-        return { ok: false, reason: 'permission policy changed' };
-      }
-      if (
-        !lease.capabilities.includes(current.operation.capability) &&
-        currentPermission?.outcome !== 'allow' &&
-        !oneTimeAllowed(context, sessionId, current.operation.capability, current.operation.family)
-      ) {
-        return { ok: false, reason: 'capability changed' };
-      }
-
+      const auth = verifyTicketAuthority(context, sessionId, current);
+      if (!auth.ok) return auth;
       if (current.expectedState?.head) {
+        const lease =
+          context.sessions.leaseForWorkspace?.(sessionId, current.workspaceId) ??
+          context.sessions.activeLease(sessionId);
         const state = await repoState(
           context,
           sessionId,
-          lease.workspaceId,
-          context.workspaces.capabilityRoots(lease.workspaceId),
+          lease!.workspaceId,
+          context.workspaces.capabilityRoots(lease!.workspaceId),
         );
         if (state.head !== current.expectedState.head) {
           return { ok: false, reason: 'repository state changed' };
@@ -88,6 +61,7 @@ export async function resumeApproval(
       return { ok: true };
     },
     async (current) => executeFrozen(context, sessionId, current),
+    (current) => verifyTicketAuthority(context, sessionId, current),
   );
 }
 
@@ -141,7 +115,11 @@ async function resumeCapabilityRequest(
       if (!context.workspaces.getLocal(ticket.workspaceId)) {
         return { ok: false, reason: 'workspace no longer exists' };
       }
-      const lease = context.sessions.activeLease(sessionId);
+      const lease =
+        context.sessions.leaseForWorkspace?.(sessionId, ticket.workspaceId) ??
+        (context.sessions.activeLease(sessionId)?.workspaceId === ticket.workspaceId
+          ? context.sessions.activeLease(sessionId)
+          : null);
       if (!lease || lease.workspaceId !== ticket.workspaceId) {
         return { ok: false, reason: 'workspace changed' };
       }
@@ -167,6 +145,17 @@ async function resumeCapabilityRequest(
       } finally {
         if (once) context.oneTimeCapabilities.delete(key);
       }
+    },
+    (ticket) => {
+      const lease =
+        context.sessions.leaseForWorkspace?.(sessionId, ticket.workspaceId) ??
+        (context.sessions.activeLease(sessionId)?.workspaceId === ticket.workspaceId
+          ? context.sessions.activeLease(sessionId)
+          : null);
+      if (!lease || lease.workspaceId !== ticket.workspaceId) {
+        return { ok: false, reason: 'workspace changed' };
+      }
+      return { ok: true };
     },
   );
 }
@@ -228,8 +217,16 @@ async function executeFrozen(
     );
   }
 
+  const ctx = ticket.workspaceId ? { ...context, workspaceId: ticket.workspaceId } : context;
+
   if (payload.tool === 'git_commit' || payload.tool === 'git_push') {
-    const lease = requiredLease(context, sessionId);
+    const lease =
+      context.sessions.leaseForWorkspace?.(sessionId, ticket.workspaceId) ??
+      requiredLease(context, sessionId);
+    const cap = payload.tool === 'git_commit' ? 'git.commit' : 'git.push';
+    if (!lease.capabilities.includes(cap) && !oneTimeAllowed(context, sessionId, cap, 'git')) {
+      throw new AevraToolError('CAPABILITY_REQUIRED', `Workspace lease does not grant ${cap}`);
+    }
     const roots = context.workspaces.capabilityRoots(lease.workspaceId);
     const operation: any =
       payload.tool === 'git_commit'
@@ -258,7 +255,7 @@ async function executeFrozen(
   }
 
   if (payload.tool === 'file_delete') {
-    const authorization = authorizationContext(context, sessionId, 'files.delete', 'files:delete');
+    const authorization = authorizationContext(ctx, sessionId, 'files.delete', 'files:delete');
     return context.deps.operations!.delete(
       sessionId,
       {
@@ -285,7 +282,7 @@ async function executeFrozen(
     return context.deps.skills!.write(
       source,
       String(payload.args.name ?? ''),
-      workspaceRoot(context, sessionId),
+      workspaceRoot(ctx, sessionId),
       payload.args.file ? String(payload.args.file) : undefined,
       String(payload.args.content ?? ''),
     );
@@ -295,7 +292,7 @@ async function executeFrozen(
     const source = payload.args.source === 'workspace' ? 'workspace' : 'user';
     return context.deps.skills!.writeInstructions(
       source,
-      workspaceRoot(context, sessionId),
+      workspaceRoot(ctx, sessionId),
       String(payload.args.content ?? ''),
     );
   }

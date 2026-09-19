@@ -22,7 +22,7 @@ export const handleApprovalPermissionRoutes: AdminRouteHandler = async (req, res
       });
       return true;
     }
-    if (before.state !== 'PENDING') {
+    if (!['PENDING', 'APPROVED', 'EXPIRED'].includes(before.state)) {
       sendAdminResponse(res, 409, {
         error: { code: 'INVALID_STATE', message: `Cannot enable YOLO for ${before.state} request` },
       });
@@ -30,12 +30,14 @@ export const handleApprovalPermissionRoutes: AdminRouteHandler = async (req, res
     }
     try {
       const yolo = context.sessions?.enableYolo?.(before.sessionId);
-      let ticket;
-      try {
-        ticket = context.approvals.approve(match[1], 'once');
-      } catch (error) {
-        context.sessions?.disableYolo?.(before.sessionId);
-        throw error;
+      let ticket = before;
+      if (before.state === 'PENDING') {
+        try {
+          ticket = context.approvals.approve(match[1], 'once');
+        } catch (error) {
+          context.sessions?.disableYolo?.(before.sessionId);
+          throw error;
+        }
       }
       context.audit?.append?.({
         actor: 'admin',
@@ -68,14 +70,24 @@ export const handleApprovalPermissionRoutes: AdminRouteHandler = async (req, res
   if (match && method === 'POST') {
     const input = await readAdminBody(req);
     const before = context.approvals?.status?.(match[1]);
+    if (!before) {
+      sendAdminResponse(res, 404, {
+        error: { code: 'NOT_FOUND', message: 'Approval request not found' },
+      });
+      return true;
+    }
     const admission = before?.operation?.family === 'workspace:select';
     const scope = admission ? 'once' : (input.scope ?? 'once');
     const ticket =
       match[2] === 'approve'
-        ? context.approvals.approve(match[1], scope)
-        : context.approvals.deny(match[1]);
+        ? before.state === 'APPROVED'
+          ? before
+          : context.approvals.approve(match[1], scope)
+        : before.state === 'DENIED'
+          ? before
+          : context.approvals.deny(match[1]);
 
-    if (match[2] === 'approve' && !admission && context.permissions) {
+    if (match[2] === 'approve' && !admission && context.permissions && before.state === 'PENDING') {
       const rule = permissionRuleFromApproval(
         ticket,
         scope,

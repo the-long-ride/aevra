@@ -20,6 +20,7 @@ export interface OAuthAuthorizationRequestRecord {
   remoteIp?: string;
   pairingCode: string;
   status: 'PENDING' | 'APPROVED' | 'DENIED';
+  renewable: boolean;
   createdAt: string;
   expiresAt: string;
   decidedAt?: string;
@@ -31,6 +32,7 @@ export interface OAuthGrantRecord {
   subject: string;
   scope: string;
   resource: string;
+  renewable?: boolean;
 }
 
 export interface OAuthTokenRecord extends OAuthGrantRecord {
@@ -41,6 +43,7 @@ export interface OAuthTokenRecord extends OAuthGrantRecord {
 export interface OAuthAuthorizationCodeRecord extends OAuthTokenRecord {
   redirectUri: string;
   codeChallenge: string;
+  renewable: boolean;
 }
 
 export interface OAuthConnectionRecord extends OAuthGrantRecord {

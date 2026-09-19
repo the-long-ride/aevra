@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../../packages/protocol/src/index.js';
 import type { SessionRepository } from '../../../../packages/store/src/sessions.js';
 import type { VerifiedRemoteIdentity } from '../auth/cloudflare.js';
-import type { SecuritySession, WorkspaceLease } from './session-types.js';
+import type { ConnectionStateStore } from './connection-state.js';
+import type { DisconnectedIdentity, SecuritySession, WorkspaceLease } from './session-types.js';
 
 export function isConnectorSessionActor(actor: string) {
   return actor.startsWith('connector:') || actor.startsWith('oauth:');
@@ -160,4 +161,126 @@ export function revokeRememberedWorkspaceAcrossSessions(input: {
     changed = true;
   }
   return changed;
+}
+
+export function findMatchingConnectionSessions(
+  sessions: Iterable<SecuritySession>,
+  connectionId: string,
+): SecuritySession[] {
+  return [...sessions].filter((s) => s.connectionId === connectionId || s.subject === connectionId);
+}
+
+export function findMatchingDetachedIdentities(
+  identities: Iterable<[string, { actor: string; subject: string; connectionId?: string }]>,
+  connectionId: string,
+): Array<{ sessionId: string; actor: string; subject: string; connectionId?: string }> {
+  return [...identities]
+    .filter(([, id]) => id.connectionId === connectionId || id.subject === connectionId)
+    .map(([sessionId, id]) => ({ sessionId, ...id }));
+}
+
+export function findMatchingConnectionLeases(input: {
+  sessions: Iterable<SecuritySession>;
+  disconnectedIdentities: Iterable<[string, { connectionId?: string; subject?: string }]>;
+  leaseRows: Iterable<WorkspaceLease>;
+  connectionId: string;
+  workspaceId: string;
+}): WorkspaceLease[] {
+  const ids = new Set<string>();
+  for (const s of input.sessions) {
+    if (s.connectionId === input.connectionId || s.subject === input.connectionId) ids.add(s.id);
+  }
+  for (const [id, ident] of input.disconnectedIdentities) {
+    if (ident.connectionId === input.connectionId || ident.subject === input.connectionId)
+      ids.add(id);
+  }
+  return [...input.leaseRows].filter(
+    (l) => l.workspaceId === input.workspaceId && ids.has(l.sessionId),
+  );
+}
+
+export function disconnectSessionImmediate(input: {
+  sessionId: string;
+  rememberIdentity: boolean;
+  sessions: Map<string, SecuritySession>;
+  disconnectedIdentities: Map<string, { actor: string; subject: string; connectionId?: string }>;
+  leaseRows: Map<string, WorkspaceLease>;
+  yoloSessions: Set<string>;
+  pendingRememberedRestore: Set<string>;
+  connections?: { forgetSession(sessionId: string): void };
+  revokeLease: (id: string) => void;
+}) {
+  const session = input.sessions.get(input.sessionId);
+  if (input.rememberIdentity && session) {
+    input.disconnectedIdentities.set(input.sessionId, {
+      actor: session.actor,
+      subject: session.subject,
+      ...(session.connectionId ? { connectionId: session.connectionId } : {}),
+    });
+  } else if (!input.rememberIdentity) {
+    input.disconnectedIdentities.delete(input.sessionId);
+  }
+  const leases = [...input.leaseRows.values()].filter((l) => l.sessionId === input.sessionId);
+  for (const lease of leases) input.revokeLease(lease.id);
+  input.yoloSessions.delete(input.sessionId);
+  input.pendingRememberedRestore.delete(input.sessionId);
+  input.sessions.delete(input.sessionId);
+  input.connections?.forgetSession(input.sessionId);
+}
+
+export function invalidateWorkspaceAccess(input: {
+  repo: SessionRepository;
+  leaseRows: Iterable<WorkspaceLease>;
+  workspaceId: string;
+  revokeLease: (id: string) => void;
+}) {
+  for (const lease of [...input.leaseRows]) {
+    if (lease.workspaceId === input.workspaceId) input.revokeLease(lease.id);
+  }
+  input.repo.revokeWorkspaceLeases?.(input.workspaceId);
+  input.repo.forgetWorkspaceGrants?.(input.workspaceId);
+}
+
+export function detachSession(input: {
+  sessionId: string;
+  sessions: Map<string, SecuritySession>;
+  disconnectedIdentities: Map<string, DisconnectedIdentity>;
+  connections?: ConnectionStateStore;
+  repo: SessionRepository;
+  yoloSessions: Set<string>;
+  pendingRememberedRestore: Set<string>;
+  reconnectGraceMs: number;
+  disconnectImmediate: (sessionId: string, rememberIdentity: boolean) => void;
+}) {
+  const session = input.sessions.get(input.sessionId);
+  if (!session) return;
+  if (session.actor.startsWith('oauth:') && session.connectionId && input.connections) {
+    input.disconnectedIdentities.set(input.sessionId, {
+      actor: session.actor,
+      subject: session.subject,
+      connectionId: session.connectionId,
+    });
+    input.connections.detach(input.sessionId, input.reconnectGraceMs);
+    input.repo.detach(input.sessionId);
+    input.yoloSessions.delete(input.sessionId);
+    input.pendingRememberedRestore.delete(input.sessionId);
+    input.sessions.delete(input.sessionId);
+    return;
+  }
+  input.disconnectImmediate(input.sessionId, session.actor.startsWith('oauth:'));
+}
+
+export function expireGraceSessionConnections(input: {
+  connections?: ConnectionStateStore;
+  disconnectedIdentities: Map<string, DisconnectedIdentity>;
+  disconnectImmediate: (sessionId: string, rememberIdentity: boolean) => void;
+}) {
+  if (!input.connections) return;
+  const expired = new Set(input.connections.expireGraceConnections());
+  if (!expired.size) return;
+  for (const [sessionId, identity] of [...input.disconnectedIdentities]) {
+    if (identity.connectionId && expired.has(identity.connectionId)) {
+      input.disconnectImmediate(sessionId, false);
+    }
+  }
 }

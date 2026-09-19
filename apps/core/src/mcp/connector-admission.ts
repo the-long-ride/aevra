@@ -18,6 +18,7 @@ export function createConnectorAdmission(
   limiter: RateLimiterLike,
 ) {
   return {
+    lookup: (token: string) => Boolean(connectors.findByToken(token)),
     verify: async (token: string, ip: string) => {
       if (!limiter.allow(ip)) return { kind: 'rate-limited' } as const;
       const row = connectors.findByToken(token);
