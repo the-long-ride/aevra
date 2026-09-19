@@ -3,7 +3,8 @@ import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { useMcpActivityEntries } from '../hooks/use-mcp-activity';
-import { BrowserSuggestion } from '../features/browser/BrowserSuggestion';
+import { BrowserSetupModal } from '../features/browser/BrowserSetupModal';
+import { useBrowserExtensionInfo } from '../features/browser/use-browser-extension';
 import type { Theme } from '../hooks/theme-state';
 
 export function isVersionOutdated(current?: string, latest?: string): boolean {
@@ -64,6 +65,39 @@ function HealthChip({
   );
 }
 
+function BrowserHealthChip({
+  isInstalled,
+  version,
+  onClick,
+}: {
+  isInstalled: boolean;
+  version: string | null;
+  onClick(): void;
+}) {
+  return (
+    <button
+      type="button"
+      className="health-chip"
+      data-health="browser"
+      data-state={isInstalled ? 'ok' : 'error'}
+      title={
+        isInstalled
+          ? `Aevra browser extension installed${version ? ` (v${version})` : ''}`
+          : 'Aevra browser extension not installed'
+      }
+      aria-label={
+        isInstalled
+          ? `Aevra browser extension installed${version ? ` (v${version})` : ''}`
+          : 'Aevra browser extension not installed'
+      }
+      onClick={onClick}
+    >
+      <i />
+      <span>Browser</span>
+    </button>
+  );
+}
+
 function ToolRunningSignal({ count }: { count: number }) {
   if (!count) return null;
   return (
@@ -95,6 +129,8 @@ export function AppShell({
 }: AppShellProps) {
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [browserModalOpen, setBrowserModalOpen] = useState(false);
+  const extensionInfo = useBrowserExtensionInfo();
   const activity = useMcpActivityEntries();
   const runningToolCount = activity.filter(
     (entry) => entry.kind === 'tool' && entry.state === 'running',
@@ -123,6 +159,15 @@ export function AppShell({
 
   const isOutdated = isVersionOutdated(status.version, latestVersion ?? undefined);
   const updateCommand = 'npm i -g @the-long-ride/aevra@latest';
+
+  const cleanAevra = (status.version ?? '').replace(/^v/, '').trim();
+  const cleanExt = (extensionInfo.version ?? '').replace(/^v/, '').trim();
+  const isExtensionMismatch = Boolean(
+    extensionInfo.isInstalled &&
+    cleanExt &&
+    cleanAevra &&
+    cleanExt !== cleanAevra,
+  );
 
   const handleCopyUpdate = async () => {
     try {
@@ -153,12 +198,23 @@ export function AppShell({
                 <button
                   type="button"
                   className="version-update-btn"
-                  title="Click to copy update command"
+                  title="Click to copy update command (new browser extension also recommended)"
                   aria-label="Click to copy update command"
                   onClick={handleCopyUpdate}
                 >
                   <code>{updateCommand}</code>
                   {copied ? <span className="copied-tag">[copied]</span> : null}
+                </button>
+              ) : null}
+              {isExtensionMismatch ? (
+                <button
+                  type="button"
+                  className="version-update-btn extension-mismatch-btn"
+                  title={`Browser extension v${cleanExt} does not match Aevra v${cleanAevra}. Click to download matching extension.`}
+                  aria-label="Extension update recommended"
+                  onClick={() => setBrowserModalOpen(true)}
+                >
+                  <code>ext v{cleanExt} &ne; v{cleanAevra} (update)</code>
                 </button>
               ) : null}
             </strong>
@@ -171,6 +227,11 @@ export function AppShell({
             {(['core', 'worker', 'mcp', 'tunnel'] as const).map((name) => (
               <HealthChip key={name} name={name} status={status} />
             ))}
+            <BrowserHealthChip
+              isInstalled={extensionInfo.isInstalled}
+              version={extensionInfo.version}
+              onClick={() => setBrowserModalOpen(true)}
+            />
           </div>
           <button
             type="button"
@@ -180,7 +241,6 @@ export function AppShell({
           >
             [{theme}]
           </button>
-          <BrowserSuggestion />
           <button
             type="button"
             id="open-requests"
@@ -192,6 +252,12 @@ export function AppShell({
           </button>
         </div>
       </header>
+      {browserModalOpen ? (
+        <BrowserSetupModal
+          aevraVersion={status.version}
+          onClose={() => setBrowserModalOpen(false)}
+        />
+      ) : null}
       {status.safeMode ? (
         <div id="safe-mode-banner" className="safe-mode-banner">
           SAFE MODE: remote execution and administrative mutations are disabled.

@@ -19,7 +19,8 @@ export interface DropdownProps {
 }
 
 interface MenuPosition {
-  top: number;
+  top?: number;
+  bottom?: number;
   left: number;
   width: number;
   maxHeight: number;
@@ -53,13 +54,15 @@ export function Dropdown({
     const preferredHeight = 280;
     const below = window.innerHeight - rect.bottom - gap - viewportPadding;
     const above = rect.top - gap - viewportPadding;
-    const placement = below >= Math.min(preferredHeight, above) ? 'below' : 'above';
+    const estimatedHeight = Math.min(preferredHeight, Math.max(80, options.length * 34 + 8));
+    const placement = below >= estimatedHeight || below >= above ? 'below' : 'above';
     const available = placement === 'below' ? below : above;
     setMenuPosition({
-      top:
-        placement === 'below'
-          ? rect.bottom + gap
-          : Math.max(viewportPadding, rect.top - gap - Math.min(preferredHeight, available)),
+      top: placement === 'below' ? rect.bottom + gap : undefined,
+      bottom:
+        placement === 'above'
+          ? Math.max(viewportPadding, window.innerHeight - rect.top + gap)
+          : undefined,
       left: Math.max(
         viewportPadding,
         Math.min(rect.left, window.innerWidth - rect.width - viewportPadding),
@@ -112,10 +115,11 @@ export function Dropdown({
             role="listbox"
             aria-labelledby={id}
             style={{
-              top: menuPosition.top,
-              left: menuPosition.left,
-              width: menuPosition.width,
-              maxHeight: menuPosition.maxHeight,
+              top: menuPosition.top !== undefined ? `${menuPosition.top}px` : 'auto',
+              bottom: menuPosition.bottom !== undefined ? `${menuPosition.bottom}px` : 'auto',
+              left: `${menuPosition.left}px`,
+              width: `${menuPosition.width}px`,
+              maxHeight: `${menuPosition.maxHeight}px`,
             }}
           >
             {options.map((option) => {

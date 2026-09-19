@@ -1,6 +1,7 @@
 import type { ApprovalItem, OauthRequestItem } from '@aevra/admin-contracts';
 import { useEffect, useRef, useState } from 'react';
 import { useDialog } from '../../components/Dialog';
+import { Switch } from '../../components/Switch';
 import { actionsForApproval } from './request-actions';
 import {
   approveRequest,
@@ -62,9 +63,19 @@ function ApprovalModalCard({
       await act();
       await onActioned();
     } catch (error) {
-      // Stay open so the decision can be retried - closing here would hide the
-      // fact that nothing was recorded.
-      setFailure(error instanceof Error ? error.message : 'The decision could not be recorded.');
+      const message =
+        error instanceof Error ? error.message : 'The decision could not be recorded.';
+      const isTerminalOrStale =
+        /expired|timeout|not found|cannot approve (?:approved|expired)|cannot enable yolo for (?:approved|expired)|cannot deny (?:denied|expired)/i.test(
+          message,
+        );
+      if (isTerminalOrStale) {
+        // The decision is already resolved, expired, or non-actionable.
+        // Close and refresh so the user is not stranded on an un-actionable modal.
+        await onActioned();
+        return;
+      }
+      setFailure(message);
       setBusy(false);
     }
   };
@@ -152,16 +163,24 @@ function OauthModalCard({
 }) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
 
   const decide = async (allow: boolean) => {
     if (busy) return;
     setBusy(true);
     setFailure(null);
     try {
-      await decideOauth(item.id, allow);
+      await decideOauth(item.id, allow, { renewable: keepSignedIn });
       await onActioned();
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : 'The decision could not be recorded.');
+      const message =
+        error instanceof Error ? error.message : 'The decision could not be recorded.';
+      const isTerminalOrStale = /expired|timeout|not found|already|invalid_state/i.test(message);
+      if (isTerminalOrStale) {
+        await onActioned();
+        return;
+      }
+      setFailure(message);
       setBusy(false);
     }
   };
@@ -178,6 +197,22 @@ function OauthModalCard({
       <p className="approval-modal-detail">
         {item.remoteIp ?? 'Remote client'} · code <code>{item.pairingCode}</code>
       </p>
+      <div className="approval-modal-option-row">
+        <Switch
+          checked={keepSignedIn}
+          onChange={(e) => setKeepSignedIn(e.target.checked)}
+          data-surface-id="approval-modal:oauth-renewable"
+          containerClassName="approval-modal-option-label"
+          label={
+            <div className="approval-modal-option-info">
+              <span className="approval-modal-option-title">Keep this connection signed in</span>
+              <span className="approval-modal-option-description">
+                Issue a refresh token for continued access beyond 1 hour.
+              </span>
+            </div>
+          }
+        />
+      </div>
       <div className="request-actions approval-modal-actions">
         <button
           type="button"

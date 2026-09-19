@@ -69,6 +69,8 @@ test('Permissions creates normalized command rules and revokes remembered rules'
     commandMatchers: ['git:status', 'npm:test'],
   });
   await user.click(await screen.findByRole('button', { name: 'Revoke' }));
+  const revokeDialog = screen.getByRole('dialog', { name: 'Revoke permission rule' });
+  await user.click(within(revokeDialog).getByRole('button', { name: 'Revoke' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/permissions/rule-1', 'DELETE')).toBeTruthy(),
   );
@@ -261,12 +263,16 @@ test('Sessions switches workspace and revokes remote, local, and other sessions'
   );
   expect(remoteTable).not.toBeNull();
   await user.click(within(remoteTable!).getByRole('button', { name: 'Revoke' }));
+  let revokeDialog = screen.getByRole('dialog', { name: 'Revoke session' });
+  await user.click(within(revokeDialog).getByRole('button', { name: 'Revoke' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/sessions/session-1/revoke', 'POST')).toBeTruthy(),
   );
   const localTable = document.querySelector<HTMLElement>('[data-table-id="react-local-sessions"]');
   expect(localTable).not.toBeNull();
   await user.click(within(localTable!).getByRole('button', { name: 'Revoke' }));
+  revokeDialog = screen.getByRole('dialog', { name: 'Revoke admin session' });
+  await user.click(within(revokeDialog).getByRole('button', { name: 'Revoke' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/admin-sessions/admin-1/revoke', 'POST')).toBeTruthy(),
   );
@@ -302,13 +308,18 @@ test('Processes exposes stop restart and forget mutations', async () => {
   for (const [label, action] of [
     ['Stop', 'stop'],
     ['Restart', 'restart'],
-    ['Forget', 'forget'],
   ] as const) {
     await user.click(screen.getByRole('button', { name: label }));
     await waitFor(() =>
       expect(mutationCall(fetchMock, `/api/processes/process-1/${action}`, 'POST')).toBeTruthy(),
     );
   }
+  await user.click(screen.getByRole('button', { name: 'Forget' }));
+  const forgetDialog = screen.getByRole('dialog', { name: 'Forget process' });
+  await user.click(within(forgetDialog).getByRole('button', { name: 'Forget' }));
+  await waitFor(() =>
+    expect(mutationCall(fetchMock, '/api/processes/process-1/forget', 'POST')).toBeTruthy(),
+  );
 });
 test('Changes renames, keeps, and rolls back an open change set', async () => {
   const user = userEvent.setup();

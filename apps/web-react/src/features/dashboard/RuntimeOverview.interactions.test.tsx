@@ -115,3 +115,17 @@ test('request activity uses rounded step transitions instead of square polyline 
   expect(chart.querySelector('path.runtime-chart-line')).not.toBeNull();
   expect(chart.querySelector('polyline.runtime-chart-line')).toBeNull();
 });
+
+test('request activity displays request count scale on the right side Y-axis', () => {
+  renderRuntime();
+
+  const chart = screen.getByLabelText('Active requests over runtime');
+  const yAxis = chart.querySelector('.runtime-chart-y-axis');
+  expect(yAxis).not.toBeNull();
+  expect(yAxis?.textContent).toContain('0');
+
+  // Main SVG timeline only contains time labels, not request count numbers on the left
+  const mainSvg = chart.querySelector('.runtime-request-chart-viewport svg');
+  const mainSvgLabels = Array.from(mainSvg?.querySelectorAll('text') ?? []).map((t) => t.textContent);
+  expect(mainSvgLabels).not.toContain('0');
+});

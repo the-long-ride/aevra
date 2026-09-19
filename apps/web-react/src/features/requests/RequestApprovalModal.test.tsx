@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { DialogProvider } from '../../components/Dialog';
@@ -211,4 +211,81 @@ test('a second click cannot post a second decision for the same request', async 
       String(url).endsWith('/approve') && String(init?.method).toUpperCase() === 'POST',
   );
   expect(approvePosts).toHaveLength(1);
+});
+
+test('a decision that fails due to expired or already-approved request advances the modal', async () => {
+  installApiFixtures({
+    mutationResponses: {
+      'POST /api/approvals/approval-1/approve': new Response(
+        JSON.stringify({ error: { code: 'INVALID_STATE', message: 'Cannot approve EXPIRED' } }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      ),
+    },
+  });
+  const onActioned = vi.fn().mockResolvedValue(undefined);
+  renderModal(makeData(), onActioned);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Run once' }));
+
+  // The expired request is no longer actionable, so onActioned is invoked to close/advance.
+  await waitFor(() => expect(onActioned).toHaveBeenCalledTimes(1));
+});
+
+test('enabling YOLO confirms and calls onActioned on success or terminal state', async () => {
+  const fetchMock = installApiFixtures({
+    mutationResponses: {
+      'POST /api/approvals/approval-1/yolo': new Response(
+        JSON.stringify({ ok: true, yolo: { enabled: true } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    },
+  });
+  const onActioned = vi.fn().mockResolvedValue(undefined);
+  renderModal(
+    makeData({
+      approvals: [{ ...commandApproval, actor: 'oauth:ChatGPT' } as any],
+    }),
+    onActioned,
+  );
+
+  await userEvent.click(screen.getByRole('button', { name: 'Enable YOLO' }));
+
+  const confirmDialog = await screen.findByRole('dialog', { name: 'Enable YOLO session?' });
+  expect(confirmDialog).toBeInTheDocument();
+
+  const confirmBtn = within(confirmDialog).getByRole('button', { name: 'Enable YOLO' });
+  await userEvent.click(confirmBtn);
+
+  await waitFor(() => expect(onActioned).toHaveBeenCalledTimes(1));
+  expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/approval-1/yolo'))).toBe(true);
+});
+
+test('enabling YOLO on an expired request advances the modal rather than trapping it', async () => {
+  installApiFixtures({
+    mutationResponses: {
+      'POST /api/approvals/approval-1/yolo': new Response(
+        JSON.stringify({
+          error: { code: 'INVALID_STATE', message: 'Cannot enable YOLO for EXPIRED request' },
+        }),
+        { status: 409, headers: { 'content-type': 'application/json' } },
+      ),
+    },
+  });
+  const onActioned = vi.fn().mockResolvedValue(undefined);
+  renderModal(
+    makeData({
+      approvals: [{ ...commandApproval, actor: 'oauth:ChatGPT' } as any],
+    }),
+    onActioned,
+  );
+
+  await userEvent.click(screen.getByRole('button', { name: 'Enable YOLO' }));
+
+  const confirmDialog = await screen.findByRole('dialog', { name: 'Enable YOLO session?' });
+  expect(confirmDialog).toBeInTheDocument();
+
+  const confirmBtn = within(confirmDialog).getByRole('button', { name: 'Enable YOLO' });
+  await userEvent.click(confirmBtn);
+
+  await waitFor(() => expect(onActioned).toHaveBeenCalledTimes(1));
 });

@@ -332,6 +332,39 @@
   font-size: 12px;
 }
 
+.approval-modal-option-row {
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--surface-soft);
+}
+
+.approval-modal-option-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  user-select: text;
+}
+
+.approval-modal-option-info {
+  display: grid;
+  gap: 2px;
+}
+
+.approval-modal-option-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.approval-modal-option-description {
+  color: var(--mute);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .approval-modal-actions {
   padding-top: 2px;
   border-top: 1px solid var(--hairline);

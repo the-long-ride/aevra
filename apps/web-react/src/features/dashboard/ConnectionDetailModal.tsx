@@ -25,7 +25,10 @@ export interface ActiveConnection {
   graceExpiresAt?: string;
   refreshFamilyExpiresAt?: string;
   accessTokenLifetimeSeconds?: number;
+  renewable?: boolean;
   status?: string;
+  recentOrigins?: { remoteIp: string; lastSeenAt: string }[];
+  workspaceGrants?: { workspaceId: string; profileId: string }[];
 }
 
 function dateTime(value?: string) {
@@ -49,6 +52,13 @@ function statusLabel(status?: string) {
   }
 }
 
+const PROFILE_OPTIONS = [
+  { value: 'read-only', label: 'Read Only' },
+  { value: 'coding-session', label: 'Coding Session' },
+  { value: 'developer', label: 'Developer' },
+  { value: 'full-workspace', label: 'Full Workspace' },
+];
+
 export function ConnectionDetailModal({
   connection,
   workspaces,
@@ -62,10 +72,12 @@ export function ConnectionDetailModal({
 }) {
   const dialog = useDialog();
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? '');
+  const [grantProfile, setGrantProfile] = useState('read-only');
   const [error, setError] = useState('');
 
   useEffect(() => {
     setWorkspaceId(workspaces[0]?.id ?? '');
+    setGrantProfile('read-only');
     setError('');
   }, [connection, workspaces]);
 
@@ -73,6 +85,7 @@ export function ConnectionDetailModal({
 
   const durableOAuth = connection.authType === 'OAuth' && Boolean(connection.connectionId);
   const sessionId = connection.sessionId ?? (durableOAuth ? undefined : connection.id);
+  const canManageWorkspaces = Boolean(sessionId || (durableOAuth && connection.connectionId));
   const granted = connection.workspaceIds ?? [];
   const grantOptions = workspaces
     .filter((workspace) => !granted.includes(workspace.id))
@@ -137,23 +150,61 @@ export function ConnectionDetailModal({
   };
 
   const grantWorkspace = async () => {
-    if (!sessionId || !workspaceId) return;
+    if (!workspaceId) return;
+    if (durableOAuth && connection.connectionId) {
+      await run(() =>
+        requestJson(`/api/connections/${encodeURIComponent(connection.connectionId!)}/workspaces`, {
+          method: 'POST',
+          body: JSON.stringify({ workspaceId, profileId: grantProfile }),
+        }),
+      );
+    } else if (sessionId) {
+      await run(() =>
+        requestJson(`/api/sessions/${encodeURIComponent(sessionId)}/workspace`, {
+          method: 'POST',
+          body: JSON.stringify({ workspaceId, timeoutMs: 60000 }),
+        }),
+      );
+    }
+  };
+
+  const updateProfile = async (targetWsId: string, newProfile: string) => {
+    if (!durableOAuth || !connection.connectionId) return;
     await run(() =>
-      requestJson(`/api/sessions/${encodeURIComponent(sessionId)}/workspace`, {
+      requestJson(`/api/connections/${encodeURIComponent(connection.connectionId!)}/workspaces`, {
         method: 'POST',
-        body: JSON.stringify({ workspaceId, timeoutMs: 60000 }),
+        body: JSON.stringify({ workspaceId: targetWsId, profileId: newProfile }),
       }),
     );
   };
 
   const revokeWorkspace = async (id: string) => {
-    if (!sessionId) return;
-    await run(() =>
-      requestJson(
-        `/api/sessions/${encodeURIComponent(sessionId)}/workspace/${encodeURIComponent(id)}`,
-        { method: 'DELETE' },
-      ),
-    );
+    const wsName = workspaces.find((w) => w.id === id)?.name ?? id;
+    if (
+      !(await dialog.confirm({
+        title: 'Remove workspace grant',
+        message: `Remove access to "${wsName}" for this ${durableOAuth ? 'connection' : 'session'}?`,
+        confirmLabel: 'Remove',
+        confirmTone: 'danger',
+      }))
+    ) {
+      return;
+    }
+    if (durableOAuth && connection.connectionId) {
+      await run(() =>
+        requestJson(
+          `/api/connections/${encodeURIComponent(connection.connectionId!)}/workspaces/${encodeURIComponent(id)}`,
+          { method: 'DELETE' },
+        ),
+      );
+    } else if (sessionId) {
+      await run(() =>
+        requestJson(
+          `/api/sessions/${encodeURIComponent(sessionId)}/workspace/${encodeURIComponent(id)}`,
+          { method: 'DELETE' },
+        ),
+      );
+    }
   };
 
   return (
@@ -212,7 +263,11 @@ export function ConnectionDetailModal({
                 </div>
                 <div>
                   <span>Refresh grant</span>
-                  <strong>{dateTime(connection.refreshFamilyExpiresAt)}</strong>
+                  <strong>
+                    {connection.refreshFamilyExpiresAt
+                      ? `${dateTime(connection.refreshFamilyExpiresAt)} (${connection.renewable ? 'Active' : 'Expired'})`
+                      : 'Not available (session-only)'}
+                  </strong>
                 </div>
                 <div>
                   <span>Live sessions</span>
@@ -242,21 +297,41 @@ export function ConnectionDetailModal({
             <h3>Workspaces</h3>
             {granted.length ? (
               <ul>
-                {granted.map((id, index) => (
-                  <li key={id}>
-                    <span>{connection.workspaces?.[index] ?? id}</span>
-                    {sessionId ? (
-                      <button type="button" onClick={() => void revokeWorkspace(id)}>
-                        Remove
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
+                {granted.map((id, index) => {
+                  const grant = connection.workspaceGrants?.find((g) => g.workspaceId === id);
+                  const profile = grant?.profileId ?? 'read-only';
+                  const name = connection.workspaces?.[index] ?? id;
+                  return (
+                    <li key={id}>
+                      <span>{name}</span>
+                      {durableOAuth ? (
+                        <Dropdown
+                          ariaLabel={`Profile for ${name}`}
+                          value={profile}
+                          onChange={(val) => void updateProfile(id, val)}
+                          options={PROFILE_OPTIONS}
+                        />
+                      ) : null}
+                      {canManageWorkspaces ? (
+                        <button
+                          type="button"
+                          className="danger-button"
+                          aria-label="Remove"
+                          title="Remove"
+                          data-surface-id="connections:revoke-workspace-grant"
+                          onClick={() => void revokeWorkspace(id)}
+                        >
+                          [x]
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
-              <p className="muted">No workspace granted to this live session.</p>
+              <p className="muted">No workspace granted to this connection.</p>
             )}
-            {sessionId && grantOptions.length ? (
+            {canManageWorkspaces && grantOptions.length ? (
               <div className="connection-grant">
                 <Dropdown
                   ariaLabel="Grant workspace"
@@ -264,12 +339,33 @@ export function ConnectionDetailModal({
                   onChange={setWorkspaceId}
                   options={grantOptions}
                 />
+                {durableOAuth ? (
+                  <Dropdown
+                    ariaLabel="Grant profile"
+                    value={grantProfile}
+                    onChange={setGrantProfile}
+                    options={PROFILE_OPTIONS}
+                  />
+                ) : null}
                 <button type="button" onClick={() => void grantWorkspace()}>
                   Grant workspace
                 </button>
               </div>
             ) : null}
           </div>
+          {connection.recentOrigins && connection.recentOrigins.length ? (
+            <div className="connection-origins">
+              <h3>Recent runner origins</h3>
+              <ul>
+                {connection.recentOrigins.map((origin) => (
+                  <li key={origin.remoteIp}>
+                    <span>{origin.remoteIp}</span>
+                    <span className="muted">{dateTime(origin.lastSeenAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {error ? <p className="warning">{error}</p> : null}
           <div className="actions">
             {sessionId ? (

@@ -147,6 +147,10 @@ test('Settings creates and removes command and network policy entries', async ()
   );
   expect(removeCommand).not.toBeNull();
   await user.click(removeCommand!);
+  const removeCommandDialog = screen.getByRole('dialog', {
+    name: 'Remove command-family override',
+  });
+  await user.click(within(removeCommandDialog).getByRole('button', { name: 'Remove' }));
   await waitFor(() =>
     expect(
       fetchMock.mock.calls.filter(
@@ -169,6 +173,8 @@ test('Settings creates and removes command and network policy entries', async ()
   );
   expect(removeNetwork).not.toBeNull();
   await user.click(removeNetwork!);
+  const removeNetworkDialog = screen.getByRole('dialog', { name: 'Remove network rule' });
+  await user.click(within(removeNetworkDialog).getByRole('button', { name: 'Remove' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/policy/network-rules/network-1', 'DELETE')).toBeTruthy(),
   );
@@ -210,6 +216,8 @@ test('Settings creates environment profiles and securely stores/removes secret r
   );
   expect(removeSecret).not.toBeNull();
   await user.click(removeSecret!);
+  const removeSecretDialog = screen.getByRole('dialog', { name: 'Delete secret reference' });
+  await user.click(within(removeSecretDialog).getByRole('button', { name: 'Delete' }));
   await waitFor(() =>
     expect(mutationCall(fetchMock, '/api/secret-references/API_TOKEN', 'DELETE')).toBeTruthy(),
   );

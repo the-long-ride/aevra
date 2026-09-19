@@ -1,13 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
+import { DialogProvider } from '../../components/Dialog';
 import { SecretReferencesSettings } from './SecretReferencesSettings';
 
 test('secret references normalize string, ref, key, and empty record shapes', () => {
   render(
-    <SecretReferencesSettings
-      secretRefs={['STRING_REF', { ref: 'OBJECT_REF' }, { key: 'KEY_REF' }, {}]}
-      onChanged={vi.fn().mockResolvedValue(undefined)}
-    />,
+    <DialogProvider>
+      <SecretReferencesSettings
+        secretRefs={['STRING_REF', { ref: 'OBJECT_REF' }, { key: 'KEY_REF' }, {}]}
+        onChanged={vi.fn().mockResolvedValue(undefined)}
+      />
+    </DialogProvider>,
   );
 
   expect(screen.getByText('4 locally stored references.')).toBeInTheDocument();

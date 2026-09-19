@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { deleteResource } from './settings-service';
 import { SecretReferenceCreateModal } from './SecretReferenceCreateModal';
 
@@ -10,10 +11,23 @@ export function SecretReferencesSettings({
   secretRefs: Array<Record<string, unknown> | string>;
   onChanged(): Promise<void>;
 }) {
+  const dialog = useDialog();
   const [creating, setCreating] = useState(false);
   const rows = secretRefs.map((value) => ({
     ref: typeof value === 'string' ? value : String(value.ref ?? value.key ?? ''),
   }));
+
+  const handleDelete = async (ref: string) => {
+    const confirmed = await dialog.confirm({
+      title: 'Delete secret reference',
+      message: `Delete secret reference "${ref}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
+    await deleteResource(`/api/secret-references/${encodeURIComponent(ref)}`);
+    await onChanged();
+  };
 
   return (
     <section className="panel settings-compact-panel">
@@ -45,14 +59,13 @@ export function SecretReferencesSettings({
             render: (row) => (
               <button
                 type="button"
+                className="danger-button"
+                aria-label="Delete"
+                title="Delete"
                 data-surface-id="settings:remove-secret"
-                onClick={() =>
-                  void deleteResource(`/api/secret-references/${encodeURIComponent(row.ref)}`).then(
-                    onChanged,
-                  )
-                }
+                onClick={() => void handleDelete(row.ref)}
               >
-                Delete
+                [x]
               </button>
             ),
           },

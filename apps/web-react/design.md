@@ -227,11 +227,21 @@ border           hairline-strong
 radius           4px
 ```
 
-Tabs are transparent and square, with the active state represented by text emphasis plus a bottom rule.
+Tabs are transparent and square, with the active state represented by text emphasis plus a bottom rule. A dedicated **Data** tab provides JSON backup export and interactive configuration restore.
 
-## Tables
+## Segmented Console Controls
+
+Policy options use `.console-radio-group` and `.console-radio-option` terminal-style segmented controls. Radios are wrapped in structured flat rectangular containers with 1px hairlines; active options use inverted background/ink coloring with immediate persistence.
+
+## Tables & Destructive Actions
 
 Tables remain horizontally scrollable when necessary. On smaller screens prefer a stacked row representation when the existing DataTable can preserve labels clearly; otherwise keep a horizontal scroll container rather than clipping data.
+
+Row action controls:
+
+- **Deletion and revocation:** Uses the compact ASCII `[x]` marker with `.danger-button` styling. Every destructive action requires an interactive confirmation modal via `useDialog().confirm()` before dispatching mutations.
+- **Accessibility:** Never use `[x]` alone as the accessible label; always provide semantic `aria-label` and `title` attributes (`aria-label="Remove"`, `aria-label="Revoke"`, `aria-label="Delete"`).
+- **Secondary actions:** Non-destructive quick actions (such as copying a workspace path or opening details) use crisp monochrome SVG icons with accessible titles.
 
 Search, filter, pagination, and actions must stay reachable on phone widths.
 

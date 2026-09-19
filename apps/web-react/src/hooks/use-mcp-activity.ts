@@ -51,11 +51,29 @@ export function McpActivityProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<Record<string, McpActivityEntry>>({});
   const [streamState, setStreamState] = useState<StreamState>('connecting');
   useEffect(() => {
+    const controller = new AbortController();
+    if (typeof fetch === 'function') {
+      fetch('/api/activity', { signal: controller.signal, credentials: 'include' })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: unknown) => {
+          if (Array.isArray(data)) {
+            const initial: Record<string, McpActivityEntry> = {};
+            for (const item of data) {
+              if (validEntry(item)) initial[item.id] = item;
+            }
+            setEntries((current) => reconcile({ ...initial, ...current }, Date.now(), false));
+          }
+        })
+        .catch(() => {
+          /* Fall back to live stream */
+        });
+    }
+
     if (typeof EventSource === 'undefined') {
       setStreamState('unsupported');
-      return undefined;
+      return () => controller.abort();
     }
-    const source = new EventSource('/api/activity/stream');
+    const source = new EventSource('/api/activity/stream', { withCredentials: true });
     source.onopen = () => setStreamState('live');
     source.onerror = () => setStreamState('reconnecting');
     const onActivity = (event: MessageEvent<string>) => {
@@ -70,6 +88,7 @@ export function McpActivityProvider({ children }: { children: ReactNode }) {
     source.addEventListener('activity', onActivity as EventListener);
     const timer = setInterval(() => setEntries((current) => reconcile(current)), 60_000);
     return () => {
+      controller.abort();
       clearInterval(timer);
       source.close();
     };

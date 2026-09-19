@@ -1,8 +1,11 @@
+import type { RemoteSessionSummary, WorkspaceSummary } from '@aevra/admin-contracts';
 import { useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { ManagementModal } from '../../components/ManagementModal';
 import { PageState } from '../../components/PageState';
+import { SearchableMultiSelect, type SearchOption } from '../../components/SearchableMultiSelect';
 import { Switch } from '../../components/Switch';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
@@ -14,6 +17,12 @@ interface PermissionRule extends Record<string, unknown> {
   scope?: string;
   actor?: string;
   matcher?: string;
+}
+
+interface PermissionsPageData {
+  rules: PermissionRule[];
+  workspaces: WorkspaceSummary[];
+  sessions: RemoteSessionSummary[];
 }
 
 const CAPABILITIES = [
@@ -35,23 +44,40 @@ const CAPABILITIES = [
   'mcp.proxy',
 ] as const;
 
-async function load(signal: AbortSignal) {
-  return requestJson<PermissionRule[]>('/api/permissions', { signal });
+async function load(signal: AbortSignal): Promise<PermissionsPageData> {
+  const [rules, workspaces, sessions] = await Promise.all([
+    requestJson<PermissionRule[]>('/api/permissions', { signal }),
+    requestJson<WorkspaceSummary[]>('/api/workspaces', { signal }).catch(() => []),
+    requestJson<RemoteSessionSummary[]>('/api/sessions', { signal }).catch(() => []),
+  ]);
+  return { rules, workspaces, sessions };
 }
 
 export function PermissionsPage() {
   const resource = useApiResource(load);
+  const dialog = useDialog();
   const [adding, setAdding] = useState(false);
   const [commandEnabled, setCommandEnabled] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
 
   const closeAddRules = () => {
     setAdding(false);
     setCommandEnabled(false);
     setSubmitError(null);
+    setSelectedWorkspaceIds([]);
+    setSelectedSessionIds([]);
   };
 
   const revoke = async (id: string) => {
+    const confirmed = await dialog.confirm({
+      title: 'Revoke permission rule',
+      message: 'Revoke this permission rule? This cannot be undone.',
+      confirmLabel: 'Revoke',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
     await requestJson(`/api/permissions/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
@@ -96,6 +122,31 @@ export function PermissionsPage() {
     }
   };
 
+  const workspaceOptions: SearchOption[] = (resource.data?.workspaces ?? []).map((w) => ({
+    value: w.id,
+    label: w.name || w.id,
+    description:
+      w.name !== w.id
+        ? `ID: ${w.id}${w.hostRoot ? ` · ${w.hostRoot}` : ''}`
+        : (w.hostRoot ?? `ID: ${w.id}`),
+  }));
+
+  const sessionOptions: SearchOption[] = (resource.data?.sessions ?? []).map((s) => {
+    const wsName = s.lease?.workspaceId
+      ? resource.data?.workspaces?.find((w) => w.id === s.lease?.workspaceId)?.name
+      : undefined;
+    const wsInfo = wsName
+      ? `Workspace: ${wsName}`
+      : s.lease?.workspaceId
+        ? `Workspace: ${s.lease.workspaceId}`
+        : '';
+    return {
+      value: s.id,
+      label: s.actor ? `${s.actor} (${s.id})` : s.id,
+      description: wsInfo ? `${wsInfo} · ID: ${s.id}` : `ID: ${s.id}`,
+    };
+  });
+
   return (
     <PageState loading={resource.loading} error={resource.error}>
       <section className="page-head">
@@ -139,14 +190,28 @@ export function PermissionsPage() {
                 ]}
               />
             </label>
-            <label className="field">
-              <span>Workspace IDs</span>
-              <input name="workspaceIds" placeholder="Comma separated" />
-            </label>
-            <label className="field">
-              <span>Session IDs</span>
-              <input name="sessionIds" placeholder="Comma separated" />
-            </label>
+            <div className="field">
+              <label htmlFor="workspace-ids-input">Workspace IDs</label>
+              <SearchableMultiSelect
+                id="workspace-ids-input"
+                name="workspaceIds"
+                placeholder="Search workspace by name or enter ID…"
+                options={workspaceOptions}
+                values={selectedWorkspaceIds}
+                onChange={setSelectedWorkspaceIds}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="session-ids-input">Session IDs</label>
+              <SearchableMultiSelect
+                id="session-ids-input"
+                name="sessionIds"
+                placeholder="Search session by actor, name, or enter ID…"
+                options={sessionOptions}
+                values={selectedSessionIds}
+                onChange={setSelectedSessionIds}
+              />
+            </div>
           </section>
           <section className="form-section wide">
             <h3>What can they do?</h3>
@@ -213,7 +278,7 @@ export function PermissionsPage() {
       <section className="panel">
         <DataTable
           id="react-permissions-admin"
-          rows={resource.data ?? []}
+          rows={resource.data?.rules ?? []}
           pageSize={25}
           searchPlaceholder="Search permissions…"
           filters={[
@@ -236,10 +301,13 @@ export function PermissionsPage() {
               render: (row) => (
                 <button
                   type="button"
+                  className="danger-button"
+                  aria-label="Revoke"
+                  title="Revoke"
                   data-surface-id="permissions:revoke"
                   onClick={() => void revoke(row.id)}
                 >
-                  Revoke
+                  [x]
                 </button>
               ),
             },

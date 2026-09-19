@@ -122,10 +122,18 @@
   gap: 5px;
   min-height: 28px;
   border: 1px solid var(--hairline);
+  border-radius: 0;
   padding: 3px 7px;
   color: var(--mute);
   font-size: 10px;
   text-transform: uppercase;
+}
+
+button.health-chip {
+  background: transparent;
+  border-radius: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .health-chip i {

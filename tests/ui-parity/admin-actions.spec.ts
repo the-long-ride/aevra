@@ -61,6 +61,7 @@ for (const surface of ADMIN_SURFACES) {
     await page.getByRole('option', { name: 'deny' }).click();
     const permissionRevoke = waitsFor(page, '/api/permissions/rule-1', 'DELETE');
     await page.getByRole('button', { name: 'Revoke', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Revoke', exact: true }).click();
     await permissionRevoke;
 
     await page.getByRole('button', { name: 'Workspaces', exact: true }).click();
@@ -77,6 +78,7 @@ for (const surface of ADMIN_SURFACES) {
     await page.getByRole('option', { name: 'Workspace active' }).click();
     const sessionRevoke = waitsFor(page, '/api/sessions/session-1/revoke');
     await page.getByRole('button', { name: 'Revoke', exact: true }).first().click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Revoke', exact: true }).click();
     await sessionRevoke;
 
     await page.getByRole('button', { name: 'Dashboard', exact: true }).click();

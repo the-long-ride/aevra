@@ -52,7 +52,8 @@
   gap: 6px;
 }
 
-.field > span {
+.field > span,
+.field > label {
   color: var(--body);
   font-size: 12px;
   font-weight: 600;
@@ -128,7 +129,7 @@
   gap: 8px;
   min-height: 28px;
   cursor: pointer;
-  user-select: none;
+  user-select: text;
 }
 
 .switch-control > input[type='checkbox'] {
@@ -325,7 +326,9 @@ pre {
   background: var(--canvas);
   padding: 10px 12px;
   color: var(--ink);
+  font-family: var(--mono);
   font-size: 12px;
+  user-select: text;
 }
 
 .toast.success {

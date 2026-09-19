@@ -8,10 +8,7 @@ import {
   useHasMcpActivityProvider,
   useMcpActivity,
 } from '../../hooks/use-mcp-activity';
-
-function clientLabel(actor: string) {
-  return actor.replace(/^(oauth:|connector:)/, '') || actor;
-}
+import { clientLabel, showMcpActivityDetails } from './activity-detail';
 
 function McpActivityPanelContent({ workspaces }: { workspaces: WorkspaceSummary[] }) {
   const { entries, streamState } = useMcpActivity();
@@ -24,31 +21,7 @@ function McpActivityPanelContent({ workspaces }: { workspaces: WorkspaceSummary[
     entry.workspaceId ? (workspaceNames.get(entry.workspaceId) ?? entry.workspaceId) : '—';
 
   const showDetails = (entry: McpActivityEntry) =>
-    dialog.message({
-      title: 'MCP activity details',
-      actionLabel: 'Close',
-      message: (
-        <div className="activity-detail">
-          <div className="activity-detail-meta">
-            <span>{clientLabel(entry.actor)}</span>
-            <span>{workspaceLabel(entry)}</span>
-            <code>{entry.action}</code>
-          </div>
-          <section>
-            <b>Input</b>
-            <JsonDetailView label="Input" value={entry.input} emptyText="No input recorded." />
-          </section>
-          <section>
-            <b>Output</b>
-            <JsonDetailView
-              label="Output"
-              value={entry.output}
-              emptyText={entry.state === 'running' ? 'Still running.' : 'No output recorded.'}
-            />
-          </section>
-        </div>
-      ),
-    });
+    showMcpActivityDetails(dialog, entry, workspaces);
 
   return (
     <div className="mcp-activity-panel">

@@ -66,27 +66,16 @@ describe('React admin shell', () => {
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
   });
 
-  test('offers browser control immediately left of Requests when no extension is paired', async () => {
+  test('shows browser extension chip in health cluster without separate button next to Requests', async () => {
     installApiFixtures({ browserPaired: false });
     render(<App />);
-    const suggestion = await screen.findByRole('button', {
-      name: 'Aevra can control your browser',
+    const browserChip = await screen.findByRole('button', {
+      name: /Aevra browser extension/,
     });
-    const requests = screen.getByRole('button', { name: /Requests/ });
+    expect(browserChip).toBeInTheDocument();
     expect(
-      suggestion.compareDocumentPosition(requests) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(suggestion.nextElementSibling).toBe(requests);
-  });
-
-  test('does not offer browser control once an extension is paired', async () => {
-    render(<App />);
-    await screen.findByRole('button', { name: /Requests/ });
-    await waitFor(() =>
-      expect(
-        screen.queryByRole('button', { name: 'Aevra can control your browser' }),
-      ).not.toBeInTheDocument(),
-    );
+      screen.queryByRole('button', { name: 'Aevra can control your browser' }),
+    ).not.toBeInTheDocument();
   });
 
   test('shows version, runtime health, requests count, and safe mode from status', async () => {

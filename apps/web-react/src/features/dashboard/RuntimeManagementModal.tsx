@@ -99,10 +99,13 @@ export function RuntimeManagementModal({
                   ) : (
                     <button
                       type="button"
+                      className="danger-button"
+                      aria-label="Revoke"
+                      title="Revoke"
                       data-surface-id="connections:revoke-connector"
                       onClick={() => void revokeConnector(row)}
                     >
-                      Revoke
+                      [x]
                     </button>
                   ),
               },

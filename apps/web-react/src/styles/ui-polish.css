@@ -79,13 +79,15 @@
 
 [data-table-id='react-processes'] .data-table th:first-child,
 [data-table-id='react-processes'] .data-table td:first-child {
-  width: 36%;
+  width: 340px;
   min-width: 340px;
+  max-width: 340px;
 }
 
 .process-name-button {
   display: block;
   width: 100%;
+  max-width: 100%;
   border: none;
   background: transparent;
   padding: 0;
@@ -168,9 +170,19 @@
   font-size: 13px;
 }
 
-.runtime-request-chart-viewport {
+.runtime-request-chart-body {
+  display: flex;
+  align-items: flex-start;
   width: 100%;
-  max-width: 100%;
+  min-width: 0;
+  position: relative;
+  height: 180px;
+}
+
+.runtime-request-chart-viewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
@@ -184,12 +196,29 @@
 
 .runtime-request-chart-canvas {
   min-width: 100%;
+  height: 100%;
+}
+
+.runtime-chart-y-axis {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 100%;
+  display: flex;
+  align-items: flex-start;
+  user-select: none;
 }
 
 .runtime-request-chart svg {
   display: block;
   width: 100%;
-  min-height: 150px;
+  height: 180px;
+  color: var(--ink);
+}
+
+.runtime-chart-y-axis svg {
+  display: block;
+  width: 32px;
+  height: 180px;
   color: var(--ink);
 }
 
@@ -223,14 +252,23 @@
   fill: var(--success);
   stroke: var(--canvas);
   stroke-width: 1.5;
-  cursor: crosshair;
+  cursor: pointer;
   opacity: 0;
   vector-effect: non-scaling-stroke;
-  transition: opacity 0.12s;
+  transition:
+    opacity 0.12s,
+    r 0.12s;
 }
 
 .runtime-chart-point:hover {
   opacity: 1;
+}
+
+.runtime-chart-point.is-pinned {
+  opacity: 1;
+  stroke: var(--text);
+  stroke-width: 2;
+  fill: var(--success);
 }
 
 .runtime-chart-tooltip {
@@ -238,45 +276,136 @@
   z-index: 200;
   pointer-events: none;
   transform: translate(-50%, calc(-100% - 10px));
-  min-width: 110px;
-  padding: 6px 9px;
+  min-width: 140px;
+  max-width: 320px;
+  padding: 8px 10px;
   border: 1px solid var(--hairline);
   background: var(--canvas);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 28%);
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.runtime-chart-tooltip.is-pinned {
+  pointer-events: auto;
+  user-select: text;
+}
+
+.runtime-chart-tooltip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .runtime-chart-tooltip-time {
   color: var(--mute);
   font-size: 10px;
-  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.runtime-chart-tooltip-head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .runtime-chart-tooltip-count {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.runtime-chart-tooltip-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--mute);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.runtime-chart-tooltip-close:hover {
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.runtime-chart-tooltip-body {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.runtime-chart-tooltip-group {
+  display: grid;
+  gap: 4px;
+}
+
+.runtime-chart-tooltip-connector {
+  color: var(--mute);
+  font-size: 9px;
   font-weight: 600;
-  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .runtime-chart-tooltip-entries {
   display: grid;
-  gap: 2px;
-  margin-top: 4px;
-  padding-top: 4px;
-  border-top: 1px solid var(--hairline);
+  gap: 3px;
+}
+
+.runtime-chart-tooltip-entry-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  background: var(--surface-soft, rgba(255, 255, 255, 0.04));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+
+.runtime-chart-tooltip-entry-btn:hover,
+.runtime-chart-tooltip-entry-btn:focus-visible {
+  background: var(--surface, rgba(255, 255, 255, 0.08));
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .runtime-chart-tooltip-entry {
   overflow: hidden;
-  max-width: 200px;
+  max-width: 100%;
+  font-family: var(--font-mono, monospace);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.runtime-chart-tooltip-more {
+.runtime-chart-tooltip-empty {
   color: var(--mute);
   font-size: 10px;
+  font-style: italic;
 }
 
 .active-connections-toolbar {

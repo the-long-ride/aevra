@@ -272,3 +272,7 @@ export function useDialog(): DialogApi {
   if (!value) throw new Error('useDialog must be used inside DialogProvider');
   return value;
 }
+
+export function useOptionalDialog(): DialogApi | null {
+  return useContext(DialogContext);
+}

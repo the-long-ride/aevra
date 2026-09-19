@@ -178,29 +178,259 @@
   grid-column: auto;
 }
 
-.browser-origin-policy fieldset {
+.console-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-@media (min-width: 901px) {
-  .browser-origin-policy fieldset {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 20px;
-  }
+.console-fieldset legend {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+  padding: 0;
 }
 
-.browser-origin-policy fieldset label {
+.console-radio-group {
   display: inline-flex;
   align-items: center;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 4px;
+  background: var(--surface-soft);
+  padding: 3px;
+  gap: 3px;
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.console-radio-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mute);
+  cursor: pointer;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+  user-select: text;
+  white-space: nowrap;
+}
+
+.console-radio-option input[type='radio'] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.console-radio-option:hover:not(.is-disabled) {
+  color: var(--ink);
+  background: var(--surface-card);
+}
+
+.console-radio-option.is-selected {
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 600;
+  border-color: var(--ink);
+}
+
+.console-radio-option.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.console-radio-option:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.console-radio-hint {
+  margin: 4px 0 0;
+  color: var(--mute);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.desktop-app-picker-table {
+  margin: 10px 0;
+}
+
+.desktop-app-picker-table .dt-scroll {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.desktop-app-table-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: text;
+}
+
+.desktop-app-name {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.desktop-app-version {
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.desktop-app-exe {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--mute);
+}
+
+.desktop-app-status {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+}
+
+.desktop-app-status.is-allowed {
+  background: var(--surface-card);
+  color: var(--success);
+  border: 1px solid var(--hairline-strong);
+}
+
+.desktop-app-status.is-blocked {
+  background: var(--surface-soft);
+  color: var(--mute);
+  border: 1px solid var(--hairline);
+}
+
+.desktop-manual-app-section {
+  margin-top: 10px;
+  display: grid;
   gap: 6px;
 }
 
-.browser-origin-policy fieldset input[type='radio'] {
-  width: 8px;
-  height: 8px;
-  margin: 0;
+.desktop-manual-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.desktop-custom-app-modal-trigger {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.desktop-custom-app-modal-trigger:hover:not(:disabled) {
+  background: var(--hairline-strong);
+}
+
+.desktop-manual-app-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.desktop-manual-app-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.desktop-manual-app-input-row input {
+  flex: 1 1 auto;
+}
+
+.desktop-manual-app-input-row button {
+  flex: 0 0 auto;
+}
+
+.desktop-path-exposure-row {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--surface-soft);
+}
+
+.desktop-path-exposure-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  user-select: text;
+}
+
+.desktop-path-exposure-info {
+  display: grid;
+  gap: 2px;
+}
+
+.desktop-path-exposure-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.desktop-app-row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.desktop-app-action-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.desktop-app-action-btn:hover:not(:disabled) {
+  background: var(--hairline-strong);
+}
+
+.desktop-app-action-btn.danger-button {
+  color: var(--danger, #ff5555);
+}
+
+.desktop-app-action-btn.danger-button:hover:not(:disabled) {
+  background: rgba(255, 85, 85, 0.12);
+}
+
+.desktop-app-system-badge {
+  color: var(--mute);
+  font-family: var(--mono);
+  font-size: 11px;
 }

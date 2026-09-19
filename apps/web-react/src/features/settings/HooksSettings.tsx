@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
+import { useDialog } from '../../components/Dialog';
 import { HookCreateModal } from './HookCreateModal';
 import { deleteResource, patchJson, type HookSetting } from './settings-service';
 
@@ -10,7 +11,20 @@ export function HooksSettings({
   hooks: HookSetting[];
   onChanged: () => Promise<void>;
 }) {
+  const dialog = useDialog();
   const [creating, setCreating] = useState(false);
+
+  const handleDelete = async (id: string) => {
+    const confirmed = await dialog.confirm({
+      title: 'Delete hook',
+      message: 'Delete this lifecycle hook? This cannot be undone.',
+      confirmLabel: 'Delete',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
+    await deleteResource(`/api/hooks/${encodeURIComponent(id)}`);
+    await onChanged();
+  };
 
   return (
     <section className="panel wide hooks-panel">
@@ -68,11 +82,12 @@ export function HooksSettings({
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    void deleteResource(`/api/hooks/${encodeURIComponent(row.id)}`).then(onChanged)
-                  }
+                  className="danger-button"
+                  aria-label="Delete"
+                  title="Delete"
+                  onClick={() => void handleDelete(row.id)}
                 >
-                  Delete
+                  [x]
                 </button>
               </div>
             ),
