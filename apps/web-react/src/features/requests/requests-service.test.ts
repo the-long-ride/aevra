@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   approveRequest,
   decideOauth,
@@ -14,6 +14,9 @@ vi.mock('../../services/api-client', () => ({
 }));
 
 describe('requests-service', () => {
+  beforeEach(() => {
+    requestJson.mockReset();
+  });
   it('loads approvals oauth requests and workspaces together', async () => {
     requestJson.mockImplementation(async (path: string) => {
       if (path === '/api/approvals') return [{ id: 'a1' }];

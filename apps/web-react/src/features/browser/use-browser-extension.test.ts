@@ -7,7 +7,9 @@ vi.mock('../../services/api-client', () => ({ requestJson: vi.fn() }));
 
 const request = vi.mocked(requestJson);
 
-beforeEach(() => request.mockReset());
+beforeEach(() => {
+  request.mockReset();
+});
 
 it('reports a paired extension', async () => {
   request.mockResolvedValue({ extensionId: 'a'.repeat(32), pairedAt: '2026-01-01T00:00:00Z' });
@@ -64,4 +66,17 @@ it('detects installed extension via custom event and postMessage', async () => {
   await waitFor(() => {
     expect(result.current.version).toBe('1.0.6');
   });
+});
+
+it('initializes from documentElement attributes if already present', () => {
+  document.documentElement.setAttribute('data-aevra-extension-installed', 'true');
+  document.documentElement.setAttribute('data-aevra-extension-version', '2.0.0');
+  try {
+    const { result } = renderHook(() => useBrowserExtensionInfo());
+    expect(result.current.isInstalled).toBe(true);
+    expect(result.current.version).toBe('2.0.0');
+  } finally {
+    document.documentElement.removeAttribute('data-aevra-extension-installed');
+    document.documentElement.removeAttribute('data-aevra-extension-version');
+  }
 });

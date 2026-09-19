@@ -228,3 +228,28 @@ test('hook table falls back to observe and block copy when a hook has no extra p
   expect(within(table!).getByText('Yes')).toBeInTheDocument();
   expect(within(table!).getByText('No')).toBeInTheDocument();
 });
+
+test('hook creation displays server error and supports backdrop close', async () => {
+  const user = userEvent.setup();
+  installApiFixtures({
+    mutationResponses: {
+      'POST /api/hooks': new Response(
+        JSON.stringify({ error: { message: 'Hook name duplicated' } }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      ),
+    },
+  });
+  renderHooks([]);
+
+  await user.click(screen.getByRole('button', { name: 'Add hook' }));
+  await user.type(screen.getByLabelText('Name'), 'Dup hook');
+  await user.type(screen.getByLabelText('Executable / app'), 'dup.exe');
+  await user.click(screen.getByRole('button', { name: 'Create hook' }));
+
+  expect(await screen.findByText('Hook name duplicated')).toBeInTheDocument();
+
+  // Backdrop click closes modal
+  const backdrop = document.querySelector('.modal-backdrop')!;
+  fireEvent.mouseDown(backdrop);
+  expect(screen.queryByRole('dialog', { name: 'Create lifecycle hook' })).toBeNull();
+});

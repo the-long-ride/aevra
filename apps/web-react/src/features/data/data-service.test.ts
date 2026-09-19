@@ -175,6 +175,7 @@ describe('data-service', () => {
 
       const appendChildSpy = vi.spyOn(document.body, 'appendChild');
       const removeChildSpy = vi.spyOn(document.body, 'removeChild');
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
       const mockData: AevraBackupData = {
         version: 1,
@@ -193,9 +194,11 @@ describe('data-service', () => {
       expect(appendChildSpy).toHaveBeenCalled();
       expect(removeChildSpy).toHaveBeenCalled();
       expect(revokeObjectURLMock).toHaveBeenCalled();
+      expect(clickSpy).toHaveBeenCalledTimes(1);
 
       downloadBackupFile({ ...mockData, portable: true });
       expect(createObjectURLMock).toHaveBeenCalledTimes(2);
+      expect(clickSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

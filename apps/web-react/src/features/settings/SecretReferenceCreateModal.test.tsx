@@ -9,7 +9,9 @@ vi.mock('./settings-service', () => ({
   postJson: (path: string, value: unknown) => postJson(path, value),
 }));
 
-beforeEach(() => postJson.mockReset());
+beforeEach(() => {
+  postJson.mockReset();
+});
 
 test('secret creation closes after storage and tolerates refresh failure', async () => {
   postJson.mockResolvedValue(undefined);
