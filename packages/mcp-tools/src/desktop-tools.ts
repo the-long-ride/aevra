@@ -12,6 +12,11 @@ import { evaluateWindowGate } from '../../security/src/window-gate.js';
 import { authorizeCapability } from './authorization.js';
 import { ACT_OP, desktopActRisk, handleAct, sanitizeArgsForAuthorization } from './desktop-act.js';
 import {
+  BACKGROUND_ACT_OP,
+  backgroundActRisk,
+  handleBackgroundAction,
+} from './desktop-background.js';
+import {
   audit,
   policyFor,
   redact,
@@ -35,6 +40,11 @@ export const DESKTOP_TOOL_NAMES = new Set([
   'desktop_type',
   'desktop_key',
   'desktop_scroll',
+  'desktop_invoke',
+  'desktop_set_value',
+  'desktop_select',
+  'desktop_toggle',
+  'desktop_release_window',
 ]);
 
 // A screenshot's `window` field, and every accessible name/title, is
@@ -106,11 +116,14 @@ async function handleDescribe(
   args: any,
   risk: RiskTier,
 ) {
+  const mode = args.mode === 'background' ? 'background' : 'foreground';
   const operation: WorkerOperation = {
     kind: 'desktop.describe',
     ...(args.windowId !== undefined ? { windowId: String(args.windowId) } : {}),
     maxNodes: Number(args.maxNodes ?? 500),
     interactiveOnly: Boolean(args.interactiveOnly ?? false),
+    mode,
+    policy: policyFor(context),
   };
   const value = (await run(context, sessionId, operation)) as DesktopDescribeResult;
   const policy = policyFor(context);
@@ -120,13 +133,24 @@ async function handleDescribe(
   // The worker never gates reads, so without this call the gate's capture
   // branch is unreachable and every screenshot/describe would be missing
   // from the audit trail - see the brief's requirement 4.
-  const verdict = evaluateWindowGate(value.window, policy, 'capture');
+  const verdict = evaluateWindowGate(
+    value.window,
+    policy,
+    mode === 'background' ? 'background' : 'capture',
+  );
   audit(context, sessionId, 'desktop_describe', targetOf(window), risk, 'SUCCEEDED', {
     redactionCount: tally.count,
     gateVerdict: verdict.allowed ? 'allow' : 'deny',
     gateRule: verdict.reason,
   });
-  return markUntrusted({ window, nodes, truncated: value.truncated });
+  return markUntrusted({
+    window,
+    nodes,
+    truncated: value.truncated,
+    ...(value.snapshotId ? { snapshotId: value.snapshotId } : {}),
+    ...(value.windowLeaseId ? { windowLeaseId: value.windowLeaseId } : {}),
+    ...(value.leaseExpiresAt ? { leaseExpiresAt: value.leaseExpiresAt } : {}),
+  });
 }
 
 async function handleCapture(
@@ -174,7 +198,9 @@ async function handleCapture(
  */
 function riskFor(name: string): RiskTier {
   if (name === 'desktop_connect') return 'MEDIUM';
-  return ACT_OP[name] ? desktopActRisk(name) : 'LOW';
+  if (ACT_OP[name]) return desktopActRisk(name);
+  if (BACKGROUND_ACT_OP[name] || name === 'desktop_release_window') return backgroundActRisk(name);
+  return 'LOW';
 }
 
 export async function handleDesktopTool(
@@ -208,5 +234,8 @@ export async function handleDesktopTool(
   if (name === 'desktop_apps') return handleApps(context, sessionId, risk);
   if (name === 'desktop_describe') return handleDescribe(context, sessionId, args, risk);
   if (name === 'desktop_capture') return handleCapture(context, sessionId, args, risk);
+  if (BACKGROUND_ACT_OP[name] || name === 'desktop_release_window') {
+    return handleBackgroundAction(context, sessionId, name, args, risk);
+  }
   return handleAct(context, sessionId, name, args, risk);
 }

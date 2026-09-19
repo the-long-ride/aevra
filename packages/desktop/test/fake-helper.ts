@@ -68,6 +68,35 @@ function driverResult(method: string): unknown {
     case 'act':
       actCount += 1;
       return true;
+    case 'targetIdentity':
+      return {
+        window: FOCUSED_WINDOW,
+        windowInstance: { windowId: 'w1', processId: 1234, processStartedAt: '2026-09-18T00:00:00Z' },
+      };
+    case 'describeBackground':
+      return {
+        window: FOCUSED_WINDOW,
+        windowInstance: { windowId: 'w1', processId: 1234, processStartedAt: '2026-09-18T00:00:00Z' },
+        nodes: [
+          {
+            handle: 'h1',
+            role: 'button',
+            name: 'Save',
+            enabled: true,
+            focused: false,
+            supportedActions: ['invoke'],
+          },
+        ],
+        truncated: false,
+      };
+    case 'releaseBackgroundSnapshot':
+      return true;
+    case 'backgroundAct':
+      return {
+        ok: true,
+        outcome: 'completed',
+        focusChanged: false,
+      };
     default:
       return null;
   }

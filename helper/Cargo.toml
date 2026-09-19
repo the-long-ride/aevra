@@ -29,4 +29,6 @@ windows = { version = "0.58.0", features = [
   # PrintWindow and PRINT_WINDOW_FLAGS live under Storage::Xps in the
   # windows crate's generated modules, not under UI::WindowsAndMessaging.
   "Win32_Storage_Xps",
+  "Win32_Security",
+  "Win32_System_StationsAndDesktops",
 ] }

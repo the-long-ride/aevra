@@ -3,6 +3,7 @@ import type {
   DesktopCapabilities,
   DesktopCaptureResult,
   DesktopDescribeResult,
+  DesktopNode,
   DesktopWindowIdentity,
 } from '../../protocol/src/desktop.js';
 
@@ -10,6 +11,7 @@ export interface DescribeRequest {
   windowId?: string;
   maxNodes: number;
   interactiveOnly: boolean;
+  mode?: 'foreground' | 'background';
 }
 
 export interface ActRequest {
@@ -58,4 +60,33 @@ export interface DesktopDriver {
   capture(windowId?: string): Promise<DesktopCaptureResult>;
   act(request: ActRequest): Promise<ActResult>;
   disconnect(): Promise<void>;
+
+  targetIdentity?(windowId: string): Promise<{
+    window: DesktopWindowIdentity;
+    windowInstance: { windowId: string; processId: number; processStartedAt: string };
+  }>;
+  describeBackground?(request: {
+    windowId: string;
+    snapshotId: string;
+    maxNodes: number;
+    interactiveOnly: boolean;
+  }): Promise<{
+    window: DesktopWindowIdentity;
+    windowInstance: { windowId: string; processId: number; processStartedAt: string };
+    nodes: DesktopNode[];
+    truncated: boolean;
+  }>;
+  releaseBackgroundSnapshot?(snapshotId: string): Promise<boolean>;
+  backgroundAct?(request: {
+    snapshotId: string;
+    handle: string;
+    op: string;
+    value?: string;
+    expectedInstance: { windowId: string; processId: number; processStartedAt: string };
+  }): Promise<{
+    ok: boolean;
+    outcome: string;
+    focusChanged: boolean;
+    toggleState?: 'off' | 'on' | 'indeterminate';
+  }>;
 }

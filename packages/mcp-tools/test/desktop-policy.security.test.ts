@@ -250,3 +250,69 @@ test('desktop_apps DLP-redacts a secret-shaped display name and counts it in the
   const entry = ctx.auditEntries.find((e: any) => e.tool === 'desktop_apps');
   assert.equal(entry.redactionCount, 1);
 });
+
+test('desktop_set_value secret value never reaches audit, approvals, or serialized logs', async () => {
+  const ctx = desktopContext({ yolo: true });
+  const secret = 'synthetic-secret-12345-never-leak';
+  await handleDesktopTool(ctx.value, 's1', 'desktop_set_value', {
+    windowId: 'w1',
+    windowLeaseId: 'lease-1',
+    snapshotId: 'snap-1',
+    ref: 'ref_1_1',
+    value: secret,
+  });
+
+  const serialized = JSON.stringify({
+    audit: ctx.auditEntries,
+    approvals: ctx.approvals.requests,
+  });
+  assert.equal(serialized.includes(secret), false);
+  assert.ok(serialized.includes(String(secret.length)));
+});
+
+test('desktop_set_value generates unique requestNonce preventing cross-payload approval reuse', async () => {
+  const ctx = desktopContext({ yolo: false, leaseCapabilities: [] }); // will require approval
+  const secret1 = 'secret-val-1';
+  const secret2 = 'secret-val-2'; // same length!
+
+  await handleDesktopTool(ctx.value, 's1', 'desktop_set_value', {
+    windowId: 'w1',
+    windowLeaseId: 'lease-1',
+    snapshotId: 'snap-1',
+    ref: 'ref_1_1',
+    value: secret1,
+  });
+
+  const req1 = ctx.approvals.requests[0];
+  assert.ok(req1);
+  const nonce1 = req1.payload.original.args.requestNonce;
+  assert.ok(nonce1);
+
+  await handleDesktopTool(ctx.value, 's1', 'desktop_set_value', {
+    windowId: 'w1',
+    windowLeaseId: 'lease-1',
+    snapshotId: 'snap-1',
+    ref: 'ref_1_1',
+    value: secret2,
+  });
+
+  const req2 = ctx.approvals.requests[1];
+  assert.ok(req2);
+  const nonce2 = req2.payload.original.args.requestNonce;
+  assert.ok(nonce2);
+
+  assert.notEqual(nonce1, nonce2);
+  assert.notEqual(req1.operation.argsHash, req2.operation.argsHash);
+});
+
+test('desktop_describe in background mode marks output untrusted and preserves supportedActions', async () => {
+  const ctx = desktopContext();
+  const result: any = await handleDesktopTool(ctx.value, 's1', 'desktop_describe', {
+    windowId: 'w1',
+    mode: 'background',
+  });
+  assert.equal(result.untrusted, true);
+  assert.equal(result.snapshotId, 'snap-1');
+  assert.equal(result.windowLeaseId, 'lease-1');
+  assert.deepEqual(result.nodes[0].supportedActions, ['invoke']);
+});

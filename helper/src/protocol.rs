@@ -29,7 +29,7 @@ pub struct SuccessReply {
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct ErrorReply {
     pub id: i64,
-    pub error: String,
+    pub error: Value,
 }
 
 /// Parses one input line into a `Request`. A line that is not valid JSON, or
@@ -50,7 +50,7 @@ pub fn parse_request(line: &str) -> Result<Request, ErrorReply> {
                 .unwrap_or(0);
             Err(ErrorReply {
                 id,
-                error: format!("invalid request: {err}"),
+                error: Value::String(format!("invalid request: {err}")),
             })
         }
     }
@@ -62,8 +62,25 @@ pub fn success_line(id: i64, result: Value) -> String {
 }
 
 pub fn error_line(id: i64, message: impl Into<String>) -> String {
-    let reply = ErrorReply { id, error: message.into() };
+    let reply = ErrorReply { id, error: Value::String(message.into()) };
     serde_json::to_string(&reply).unwrap_or_else(|_| format!("{{\"id\":{id},\"error\":\"failed to serialise error\"}}"))
+}
+
+pub fn structured_error_line(id: i64, code: &str, message: &str, details: Option<Value>) -> String {
+    let mut map = serde_json::Map::new();
+    map.insert("code".to_string(), Value::String(code.to_string()));
+    map.insert("message".to_string(), Value::String(message.to_string()));
+    if let Some(d) = details {
+        map.insert("details".to_string(), d);
+    }
+    let reply = ErrorReply { id, error: Value::Object(map) };
+    serde_json::to_string(&reply).unwrap_or_else(|_| format!("{{\"id\":{id},\"error\":\"failed to serialise error\"}}"))
+}
+
+impl std::fmt::Display for ErrorReply {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", serde_json::to_string(self).unwrap_or_default())
+    }
 }
 
 #[cfg(test)]
@@ -97,10 +114,16 @@ mod tests {
     }
 
     #[test]
+    fn structured_error_matches_wire_shape() {
+        let line = structured_error_line(3, "DESKTOP_REF_STALE", "Expired", None);
+        assert_eq!(line, r#"{"id":3,"error":{"code":"DESKTOP_REF_STALE","message":"Expired"}}"#);
+    }
+
+    #[test]
     fn malformed_line_produces_error_reply_not_panic_or_silent_drop() {
         let err = parse_request("this is not json").unwrap_err();
         assert_eq!(err.id, 0);
-        assert!(!err.error.is_empty());
+        assert!(!err.error.as_str().unwrap().is_empty());
     }
 
     #[test]

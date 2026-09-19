@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { DesktopWindowIdentity } from '../../protocol/src/desktop.js';
 import type { RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
@@ -66,6 +67,11 @@ export function sanitizeArgsForAuthorization(name: string, args: any): any {
   if (name === 'desktop_key' && typeof args?.keys === 'string') {
     const { keys, ...rest } = args;
     return { ...rest, keyCount: keys.length };
+  }
+  if (name === 'desktop_set_value' && typeof args?.value === 'string') {
+    const { value, ...rest } = args;
+    const requestNonce = args.requestNonce ?? randomUUID();
+    return { ...rest, valueLength: value.length, requestNonce };
   }
   return args;
 }

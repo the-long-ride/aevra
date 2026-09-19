@@ -130,3 +130,19 @@ test('WindowsDesktopDriver: the unreliable delta is a fresh object each time, no
     await driver.disconnect();
   }
 });
+
+test('WindowsDesktopDriver: repeated descriptions never reuse public refs', async () => {
+  const helper = makeHelper();
+  const driver = new WindowsDesktopDriver(helper);
+  try {
+    await driver.connect();
+    const first = await driver.describe({ maxNodes: 100, interactiveOnly: true });
+    const second = await driver.describe({ maxNodes: 100, interactiveOnly: true });
+    const firstRefs = new Set(first.nodes.map((n) => n.ref));
+    for (const node of second.nodes) {
+      assert.equal(firstRefs.has(node.ref), false);
+    }
+  } finally {
+    await driver.disconnect();
+  }
+});

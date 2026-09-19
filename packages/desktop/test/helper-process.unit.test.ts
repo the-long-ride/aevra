@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { HelperProcess } from '../src/helper-process.js';
+import { HelperProcess, parseHelperError } from '../src/helper-process.js';
 
 const SCRIPT = fileURLToPath(new URL('./fake-helper.js', import.meta.url));
 
@@ -113,4 +113,39 @@ test('a live replacement child is not torn down by its dead predecessor late exi
   } finally {
     process_.kill();
   }
+});
+
+test('parseHelperError parses string legacy errors into DESKTOP_HELPER', () => {
+  const parsed = parseHelperError('legacy failure');
+  assert.equal(parsed.code, 'DESKTOP_HELPER');
+  assert.equal(parsed.message, 'legacy failure');
+});
+
+test('parseHelperError accepts structured allowlisted codes and preserves safe details', () => {
+  const parsed = parseHelperError({
+    code: 'DESKTOP_REF_STALE',
+    message: 'Expired',
+    details: { ref: 'ref_123', windowId: 'win_1', secret: 'ignore-me' },
+  });
+  assert.equal(parsed.code, 'DESKTOP_REF_STALE');
+  assert.equal(parsed.message, 'Expired');
+  assert.deepEqual(parsed.details, { ref: 'ref_123', windowId: 'win_1' });
+});
+
+test('parseHelperError maps unallowlisted codes to DESKTOP_HELPER', () => {
+  const parsed = parseHelperError({
+    code: 'SOME_RANDOM_CODE',
+    message: 'Something broke',
+  });
+  assert.equal(parsed.code, 'DESKTOP_HELPER');
+  assert.equal(parsed.message, 'Something broke');
+});
+
+test('normalizeBackgroundCapability requires literal boolean true', async () => {
+  const { normalizeBackgroundCapability } = await import('../src/background-driver.js');
+  assert.equal(normalizeBackgroundCapability({ input: true } as any), false);
+  assert.equal(normalizeBackgroundCapability({ backgroundActions: true }), true);
+  assert.equal(normalizeBackgroundCapability({ backgroundActions: 'true' } as any), false);
+  assert.equal(normalizeBackgroundCapability(null), false);
+  assert.equal(normalizeBackgroundCapability(undefined), false);
 });

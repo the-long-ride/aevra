@@ -71,12 +71,20 @@ export function desktopContext(
                 value: attackerTitle,
                 enabled: true,
                 focused: false,
+                supportedActions: ['invoke'],
                 children: [
                   { ref: 'ref_1_2', role: 'label', name: 'Child', enabled: true, focused: false },
                 ],
               },
             ],
             truncated: false,
+            ...(input.operation.mode === 'background'
+              ? {
+                  snapshotId: 'snap-1',
+                  windowLeaseId: 'lease-1',
+                  leaseExpiresAt: '2026-09-18T00:00:00Z',
+                }
+              : {}),
           },
         };
       }
@@ -87,6 +95,34 @@ export function desktopContext(
             imageDataUri: 'data:image/png;base64,AAAA',
             devicePixelRatio: 1,
             window: input.operation.windowId === 'no-window' ? null : window,
+          },
+        };
+      }
+      if (kind === 'desktop.releaseWindow') {
+        return { ok: true, value: { ok: true, released: true } };
+      }
+      if (kind === 'desktop.backgroundAct') {
+        if (input.operation.action?.ref === 'fail-ref') {
+          return {
+            ok: false,
+            error: {
+              code: 'DESKTOP_INPUT_REFUSED',
+              message: 'refused by denylist',
+              details: { window, gateVerdict: 'deny', gateRule: 'refused by denylist' },
+            },
+          };
+        }
+        return {
+          ok: true,
+          value: {
+            ok: true,
+            outcome: 'completed',
+            window,
+            snapshotInvalidated: true,
+            requiresDescribe: true,
+            focusChanged: false,
+            gateVerdict: 'allow',
+            gateRule: 'permitted by denylist',
           },
         };
       }

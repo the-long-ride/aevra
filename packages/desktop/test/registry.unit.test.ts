@@ -51,3 +51,26 @@ test('a rejected operation does not poison the queue', async () => {
 test('run before connect reports DESKTOP_NOT_CONNECTED', async () => {
   await assert.rejects(() => registry().run(async () => 'x'), /DESKTOP_NOT_CONNECTED/);
 });
+
+test('queued operation cannot migrate to a new driver after disconnect', async () => {
+  const target = registry();
+  await target.connect();
+  let releaseFirst: () => void = () => {};
+  const firstStarted = new Promise<void>((resolve) => {
+    void target.run(async () => {
+      resolve();
+      await new Promise<void>((done) => (releaseFirst = done));
+    });
+  });
+  await firstStarted;
+
+  // Queue a second operation while the first is running
+  const second = target.run(async () => 'migrated');
+
+  // Disconnect mid-flight advances epoch and tears down session
+  await target.disconnect();
+  releaseFirst();
+
+  // The queued operation must reject because epoch changed
+  await assert.rejects(() => second, /DESKTOP_NOT_CONNECTED/);
+});

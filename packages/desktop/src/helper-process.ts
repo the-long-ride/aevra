@@ -13,6 +13,67 @@ interface Pending {
   timer: NodeJS.Timeout;
 }
 
+export const ALLOWED_HELPER_ERROR_CODES = new Set([
+  'DESKTOP_BACKGROUND_UNSUPPORTED',
+  'DESKTOP_PATTERN_UNSUPPORTED',
+  'DESKTOP_ELEMENT_DISABLED',
+  'DESKTOP_VALUE_READ_ONLY',
+  'DESKTOP_REF_STALE',
+  'DESKTOP_TARGET_CHANGED',
+  'DESKTOP_WINDOW_BUSY',
+  'DESKTOP_LEASE_EXPIRED',
+  'DESKTOP_INPUT_REFUSED',
+  'DESKTOP_OUTCOME_UNKNOWN',
+  'DESKTOP_FOCUS_CHANGED',
+  'DESKTOP_DRIVER_DIED',
+  'DESKTOP_TIMEOUT',
+  'DESKTOP_HELPER',
+]);
+
+const ALLOWED_DETAIL_KEYS = new Set([
+  'windowId',
+  'ref',
+  'retryAfterMs',
+  'expectedGeneration',
+  'actualGeneration',
+  'pattern',
+  'action',
+  'reason',
+]);
+
+export function parseHelperError(raw: unknown): {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+} {
+  if (typeof raw === 'string') {
+    return { code: 'DESKTOP_HELPER', message: raw };
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    const rawCode = typeof obj.code === 'string' ? obj.code : 'DESKTOP_HELPER';
+    const code = ALLOWED_HELPER_ERROR_CODES.has(rawCode) ? rawCode : 'DESKTOP_HELPER';
+    const message = typeof obj.message === 'string' ? obj.message : 'Unknown helper error';
+    let details: Record<string, unknown> | undefined;
+    if (obj.details && typeof obj.details === 'object' && !Array.isArray(obj.details)) {
+      const filtered: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(obj.details as Record<string, unknown>)) {
+        if (
+          ALLOWED_DETAIL_KEYS.has(k) &&
+          (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+        ) {
+          filtered[k] = v;
+        }
+      }
+      if (Object.keys(filtered).length > 0) {
+        details = filtered;
+      }
+    }
+    return details ? { code, message, details } : { code, message };
+  }
+  return { code: 'DESKTOP_HELPER', message: 'Unknown helper error' };
+}
+
 /**
  * Supervises the native helper child process: frames calls as line-delimited
  * JSON-RPC, enforces a per-call deadline, and advances a generation counter
@@ -71,13 +132,17 @@ export class HelperProcess {
       const line = this.buffer.slice(0, index);
       this.buffer = this.buffer.slice(index + 1);
       try {
-        const message = JSON.parse(line) as { id: number; result?: unknown; error?: string };
+        const message = JSON.parse(line) as { id: number; result?: unknown; error?: unknown };
         const entry = this.pending.get(message.id);
         if (entry) {
           this.pending.delete(message.id);
           clearTimeout(entry.timer);
-          if (message.error) entry.reject(new DesktopDriverError('DESKTOP_HELPER', message.error));
-          else entry.resolve(message.result);
+          if (message.error !== undefined && message.error !== null) {
+            const parsed = parseHelperError(message.error);
+            entry.reject(new DesktopDriverError(parsed.code, parsed.message, parsed.details));
+          } else {
+            entry.resolve(message.result);
+          }
         }
       } catch {
         // A helper that emits a line we cannot parse has told us nothing. The

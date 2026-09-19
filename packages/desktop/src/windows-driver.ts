@@ -34,6 +34,7 @@ function makeUnreliableDelta(): DesktopActionDelta {
 
 export class WindowsDesktopDriver implements DesktopDriver {
   private refs = new Map<string, string>();
+  private nextRefId = 1;
 
   constructor(private readonly helper: HelperProcess) {}
 
@@ -54,16 +55,26 @@ export class WindowsDesktopDriver implements DesktopDriver {
       window: DesktopWindowIdentity;
       nodes: (Omit<DesktopNode, 'ref'> & { handle: string })[];
       truncated: boolean;
+      snapshotId?: string;
+      windowLeaseId?: string;
+      leaseExpiresAt?: string;
     }>('describe', request);
     this.refs.clear();
     const generation = this.helper.generation();
-    const nodes = raw.nodes.map((node, index) => {
-      const ref = `ref_${generation}_${index + 1}`;
+    const nodes = raw.nodes.map((node) => {
+      const ref = `ref_${generation}_${this.nextRefId++}`;
       this.refs.set(ref, node.handle);
       const { handle: _handle, ...rest } = node;
       return { ...rest, ref };
     });
-    return { window: raw.window, nodes, truncated: raw.truncated };
+    return {
+      window: raw.window,
+      nodes,
+      truncated: raw.truncated,
+      snapshotId: raw.snapshotId,
+      windowLeaseId: raw.windowLeaseId,
+      leaseExpiresAt: raw.leaseExpiresAt,
+    };
   }
 
   capture(windowId?: string): Promise<DesktopCaptureResult> {
@@ -105,6 +116,46 @@ export class WindowsDesktopDriver implements DesktopDriver {
 
   async disconnect(): Promise<void> {
     this.refs.clear();
-    this.helper.kill();
+    await this.helper.kill();
+  }
+
+  targetIdentity(windowId: string): Promise<{
+    window: DesktopWindowIdentity;
+    windowInstance: { windowId: string; processId: number; processStartedAt: string };
+  }> {
+    return this.helper.call('targetIdentity', { windowId });
+  }
+
+  describeBackground(request: {
+    windowId: string;
+    snapshotId: string;
+    maxNodes: number;
+    interactiveOnly: boolean;
+  }): Promise<{
+    window: DesktopWindowIdentity;
+    windowInstance: { windowId: string; processId: number; processStartedAt: string };
+    nodes: DesktopNode[];
+    truncated: boolean;
+  }> {
+    return this.helper.call('describeBackground', request);
+  }
+
+  releaseBackgroundSnapshot(snapshotId: string): Promise<boolean> {
+    return this.helper.call('releaseBackgroundSnapshot', { snapshotId });
+  }
+
+  backgroundAct(request: {
+    snapshotId: string;
+    handle: string;
+    op: string;
+    value?: string;
+    expectedInstance: { windowId: string; processId: number; processStartedAt: string };
+  }): Promise<{
+    ok: boolean;
+    outcome: string;
+    focusChanged: boolean;
+    toggleState?: 'off' | 'on' | 'indeterminate';
+  }> {
+    return this.helper.call('backgroundAct', request);
   }
 }

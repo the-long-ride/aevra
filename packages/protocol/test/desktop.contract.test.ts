@@ -21,7 +21,7 @@ test('every desktop operation kind is namespaced and unique', () => {
   const kinds = [...DESKTOP_OPERATION_KINDS];
   assert.ok(kinds.length > 0);
   assert.equal(new Set(kinds).size, kinds.length);
-  for (const kind of kinds) assert.match(kind, /^desktop\.[a-z]+$/);
+  for (const kind of kinds) assert.match(kind, /^desktop\.[a-zA-Z]+$/);
 });
 
 test('envelope accepts every desktop operation kind', () => {
@@ -37,6 +37,22 @@ test('envelope accepts every desktop operation kind', () => {
       kind: 'desktop.act',
       op: 'click',
       policy: { mode: 'allowlist', applications: [], unattributedInput: 'deny' },
+    },
+    'desktop.backgroundAct': {
+      kind: 'desktop.backgroundAct',
+      action: {
+        windowId: 'win_1',
+        snapshotId: 'snap_1',
+        windowLeaseId: 'lease_1',
+        ref: 'ref_1',
+        op: 'invoke',
+      },
+      policy: { mode: 'allowlist', applications: [], unattributedInput: 'deny' },
+    },
+    'desktop.releaseWindow': {
+      kind: 'desktop.releaseWindow',
+      windowId: 'win_1',
+      windowLeaseId: 'lease_1',
     },
   };
   for (const kind of DESKTOP_OPERATION_KINDS) {

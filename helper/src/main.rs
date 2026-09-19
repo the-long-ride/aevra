@@ -7,18 +7,24 @@
 
 mod act;
 mod backend;
+mod background;
+mod background_snapshots;
 mod capture;
 mod grab;
 mod handles;
 mod input;
 mod keys;
 mod protocol;
+mod target_guard;
 mod uia;
 #[path = "windows.rs"]
 mod windows_backend;
 
-use backend::{ActRequest, CaptureRequest, DescribeRequest, DesktopBackend};
-use protocol::{error_line, parse_request, success_line, Request};
+use backend::{
+    ActRequest, BackgroundActRequest, CaptureRequest, DescribeBackgroundRequest,
+    DescribeRequest, DesktopBackend, ReleaseBackgroundSnapshotRequest, TargetIdentityRequest,
+};
+use protocol::{error_line, parse_request, structured_error_line, success_line, Request};
 use std::io::{self, BufRead, Write};
 
 fn main() {
@@ -39,13 +45,26 @@ fn main() {
         }
         let reply = match parse_request(&line) {
             Ok(request) => handle(&backend, request),
-            Err(err) => error_line(err.id, err.error),
+            Err(err) => err.to_string(),
         };
         if writeln!(stdout, "{reply}").is_err() {
             break;
         }
         let _ = stdout.flush();
     }
+}
+
+fn map_err_line(id: i64, err: String) -> String {
+    if let Some((code, msg)) = err.split_once(':') {
+        let code = code.trim();
+        if code.starts_with("DESKTOP_") {
+            return structured_error_line(id, code, msg.trim(), None);
+        }
+    }
+    if err.starts_with("DESKTOP_") {
+        return structured_error_line(id, &err, &err, None);
+    }
+    error_line(id, err)
 }
 
 fn handle(backend: &impl DesktopBackend, request: Request) -> String {
@@ -72,14 +91,14 @@ fn handle(backend: &impl DesktopBackend, request: Request) -> String {
                     Ok(value) => success_line(request.id, value),
                     Err(err) => error_line(request.id, format!("failed to serialise describe result: {err}")),
                 },
-                Err(err) => error_line(request.id, err),
+                Err(err) => map_err_line(request.id, err),
             },
             Err(err) => error_line(request.id, format!("invalid describe params: {err}")),
         },
         "act" => match serde_json::from_value::<ActRequest>(request.params.clone()) {
             Ok(act_request) => match backend.act(act_request) {
                 Ok(ok) => success_line(request.id, serde_json::Value::Bool(ok)),
-                Err(err) => error_line(request.id, err),
+                Err(err) => map_err_line(request.id, err),
             },
             Err(err) => error_line(request.id, format!("invalid act params: {err}")),
         },
@@ -89,9 +108,46 @@ fn handle(backend: &impl DesktopBackend, request: Request) -> String {
                     Ok(value) => success_line(request.id, value),
                     Err(err) => error_line(request.id, format!("failed to serialise capture result: {err}")),
                 },
-                Err(err) => error_line(request.id, err),
+                Err(err) => map_err_line(request.id, err),
             },
             Err(err) => error_line(request.id, format!("invalid capture params: {err}")),
+        },
+        "targetIdentity" => match serde_json::from_value::<TargetIdentityRequest>(request.params.clone()) {
+            Ok(req) => match backend.target_identity(req) {
+                Ok(result) => match serde_json::to_value(result) {
+                    Ok(value) => success_line(request.id, value),
+                    Err(err) => error_line(request.id, format!("failed to serialise targetIdentity result: {err}")),
+                },
+                Err(err) => map_err_line(request.id, err),
+            },
+            Err(err) => error_line(request.id, format!("invalid targetIdentity params: {err}")),
+        },
+        "describeBackground" => match serde_json::from_value::<DescribeBackgroundRequest>(request.params.clone()) {
+            Ok(req) => match backend.describe_background(req) {
+                Ok(result) => match serde_json::to_value(result) {
+                    Ok(value) => success_line(request.id, value),
+                    Err(err) => error_line(request.id, format!("failed to serialise describeBackground result: {err}")),
+                },
+                Err(err) => map_err_line(request.id, err),
+            },
+            Err(err) => error_line(request.id, format!("invalid describeBackground params: {err}")),
+        },
+        "releaseBackgroundSnapshot" => match serde_json::from_value::<ReleaseBackgroundSnapshotRequest>(request.params.clone()) {
+            Ok(req) => match backend.release_background_snapshot(req) {
+                Ok(ok) => success_line(request.id, serde_json::Value::Bool(ok)),
+                Err(err) => map_err_line(request.id, err),
+            },
+            Err(err) => error_line(request.id, format!("invalid releaseBackgroundSnapshot params: {err}")),
+        },
+        "backgroundAct" => match serde_json::from_value::<BackgroundActRequest>(request.params.clone()) {
+            Ok(req) => match backend.background_act(req) {
+                Ok(result) => match serde_json::to_value(result) {
+                    Ok(value) => success_line(request.id, value),
+                    Err(err) => map_err_line(request.id, format!("failed to serialise backgroundAct result: {err}")),
+                },
+                Err(err) => map_err_line(request.id, err),
+            },
+            Err(err) => error_line(request.id, format!("invalid backgroundAct params: {err}")),
         },
         other => error_line(request.id, format!("unknown method: {other}")),
     }
