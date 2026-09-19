@@ -67,11 +67,28 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
+const iconSizes = [16, 32, 48, 128];
+const icons = [];
+for (const size of iconSizes) {
+  const iconPath = path.join(SOURCE, `icons/icon-${size}.png`);
+  if (existsSync(iconPath)) {
+    icons.push({
+      name: `icons/icon-${size}.png`,
+      data: readFileSync(iconPath),
+    });
+  }
+}
+
+const popupHtmlPath = path.join(SOURCE, 'src/popup.html');
+const popupHtml = existsSync(popupHtmlPath) ? readFileSync(popupHtmlPath, 'utf8') : undefined;
+
 const entries = extensionEntries({
   emitted: emittedFiles(DIST),
   manifest: JSON.parse(readFileSync(path.join(SOURCE, 'manifest.json'), 'utf8')),
   optionsHtml: readFileSync(path.join(SOURCE, 'src/options.html'), 'utf8'),
+  popupHtml,
   version: JSON.parse(readFileSync('package.json', 'utf8')).version,
+  icons,
 });
 
 rmSync(outRoot, { recursive: true, force: true });

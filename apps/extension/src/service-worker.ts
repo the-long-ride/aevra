@@ -9,20 +9,38 @@ import { ExtensionRpc } from './rpc.js';
 export function startServiceWorker(): ExtensionRpc {
   const rpc = new ExtensionRpc(createChromeBridge());
 
-  // MV3 evicts an idle service worker, so every wake-up re-establishes the socket.
+  // MV3 evicts an idle service worker, so wake-up re-establishes the socket.
   chrome.runtime.onStartup.addListener(() => void rpc.connect());
-  chrome.runtime.onInstalled.addListener(() => void rpc.connect());
-  chrome.tabs.onUpdated.addListener(() => void rpc.connect());
+  chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+    const url = changeInfo?.url ?? tab?.url ?? '';
+    if (url.includes('127.0.0.1:47831') || url.includes('localhost:47831')) {
+      void rpc.connect(true);
+    }
+  });
   chrome.runtime.onMessage.addListener(
-    (message: { type?: string; text?: string; level?: string }) => {
+    (
+      message: { type?: string; text?: string; level?: string },
+      _sender,
+      sendResponse?: (response?: unknown) => void,
+    ) => {
       if (message?.type === 'aevra:console') {
         recordConsoleLog(String(message.text ?? ''), String(message.level ?? 'log'));
       }
-      if (message?.type === 'aevra:paired') void rpc.connect();
+      if (message?.type === 'aevra:paired' || message?.type === 'aevra:connect') {
+        void rpc.connect(true);
+      }
+      if (message?.type === 'aevra:disconnect') {
+        rpc.disconnect();
+      }
+      if (message?.type === 'aevra:getStatus') {
+        if (!rpc.isConnected()) {
+          void rpc.connect();
+        }
+        sendResponse?.({ connected: rpc.isConnected() });
+      }
     },
   );
 
-  void rpc.connect();
   return rpc;
 }
 

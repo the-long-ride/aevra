@@ -122,6 +122,20 @@ export class BrowserPairingService {
       expiresAt: new Date(issuedAt + TOKEN_TTL_MS).toISOString(),
     });
     const port = Number(process.env.AEVRA_BROWSER_PORT ?? 47833);
+    await this.worker
+      .execute({
+        sessionId: 'admin:browser',
+        workspaceId: 'system',
+        roots: [],
+        operation: {
+          kind: 'browser.status',
+          epoch: this.stored.epoch,
+          extensionId,
+        },
+      })
+      .catch(() => {
+        // Worker might not be running or ready yet
+      });
     return { token, wsUrl: `ws://127.0.0.1:${port}` };
   }
 

@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 import type { CoreConfig } from './config.js';
 import { createRuntimeRepositories } from './runtime-repositories.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
-import { SkillsService } from './skills/skills-service.js';
 import { SecurityGuard } from './security/security-guard.js';
 import { ManifestService } from './workspaces/manifest-service.js';
 import { IpRateLimiter } from './mcp/rate-limit.js';
+import { ConnectionRateLimiter } from './mcp/connection-rate-limit.js';
 import { createConnectorAdmission } from './mcp/connector-admission.js';
 import { McpActivityLog } from './mcp/activity-log.js';
 import { AEVRA_VERSION } from './version.js';
@@ -17,21 +17,25 @@ import { ConnectionAdminService } from './admin/connection-admin.js';
 import { buildRuntimeHealth } from './admin/runtime-health.js';
 import { McpIngressServer } from './mcp/server.js';
 import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
+import {
+  buildAdminApiContext,
+  createCoreToolService,
+  createRuntimeApprovalService,
+} from './admin/admin-api-context.js';
 import { LocalFilesystemService } from './admin/local-filesystem.js';
 import type { WorkerClient } from '../../../packages/ipc/src/client.js';
 import { CapabilityProfileService } from './policy/capabilities.js';
 import { SessionManager } from './sessions/session-manager.js';
 import { ConnectionStateStore } from './sessions/connection-state.js';
+import { ConnectionWorkspaceGrantService } from './sessions/connection-workspace-grants.js';
 import { WorkspaceService } from './workspaces/workspace-service.js';
 import { ReadVersionCache } from './operations/read-version-cache.js';
 import { ResumableOperationService } from './operations/resumable-operation-service.js';
 import { AuditService } from './audit/audit-service.js';
-import { ApprovalService } from './approvals/approval-service.js';
 import { PermissionEngine } from './policy/permissions.js';
 import { OperationService } from './operations/operation-service.js';
 import { ChangeSetService } from './changes/change-service.js';
 import { ProcessService } from './processes/process-service.js';
-import { McpToolService } from '../../../packages/mcp-tools/src/service.js';
 import {
   closeRuntimeResource,
   createBrowserOriginPolicyService,
@@ -61,21 +65,16 @@ export async function createCoreRuntime(
     admin: AdminServer | undefined,
     mcp: McpIngressServer | undefined,
     exposureWiring: RuntimeExposureWiring | undefined,
-    keepAwake: KeepAwakeService | undefined;
-  let safeMode = false,
+    keepAwake: KeepAwakeService | undefined,
+    safeMode = false,
     started = false;
   const wm = createRuntimeWorkerManager(config, deps);
   const cleanup = async () => {
-    if (keepAwake) await closeRuntimeResource(() => keepAwake!.close());
-    keepAwake = undefined;
-    if (exposureWiring) await closeRuntimeResource(() => exposureWiring!.close());
-    exposureWiring = undefined;
-    if (mcp) await closeRuntimeResource(() => mcp!.close());
-    mcp = undefined;
-    if (admin) await closeRuntimeResource(() => admin!.close());
-    admin = undefined;
+    for (const r of [keepAwake, exposureWiring, mcp, admin]) {
+      if (r) await closeRuntimeResource(() => r.close());
+    }
     if (worker) await closeRuntimeResource(() => wm.close());
-    worker = undefined;
+    keepAwake = exposureWiring = mcp = admin = worker = undefined;
     try {
       db?.close();
     } catch {}
@@ -126,6 +125,8 @@ export async function createCoreRuntime(
         processRepo.markKeepRunningUncertain();
         const workspaces = new WorkspaceService(workspaceRepo),
           profiles = new CapabilityProfileService(raw),
+          connectionLimiter = new ConnectionRateLimiter(),
+          invalidBearerLimiter = new IpRateLimiter(30, 1),
           sessions = new SessionManager(
             sessionRepo,
             profiles,
@@ -134,10 +135,22 @@ export async function createCoreRuntime(
             connectionState,
             config.connectionReconnectGraceMs,
           ),
+          grantHandler = new ConnectionWorkspaceGrantService({
+            db: raw,
+            oauthRepo,
+            workspaceRepo,
+            sessionRepo,
+            profiles,
+            idleMs: config.leaseIdleMs,
+            sessions,
+          }),
           connections = new ConnectionAdminService(
             oauthRepo,
             sessions,
             Math.floor(config.oauthAccessTokenTtlMs / 1000),
+            undefined,
+            grantHandler,
+            (connId) => connectionLimiter.clear(connId),
           ),
           audit = new AuditService(auditRepo),
           permissions = new PermissionEngine(permissionRepo),
@@ -175,56 +188,42 @@ export async function createCoreRuntime(
         );
         operations.attachChangeService(changes);
         operations.setCommandEffectResolver((family, defaultEffect) => {
-          const overrides = settings.get<Record<string, string>>('command.family.overrides', {});
-          const value = overrides[family];
-          return EFFECTS.includes(value) ? (value as any) : defaultEffect;
+          const val = settings.get<Record<string, string>>('command.family.overrides', {})[family];
+          return EFFECTS.includes(val) ? (val as any) : defaultEffect;
         });
         operations.setExecutionSettingsResolver(() =>
           settings.get('execution.settings', { sandboxBackend: 'auto', cachePolicy: 'workspace' }),
         );
-        sessions.setSwitchDrainHandler((sessionId, _old, _next, timeoutMs) =>
-          operations.drainSession(
-            sessionId,
-            timeoutMs ?? settings.get<number>('workspace.drain.defaultMs', 60_000),
-          ),
+        sessions.setSwitchDrainHandler((sId, _o, _n, tMs) =>
+          operations.drainSession(sId, tMs ?? settings.get('workspace.drain.defaultMs', 60_000)),
         );
         if (!safeMode) await changes.reconcileIncompleteOperations();
-        const approvals = new ApprovalService(approvalRepo, audit, {
-          fastWaitMs: config.approvalFastWaitMs,
-          lifetimeMs: config.approvalLifetimeMs,
-          lifetimeByRiskMs: config.approvalLifetimeByRiskMs,
-        });
-        if (!safeMode) approvals.cancelForRestart();
-        approvals.setSessionIdentityResolver((sessionId) => sessions.connectionIdentity(sessionId));
-        approvals.setApprovedHandler((ticket) => {
-          if (ticket.operation.family === 'workspace:select')
-            sessions.grantConnectionWorkspace(ticket.sessionId, ticket.workspaceId, 'read-only');
-        });
-        const metrics = new MetricsService();
-        const browserPairing = createBrowserPairingService(settings, wm, workerGateway);
-        // Every route Aevra's own control plane answers on, so the browser
-        // policy can refuse all of them. Read through the outer `let` on each
-        // call: exposure wiring does not exist yet at this point, and its
-        // public URL changes when the operator reconfigures remote access.
-        const browserPolicy = createBrowserOriginPolicyService(settings, config, () => [
-          exposureWiring?.gatewayUrl(),
-          exposureWiring?.publicUrl(),
-          exposureWiring?.adminPublicUrl(),
-          ...(exposureWiring?.trustedAdminOrigins() ?? []),
-        ]);
-        const desktopPolicy = createDesktopPolicyService(settings);
-        const activity = new McpActivityLog();
-        const dataServices = await createRuntimeDataServices(config, db);
+        const approvals = createRuntimeApprovalService(
+          approvalRepo,
+          audit,
+          config,
+          safeMode,
+          sessions,
+        );
+        const metrics = new MetricsService(),
+          browserPairing = createBrowserPairingService(settings, wm, workerGateway),
+          browserPolicy = createBrowserOriginPolicyService(settings, config, () => [
+            exposureWiring?.gatewayUrl(),
+            exposureWiring?.publicUrl(),
+            exposureWiring?.adminPublicUrl(),
+            ...(exposureWiring?.trustedAdminOrigins() ?? []),
+          ]),
+          desktopPolicy = createDesktopPolicyService(settings),
+          activity = new McpActivityLog(),
+          dataServices = await createRuntimeDataServices(config, db);
         const { vault, environment, databaseAdmin } = dataServices;
         const mcpUpstreams = createMcpUpstreams(db, workerGateway, dataServices.secretStore);
-        const tools = new McpToolService(sessions, workspaces, workerGateway, reads, approvals, {
+        const tools = createCoreToolService(sessions, workspaces, workerGateway, reads, approvals, {
           operations,
           resumableOperations,
           processes,
           changes,
           permissions,
-          approvals,
-          skills: new SkillsService(),
           security,
           audit,
           connectorBindings,
@@ -232,7 +231,6 @@ export async function createCoreRuntime(
           settings,
           systemCapabilities,
           browserPolicy,
-          manifests: new ManifestService(workspaces),
           upstreams: mcpUpstreams,
         });
         const remoteTools = new SessionSkillAccessGate(tools, sessions, approvals);
@@ -248,6 +246,7 @@ export async function createCoreRuntime(
           tls,
           deps.cloudflare,
           gatewayTrustSecret,
+          audit,
         );
         const localTls = tls.serverOptions;
         const staticDir = fileURLToPath(new URL('../../web', import.meta.url));
@@ -278,7 +277,7 @@ export async function createCoreRuntime(
             localHttpGatewayEnabled: () =>
               exposureWiring?.currentConfig().provider === 'local' &&
               exposureWiring.localProtocol() === 'http',
-            api: {
+            api: buildAdminApiContext({
               workspaces,
               approvals,
               permissions: permissionRepo,
@@ -289,8 +288,7 @@ export async function createCoreRuntime(
               changes,
               audit,
               settings,
-              cloudflare: exposureWiring.cloudflare,
-              exposure: exposureWiring,
+              exposureWiring,
               localFilesystem,
               oauth,
               connections,
@@ -300,20 +298,20 @@ export async function createCoreRuntime(
               connectors: connectorRepo,
               metrics,
               activity,
-              power: keepAwake,
-              browser: browserPairing,
+              keepAwake,
+              browserPairing,
               browserPolicy,
               desktopPolicy,
               mcpUpstreams,
               systemCapabilities: () => systemCapabilities,
-              mcpDiagnostics: () => mcp?.diagnosticsSnapshot() ?? null,
-              safeMode: () => safeMode,
-            },
+              getMcpDiagnostics: () => mcp?.diagnosticsSnapshot() ?? null,
+              isSafeMode: () => safeMode,
+            }),
           },
         );
-        const verifier = exposureWiring.verifier;
-        const connectorLimiter = new IpRateLimiter(30, 1);
-        const connectorsAdmission = createConnectorAdmission(connectorRepo, connectorLimiter);
+        const verifier = exposureWiring.verifier,
+          connectorLimiter = new IpRateLimiter(30, 1),
+          connectorsAdmission = createConnectorAdmission(connectorRepo, connectorLimiter);
         mcp = new McpIngressServer(
           config.mcpHost,
           config.mcpPort,
@@ -329,13 +327,29 @@ export async function createCoreRuntime(
             oauth,
             activity,
             trustForwardedClientIp: () => exposureWiring?.trustForwardedClientIp() === true,
+            connectionLimiter,
+            invalidBearerLimiter,
           },
         );
-        await admin.start();
-        await mcp.start();
+        await Promise.all([admin.start(), mcp.start()]);
         await exposureWiring.startGateway(admin.url(), mcp.url());
         await exposureWiring.startProvider();
         await keepAwake.start();
+        const initialPairing = browserPairing.state();
+        if (initialPairing.extensionId) {
+          await workerGateway
+            .execute({
+              sessionId: 'admin:browser',
+              workspaceId: 'system',
+              roots: [],
+              operation: {
+                kind: 'browser.status',
+                epoch: initialPairing.epoch,
+                extensionId: initialPairing.extensionId,
+              },
+            })
+            .catch(() => {});
+        }
         started = true;
       } catch (error) {
         await cleanup();

@@ -28,12 +28,30 @@ export function normalizeVersion(raw) {
  * everything and breaking every import.
  */
 export function packagedManifest(manifest, version) {
-  return {
+  const packaged = {
     ...manifest,
     version: normalizeVersion(version),
     background: { ...manifest.background, service_worker: `${EXTENSION_ROOT}/service-worker.js` },
     options_page: `${EXTENSION_ROOT}/options.html`,
   };
+  if (manifest.action) {
+    packaged.action = { ...manifest.action };
+    if (manifest.action.default_popup) {
+      const popup = manifest.action.default_popup;
+      packaged.action.default_popup = popup.startsWith(EXTENSION_ROOT)
+        ? popup
+        : `${EXTENSION_ROOT}/${popup}`;
+    }
+  }
+  if (manifest.content_scripts) {
+    packaged.content_scripts = manifest.content_scripts.map((cs) => ({
+      ...cs,
+      js: cs.js?.map((file) =>
+        file.startsWith(EXTENSION_ROOT) ? file : `${EXTENSION_ROOT}/${file}`,
+      ),
+    }));
+  }
+  return packaged;
 }
 
 /** Test builds must never ship: they carry the fixtures and the assertions. */
@@ -41,7 +59,14 @@ export function shipsInExtension(name) {
   return name.endsWith('.js') && !name.endsWith('.test.js');
 }
 
-export function extensionEntries({ emitted, manifest, optionsHtml, version }) {
+export function extensionEntries({
+  emitted,
+  manifest,
+  optionsHtml,
+  popupHtml,
+  version,
+  icons = [],
+}) {
   const entries = emitted.filter((entry) => shipsInExtension(entry.name));
   entries.push({
     name: 'manifest.json',
@@ -51,5 +76,14 @@ export function extensionEntries({ emitted, manifest, optionsHtml, version }) {
     name: `${EXTENSION_ROOT}/options.html`,
     data: Buffer.from(optionsHtml, 'utf8'),
   });
+  if (popupHtml) {
+    entries.push({
+      name: `${EXTENSION_ROOT}/popup.html`,
+      data: Buffer.from(popupHtml, 'utf8'),
+    });
+  }
+  for (const icon of icons) {
+    entries.push(icon);
+  }
   return entries;
 }

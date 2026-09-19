@@ -92,3 +92,45 @@ test('the emitted manifest is valid json carrying the normalized version', () =>
   const manifest = JSON.parse(String(entries.find((entry) => entry.name === 'manifest.json').data));
   assert.equal(manifest.version, '3.1.0');
 });
+
+test('icons are included in the packaged extension entries', () => {
+  const icons = [
+    { name: 'icons/icon-16.png', data: Buffer.from('16') },
+    { name: 'icons/icon-32.png', data: Buffer.from('32') },
+    { name: 'icons/icon-48.png', data: Buffer.from('48') },
+    { name: 'icons/icon-128.png', data: Buffer.from('128') },
+  ];
+  const entries = extensionEntries({
+    emitted: [],
+    manifest: MANIFEST,
+    optionsHtml: '',
+    version: '1.0.0',
+    icons,
+  });
+  for (const icon of icons) {
+    assert.ok(entries.some((entry) => entry.name === icon.name));
+  }
+});
+
+test('the packaged manifest rewrites default_popup and packages popup.html', () => {
+  const manifestWithPopup = {
+    ...MANIFEST,
+    action: {
+      default_popup: 'popup.html',
+      default_icon: { 16: 'icons/icon-16.png' },
+    },
+  };
+  const entries = extensionEntries({
+    emitted: [{ name: 'apps/extension/src/popup.js', data: Buffer.from('popup') }],
+    manifest: manifestWithPopup,
+    optionsHtml: '<!doctype html>',
+    popupHtml: '<!doctype html><title>Popup</title>',
+    version: '1.0.0',
+  });
+  const names = entries.map((entry) => entry.name).sort();
+  assert.ok(names.includes('apps/extension/src/popup.html'));
+  assert.ok(names.includes('apps/extension/src/popup.js'));
+
+  const parsed = JSON.parse(String(entries.find((entry) => entry.name === 'manifest.json').data));
+  assert.equal(parsed.action.default_popup, `${EXTENSION_ROOT}/popup.html`);
+});

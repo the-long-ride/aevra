@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe('service worker wiring', () => {
-  it('re-establishes the socket on every wake-up signal MV3 gives it', async () => {
+  it('re-establishes the socket on startup signal', async () => {
     const { startServiceWorker } = await import('./service-worker');
     // Importing the module already starts one worker, as it does in Chrome.
     // Reset the registry so the assertions describe the instance held here.
@@ -45,15 +45,12 @@ describe('service worker wiring', () => {
     const rpc = startServiceWorker();
     const connect = vi.spyOn(rpc, 'connect').mockResolvedValue(undefined);
 
-    for (const signal of ['startup', 'installed', 'updated']) {
-      expect(registered[signal], `${signal} has no listener`).toHaveLength(1);
-      registered[signal]![0]!();
-    }
-    // MV3 evicts an idle worker; each of these is a chance to reconnect.
-    expect(connect).toHaveBeenCalledTimes(3);
+    expect(registered['startup'], 'startup has no listener').toHaveLength(1);
+    registered['startup']![0]!();
+    expect(connect).toHaveBeenCalledTimes(1);
   });
 
-  it('reconnects when the options page reports a successful pairing', async () => {
+  it('reconnects when the options page reports a successful pairing or popup sends connect', async () => {
     const { startServiceWorker } = await import('./service-worker');
     // Importing the module already starts one worker, as it does in Chrome.
     // Reset the registry so the assertions describe the instance held here.
@@ -62,6 +59,43 @@ describe('service worker wiring', () => {
     const connect = vi.spyOn(rpc, 'connect').mockResolvedValue(undefined);
     registered.message![0]!({ type: 'aevra:paired' });
     expect(connect).toHaveBeenCalledTimes(1);
+    registered.message![0]!({ type: 'aevra:connect' });
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
+
+  it('disconnects when aevra:disconnect message arrives', async () => {
+    const { startServiceWorker } = await import('./service-worker');
+    for (const key of Object.keys(registered)) delete registered[key];
+    const rpc = startServiceWorker();
+    const disconnect = vi.spyOn(rpc, 'disconnect').mockImplementation(() => {});
+    registered.message![0]!({ type: 'aevra:disconnect' });
+    expect(disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('responds to aevra:getStatus with connection state', async () => {
+    const { startServiceWorker } = await import('./service-worker');
+    for (const key of Object.keys(registered)) delete registered[key];
+    const rpc = startServiceWorker();
+    vi.spyOn(rpc, 'isConnected').mockReturnValue(true);
+    let reply: any;
+    registered.message![0]!({ type: 'aevra:getStatus' }, {}, (response: any) => {
+      reply = response;
+    });
+    expect(reply).toEqual({ connected: true });
+  });
+
+  it('attempts to connect when aevra:getStatus arrives and disconnected', async () => {
+    const { startServiceWorker } = await import('./service-worker');
+    for (const key of Object.keys(registered)) delete registered[key];
+    const rpc = startServiceWorker();
+    vi.spyOn(rpc, 'isConnected').mockReturnValue(false);
+    const connect = vi.spyOn(rpc, 'connect').mockResolvedValue(undefined);
+    let reply: any;
+    registered.message![0]!({ type: 'aevra:getStatus' }, {}, (response: any) => {
+      reply = response;
+    });
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(reply).toEqual({ connected: false });
   });
 
   it('records forwarded console text without reconnecting', async () => {
@@ -86,5 +120,19 @@ describe('service worker wiring', () => {
     registered.message![0]!({ type: 'something-else' });
     registered.message![0]!(undefined);
     expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('resets circuit breaker and connects with force when visiting Aevra Web UI', async () => {
+    const { startServiceWorker } = await import('./service-worker');
+    for (const key of Object.keys(registered)) delete registered[key];
+    const rpc = startServiceWorker();
+    const connect = vi.spyOn(rpc, 'connect').mockResolvedValue(undefined);
+
+    registered.updated![0]!(1, { url: 'https://127.0.0.1:47831/#dashboard' }, {});
+    expect(connect).toHaveBeenCalledWith(true);
+
+    registered.updated![0]!(2, { url: 'https://google.com' }, {});
+    // Non-Aevra pages should NOT trigger connection attempts
+    expect(connect).toHaveBeenCalledTimes(1);
   });
 });

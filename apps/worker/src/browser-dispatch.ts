@@ -52,6 +52,7 @@ export async function dispatchBrowserOperation(op: BrowserOperation): Promise<Wo
     // adopts the first epoch it is told, and only then does the monotonic
     // guard apply.
     if (op.epoch !== undefined) await registry.setEpoch(op.epoch);
+    if (op.extensionId) await browserRuntime.setExtensionId(op.extensionId);
     return { ok: true, value: await registry.status() };
   }
 

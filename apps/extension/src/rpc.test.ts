@@ -176,4 +176,85 @@ describe('ExtensionRpc', () => {
       vi.useRealTimers();
     }
   });
+
+  it('stays idle and opens no socket when enabled is false', async () => {
+    installChrome({ ...paired, enabled: false });
+    const { ExtensionRpc } = await import('./rpc');
+    const rpc = new ExtensionRpc({} as never);
+    await rpc.connect();
+    expect(FakeSocket.last).toBeNull();
+    expect(rpc.isConnected()).toBe(false);
+  });
+
+  it('sends profileName in auth frame when configured', async () => {
+    installChrome({ ...paired, profileName: 'Work Browser' });
+    await connectedRpc();
+    expect(FakeSocket.last!.sent[0]).toEqual({
+      type: 'auth',
+      token: 'issued-token',
+      profileName: 'Work Browser',
+    });
+  });
+
+  it('reports isConnected accurately and disconnect() stops connection and reconnects', async () => {
+    vi.useFakeTimers();
+    try {
+      const rpc = await connectedRpc();
+      expect(rpc.isConnected()).toBe(true);
+
+      const socket = FakeSocket.last!;
+      rpc.disconnect();
+      expect(socket.closed).toBe(true);
+      expect(rpc.isConnected()).toBe(false);
+
+      // Advance timers to verify reconnect was not scheduled
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(FakeSocket.last).toBe(socket);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears pending reconnect timer on disconnect()', async () => {
+    vi.useFakeTimers();
+    try {
+      const rpc = await connectedRpc();
+      const first = FakeSocket.last!;
+      first.emit('close');
+      // Reconnect is scheduled, now disconnect() should cancel the timer
+      rpc.disconnect();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(FakeSocket.last).toBe(first);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops reconnecting after MAX_RECONNECT_ATTEMPTS consecutive failures (circuit breaker)', async () => {
+    vi.useFakeTimers();
+    try {
+      const { ExtensionRpc, MAX_RECONNECT_ATTEMPTS } = await import('./rpc');
+      const rpc = new ExtensionRpc({} as never);
+      await rpc.connect();
+
+      for (let i = 0; i < MAX_RECONNECT_ATTEMPTS; i++) {
+        const currentSocket = FakeSocket.last;
+        expect(currentSocket).not.toBeNull();
+        currentSocket!.emit('close');
+        await vi.advanceTimersByTimeAsync(10_000);
+      }
+
+      const lastSocket = FakeSocket.last;
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(FakeSocket.last).toBe(lastSocket);
+
+      await rpc.connect();
+      expect(FakeSocket.last).toBe(lastSocket);
+
+      await rpc.connect(true);
+      expect(FakeSocket.last).not.toBe(lastSocket);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
