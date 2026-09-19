@@ -112,19 +112,19 @@ process evaluates it is a policy nobody can reason about.
 
 ### 4.2 Pairing over TLS
 
-`options.ts` posts to `https://127.0.0.1:<port>/api/browser/pair` and falls back
+`popup.ts` (and `options.ts`) posts to `https://127.0.0.1:<port>/api/browser/pair` and falls back
 to `http://` only when the TLS attempt fails at the transport, which covers an
 install running without a certificate.
 
 Aevra's certificate is self-signed, and an MV3 service worker cannot bypass a
-certificate error. The flow already resolves this: the pairing code is displayed
-in the admin web UI, so the user has necessarily opened that origin in this
-browser and accepted the certificate before pairing. Chrome's exception is
-per-origin and the extension's fetch inherits it.
+certificate error. The flow already resolves this: the pairing code is generated
+in the admin web UI (**Settings → Browser control**), so the user has necessarily opened that origin in this
+browser and accepted the certificate before pairing. The CLI deliberately does not mint pairing codes
+for this reason. Chrome's exception is per-origin and the extension's fetch inherits it.
 
-When both attempts fail, the options page says so specifically — that the admin
+When both attempts fail, the popup modal and options page say so specifically — that the admin
 UI must be opened once in this browser first — rather than reporting a generic
-network error. The port stops being a literal too: the options page takes it as
+network error. The port stops being a literal too: the pairing UI takes it as
 a field defaulting to 47831, since the operator who moved the admin port has
 also moved this.
 

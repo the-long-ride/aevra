@@ -19,4 +19,7 @@ playwright-report/
 coverage/
 current-work.md
 helper/target/
+**/obj/
 docs/plans/
+docs/wayfinder/
+docs/research/

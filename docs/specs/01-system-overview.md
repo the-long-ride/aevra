@@ -34,18 +34,19 @@ Everything else in these specs is an elaboration of that sentence.
 | Web UI       | `apps/web-react`                    | React 19 single-page dashboard with dark theme             |
 | Browser      | `packages/browser`                  | CDP and extension drivers behind one driver interface      |
 | Extension    | `apps/extension`                    | MV3 extension driving the user's own browser profile       |
+| Desktop      | `packages/desktop` + `helper/`      | Native Windows UIA driver and background semantic automation |
 
 ## Dependency boundaries (enforced by tests)
 
 - Core authorizes operations but never performs them directly.
 - MCP tool code (`packages/mcp-tools`) never imports Worker executors.
-- Core never imports `packages/browser`; it mints pairing tokens, the Worker drives the browser.
+- Core never imports `packages/browser` or `packages/desktop`; it mints pairing tokens/authorizes operations, the Worker drives browser and desktop helpers.
 - The Web UI never imports Worker/IPC code.
 - The Worker never imports Core policy, store, or admin code.
 
 ## Repository layout
 
-`apps/` (cli, core, web-react, worker) · `packages/` (executor, ipc, mcp-tools, notifications, protocol, secrets, security, store) · `installers/` · `docs/` · `scripts/`.
+`apps/` (cli, core, extension, web-react, worker) · `packages/` (browser, desktop, executor, ipc, mcp-tools, notifications, protocol, secrets, security, store) · `helper/` (native Windows UIA helper) · `installers/` · `docs/` · `scripts/`.
 
 **Boundaries:** no install instructions (manual `01`), no protocol detail (`03`), no security rationale (`02`).
 

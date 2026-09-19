@@ -28,4 +28,13 @@ Authentication is **OAuth**. Do not place an Admin password or connector secret 
 
 After connection, register or select a workspace before asking the client to access local files or run tools.
 
+## Dynamic Cloud VMs & Egress IP Continuity
+
+ChatGPT dispatches tool calls and session turns across rotating cloud runner VMs with dynamic egress IPs. Aevra handles this transparently:
+
+- **Zero re-admission on IP change:** As long as ChatGPT presents its valid OAuth access token, incoming requests from new runner IPs are automatically admitted without requiring operator intervention or re-pairing.
+- **Durable workspace grants:** Workspaces granted to the ChatGPT connection remain active across runner VM transitions and transport reconnects. Multiple workspaces can be assigned concurrently in the Admin UI.
+- **Approval handoff:** When an operation requires manual confirmation, approved tickets are claimed atomically by the runner resuming the work (`approval_wait`). Unauthorized callers cannot hijack or poison pending approvals.
+- **Origin visibility:** The Aevra Admin UI displays the connection's recent runner IP history (up to 10 unique IP addresses within 24 hours) in the connection details modal.
+
 If ChatGPT shows **Something went wrong with setting up the connection**, confirm Remote Access is ready, the MCP URL uses the effective public host with `/mcp`, and Aevra's OAuth metadata lists that same HTTPS origin. Then retry the connector setup and approve the pairing request in Aevra.

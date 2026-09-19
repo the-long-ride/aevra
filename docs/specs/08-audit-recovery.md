@@ -4,7 +4,7 @@
 
 ## Audit chain
 
-Every significant action appends a redacted event to `audit_events` with `previous_hash` and `content_hash` — a tamper-evident chain, checkpointed in `audit_chain_checkpoints`. The Web UI can **verify the chain** and export redacted JSON/JSONL. Secrets and credential-shaped strings are DLP-masked before anything is persisted or returned.
+Every significant action appends a redacted event to `audit_events` with `previous_hash` and `content_hash` — a tamper-evident chain, checkpointed in `audit_chain_checkpoints`. The Web UI can **verify the chain** and export redacted JSON/JSONL. Secrets and credential-shaped strings are DLP-masked before anything is persisted or returned. Desktop input and set values (`desktop_set_value`, `desktop_type`) are redacted from audit events (preserving only value length and nonce), and screenshot captures are audited strictly by SHA-256 content hash without storing raw pixels.
 
 ## Change sets
 
@@ -34,9 +34,11 @@ Mutating operation records are connection-scoped when the caller is OAuth-authen
 
 Startup validates DB integrity (`PRAGMA integrity_check`). Failure ⇒ **SAFE MODE**: admin dashboard stays up for diagnostics/export/recovery; both MCP paths return `503 {"error":"SAFE_MODE"}`; all administrative mutations are blocked. Recovery is deliberate, never automatic.
 
-## Backups
+## Backups & data migration
 
-`VACUUM INTO`-based consistent snapshots to `backups/` (never a blind copy of a live WAL database), bounded retention.
+- **Database snapshots:** `VACUUM INTO`-based consistent snapshots to `backups/` (never a blind copy of a live WAL database), bounded retention.
+- **Data export & import (`/api/data/export`):** Operators can download a structured JSON archive of their Aevra configuration (workspaces, external mounts, permission rules, command-family overrides, network rules, environment profiles, secret reference metadata, lifecycle hooks, MCP upstream server definitions, desktop policy, and custom application records). Machine-local environment variables and device-bound raw secrets are strictly omitted to protect host credentials during migration.
+- **Data restore:** The Web UI `Data` tab validates imported JSON payloads, renders pre-flight entity counts for inspection, and restores records transactionally without bypassing schema constraints.
 
 **Boundaries:** approval policy (`02`); snapshot file formats are internal.
 

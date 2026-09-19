@@ -1,6 +1,101 @@
 # Changelog
 
-## [1.0.5] - 2026-09-15
+## [1.0.5] - 2026-09-18
+
+### Added - Background Desktop Automation (Windows)
+
+- **Background semantic operations without input injection**:
+  - Implemented semantic action tools: `desktop_invoke`, `desktop_set_value`, `desktop_select`, `desktop_toggle`, and `desktop_release_window`.
+  - Added `mode: 'background'` to `desktop_describe` with automatic acquisition of 60-second exclusive window leases (`windowLeaseId`).
+  - Zero foreground interference: operates purely via Windows UI Automation pattern interfaces (`IUIAutomationInvokePattern`, `IUIAutomationValuePattern`, `IUIAutomationSelectionItemPattern`, `IUIAutomationTogglePattern`), never invoking `SendInput`, `SetCursorPos`, `SetFocus`, clipboard modifications, or window activation.
+- **Window lease and snapshot lifecycle isolation**:
+  - Window leases are bound strictly to the verified worker session and workspace (`sessionId`, `workspaceId`).
+  - Single-snapshot invalidation: every mutating background action invalidates the snapshot immediately, preventing stale handle reuse across state changes.
+  - Expiring lease TTL (60 seconds) with explicit release support (`desktop_release_window`).
+- **Focus change detection and native target security**:
+  - Monitors active foreground window across actions: if focus changes or a modal dialog appears, the lease is suspended and subsequent actions fail with `DESKTOP_FOCUS_CHANGED` until re-described.
+  - Native target security pre-checks: validates target process creation time, token elevation, token integrity levels, and desktop station (strictly refuses Winlogon, Screen-saver, UAC secure desktops, and higher-integrity targets).
+  - Unattributed windows are strictly refused for background automation.
+  - Protected password controls return masked values and refuse background input; read-only controls refuse `desktop_set_value`.
+  - Audit logging and approval prompts sanitize `desktop_set_value` values to prevent secret leakage in logs, storing only value lengths with unique request nonces.
+- **Native coexistence test fixture and probe**:
+  - Added Windows test fixture (`helper/tests/fixtures/background-controls`) and integration suite (`packages/desktop/test/background-native.integration.test.ts`) proving simultaneous coexistence with an active foreground sentinel window without cursor movement or keystroke leakage.
+  - Added `scripts/desktop-background-probe.ps1` and research report `docs/research/2026-09-18-quotashift-background-compatibility.md` detailing QuotaShift tray minimization findings and WebView2 accessibility requirements.
+
+### Added - Floating-IP OAuth connection continuity & runner lease persistence
+
+- **Floating-IP OAuth runner continuity**:
+  AI web providers (such as OpenAI ChatGPT and Anthropic Claude) dispatch requests across transient cloud runner VMs with dynamic egress IPs. Aevra now decouples connection authority from transient IP addresses: any runner VM presenting a valid OAuth bearer token retains its explicit connection-level workspace authority without operator re-admission.
+- **Durable multi-workspace connection grants**:
+  OAuth connections can now hold multiple durable workspace grants concurrently (`oauth_connection_workspace_grants`). Grants can be added or revoked offline from the Admin UI even when no active sessions are attached. Revoking one workspace grant preserves sibling grants.
+- **Atomic approval execution claims**:
+  Pending approvals record the owning connection subject (`connectionSubject`). Resuming an approved ticket (`approval_wait`) claims execution atomically in the database (`claimExecution`), guaranteeing at-most-one execution across concurrent runner VMs. Unauthorized callers attempting resumption receive `APPROVAL_UNAUTHORIZED` without modifying the ticket's state, preventing ticket poisoning attacks.
+- **Separated rate-limiting boundaries**:
+  Token bucket rate limiters are partitioned into three independent pools:
+  1. Shared connection limiter (120 capacity, 20/s refill) for authenticated OAuth requests across rotating runner IPs.
+  2. Independent invalid-bearer limiter (30 burst, 1/s refill) returning `429` with `Retry-After` on unauthenticated or malformed tokens, protecting valid connections and connectors from quota exhaustion.
+  3. Static connector rate limiter for URL-based and Bearer-token connector credentials.
+- **Bounded runner origin visibility and immutable provenance**:
+  Incoming requests capture immutable execution provenance (`remoteIp`, `userAgent`, `requestId`) in audit records. The Admin UI renders the last 10 unique runner IPs per connection subject with relative timestamps from `oauth_connection_origins` (pruned after 24 hours).
+- **Interactive delete confirmations across Web UI**:
+  Standardized `[x]` danger-button controls with interactive confirmation dialogs for all removal actions across the Web UI, including revoking workspace grants and disconnecting connectors.
+
+### Added - Web UI, data management, and settings enhancements
+
+- **Universal switch toggles across Web UI**:
+  Replaced all legacy HTML checkboxes with accessible `<Switch>` button toggles across the application:
+  - Active Connections table in the Dashboard (`Select` column).
+  - Data export and import tables (`DataPage`).
+  - Request Approval modal (`Remember decision for this workspace`).
+  - Desktop App Picker table (`DesktopAppPicker`).
+  - Desktop Control settings toggles (capability permissions and unattributed window access in `DesktopControlSettings`).
+- **Responsive edge-to-edge Request Activity timeline**:
+  Updated `RequestActivityChart` to dynamically observe viewport container width using `ResizeObserver` instead of fixed pixel widths, ensuring the activity chart spans full width on high-resolution displays.
+- **Anchor-aligned dropdown positioning**:
+  Fixed upward-opening positioning calculations in `Dropdown` and `SearchableMultiSelect` by anchoring to the trigger rectangle's bottom coordinate, eliminating floating or detached menus when selecting workspaces or filtering lists.
+- **Browser extension detection and status monitoring**:
+  - Content script presence detection (`content-detect.ts`) verifies whether the Aevra extension is actively loaded in the browser.
+  - Live top-bar badge chip displays real-time connection status with a green indicator dot when connected and red when disconnected.
+  - Added version mismatch detection and warning banner in `BrowserSetupModal` prompting operators to update their extension when versions diverge.
+  - Multi-size branding icon assets generated in 16x16, 32x32, 48x48, and 128x128 formats for the extension package.
+
+- **Data backup and import tab (`/api/data/export` & `/api/data/import`)**:
+  A new top-level **Data** tab in the Web UI allows operators to download a complete
+  JSON backup of their Aevra configuration (workspaces, external mounts, permission rules,
+  command-family overrides, network rules, environment profiles, secret references,
+  lifecycle hooks, MCP upstream servers, desktop policy, and custom apps).
+  Machine-specific environment variables and device-bound secrets are intentionally
+  excluded to ensure safe portability. Backups can be uploaded, previewed with itemized
+  entity counts, and restored directly through the UI.
+- **Desktop control custom apps management**:
+  The `Apps computer use can touch` setting now uses a terminal console-style segmented
+  control (`Allow all apps`, `Only these apps`, `Deny all apps`). Under allowlist mode,
+  detected applications are presented in a compact, searchable, filterable, sortable,
+  and paginated table. Operators can add custom applications with explicit executable file
+  paths and optional version tags via `AddCustomAppModal`, and edit or delete them
+  directly in the table.
+- **Console-styled segmented radio controls**:
+  Standardized terminal aesthetic radio buttons (`.console-radio-group` / `.console-radio-option`)
+  for policy selectors, including `Local pages (localhost and 127.0.0.1)`, `Apps computer use can touch`,
+  and `YOLO policy`.
+- **YOLO policy section UX and relocation**:
+  The YOLO policy setting has been redesigned into a segmented console radio control
+  (`Workspace YOLO`, `Unrestricted YOLO`, `YOLO disabled`) with immediate persistence,
+  and relocated to sit directly after `Secret references` for clearer administrative flow.
+- **Standardized `[x]` delete controls and mandatory confirmation dialogs**:
+  Every delete, remove, and revoke button across the entire Web UI now renders with the
+  compact `[x]` label with semantic `danger-button` styling and explicit `aria-label`/`title`
+  tags for accessibility. All deletions (workspaces, mounts, secret references, lifecycle hooks,
+  network rules, command-family overrides, MCP upstream servers, permission rules, remote
+  sessions, local admin sessions, custom desktop apps, and managed processes) strictly
+  require confirmation via an interactive modal before executing.
+- **Workspaces SVG action icons**:
+  Workspaces table action buttons now use crisp terminal-style SVG icons for copying paths
+  and viewing details.
+- **UI performance and selection enhancements**:
+  Memoized the `Show file paths to the AI` control to eliminate cascade re-renders across
+  surrounding settings panels, routed success notifications through toast messages with the
+  `// ` prefix, and preserved native text selection throughout table and settings copy.
 
 ### Added - desktop control (Windows)
 
@@ -160,30 +255,10 @@ install` rejects absolute paths, `..` and `.` segments, backslashes, and
 
 ### Fixed
 
-- **Browser operations are serialized per session.** A tab is shared mutable
-  state with no transactions, so two concurrent `browser_act_many` batches
-  interleaved their clicks. Connect, disconnect, and status stay outside the
-  queue so the kill switch still reaches a wedged session.
-- **Vision-mode coordinates match the screenshot.** Boxes were reported in CSS
-  pixels while the screenshot was captured in device pixels, so every coordinate
-  click landed short on a HiDPI display. Snapshots now report
-  `devicePixelRatio` and put boxes and `{x, y}` in the screenshot's own space.
-- **Console logs work on the extension transport.** The buffer existed but
-  nothing filled it, so `browser_logs {kind:'console'}` always returned empty.
 - `RequestActivityChart` is split into geometry, viewport, and rendering, taking
   it from 411 lines to 175.
 
-All notable changes to this project are documented here.
-
 ## [1.0.4] - 2026-08-30
-
-- Restored missing runtime modules and fixed strict typecheck/build failures.
-- Hardened OAuth client-IP handling, DLP path detection, and approval-modal keyboard focus.
-- Added YOLO policy and onboarding/settings UI integrations with regression coverage.
-
-All notable changes to this project are documented here.
-
-## [Unreleased]
 
 ### Added
 
@@ -197,6 +272,11 @@ All notable changes to this project are documented here.
   confirmed in the UI before it applies, and has to be selected
   deliberately; it still honors `policy.critical.alwaysConfirm`. A YOLO session also
   no longer stops for a per-command approval after clearing the capability gate.
+- **YOLO policy and onboarding/settings UI integrations**: added full web UI controls
+  and regression test coverage for YOLO policy selection and onboarding setup.
+- **`git_add` tool**: stages files in the workspace index (`paths` list or `all: true` for `git add -A`). Classified LOW risk with no approval gate, matching the other read-adjacent Git tools.
+- **`git_diff` short mode**: optional `short: true` input returns a compact `--stat` summary instead of the full patch text.
+- **OAuth secret-persistence regression tests**: assert that access tokens, refresh tokens, PKCE verifiers, and authorization codes never reach durable storage in plaintext, that refresh rotation preserves the invariant, and that tokens stay verifiable from their stored hashes.
 
 ### Security
 
@@ -212,7 +292,6 @@ Remediates an internal security audit. Each item carries a regression test in th
 - **Escape detection is linear**: the workspace-escape patterns no longer pair two
   tokens across a scan-to-end-of-line, which backtracked quadratically on a
   caller-controlled script body.
-
 - **Slash-bearing secrets are redacted**: the generic entropy rule skipped every
   candidate containing `/`, so a base64 payload with a `/` in it passed through
   unredacted. Slash-bearing runs are now judged per segment - a long or
@@ -225,6 +304,8 @@ Remediates an internal security audit. Each item carries a regression test in th
   `cf-connecting-ip`, `true-client-ip`, and `x-real-ip`, and `remoteIp` ignores them
   unless a caller explicitly opts in. `IpRateLimiter` additionally bounds its bucket
   and failure maps with LRU eviction so key cycling cannot exhaust memory.
+- **Hardened OAuth client-IP handling, DLP path detection, and approval-modal keyboard focus**:
+  prevented IP spoofing, closed DLP evasion paths, and kept keyboard focus trapped within approval dialogs.
 - **Shell approvals are one-time only**: the permission matcher `shell:<shell>:*`
   excludes the script body, so approving a single shell command with a persistent
   scope authorized every future script. Persistent scopes are now refused for
@@ -268,7 +349,6 @@ Remediates an internal security audit. Each item carries a regression test in th
   path set `Cache-Control: no-store`, and a one-time startup warning recommends the
   `Authorization: Bearer` form. Aevra itself never recorded the request path, so no
   audit or activity redaction was required.
-
 - **Workspace read output carries provenance**: `file_read`, `file_search`, and
   `search` results are tagged `untrusted: true` with a notice stating the content is
   data rather than instructions. The marker travels alongside the content instead of
@@ -291,18 +371,13 @@ Remediates an internal security audit. Each item carries a regression test in th
   `search` results carry `untrusted: true` and a notice, but a model that ignores the
   marker can still act on injected text. Approvals remain the backstop.
 
-### Added
-
-- **`git_add` tool**: stages files in the workspace index (`paths` list or `all: true` for `git add -A`). Classified LOW risk with no approval gate, matching the other read-adjacent Git tools.
-- **`git_diff` short mode**: optional `short: true` input returns a compact `--stat` summary instead of the full patch text.
-- **OAuth secret-persistence regression tests**: assert that access tokens, refresh tokens, PKCE verifiers, and authorization codes never reach durable storage in plaintext, that refresh rotation preserves the invariant, and that tokens stay verifiable from their stored hashes.
-
 ### Changed
 
 - **Remembered workspace grants restore lazily**: creating or resuming a session now records that a restore is owed instead of re-admitting every remembered grant up front; the leases are admitted when the session first reads them, at most once per session. A session that never touches a workspace no longer writes lease rows, and concurrent first use cannot admit a lease twice. Reconnect re-arms the restore, preserving repair of leases that expired while the connection was away.
 
 ### Fixed
 
+- **Restored missing runtime modules and fixed strict typecheck/build failures**.
 - **MCP structured-content schema violations**: seven tools could return a shape that failed their own declared (or default) output schema, surfacing as `Structured content does not match the tool's output schema` in strict MCP clients that validate `structuredContent`:
   - `file_list` and `file_search` returned bare arrays instead of an object; now `{ entries: [...] }` and `{ hits: [...] }` respectively, each with a matching output schema.
   - `workspace_list` returned a bare array; now `{ workspaces: [...] }` with a matching output schema.
