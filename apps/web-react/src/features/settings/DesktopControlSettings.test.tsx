@@ -108,6 +108,16 @@ describe('DesktopControlSettings', () => {
     );
   });
 
+  it('adds an app by pressing Enter in manual input', async () => {
+    const { save } = mount({ mode: 'allowlist', applications: [] });
+    const field = await screen.findByLabelText(/add an app by program file name/i);
+    fireEvent.change(field, { target: { value: 'Code.exe' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(expect.objectContaining({ applications: ['Code.exe'] })),
+    );
+  });
+
   it('adding an app that is already allowed does not duplicate it', async () => {
     const { save } = mount({ mode: 'allowlist', applications: ['np.exe'] });
     const field = await screen.findByLabelText(/add an app by program file name/i);
@@ -270,5 +280,66 @@ describe('DesktopControlSettings', () => {
 
     const stored = JSON.parse(window.localStorage.getItem('aevra.custom_desktop_apps') || '[]');
     expect(stored.find((a: any) => a.exeBasename === 'ToDelete.exe')).toBeUndefined();
+  });
+
+  it('cancelling custom app delete retains the app', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      'aevra.custom_desktop_apps',
+      JSON.stringify([
+        {
+          displayName: 'To Keep',
+          version: null,
+          executablePath: 'C:\\Tools\\ToKeep.exe',
+          exeBasename: 'ToKeep.exe',
+          isCustom: true,
+        },
+      ]),
+    );
+
+    const { save } = mount({ mode: 'allowlist', applications: ['ToKeep.exe'] });
+    const deleteBtn = await screen.findByRole('button', { name: /delete to keep/i });
+    await user.click(deleteBtn);
+    const deleteDialog = screen.getByRole('dialog', { name: 'Delete custom app' });
+    await user.click(within(deleteDialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(save).not.toHaveBeenCalled();
+    const stored = JSON.parse(window.localStorage.getItem('aevra.custom_desktop_apps') || '[]');
+    expect(stored.find((a: any) => a.exeBasename === 'ToKeep.exe')).toBeDefined();
+  });
+
+  it('displays error when save fails', async () => {
+    const save = vi.fn().mockRejectedValue(new Error('Failed to update policy'));
+    render(
+      <DialogProvider>
+        <DesktopControlSettings
+          load={() => Promise.resolve(policy)}
+          save={save}
+          loadApps={() => Promise.resolve(apps)}
+        />
+      </DialogProvider>,
+    );
+    const onlyThese = await screen.findByRole('radio', { name: /only these apps/i });
+    fireEvent.click(onlyThese);
+    expect(await screen.findByText('Failed to update policy')).toBeInTheDocument();
+  });
+
+  it('displays error when initial load fails', async () => {
+    render(
+      <DialogProvider>
+        <DesktopControlSettings
+          load={() => Promise.reject(new Error('Cannot load policy'))}
+          save={vi.fn()}
+          loadApps={() => Promise.resolve([])}
+        />
+      </DialogProvider>,
+    );
+    expect(await screen.findByText('Cannot load policy')).toBeInTheDocument();
+  });
+
+  it('gracefully handles malformed JSON in custom apps storage', () => {
+    window.localStorage.setItem('aevra.custom_desktop_apps', 'invalid-json{');
+    mount({ mode: 'allowlist', applications: [] });
+    expect(screen.getByRole('heading', { name: 'Desktop control' })).toBeInTheDocument();
   });
 });

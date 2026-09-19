@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   completeOnboarding,
   loadDashboard,
@@ -13,6 +13,9 @@ vi.mock('../../services/api-client', () => ({
 }));
 
 describe('dashboard-service', () => {
+  beforeEach(() => {
+    requestJson.mockReset();
+  });
   it('loads runtime onboarding exposure and workspaces with the abort signal', async () => {
     const controller = new AbortController();
     requestJson.mockImplementation(async (path: string) => {

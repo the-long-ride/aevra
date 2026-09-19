@@ -7,7 +7,9 @@ vi.mock('../../services/api-client', () => ({
   requestJson: (path: string, init?: RequestInit) => requestJson(path, init),
 }));
 
-beforeEach(() => requestJson.mockReset().mockResolvedValue(undefined));
+beforeEach(() => {
+  requestJson.mockReset().mockResolvedValue(undefined);
+});
 
 test('settings loading uses empty options without a signal and forwards one when provided', async () => {
   await loadSettings();

@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { DialogProvider } from '../../components/Dialog';
 import { installApiFixtures } from '../../test/api-fixtures';
+import { CommandPolicySettings } from './CommandPolicySettings';
+import { NetworkPolicySettings } from './NetworkPolicySettings';
 import { SettingsPage } from './SettingsPage';
 
 function mutationCall(
@@ -114,4 +116,130 @@ test('advanced execution settings are collapsed and keep awake uses compact cont
   expect(
     within(keepAwake).getByRole('button', { name: 'Prevent system sleep' }),
   ).toBeInTheDocument();
+});
+
+test('handles command-family override submission, error, and removal', async () => {
+  const user = userEvent.setup();
+  const onChanged = vi.fn().mockResolvedValue(undefined);
+  const fetchMock = installApiFixtures({
+    mutationResponses: {
+      'PATCH /api/policy/command-families': new Response(
+        JSON.stringify({ error: { message: 'Invalid family pattern' } }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      ),
+    },
+  });
+
+  render(
+    <DialogProvider>
+      <CommandPolicySettings families={{ 'git:status': 'READ_ONLY' }} onChanged={onChanged} />
+    </DialogProvider>,
+  );
+
+  // 1. Submit error
+  await user.click(screen.getByRole('button', { name: 'Add override' }));
+  let dialog = screen.getByRole('dialog', { name: 'Add command-family override' });
+  await user.type(within(dialog).getByLabelText('Family'), 'bad:cmd');
+  await user.click(within(dialog).getByRole('button', { name: 'Set override' }));
+  expect(await within(dialog).findByText('Invalid family pattern')).toBeInTheDocument();
+
+  // 2. Submit success
+  installApiFixtures({
+    mutationResponses: {
+      'PATCH /api/policy/command-families': {},
+    },
+  });
+
+  await user.click(within(dialog).getByRole('button', { name: 'Set override' }));
+  await waitFor(() => {
+    expect(
+      screen.queryByRole('dialog', { name: 'Add command-family override' }),
+    ).not.toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  // 3. Remove override (Cancel then Confirm)
+  const removeBtn = screen.getByRole('button', { name: 'Remove' });
+  await user.click(removeBtn);
+
+  let confirmDialog = screen.getByRole('dialog', { name: 'Remove command-family override' });
+  await user.click(within(confirmDialog).getByRole('button', { name: 'Cancel' }));
+
+  await user.click(removeBtn);
+  confirmDialog = screen.getByRole('dialog', { name: 'Remove command-family override' });
+  await user.click(within(confirmDialog).getByRole('button', { name: 'Remove' }));
+
+  await waitFor(() => {
+    expect(onChanged).toHaveBeenCalledTimes(2);
+  });
+});
+
+test('handles network rule submission, error, and removal', async () => {
+  const user = userEvent.setup();
+  const onChanged = vi.fn().mockResolvedValue(undefined);
+  installApiFixtures({
+    mutationResponses: {
+      'POST /api/policy/network-rules': new Response(
+        JSON.stringify({ error: { message: 'Rule host invalid' } }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      ),
+      'DELETE /api/policy/network-rules/network-1': {},
+    },
+  });
+
+  render(
+    <DialogProvider>
+      <NetworkPolicySettings
+        rules={[
+          {
+            id: 'network-1',
+            effect: 'allow',
+            protocol: 'https',
+            host: 'api.example.com',
+            port: 443,
+          },
+        ]}
+        workspaces={[]}
+        onChanged={onChanged}
+      />
+    </DialogProvider>,
+  );
+
+  // 1. Submit error
+  await user.click(screen.getByRole('button', { name: 'Add rule' }));
+  let dialog = screen.getByRole('dialog', { name: 'Add network rule' });
+  await user.type(within(dialog).getByLabelText('Host'), 'invalid-host');
+
+  const submitBtn = within(dialog).getByRole('button', { name: 'Add rule' });
+  await user.click(submitBtn);
+  expect(await within(dialog).findByText('Rule host invalid')).toBeInTheDocument();
+
+  // 2. Submit success
+  installApiFixtures({
+    mutationResponses: {
+      'POST /api/policy/network-rules': {},
+      'DELETE /api/policy/network-rules/network-1': {},
+    },
+  });
+
+  await user.click(within(dialog).getByRole('button', { name: 'Add rule' }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog', { name: 'Add network rule' })).not.toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  // 3. Remove network rule (Cancel then Confirm)
+  const removeBtn = screen.getByRole('button', { name: 'Remove' });
+  await user.click(removeBtn);
+
+  let confirmDialog = screen.getByRole('dialog', { name: 'Remove network rule' });
+  await user.click(within(confirmDialog).getByRole('button', { name: 'Cancel' }));
+
+  await user.click(removeBtn);
+  confirmDialog = screen.getByRole('dialog', { name: 'Remove network rule' });
+  await user.click(within(confirmDialog).getByRole('button', { name: 'Remove' }));
+
+  await waitFor(() => {
+    expect(onChanged).toHaveBeenCalledTimes(2);
+  });
 });
