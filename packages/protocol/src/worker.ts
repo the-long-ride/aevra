@@ -15,7 +15,7 @@ import type {
   BrowserTransport,
 } from './browser.js';
 import { BROWSER_OPERATION_KINDS } from './browser.js';
-import type { DesktopPolicy } from './desktop.js';
+import type { BackgroundActionInput, DesktopPolicy } from './desktop.js';
 import { DESKTOP_OPERATION_KINDS } from './desktop.js';
 import type { McpUpstreamCall } from './mcp-upstream.js';
 import { MCP_UPSTREAM_OPERATION_KINDS } from './mcp-upstream.js';
@@ -124,13 +124,20 @@ export type WorkerOperation =
   | { kind: 'browser.act'; tabId?: string; actions: BrowserActionInput[]; stopOnError: boolean }
   | { kind: 'browser.logs'; tabId?: string; logKind: BrowserLogKind; limit: number; since?: string }
   | { kind: 'browser.disconnect'; epoch?: number; all?: boolean }
-  | { kind: 'browser.status'; epoch?: number }
+  | { kind: 'browser.status'; epoch?: number; extensionId?: string }
   | { kind: 'desktop.connect' }
   | { kind: 'desktop.status' }
   | { kind: 'desktop.disconnect' }
   | { kind: 'desktop.apps' }
   | { kind: 'desktop.windows' }
-  | { kind: 'desktop.describe'; windowId?: string; maxNodes: number; interactiveOnly: boolean }
+  | {
+      kind: 'desktop.describe';
+      windowId?: string;
+      maxNodes: number;
+      interactiveOnly: boolean;
+      mode?: 'foreground' | 'background';
+      policy?: DesktopPolicy;
+    }
   | { kind: 'desktop.capture'; windowId?: string }
   | {
       kind: 'desktop.act';
@@ -142,6 +149,16 @@ export type WorkerOperation =
       keys?: string;
       deltaY?: number;
       policy: DesktopPolicy;
+    }
+  | {
+      kind: 'desktop.backgroundAct';
+      action: BackgroundActionInput;
+      policy: DesktopPolicy;
+    }
+  | {
+      kind: 'desktop.releaseWindow';
+      windowId: string;
+      windowLeaseId: string;
     }
   | { kind: 'mcp.upstream.connect'; upstreamId: string; config: UpstreamTransportConfig }
   | { kind: 'mcp.upstream.disconnect'; upstreamId?: string }

@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aevra Browser Control</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #171515;
+        --surface-soft: #1e1b1b;
+        --surface-card: #292525;
+        --surface-strong: #353030;
+        --ink: #fdfcfc;
+        --ink-deep: #ffffff;
+        --body: #d5d1d1;
+        --mute: #aaa5a5;
+        --stone: #908b8b;
+        --ash: #747070;
+        --hairline: rgb(253 252 252 / 14%);
+        --hairline-strong: #817b7b;
+        --accent: #0a84ff;
+        --warning: #ff9f0a;
+        --danger: #ff453a;
+        --success: #32d74b;
+        --backdrop: rgb(0 0 0 / 72%);
+        --on-ink: #171515;
+        --mono:
+          'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          'Liberation Mono', 'Courier New', monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 340px;
+        min-height: 440px;
+        background: var(--canvas);
+      }
+
+      body {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        margin: 0;
+        padding: 16px;
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.5;
+        user-select: none;
+        overflow-x: hidden;
+      }
+
+      .header {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--hairline);
+        margin-bottom: 14px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .brand-title {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: -0.2px;
+        color: var(--ink);
+      }
+
+      .brand-sub {
+        font-size: 10px;
+        color: var(--mute);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .health-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 24px;
+        border: 1px solid var(--hairline-strong);
+        border-radius: 4px;
+        padding: 2px 7px;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--mute);
+      }
+
+      .health-chip i {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: var(--ash);
+      }
+
+      .health-chip[data-state='ok'] {
+        border-color: color-mix(in srgb, var(--success) 48%, transparent);
+        color: var(--success);
+      }
+      .health-chip[data-state='ok'] i {
+        background: var(--success);
+      }
+
+      .health-chip[data-state='pending'] {
+        border-color: color-mix(in srgb, var(--warning) 48%, transparent);
+        color: var(--warning);
+      }
+      .health-chip[data-state='pending'] i {
+        background: var(--warning);
+      }
+
+      .health-chip[data-state='off'] {
+        border-color: var(--hairline);
+        color: var(--mute);
+      }
+      .health-chip[data-state='off'] i {
+        background: var(--ash);
+      }
+
+      .main-content {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .unpaired-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 1px solid color-mix(in srgb, var(--warning) 48%, transparent);
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--warning) 10%, var(--canvas));
+        font-size: 11px;
+        color: var(--body);
+      }
+
+      .unpaired-card[hidden] {
+        display: none !important;
+      }
+
+      .primary-sm {
+        background: var(--ink);
+        color: var(--on-ink);
+        border: 1px solid var(--ink);
+        font: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 120ms ease;
+      }
+
+      .primary-sm:hover {
+        background: var(--ink-deep);
+      }
+
+      .setting-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px;
+        background: var(--surface-soft);
+        border: 1px solid var(--hairline);
+        border-radius: 4px;
+      }
+
+      .setting-info {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .setting-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      .setting-desc {
+        font-size: 11px;
+        color: var(--mute);
+      }
+
+      /* Switch component matching Aevra WebUI components.css */
+      .switch-control {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+
+      .switch-control > input[type='checkbox'] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .switch-track {
+        position: relative;
+        display: inline-flex;
+        flex: 0 0 auto;
+        width: 34px;
+        height: 20px;
+        align-items: center;
+        border: 1px solid var(--hairline-strong);
+        border-radius: 4px;
+        background: var(--surface-card);
+        transition:
+          border-color 120ms ease,
+          background-color 120ms ease;
+      }
+
+      .switch-thumb {
+        width: 12px;
+        height: 12px;
+        margin-left: 3px;
+        border-radius: 2px;
+        background: var(--mute);
+        transition:
+          transform 120ms ease,
+          background-color 120ms ease;
+      }
+
+      .switch-control > input[type='checkbox']:checked + .switch-track {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 16%, var(--canvas));
+      }
+
+      .switch-control > input[type='checkbox']:checked + .switch-track .switch-thumb {
+        transform: translateX(14px);
+        background: var(--accent);
+      }
+
+      .switch-control > input[type='checkbox']:focus-visible + .switch-track {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .field-group {
+        display: grid;
+        gap: 6px;
+      }
+
+      .field-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .field-group label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--body);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .save-indicator {
+        font-size: 10px;
+        color: var(--success);
+        opacity: 0;
+        transition: opacity 160ms ease;
+      }
+
+      .save-indicator.visible {
+        opacity: 1;
+      }
+
+      .input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+      input[type='text'],
+      input[type='number'] {
+        width: 100%;
+        min-height: 34px;
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 10px;
+        background: var(--surface-soft);
+        border: 1px solid var(--hairline);
+        border-radius: 4px;
+        color: var(--ink);
+        transition:
+          border-color 120ms ease,
+          background-color 120ms ease;
+      }
+
+      input[type='text']:hover,
+      input[type='number']:hover {
+        border-color: var(--hairline-strong);
+      }
+
+      input[type='text']:focus,
+      input[type='number']:focus {
+        border-color: var(--accent);
+        background: var(--canvas);
+        outline: none;
+      }
+
+      input::placeholder {
+        color: var(--ash);
+      }
+
+      .field-hint {
+        font-size: 11px;
+        color: var(--mute);
+        line-height: 1.4;
+      }
+
+      .resources-card {
+        padding: 10px 12px;
+        background: var(--surface-soft);
+        border: 1px solid var(--hairline);
+        border-radius: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .resources-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .resources-title {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--body);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .version-badge {
+        font-size: 10px;
+        color: var(--mute);
+        background: var(--surface-card);
+        border: 1px solid var(--hairline);
+        border-radius: 3px;
+        padding: 1px 5px;
+      }
+
+      .resources-links {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 5px;
+      }
+
+      .resource-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        padding: 6px 2px;
+        background: var(--surface-card);
+        border: 1px solid var(--hairline);
+        border-radius: 4px;
+        color: var(--body);
+        text-decoration: none;
+        font-size: 10px;
+        white-space: nowrap;
+        transition:
+          background-color 120ms ease,
+          border-color 120ms ease,
+          color 120ms ease;
+      }
+
+      .resource-link:hover {
+        background: var(--surface-strong);
+        border-color: var(--hairline-strong);
+        color: var(--ink);
+      }
+
+      .resource-link .link-arrow {
+        font-size: 9px;
+        color: var(--ash);
+        transition: color 120ms ease;
+      }
+
+      .resource-link:hover .link-arrow {
+        color: var(--ink);
+      }
+
+      .update-box {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-top: 4px;
+        border-top: 1px solid var(--hairline);
+      }
+
+      .update-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        padding: 6px 10px;
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--body);
+        background: var(--surface-card);
+        border: 1px solid var(--hairline-strong);
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          background-color 120ms ease,
+          color 120ms ease,
+          border-color 120ms ease;
+      }
+
+      .update-btn:hover:not(:disabled) {
+        background: var(--surface-strong);
+        color: var(--ink);
+        border-color: var(--ink);
+      }
+
+      .update-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .update-status {
+        font-size: 11px;
+        line-height: 1.4;
+        text-align: center;
+        padding: 4px 6px;
+        border-radius: 4px;
+        word-break: break-word;
+      }
+
+      .update-status[hidden] {
+        display: none !important;
+      }
+
+      .update-status.latest {
+        color: var(--success);
+        background: color-mix(in srgb, var(--success) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+      }
+
+      .update-status.available {
+        color: var(--warning);
+        background: color-mix(in srgb, var(--warning) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+      }
+
+      .update-status.available a {
+        color: var(--accent);
+        text-decoration: underline;
+        margin-left: 4px;
+        cursor: pointer;
+      }
+
+      .update-status.error {
+        color: var(--mute);
+        background: color-mix(in srgb, var(--ash) 10%, transparent);
+        border: 1px solid var(--hairline);
+      }
+
+      .update-status.error a {
+        color: var(--body);
+        text-decoration: underline;
+        margin-left: 4px;
+        cursor: pointer;
+      }
+
+      .footer {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding-top: 12px;
+        border-top: 1px solid var(--hairline);
+        font-size: 11px;
+        margin-top: auto;
+      }
+
+      .footer button {
+        background: none;
+        border: none;
+        padding: 0;
+        color: var(--mute);
+        font: inherit;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: underline;
+        text-decoration-color: var(--hairline-strong);
+        transition: color 120ms ease;
+      }
+
+      .footer button:hover {
+        color: var(--ink);
+      }
+
+      .pairing-tag {
+        color: var(--ash);
+        font-size: 10px;
+      }
+
+      /* Modal Dialog / Overlay: Takes full popup view cleanly */
+      .modal-backdrop {
+        position: absolute;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        background: var(--canvas);
+        overflow: hidden;
+      }
+
+      .modal-backdrop[hidden] {
+        display: none !important;
+      }
+
+      .modal {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        background: var(--canvas);
+      }
+
+      .modal-head {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--hairline);
+        background: var(--surface-soft);
+      }
+
+      .modal-head h3 {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--ink);
+        letter-spacing: -0.2px;
+        text-transform: uppercase;
+      }
+
+      .close-btn {
+        background: none;
+        border: 1px solid transparent;
+        color: var(--mute);
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition:
+          color 120ms ease,
+          background 120ms ease;
+      }
+
+      .close-btn:hover {
+        color: var(--ink);
+        background: var(--surface-card);
+      }
+
+      #pair-form {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .modal-body {
+        flex: 1 1 auto;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow-y: auto;
+      }
+
+      .hint-card {
+        padding: 10px 12px;
+        background: var(--surface-soft);
+        border: 1px solid var(--hairline);
+        border-radius: 4px;
+        display: grid;
+        gap: 4px;
+      }
+
+      .hint-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      .hint-body {
+        font-size: 11px;
+        color: var(--body);
+        line-height: 1.4;
+      }
+
+      .hint-sub {
+        font-size: 10px;
+        color: var(--mute);
+        line-height: 1.3;
+      }
+
+      .code-input {
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        font-weight: 600;
+        text-align: center;
+      }
+
+      .port-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .port-hint {
+        font-size: 10px;
+        color: var(--mute);
+      }
+
+      .pair-status-msg {
+        font-size: 11px;
+        line-height: 1.4;
+        min-height: 16px;
+        word-break: break-word;
+      }
+
+      .pair-status-msg.error {
+        color: var(--danger);
+      }
+
+      .pair-status-msg.success {
+        color: var(--success);
+      }
+
+      .pair-status-msg.pending {
+        color: var(--warning);
+      }
+
+      .modal-foot {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--hairline);
+        background: var(--surface-soft);
+      }
+
+      .modal-foot button {
+        min-height: 32px;
+        padding: 5px 14px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          background 120ms ease,
+          border-color 120ms ease;
+      }
+
+      .modal-foot button.secondary {
+        background: var(--canvas);
+        color: var(--ink);
+        border: 1px solid var(--hairline-strong);
+      }
+
+      .modal-foot button.secondary:hover:not(:disabled) {
+        background: var(--surface-card);
+        border-color: var(--ink);
+      }
+
+      .modal-foot button.primary {
+        background: var(--ink);
+        color: var(--on-ink);
+        border: 1px solid var(--ink);
+      }
+
+      .modal-foot button.primary:hover:not(:disabled) {
+        background: var(--ink-deep);
+        border-color: var(--ink-deep);
+      }
+
+      .modal-foot button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="brand">
+        <div>
+          <div class="brand-title">// aevra</div>
+          <div class="brand-sub">Browser Profile</div>
+        </div>
+      </div>
+      <div id="status-chip" class="health-chip" data-state="off">
+        <i></i>
+        <span id="status-text">Disconnected</span>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div id="unpaired-banner" class="unpaired-card" hidden>
+        <span>Not paired with Aevra yet.</span>
+        <button type="button" id="banner-pair-btn" class="primary-sm">Pair now</button>
+      </div>
+
+      <div class="setting-card">
+        <div class="setting-info">
+          <span class="setting-title">Aevra Connection</span>
+          <span class="setting-desc" id="connection-desc">Connection paused</span>
+        </div>
+        <label
+          class="switch-control"
+          for="connection-toggle"
+          aria-label="Toggle connection to Aevra"
+        >
+          <input type="checkbox" id="connection-toggle" checked />
+          <span class="switch-track">
+            <span class="switch-thumb"></span>
+          </span>
+        </label>
+      </div>
+
+      <div class="field-group">
+        <div class="field-header">
+          <label for="profile-name">Profile Name</label>
+          <span id="save-status" class="save-indicator">Saved</span>
+        </div>
+        <div class="input-wrapper">
+          <input
+            type="text"
+            id="profile-name"
+            placeholder="e.g. Work, Personal, Profile 1"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="64"
+          />
+        </div>
+        <span class="field-hint" id="profile-hint"
+          >Name of this browser profile holding the extension</span
+        >
+      </div>
+
+      <div class="resources-card">
+        <div class="resources-header">
+          <span class="resources-title">Resources &amp; Updates</span>
+          <span id="extension-version" class="version-badge">v0.1.0</span>
+        </div>
+        <div class="resources-links">
+          <a
+            href="https://www.npmjs.com/package/@the-long-ride/aevra"
+            target="_blank"
+            rel="noreferrer"
+            class="resource-link"
+            id="link-npm"
+            title="Aevra on npm"
+          >
+            <span>npm</span>
+            <span class="link-arrow">↗</span>
+          </a>
+          <a
+            href="https://github.com/the-long-ride/aevra"
+            target="_blank"
+            rel="noreferrer"
+            class="resource-link"
+            id="link-repo"
+            title="Aevra on GitHub"
+          >
+            <span>GitHub</span>
+            <span class="link-arrow">↗</span>
+          </a>
+          <a
+            href="https://github.com/the-long-ride/aevra/releases"
+            target="_blank"
+            rel="noreferrer"
+            class="resource-link"
+            id="link-releases"
+            title="GitHub Releases"
+          >
+            <span>Releases</span>
+            <span class="link-arrow">↗</span>
+          </a>
+          <a
+            href="https://github.com/the-long-ride/aevra/blob/main/CHANGELOG.md"
+            target="_blank"
+            rel="noreferrer"
+            class="resource-link"
+            id="link-changelog"
+            title="Project Changelog"
+          >
+            <span>Changelog</span>
+            <span class="link-arrow">↗</span>
+          </a>
+        </div>
+        <div class="update-box">
+          <button type="button" id="check-update-btn" class="update-btn">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+            </svg>
+            <span id="check-update-text">Check for update</span>
+          </button>
+          <div id="update-status" class="update-status" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button type="button" id="open-pair-modal">Pair with Aevra</button>
+      <span id="pairing-info" class="pairing-tag"></span>
+    </div>
+
+    <!-- Pair with Aevra Modal Overlay -->
+    <div id="pair-modal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-labelledby="pair-modal-title" aria-modal="true">
+        <div class="modal-head">
+          <h3 id="pair-modal-title">Pair with Aevra</h3>
+          <button type="button" id="pair-modal-close" class="close-btn" aria-label="Close dialog">
+            ×
+          </button>
+        </div>
+        <form id="pair-form">
+          <div class="modal-body">
+            <div class="hint-card">
+              <div class="hint-header">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>Pairing Instructions</span>
+              </div>
+              <p class="hint-body">
+                Open <strong>Settings → Browser control</strong> in the Aevra Web UI and select
+                <strong>Pair extension</strong>.
+              </p>
+              <span class="hint-sub"
+                >Note: CLI does not mint codes (Web UI establishes browser TLS trust).</span
+              >
+            </div>
+
+            <div class="field-group">
+              <label for="pair-code">Pairing Code</label>
+              <div class="input-wrapper">
+                <input
+                  type="text"
+                  id="pair-code"
+                  name="code"
+                  maxlength="8"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="e.g. ABC12345"
+                  class="code-input"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="field-group">
+              <div class="port-header">
+                <label for="pair-port">Admin Port</label>
+                <span class="port-hint">Default: 47831</span>
+              </div>
+              <div class="input-wrapper">
+                <input type="number" id="pair-port" name="port" min="1" max="65535" value="47831" />
+              </div>
+            </div>
+
+            <p id="pair-status" class="pair-status-msg" role="status"></p>
+          </div>
+
+          <div class="modal-foot">
+            <button type="button" id="pair-modal-cancel" class="secondary">Cancel</button>
+            <button type="submit" id="pair-modal-submit" class="primary">Pair</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

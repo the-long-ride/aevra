@@ -47,9 +47,16 @@ class BrowserRuntime {
    * listener was built with, so the listener is dropped and rebuilt.
    */
   async setExtensionId(extensionId: string): Promise<void> {
-    if (this.pairedExtensionId === extensionId) return;
-    this.pairedExtensionId = extensionId;
+    if (this.pairedExtensionId === extensionId && this.server) return;
+    this.pairedExtensionId = extensionId || null;
     await this.stopServer();
+    if (this.pairedExtensionId && this.config && !this.config.createDriver) {
+      try {
+        await this.extensionServer(this.config);
+      } catch {
+        // Port may be unavailable or bound in constrained test environments
+      }
+    }
   }
 
   private required(): BrowserRuntimeConfig {
