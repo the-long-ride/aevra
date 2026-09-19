@@ -96,6 +96,7 @@ invalidates every issued token and drops live sockets immediately.
 ## Desktop control and background automation
 
 Behind `desktop.control`, `desktop_*` tools drive local OS windows and controls through the native platform helper (Windows UIA). Desktop automation supports two operational models:
+
 1. **Foreground input injection:** `desktop_click`, `desktop_type`, `desktop_key`, `desktop_scroll` simulate direct user input into the focused window.
 2. **Background semantic automation:** `desktop_describe(mode: 'background')`, `desktop_invoke`, `desktop_set_value`, `desktop_select`, `desktop_toggle`, and `desktop_release_window` perform direct control pattern operations on target windows without stealing keyboard focus or moving the human operator's mouse.
 

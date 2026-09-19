@@ -9,3 +9,9 @@ coverage
 current-work.md
 current-work.archive.md
 .coverage-v8
+
+helper/tests/fixtures
+**/bin/**
+**/obj/**
+*.deps.json
+*.runtimeconfig.json

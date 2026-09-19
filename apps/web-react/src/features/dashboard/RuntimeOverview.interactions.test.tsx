@@ -126,6 +126,8 @@ test('request activity displays request count scale on the right side Y-axis', (
 
   // Main SVG timeline only contains time labels, not request count numbers on the left
   const mainSvg = chart.querySelector('.runtime-request-chart-viewport svg');
-  const mainSvgLabels = Array.from(mainSvg?.querySelectorAll('text') ?? []).map((t) => t.textContent);
+  const mainSvgLabels = Array.from(mainSvg?.querySelectorAll('text') ?? []).map(
+    (t) => t.textContent,
+  );
   expect(mainSvgLabels).not.toContain('0');
 });

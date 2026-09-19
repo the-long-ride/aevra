@@ -145,7 +145,11 @@ export function evaluateWindowGate(
 
   if (attribution === 'unattributable') {
     if (direction === 'background') {
-      return { allowed: false, reason: 'window identity is unavailable for background target', attribution };
+      return {
+        allowed: false,
+        reason: 'window identity is unavailable for background target',
+        attribution,
+      };
     }
     return policy.unattributedInput === 'allow'
       ? { allowed: true, reason: 'unattributedInput is set to allow', attribution }

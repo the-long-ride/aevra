@@ -3,6 +3,7 @@ import { SkillsService } from '../skills/skills-service.js';
 import { ManifestService } from '../workspaces/manifest-service.js';
 import { ApprovalService } from '../approvals/approval-service.js';
 import type { CoreConfig } from '../config.js';
+import { AdminServer } from './server.js';
 
 export function createRuntimeApprovalService(
   approvalRepo: any,
@@ -115,5 +116,34 @@ export function createCoreToolService(
     browserPolicy: deps.browserPolicy,
     manifests: new ManifestService(workspaces),
     upstreams: deps.upstreams ?? deps.mcpUpstreams,
+  });
+}
+
+export function createRuntimeAdminServer(
+  config: CoreConfig,
+  opts: {
+    bootstrap: any;
+    credentialVerifier: any;
+    controlSecret: string;
+    staticDir: string;
+    localTls?: any;
+    trustedOrigins: () => string[];
+    gatewayTrustSecret: string;
+    localHttpGatewayEnabled: () => boolean;
+    api: any;
+  },
+  healthResolver: () => any,
+): AdminServer {
+  return new AdminServer(config.adminHost, config.adminPort, healthResolver, {
+    bootstrap: opts.bootstrap,
+    credentialVerifier: opts.credentialVerifier,
+    controlSecret: opts.controlSecret,
+    staticDir: opts.staticDir,
+    ...(opts.localTls ? { tls: opts.localTls } : {}),
+    advertisedHost: 'localhost',
+    trustedOrigins: opts.trustedOrigins,
+    gatewayTrustSecret: opts.gatewayTrustSecret,
+    localHttpGatewayEnabled: opts.localHttpGatewayEnabled,
+    api: opts.api,
   });
 }

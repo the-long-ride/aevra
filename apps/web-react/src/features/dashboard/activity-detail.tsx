@@ -65,3 +65,26 @@ export function showMcpActivityDetails(
     ),
   });
 }
+
+export interface TooltipState {
+  x: number;
+  y: number;
+  timestamp: number;
+  active: number;
+  pinned: boolean;
+}
+
+export function getAnchorCoords(target: SVGElement, clientX?: number, clientY?: number) {
+  const rect =
+    typeof target.getBoundingClientRect === 'function' ? target.getBoundingClientRect() : null;
+  if (rect && (rect.width > 0 || rect.left > 0 || rect.top > 0)) {
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top),
+    };
+  }
+  return {
+    x: clientX ?? 0,
+    y: clientY ?? 0,
+  };
+}

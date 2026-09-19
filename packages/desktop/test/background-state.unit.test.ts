@@ -19,10 +19,13 @@ test('deterministic clock tests for 60-second expiry, quota rejection, renewal, 
   assert.equal(leaseA.windowLeaseId, 'lease-1');
 
   // Owner B tries to acquire win1 -> DESKTOP_WINDOW_BUSY
-  assert.throws(() => state.acquire(ownerB, win1, 1), (err: any) => {
-    assert.equal(err.code, 'DESKTOP_WINDOW_BUSY');
-    return true;
-  });
+  assert.throws(
+    () => state.acquire(ownerB, win1, 1),
+    (err: any) => {
+      assert.equal(err.code, 'DESKTOP_WINDOW_BUSY');
+      return true;
+    },
+  );
 
   // Owner A re-acquires win1 -> renews lease
   const renewedA = state.acquire(ownerA, win1, 1);
@@ -63,21 +66,12 @@ test('quota limits: max 8 leases per owner and 32 host-wide', () => {
   const owner: DesktopOwner = { sessionId: 'ses-1', workspaceId: 'ws-1' };
 
   for (let i = 0; i < 8; i++) {
-    state.acquire(
-      owner,
-      { windowId: `win-${i}`, processId: 100 + i, processStartedAt: 'time' },
-      1,
-    );
+    state.acquire(owner, { windowId: `win-${i}`, processId: 100 + i, processStartedAt: 'time' }, 1);
   }
 
   // 9th lease by same owner fails quota
   assert.throws(
-    () =>
-      state.acquire(
-        owner,
-        { windowId: 'win-8', processId: 108, processStartedAt: 'time' },
-        1,
-      ),
+    () => state.acquire(owner, { windowId: 'win-8', processId: 108, processStartedAt: 'time' }, 1),
     /DESKTOP_WINDOW_BUSY/,
   );
 });
@@ -93,9 +87,7 @@ test('bind and resolve nodes, invalidateSnapshot, and epoch mismatch', () => {
   const win = { windowId: 'win-1', processId: 100, processStartedAt: 'time' };
 
   const { windowLeaseId } = state.acquire(owner, win, 1);
-  state.bind(owner, windowLeaseId, 'snap-1', [
-    { ref: 'ref-btn', handle: 'handle-btn-1' },
-  ], 1);
+  state.bind(owner, windowLeaseId, 'snap-1', [{ ref: 'ref-btn', handle: 'handle-btn-1' }], 1);
 
   // Resolve succeeds with valid target
   const res = state.resolve(

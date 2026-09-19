@@ -37,13 +37,22 @@ export async function dispatchDesktopOperation(
     if (operation.kind === 'desktop.describe') {
       if (operation.mode === 'background') {
         if (!owner) {
-          throw new DesktopDriverError('DESKTOP_LEASE_EXPIRED', 'Background describe requires verified session owner');
+          throw new DesktopDriverError(
+            'DESKTOP_LEASE_EXPIRED',
+            'Background describe requires verified session owner',
+          );
         }
         const windowId = operation.windowId;
         if (!windowId) {
-          throw new DesktopDriverError('DESKTOP_TARGET_CHANGED', 'Window ID is required for background describe');
+          throw new DesktopDriverError(
+            'DESKTOP_TARGET_CHANGED',
+            'Window ID is required for background describe',
+          );
         }
-        if (typeof driver.targetIdentity !== 'function' || typeof driver.describeBackground !== 'function') {
+        if (
+          typeof driver.targetIdentity !== 'function' ||
+          typeof driver.describeBackground !== 'function'
+        ) {
           throw new DesktopDriverError(
             'DESKTOP_BACKGROUND_UNSUPPORTED',
             'Driver does not support background operations',
@@ -104,9 +113,16 @@ export async function dispatchDesktopOperation(
 
     if (operation.kind === 'desktop.releaseWindow') {
       if (!owner) {
-        throw new DesktopDriverError('DESKTOP_LEASE_EXPIRED', 'Release window requires verified session owner');
+        throw new DesktopDriverError(
+          'DESKTOP_LEASE_EXPIRED',
+          'Release window requires verified session owner',
+        );
       }
-      const released = registry.backgroundState.release(owner, operation.windowId, operation.windowLeaseId);
+      const released = registry.backgroundState.release(
+        owner,
+        operation.windowId,
+        operation.windowLeaseId,
+      );
       if (!released) {
         throw new DesktopDriverError(
           'DESKTOP_LEASE_EXPIRED',
@@ -121,7 +137,10 @@ export async function dispatchDesktopOperation(
 
     if (operation.kind === 'desktop.backgroundAct') {
       if (!owner) {
-        throw new DesktopDriverError('DESKTOP_LEASE_EXPIRED', 'Background action requires verified session owner');
+        throw new DesktopDriverError(
+          'DESKTOP_LEASE_EXPIRED',
+          'Background action requires verified session owner',
+        );
       }
 
       // Order invariant:
@@ -130,7 +149,10 @@ export async function dispatchDesktopOperation(
 
       // 2. Read live target identity
       if (typeof driver.targetIdentity !== 'function') {
-        throw new DesktopDriverError('DESKTOP_BACKGROUND_UNSUPPORTED', 'Driver does not support target identity');
+        throw new DesktopDriverError(
+          'DESKTOP_BACKGROUND_UNSUPPORTED',
+          'Driver does not support target identity',
+        );
       }
       const liveTarget = await driver.targetIdentity(resolved.window.windowId);
       if (
@@ -176,7 +198,11 @@ export async function dispatchDesktopOperation(
       throw new DesktopDriverError(
         'DESKTOP_WINDOW_BUSY',
         'Target window is currently leased for background automation',
-        { window: identity, gateVerdict: 'deny' as const, gateRule: 'window leased for background automation' },
+        {
+          window: identity,
+          gateVerdict: 'deny' as const,
+          gateRule: 'window leased for background automation',
+        },
       );
     }
 

@@ -50,6 +50,7 @@ through a series of failures.
 ## The tools
 
 ### Foreground control tools
+
 | Tool                                                          | What it does                                                |
 | ------------------------------------------------------------- | ----------------------------------------------------------- |
 | `desktop_connect`                                             | Starts the helper and reports its capabilities              |
@@ -61,25 +62,28 @@ through a series of failures.
 | `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` | Foreground input injection (requires window focus)          |
 
 ### Background automation tools
-| Tool                     | What it does                                                                           |
-| ------------------------ | -------------------------------------------------------------------------------------- |
-| `desktop_invoke`         | Invokes button or menu item in a background window without focus                       |
-| `desktop_set_value`      | Sets text value directly via UIA ValuePattern (never injects keystrokes)               |
-| `desktop_select`         | Selects a list/combo item via UIA SelectionItemPattern without opening dropdowns       |
-| `desktop_toggle`         | Toggles checkbox/switch via UIA TogglePattern                                          |
-| `desktop_release_window` | Releases an active window lease before its 60-second TTL expires                       |
+
+| Tool                     | What it does                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `desktop_invoke`         | Invokes button or menu item in a background window without focus                 |
+| `desktop_set_value`      | Sets text value directly via UIA ValuePattern (never injects keystrokes)         |
+| `desktop_select`         | Selects a list/combo item via UIA SelectionItemPattern without opening dropdowns |
+| `desktop_toggle`         | Toggles checkbox/switch via UIA TogglePattern                                    |
+| `desktop_release_window` | Releases an active window lease before its 60-second TTL expires                 |
 
 ## Background desktop automation
 
 Background desktop automation allows models to interact with supported Windows applications without stealing window focus, moving your mouse, or modifying the system clipboard.
 
 ### How it works
+
 1. **Acquire and Describe**: Call `desktop_describe` with `windowId` and `mode: 'background'`. This grants a 60-second exclusive `windowLeaseId` to your session and workspace and takes a native UIA snapshot.
 2. **Execute Semantic Action**: Call `desktop_invoke`, `desktop_set_value`, `desktop_select`, or `desktop_toggle` passing the element `ref` and `windowLeaseId`.
 3. **Single-Snapshot Invalidation**: Because background mutations can alter control hierarchies, every mutating action invalidates the snapshot. To perform another action, call `desktop_describe` again to get a fresh snapshot.
 4. **Release or Timeout**: Call `desktop_release_window` when finished, or allow the lease to expire after 60 seconds.
 
 ### Focus change detection & safety
+
 - If an action triggers a modal dialog or focus change, Aevra suspends the lease and returns `focusChanged: true`. Subsequent actions against that lease will be refused with `DESKTOP_FOCUS_CHANGED` until you re-describe the target.
 - Password fields strictly refuse inspection and background input.
 - Read-only fields cannot receive `desktop_set_value`.
@@ -137,7 +141,7 @@ Things worth knowing before relying on it:
 permitted. Input is refused whenever Aevra cannot say which application
 would receive it.
 
-- **It cannot drive elevated windows or secure desktops.** Under Windows [User Interface Privilege Isolation (UIPI)](https://learn.microsoft.com/en-us/previous-versions/dotnet/articles/bb625963(v=msdn.10)), unelevated processes cannot inject window messages or cross-integrity synthetic input into elevated applications. Furthermore, secure desktops (e.g. `Winlogon`, UAC elevation prompts, screensavers) isolate UI Automation from standard interactive sessions. Aevra actively checks token elevation, token integrity levels, and thread desktops, returning `DESKTOP_INPUT_REFUSED`.
+- **It cannot drive elevated windows or secure desktops.** Under Windows [User Interface Privilege Isolation (UIPI)](<https://learn.microsoft.com/en-us/previous-versions/dotnet/articles/bb625963(v=msdn.10)>), unelevated processes cannot inject window messages or cross-integrity synthetic input into elevated applications. Furthermore, secure desktops (e.g. `Winlogon`, UAC elevation prompts, screensavers) isolate UI Automation from standard interactive sessions. Aevra actively checks token elevation, token integrity levels, and thread desktops, returning `DESKTOP_INPUT_REFUSED`.
 - **It refuses input to a window it cannot attribute.** A window whose owning executable cannot be verified has no process identity, and input to it is refused. For foreground control, `unattributedInput: 'allow'` is an explicit opt-in policy; for background automation, unattributed windows are strictly and unconditionally refused.
 - **It refuses input to a denylisted application.** By default that covers
   terminals and shells (`cmd.exe`, `powershell.exe`, `pwsh.exe`,

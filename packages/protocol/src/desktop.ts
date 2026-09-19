@@ -61,6 +61,7 @@ export interface DesktopNode {
   supportedActions?: BackgroundAction[];
   readOnly?: boolean;
   toggleState?: 'off' | 'on' | 'indeterminate';
+  handle?: string;
 }
 
 /** Independent by design: a host may see without acting. */

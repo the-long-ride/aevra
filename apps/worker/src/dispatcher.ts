@@ -106,7 +106,10 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
         sessionId: envelope.sessionId,
         workspaceId: envelope.workspaceId,
       };
-      return { ok: true, value: await dispatchDesktopOperation(op, desktopRuntime.registry(), owner) };
+      return {
+        ok: true,
+        value: await dispatchDesktopOperation(op, desktopRuntime.registry(), owner),
+      };
     }
     if (isMcpUpstreamOperation(op)) {
       return {

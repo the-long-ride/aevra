@@ -65,7 +65,11 @@ export class FakeDesktopDriver implements DesktopDriver {
     this.refs = new Set(['ref_1_1']);
     return {
       window: { windowId: request.windowId, processName: 'notepad.exe', title: 'Untitled' },
-      windowInstance: { windowId: request.windowId, processId: 1234, processStartedAt: '2026-09-18T00:00:00Z' },
+      windowInstance: {
+        windowId: request.windowId,
+        processId: 1234,
+        processStartedAt: '2026-09-18T00:00:00Z',
+      },
       nodes: [
         {
           ref: 'ref_1_1',

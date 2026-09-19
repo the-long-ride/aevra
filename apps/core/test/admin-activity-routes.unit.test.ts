@@ -84,12 +84,9 @@ test('GET /api/activity returns recent activity log entries as JSON', async () =
     },
   } as any;
 
-  const handled = await handleActivityRoutes(
-    req,
-    res,
-    new URL('https://localhost/api/activity'),
-    { activity },
-  );
+  const handled = await handleActivityRoutes(req, res, new URL('https://localhost/api/activity'), {
+    activity,
+  });
 
   assert.equal(handled, true);
   assert.equal(res.statusCode, 200);

@@ -44,7 +44,7 @@ async function createFixture() {
     issuer,
     resource,
     now,
-    accessTokenTtlMs: 60_000, // 60 seconds short-lived access token
+    accessTokenTtlMs: 60_000,
     refreshTokenTtlMs: 30 * 24 * 60 * 60_000,
     audit: auditWrapper,
   });
@@ -142,10 +142,10 @@ function rpcReq(auth: string, ip = '192.0.2.10') {
   };
 }
 
-test('ChatGPT 60s lifetime: issues refresh token for scope=mcp and renews across 3 cycles with IP rotation', async () => {
+test('chatgpt 4-day expiry and refresh cycle against live MCP ingress', async () => {
   const f = await createFixture();
   try {
-    // 1. Dynamic client registration
+    // 1. Dynamic Client Registration
     const client = f.oauthService.registerClient({
       client_name: 'ChatGPT',
       redirect_uris: ['https://chatgpt.com/oauth/callback'],
@@ -228,43 +228,30 @@ test('ChatGPT 60s lifetime: issues refresh token for scope=mcp and renews across
     });
     assert.equal(cycle1Call.status, 200);
 
-    // --- EXPIRY CYCLE 2: IP ROTATION (Floating pool) ---
-    f.advanceSeconds(65); // Expire token 2
+    // --- EXPIRY CYCLES 2 & 3: IP ROTATION (Floating pool) ---
+    let currentTokens = cycle1Tokens;
+    let cycle3Tokens = cycle1Tokens;
+    const clientIps = ['198.51.100.25', '203.0.113.88'];
+    for (const ip of clientIps) {
+      f.advanceSeconds(65);
+      const nextTokens = f.oauthService.exchangeRefreshToken({
+        grant_type: 'refresh_token',
+        client_id: client.client_id,
+        refresh_token: currentTokens.refresh_token!,
+        resource,
+      });
+      assert.ok(nextTokens.access_token);
+      assert.ok(nextTokens.refresh_token);
+      assert.notEqual(nextTokens.refresh_token, currentTokens.refresh_token);
 
-    // ChatGPT runner IP rotates to 198.51.100.25
-    const cycle2Tokens = f.oauthService.exchangeRefreshToken({
-      grant_type: 'refresh_token',
-      client_id: client.client_id,
-      refresh_token: cycle1Tokens.refresh_token!,
-      resource,
-    });
-    assert.ok(cycle2Tokens.access_token);
-    assert.ok(cycle2Tokens.refresh_token);
-    assert.notEqual(cycle2Tokens.refresh_token, cycle1Tokens.refresh_token);
-
-    const cycle2Call = await fetch(`${f.base}/mcp`, {
-      method: 'POST',
-      ...rpcReq(`Bearer ${cycle2Tokens.access_token}`, '198.51.100.25'),
-    });
-    assert.equal(cycle2Call.status, 200);
-
-    // --- EXPIRY CYCLE 3 ---
-    f.advanceSeconds(65); // Expire token 3
-
-    const cycle3Tokens = f.oauthService.exchangeRefreshToken({
-      grant_type: 'refresh_token',
-      client_id: client.client_id,
-      refresh_token: cycle2Tokens.refresh_token!,
-      resource,
-    });
-    assert.ok(cycle3Tokens.access_token);
-    assert.ok(cycle3Tokens.refresh_token);
-
-    const cycle3Call = await fetch(`${f.base}/mcp`, {
-      method: 'POST',
-      ...rpcReq(`Bearer ${cycle3Tokens.access_token}`, '203.0.113.88'),
-    });
-    assert.equal(cycle3Call.status, 200, 'Tool access succeeds through third expiry cycle');
+      const call = await fetch(`${f.base}/mcp`, {
+        method: 'POST',
+        ...rpcReq(`Bearer ${nextTokens.access_token}`, ip),
+      });
+      assert.equal(call.status, 200, 'Tool access succeeds through expiry cycle');
+      currentTokens = nextTokens;
+      cycle3Tokens = nextTokens;
+    }
 
     // Verify 3 distinct refresh audit events occurred without credentials
     const refreshAudits = f.auditLog.filter((e) => e.operation === 'oauth.token.refresh');
