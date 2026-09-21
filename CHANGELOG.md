@@ -1,5 +1,78 @@
 # Changelog
 
+## [1.1.0] - 2026-09-21
+
+### Added - Structured Command Understanding, Workspace Scope & Typed Rules
+
+- **Keep-awake reliability**: Windows now reasserts the system-required execution state every 30 seconds and treats a zero API result as failure; Linux now inhibits both idle and sleep through logind so active keep-awake policy cannot silently allow suspension.
+
+- **Structured Command Analysis & Graph Generation (`packages/command-analysis`)**:
+  - Replaced legacy string-based wildcard collapsing (`shell:<kind>:*`) with versioned, structured semantic command analysis (`CommandAnalysis`, `CommandNode`).
+  - Added bounded shell parsing adapters for PowerShell (`pwsh` and Windows PowerShell 5.1), CMD, Bash, `sh`, and `zsh`, emitting explicit nodes, source spans, and graph edges (`sequence`, `success`, `failure`, `pipe`, `subshell`) without executing script text.
+  - Safe analysis bounds: max 64 KiB script text, 256 nodes, 4 nested shell depth, 32 cwd alternatives, and 1500 ms parse budget returning `ANALYSIS_LIMIT` rather than truncating into an allowed command.
+  - Transparent nested shell recursion recognizing `-Command`, `-c`, `-lc`, and CMD `/c` with dialect-specific parsing.
+  - Explicit diagnostic reasons (`PARSE_INVALID`, `UNSUPPORTED_SYNTAX`, `DYNAMIC_SCOPE`, `OUTSIDE_WORKSPACE`, `TOOL_NOT_FOUND`, `EXECUTABLE_CHANGED`, `SCRIPT_CHANGED`, `UNKNOWN_OPTION`, `CONTEXT_CHANGED`).
+
+- **Application & Wrapper Semantic Adapters**:
+  - **Git adapter (`applications/git.ts`)**: extracts global options before subcommands, repeated `-C` transitions, `--git-dir`, `--work-tree`, and distinguishes mutations (`branch -D`, hard reset, push force/force-with-lease, clean) from read-only operations (`status`, `diff`, `log`, `show`, `branch` list).
+  - **Node Packages adapter (`applications/node-packages.ts`)**: supports `npm`, `pnpm`, `yarn`, and `bun`, differentiating exact named scripts (`run <script>`), audit inspection vs `audit --fix` mutation, and target directories via `--prefix`, `--dir`, and `-C`.
+  - **RTK Wrapper adapter (`applications/rtk.ts`)**: recognizes documented RTK command mappings (`rtk git ...`, `rtk npm ...`, `rtk tsc`, `rtk lint`, `rtk prettier`, `rtk jest`, `rtk vitest`, `rtk cargo ...`, `rtk dotnet ...`, `rtk deps`, `rtk env`), retaining wrapper identity and mapping version while delegating to underlying application semantics. Unknown RTK mappings remain explicit and unprivileged.
+  - **Generic & Builtin adapter (`applications/generic.ts`)**: tracks directory change builtins (`cd`, `chdir`, `Set-Location`, `pushd`), standard read utilities (`cat`, `ls`, `grep`, `rg`), and filesystem mutation tools (`rm`, `rmdir`, `mkdir`, `cp`, `mv`).
+
+- **CWD Flow & Canonical Workspace Scope Enforcement**:
+  - Full propagation of optional `cwdLogical` through command and process inputs, resolving logical paths against authorized capability roots instead of hardcoding root `/`.
+  - Tracks branching working directory changes across success (`&&`) and sequential (`;`) execution paths.
+  - Detects targets from options, redirects (`>`, `>>`), operands, and environment overrides.
+  - Canonicalizes paths in backend namespace, enforcing containment boundaries against sibling-prefix attacks and symlink escapes (`OUTSIDE_WORKSPACE`).
+  - Identifies dynamic or unresolvable scope (`DYNAMIC_SCOPE`) requiring explicit human approval.
+
+- **Typed Command Rules (V2) & Migration 016**:
+  - Schema migration `016_command_rule_v2_predicates`: added `version`, `predicate_json`, and `status` columns to `permission_rules`.
+  - Automatic migration of narrow legacy permissions (`git:status:*`, `npm:run:<script>:*`) into typed `CommandRuleV2` predicates with application, operation, scriptName, allowed modifiers, positional constraints, dialects, and backends.
+  - Broad legacy wildcards (such as `shell:*`) remain preserved with `status: 'needs-review'`, preventing unintended broad V2 unattended execution authority.
+  - Conservative preservation of legacy DENY coverage.
+
+- **Unified Command Decision Engine & Exact Approval Binding**:
+  - Pure `decideCommand` policy implementation evaluating authority, selected DENY, critical policy (`policy.critical.alwaysConfirm`), scope status, script trust, network authority, and typed predicates.
+  - Enforced policy table: workspace YOLO auto-allows every non-critical command whose analysis stays inside the workspace; unrestricted YOLO removes the Aevra workspace authorization boundary for non-critical commands. Active in-scope YOLO overrides remembered command/network DENY rules, while invalid authority/requests remain blocked and CRITICAL commands always require fresh local confirmation.
+  - Atomic approval binding (`apps/core/src/approvals/command-binding.ts`): binds pending tickets to exact request fingerprints and evidence fingerprints, preventing ticket reuse across arguments or stale contexts (`APPROVAL_ALREADY_CONSUMED`, `CONTEXT_CHANGED`).
+  - Project script trust evaluation (`script-trust.ts`): fingerprints named script definitions and lifecycle hooks; changes to script definitions invalidate remembered approval (`SCRIPT_CHANGED`).
+
+- **Executable Identity Binding & Windows Batch Shim Safety**:
+  - System capability detection now includes GitHub CLI (`gh`) and GitLab CLI (`glab`) in the Source control group alongside Git.
+  - Host policy analysis resolves the actual invocation through `packages/command-analysis/src/executable-resolver.ts`, including explicit paths, request PATH/PATHEXT overrides, canonical identity, wrapper fingerprints, and provenance. Execution prepares Windows launch targets through `packages/executor/src/spawn-target.ts`; sandbox analysis fails closed when backend-native executable identity is unavailable rather than reusing host evidence.
+  - Safe Windows batch shim execution with `windowsShimCommand` across both managed processes and direct commands (`runCommand`), preventing CVE-2024-27980 command injection risks without falling back to generic `shell: true`.
+  - Added RTK to logical tool catalog in `capability-detector.ts`.
+
+### Fixed - Authorization Freshness, Shell Scope & Local CLI Reliability
+
+- **Command scope and parser hardening**:
+  - Logical command working directories are now mapped through capability roots independently from native absolute command operands, preventing the workspace logical root from being confused with the host filesystem root.
+  - Nested shell analysis preserves the outer launcher identity and its redirections; Bash background lists using single `&` expose both commands to policy evaluation; malformed quoting and unsupported value-bearing filesystem options fail closed.
+  - Filesystem scope extraction now includes path-bearing options such as copy/move target directories, grep/ripgrep pattern files, touch reference files, and find input lists.
+  - Package-script evidence resolves the canonical package working directory once, including mounted roots and `--prefix`/`--dir`/`-C`, so script fingerprints describe the package actually executed.
+
+- **Approval and network freshness**:
+  - Exact command approval bindings now include canonical cwd/target identities, executable and wrapper canonical paths, root/backend/policy/environment/resolver revisions, and script evidence.
+  - Approval resume re-evaluates the current network destination policy and rejects newly denied destinations rather than replaying stale network authority.
+  - Runtime-session command explain/evaluation now carries the same classified risk floor and live network decision used by execution, including CRITICAL risk.
+
+- **Local Admin CLI and service reliability**:
+  - Successful Admin logins no longer consume failed-login rate-limit capacity. Rejected login bursts still return `429` with retry timing.
+  - CLI Admin failures now distinguish authentication/rate-limit failures from transport failures instead of always suggesting the Core is stopped.
+  - Windows `aevra service start` and `restart` now preflight service installation and direct the operator to `aevra service install` when the Scheduled Task is absent.
+  - Added CLI coverage for durable OAuth connections (`aevra connections list|revoke`), live session maintenance (`aevra sessions list|revoke|revoke-others`), upstream MCP management, audit clearing, and `aevra about` metadata output.
+
+- **Admin API & Web UI Enhancements**:
+  - Reworked data-table controls so search, filters, row count, and toolbar pagination form a compact responsive control strip; Live MCP activity now keeps pagination with its filters, and mobile health chips align to the right.
+  - Removed the redundant standalone `Note` row from About while retaining the author annotation.
+  - Fixed the dashboard request-activity chart to render every integer request-count level on the same Y transform as the activity line, and start authenticated realtime activity streaming immediately after Web UI login without requiring a page refresh.
+  - Added authenticated `POST /api/policy/commands/explain` endpoint for non-executing preview and policy explanation.
+  - Added `CommandExplanation` UI component in `RequestApprovalModal` showing visual breakdown of application, operation, shell dialect, effective CWD, outside targets, and reason codes.
+  - Added `CommandRuleEditor` for authoring and previewing typed `CommandRuleV2` rules.
+  - Added `Status` column in `PermissionsPage` distinguishing active, v2, and `needs-review` rules.
+  - Reconciled workspace-default YOLO mode across Admin API and runtime helper (`normalizeYoloMode`).
+
 ## [1.0.5] - 2026-09-18
 
 ### Added - Background Desktop Automation (Windows)

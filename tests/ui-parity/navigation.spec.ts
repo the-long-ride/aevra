@@ -14,6 +14,7 @@ for (const surface of ADMIN_SURFACES) {
       'Audit',
       'Settings',
       'Guide',
+      'About',
       'Dashboard',
     ]) {
       await page.getByRole('button', { name: destination, exact: true }).click();

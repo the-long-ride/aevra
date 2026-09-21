@@ -2,7 +2,8 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current release is **1.0.5**. It includes browser control, Windows desktop
+The current release is **1.1.0**. It includes command understanding,
+workspace containment, typed command rules, browser control, Windows desktop
 control, MCP upstream servers, and workspace manifests. The feature-specific
 manuals and canonical specs linked below are the source of truth for detailed
 contracts and security limitations.

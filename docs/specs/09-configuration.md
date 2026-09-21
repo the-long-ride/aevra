@@ -1,6 +1,6 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.0.5`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.1.0`
 
 ## Ports and listeners (fixed hosts)
 
@@ -44,7 +44,7 @@ Remote Admin origins are normalized to exact HTTPS origins. Wildcards and embedd
 - `power.keepAwake`: `off|remote-connections|managed-processes|always`; default `remote-connections`.
 - Transport validation checks runtime endpoints against encryption, loopback constraints, and provider requirements, classifying state as `secure`, `local-http`, `action-required`, or `invalid`.
 - `policy.desktop`: mode (`allow-all|allowlist|denylist`), allowed/denied `applications` list, `unattributedInput` (`allow|deny`), and custom application entries stored under `aevra.custom_desktop_apps`.
-- `policy.yolo`: mode (`workspace|unrestricted|off`), managed via segmented console radio control and immediate persistence.
+- `policy.yolo`: mode (`workspace|unrestricted`, default `workspace`), normalized via `normalizeYoloMode` across Admin API and runtime; managed via console radio controls and immediate persistence.
 - `browser.policy`: `loopbackClass` (`block|normal|trusted`), managed via console-styled radio controls.
 - Command-family overrides, network rules, environment profiles, secret references, hooks, permissions, and workspace mappings are managed through their dedicated Admin APIs/UI.
 - Data export & import: `GET /api/data/export` outputs portable JSON configuration; UI `Data` tab manages file-based backup preview and restore.
@@ -56,11 +56,17 @@ aevra start [--ui]                       foreground daemon; --ui opens the authe
 aevra setup                              interactive terminal wizard for exposure and local transport configuration
 aevra ui [--logout-all]                  open authenticated dashboard / revoke admin sessions
 aevra status [--json]                    display daemon status and health watchdog
-aevra connectors list|create|revoke <id> manage admission connector tokens
+aevra connectors list|create|revoke <id> manage static admission connector tokens
+aevra connections list|revoke <id>       inspect/revoke durable OAuth connections
+aevra sessions list|revoke <id>          inspect/revoke live MCP sessions
+aevra sessions revoke-others --yes       revoke other remote/admin sessions with confirmation
+aevra mcp list|add|remove|test            manage upstream MCP servers
+aevra audit clear --yes                   clear audit rows while preserving chain checkpoint semantics
 aevra backup verify|restore <file>       verify or restore database backup
 aevra extension install [--dir <path>] [--yes]  download and unzip the browser extension for this version
-aevra service install|start|stop|restart|status
+aevra service install|start|stop|restart|status  user-service lifecycle; start/restart require prior installation
 aevra completion bash|zsh|powershell     shell autocompletion
+aevra about                              display version, author, repository, and issue links
 aevra --version / aevra -v               display version
 aevra --help / aevra -h                  display help and usage
 ```
@@ -73,9 +79,13 @@ Aevra never advertises a plaintext localhost endpoint. With no TLS override it p
 
 Lease idle `30 min` · reconnect grace `15 min` · approval fast-wait `20 s` · ticket lifetime `5 min` (HIGH `2 min`, CRITICAL `60 s`) · OAuth access token `1 h` · OAuth refresh family `30 d` · JWKS cache `5 min` · connector `last_used_at` write throttle `1/min` · keep-awake reevaluation `5 s`.
 
+Admin password login uses a dedicated per-IP token bucket. Failed credential attempts consume capacity; successful verification refunds the reservation, so ordinary CLI/UI administration does not self-throttle. Exhaustion returns `429` with `Retry-After`.
+
 ## Background service
 
 Windows: current-user Scheduled Task at logon · Linux: `systemd --user` · macOS: `~/Library/LaunchAgents`. No admin/root elevation. Installers in `installers/` mirror this.
+
+Foreground `aevra start [--ui]` is independent from the installed user service. On Windows, `aevra service start`/`restart` preflight the Scheduled Task and report an install instruction rather than forwarding an opaque `schtasks` “file not found” error.
 
 **Boundaries:** what the values _do_ — see the referenced specs.
 

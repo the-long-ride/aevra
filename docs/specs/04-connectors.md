@@ -1,6 +1,6 @@
 # 04 — Connectors
 
-**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `1.0.5`
+**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `1.1.0`
 
 A **connector** is a named admission credential for one AI client — the thing that makes "works with any web AI" true, because the client needs no auth capability at all: the credential _is_ the URL.
 
@@ -47,6 +47,8 @@ Admin session + same-origin required; safe mode blocks mutations. There is **no 
 ## OAuth connections are distinct
 
 Static connector-token URLs remain admission credentials. OAuth clients instead receive a durable connection subject backed by rotating access/refresh credentials. The connection can enter a reconnect grace state after transport detach, retain remembered workspace grants and connection-level YOLO across a new MCP session, and expose its recent durable mutation outcomes through `operation_get` / `operation_list`. Admin **Disconnect session** affects one MCP session; **Revoke connection** invalidates the OAuth credential family and clears its remembered authority.
+
+Local operators can inspect or revoke durable OAuth connections from the Admin UI or CLI with `aevra connections list` and `aevra connections revoke <id>`. Session-level maintenance remains separate (`aevra sessions list|revoke|revoke-others`).
 
 - **Multi-workspace durable grants:** Multiple workspaces can be granted to an OAuth connection at once. Grants can be added or removed from the Admin UI even when the connection has no active sessions attached (offline-capable). Revoking one workspace grant does not affect sibling grants.
 - **Floating-IP continuity & bounded origin tracking:** Rotating egress runner IPs from cloud AI platforms (ChatGPT, Claude) retain full connection authority upon presenting a valid OAuth bearer token. Bounded runner IP provenance is tracked in `oauth_connection_origins` (up to 10 unique remote IPs per connection subject, expired after 24 hours).

@@ -1,15 +1,20 @@
-# Safe command matchers
+# Safe command matchers and typed rules
 
-A command matcher limits a remembered `commands.run` permission to an Aevra command family such as `git:status` or `dotnet:test`.
+In Aevra 1.1.0, command permissions are modeled as **Typed Command Rules (V2)** evaluated via structured command analysis (`packages/command-analysis`), replacing broad wildcard string collapsing (`shell:<kind>:*`).
 
-The platform tabs in this Guide show a conservative set of useful matcher examples. They are recommendations, **not a security guarantee**. Test runners, build systems, package managers, MSBuild targets, Cargo build scripts, and project scripts can execute code from the workspace even when the top-level command family looks familiar.
+A command rule limits a remembered `commands.run` permission to an application, operation, script name, and set of allowed modifiers and dialects.
 
-Prefer the narrowest matcher that covers the operation you actually need. Avoid `*` unless you intentionally want broad command access.
+## Typed rules vs legacy matchers
 
-Aevra does not recommend remembering a broad shell family as a safe matcher. A shell can execute arbitrary script text, so shell operations should remain explicit and narrowly approved.
+- **Legacy matchers:** String-based patterns (e.g. `git:status:*`, `npm:run:test:*`). Narrow legacy patterns are automatically migrated to V2 predicates. Broad wildcards (such as `shell:*`) remain visible as `needs-review` in the Admin UI and cannot grant new unattended execution authority.
+- **Typed Command Rules (V2):** Explicitly constrain `application`, `operation`, `allowedModifiers` (such as `force` or `hard`), `targetScope: 'workspace'`, and supported shell dialects.
+- **Workspace scope enforcement:** Even if a rule matches an application (e.g. `git:status`), commands whose working directory or targets leave authorized workspace roots (`OUTSIDE_WORKSPACE`) always require human approval under both normal and workspace YOLO modes. Only active unrestricted YOLO waives this prompt.
+- **Project script trust:** Named package scripts (`npm run <script>`) carry cryptographic definition fingerprints. If the script body or lifecycle hooks change in `package.json`, remembered approval is invalidated (`SCRIPT_CHANGED`) and must be re-approved.
+- **Tool wrapper recognition:** Commands run through `rtk` (e.g. `rtk git status`, `rtk npm test`) are recognized as wrappers and evaluated against the underlying tool's typed rule while preserving wrapper identity.
+- **Exact approval evidence:** One-time command approval binds canonical cwd/target paths, launcher/wrapper identities, roots, backend, policy, environment, resolver generation, and script evidence. A changed symlink target, mount, executable, policy, or package script forces re-approval.
+- **Resume-time network policy:** Requested destinations are checked again when an approval resumes. A newly added network DENY blocks the command even if its earlier command ticket was approved.
+- **Fail-closed shell scope:** Nested shell launchers and outer redirects remain visible to policy, Bash single-`&` background lists authorize both sides, and malformed or unsupported scope-bearing syntax cannot produce a reusable allow rule.
 
-## How to use the list
+## Recommendations
 
-Open the Windows, Linux, or macOS tab, copy the matcher you need, then paste one matcher per line into Permissions → Add rules → Command matchers.
-
-Non-command capabilities such as `files.read` and `files.write` use their own capability-wide rule and do not inherit these command matchers.
+Prefer the narrowest rule that covers the operation you actually need. Modifiers like `--force`, `--hard`, or destructive branch deletion (`-D`) are tracked separately and never inherited from an ordinary command rule.

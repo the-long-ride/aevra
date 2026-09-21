@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 const externalBaseUrl = process.env.AEVRA_PARITY_BASE_URL;
-const localBaseUrl = 'http://127.0.0.1:47833';
+const localBaseUrl = 'http://127.0.0.1:47839';
 
 export default defineConfig({
   testDir: './tests/ui-parity',
@@ -19,7 +19,7 @@ export default defineConfig({
     : {
         command: 'node tests/ui-parity/static-server.mjs',
         url: localBaseUrl,
-        reuseExistingServer: true,
+        reuseExistingServer: false,
         timeout: 15_000,
       },
 });

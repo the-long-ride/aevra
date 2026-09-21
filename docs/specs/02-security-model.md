@@ -1,6 +1,6 @@
 # 02 — Security Model
 
-**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.0.5`
+**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.1.0`
 
 Security is two questions: **who gets in** (admission) and **what may they do** (authority). They never mix.
 
@@ -37,6 +37,7 @@ Dynamic client registration is open by design but bounded: `client_name` is stri
 - Disconnecting one MCP session starts the configured reconnect grace window; revoking the OAuth connection invalidates its credentials, live sessions/leases, remembered workspace grants, and YOLO state.
 - Switching workspaces drains in-flight operations first; a switch in progress blocks new mutating calls.
 - Admin plane sessions are separate: HttpOnly `aevra_admin` cookie, issued via username/password login; startup revokes persisted admin sessions. Remote Admin requests are accepted only from the local origin, configured `adminPublicUrl`, or exact HTTPS origins in `trustedAdminOrigins`. Forwarded host/proto headers never create trust. State-changing Admin requests require **positive** same-origin evidence — `Sec-Fetch-Site: same-origin|none`, or a matching `Origin` — and a request presenting neither is accepted only from a loopback peer.
+- Admin password throttling is failure-oriented: each login attempt reserves limiter capacity, a successful credential verification immediately refunds that reservation, and failed attempts consume it. Exhaustion returns `429` with `Retry-After`; repeated successful local CLI/UI logins therefore cannot lock out valid administration.
 - The public gateway proxies the Admin plane **only** when exposure is local-only or an `adminPublicUrl` is explicitly configured. Otherwise non-MCP paths return `404` without reaching the Admin upstream, so enabling a tunnel does not publish the Admin UI or its login endpoint.
 
 ## Authority — capabilities
@@ -119,6 +120,21 @@ Aevra assumes the AI client may itself be under the influence of content it read
 - Command `stdout`/`stderr` is stripped of terminal control sequences before it reaches the model or an approval preview.
 
 **Limits of this posture.** A marker is an advisory, not an enforcement boundary: a model that ignores it is still free to act on injected text. Provenance marking narrows the gap between "content the operator wrote" and "content a repository supplied"; it does not close it. Approvals remain the backstop, which is why preview integrity and one-time shell approval carry the real weight.
+
+## Command understanding, workspace scope, and exact approval binding
+
+In 1.1.0, command execution authorization is governed by structured semantic analysis (`packages/command-analysis`) rather than colon-delimited wildcard string matchers:
+
+- **Graph-based semantic analysis:** Shell scripts across PowerShell (`pwsh` / `powershell`), CMD, Bash, `sh`, and `zsh` are parsed into abstract syntax graphs with explicit nodes, spans, redirects, and edges (`sequence`, `success`, `failure`, `pipe`, `subshell`) without executing untrusted script text. Nested invocations (`-Command`, `-c`, `-lc`, `/c`) preserve the outer launcher node and redirection targets while recursively analyzing children within strict budget bounds (64 KiB, 256 nodes, 4 nested levels, 1500 ms). Bash single-`&` background lists are separate authorization nodes, and malformed quoting fails closed.
+- **Canonical workspace scope enforcement:** Effective working directory (`cwdLogical`) and all target operands (Git `-C`, npm `--prefix`, pnpm `--dir`, file redirections, operands) are evaluated against authorized workspace capability roots.
+  - Sibling-prefix paths, dot-dot escapes, UNC shares, and symlinks/junctions escaping roots evaluate to `OUTSIDE_WORKSPACE`.
+  - Commands that leave authorized workspace roots **strictly require human approval** under both normal mode and workspace YOLO mode. Only active unrestricted YOLO waives this prompt.
+  - Dynamic or unresolvable targets evaluate to `DYNAMIC_SCOPE` and require explicit approval.
+- **Typed Command Rules (V2) & Migration:** Command rules carry structured predicates (`CommandRuleV2`) specifying application, operation, scriptName, allowed modifiers, dialects, backends, and target scope. Broad legacy wildcards (`shell:*`, `npm:*`) are quarantined with `status: 'needs-review'` and cannot grant unattended execution authority.
+- **Exact cryptographic approval binding:** Approval tickets are bound to exact SHA-256 request fingerprints plus canonical execution evidence: cwd and target canonical paths, executable and wrapper canonical identities/fingerprints, roots/backend/policy/environment/resolver revisions, and script evidence. Replay, retargeting, changed mounts/symlinks, or stale executable context fails with `APPROVAL_ALREADY_CONSUMED` or `CONTEXT_CHANGED`.
+- **Resume-time network revalidation:** a command approval never freezes network authority. Every resume reclassifies requested destinations and applies the current network permission rules; a destination that became denied blocks execution.
+- **Project script trust invalidation:** Named package scripts (`npm run <script>`) and lifecycle definitions are fingerprinted; modifying a script definition invalidates remembered trust with `SCRIPT_CHANGED`.
+- **Batch shim safety (CVE-2024-27980 mitigation):** Windows `.cmd`/`.bat` shims are resolved and wrapped via `windowsShimCommand` with per-argument quoting across both direct commands and managed processes, rejecting unquotable metacharacters (`"%\r\n`) without resorting to generic `shell: true`.
 
 ## Administrative mutations & deletion safety
 

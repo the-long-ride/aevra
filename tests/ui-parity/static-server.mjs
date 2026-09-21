@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 
 const root = path.resolve('dist/apps/web');
-const port = Number(process.env.AEVRA_PARITY_PORT ?? 47833);
+const port = Number(process.env.AEVRA_PARITY_PORT ?? 47839);
 const host = '127.0.0.1';
 const mime = new Map([
   ['.css', 'text/css; charset=utf-8'],
