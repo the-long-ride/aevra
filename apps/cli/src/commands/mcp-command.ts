@@ -41,6 +41,41 @@ function registrationBody(command: McpCommand): Record<string, unknown> {
     risk: command.risk ?? 'MEDIUM',
   };
 }
+export function formatMcpTable(
+  upstreams: Array<{
+    id: string;
+    name: string;
+    transport: string;
+    state: string;
+    toolCount: number;
+    risk: string;
+  }>,
+): string[] {
+  const headers = ['ID', 'Name', 'Transport', 'State', 'Tools', 'Risk'];
+  const data = upstreams.map((u) => [
+    u.id,
+    u.name,
+    u.transport,
+    u.state,
+    `${u.toolCount} tools`,
+    u.risk,
+  ]);
+  const rows = [headers, ...data];
+  const widths = headers.map((_, col) => Math.max(...rows.map((r) => (r[col] ?? '').length)));
+  const border = (left: string, mid: string, right: string) =>
+    `${left}${widths.map((w) => '─'.repeat(w + 2)).join(mid)}${right}`;
+  const row = (cells: string[]) =>
+    `│ ${cells.map((cell, i) => (cell ?? '').padEnd(widths[i]!)).join(' │ ')} │`;
+
+  return [
+    border('┌', '┬', '┐'),
+    row(headers),
+    border('├', '┼', '┤'),
+    ...data.map((r) => row(r)),
+    border('└', '┴', '┘'),
+  ];
+}
+
 export async function runMcpCommand<Config>(
   config: Config,
   command: McpCommand,
@@ -65,10 +100,7 @@ export async function runMcpCommand<Config>(
         dependencies.log('No MCP servers registered.');
         return 0;
       }
-      for (const upstream of upstreams)
-        dependencies.log(
-          `${upstream.id}  ${upstream.name}  ${upstream.transport}  ${upstream.state}  ${upstream.toolCount} tools  ${upstream.risk}`,
-        );
+      for (const line of formatMcpTable(upstreams)) dependencies.log(line);
       return 0;
     }
     if (command.action === 'add') {
@@ -116,8 +148,16 @@ export async function runMcpCommand<Config>(
     dependencies.log(`[aevra] Removed ${command.id}`);
     return 0;
   } catch (error) {
+    const code = (error as { code?: string })?.code;
+    const connectivityFailure = new Set([
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'ENOTFOUND',
+      'ETIMEDOUT',
+      'EPIPE',
+    ]).has(String(code ?? ''));
     dependencies.error(
-      `[aevra] mcp failed: ${dependencies.formatError(error)}. Is aevra start/service running?`,
+      `[aevra] mcp failed: ${dependencies.formatError(error)}${connectivityFailure ? '. Is aevra start/service running?' : ''}`,
     );
     return 1;
   }

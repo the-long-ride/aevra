@@ -22,7 +22,9 @@ import {
   type AdminSessionDependencies,
 } from './admin-session.js';
 import { parseAevraArgs } from './args.js';
+import { runAboutCommand } from './commands/about-command.js';
 import { runBackupCommand } from './commands/backup-command.js';
+import { runConnectionsCommand } from './commands/connections-command.js';
 import { runExtensionCommand } from './commands/extension-command.js';
 import { runConnectorsCommand } from './commands/connectors-command.js';
 import { runMaintenanceCommand } from './commands/maintenance-command.js';
@@ -132,6 +134,10 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     return 0;
   }
 
+  if (command.command === 'about') {
+    return runAboutCommand(command, { log: console.log });
+  }
+
   if (command.command === 'completion') {
     process.stdout.write(completionText(command.shell));
     return 0;
@@ -154,6 +160,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         console.log(AEVRA_VERSION);
         return 0;
       },
+      about: async (current) => runAboutCommand(current, { log: console.log }),
       start: (current) =>
         runStartCommand(config, current, {
           run: (currentConfig, hooks) =>
@@ -223,6 +230,13 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       extension: (current) => runExtensionCommand(current, extensionInstallDependencies(config)),
       audit: (current) =>
         runMaintenanceCommand(config, current, {
+          api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
+          log: console.log,
+          error: console.error,
+          formatError: formatCliError,
+        }),
+      connections: (current) =>
+        runConnectionsCommand(config, current, {
           api: (currentConfig, apiPath, init) => adminApi(currentConfig, apiPath, init, admin),
           log: console.log,
           error: console.error,

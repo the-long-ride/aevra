@@ -3,6 +3,7 @@ export type AdminUiDestination = '/';
 export type AevraCommand =
   | { command: 'help' }
   | { command: 'version' }
+  | { command: 'about' }
   | { command: 'start'; uiDestination: AdminUiDestination | null }
   | { command: 'ui'; logoutAll: boolean }
   | { command: 'setup' }
@@ -25,7 +26,17 @@ export type AevraCommand =
     }
   | { command: 'audit'; action: 'clear'; yes: boolean }
   | { command: 'extension'; action: 'install'; dir?: string; yes: boolean }
-  | { command: 'sessions'; action: 'revoke-others'; yes: boolean }
+  | {
+      command: 'connections';
+      action: 'list' | 'revoke';
+      id?: string;
+    }
+  | {
+      command: 'sessions';
+      action: 'list' | 'revoke' | 'revoke-others';
+      id?: string;
+      yes?: boolean;
+    }
   | {
       command: 'mcp';
       action: 'list' | 'add' | 'remove' | 'test';
@@ -114,6 +125,11 @@ export function parseAevraArgs(argv: string[]): AevraCommand {
 
   if (['version', '--version', '-v', '-version'].includes(argv[0]!)) {
     return { command: 'version' };
+  }
+
+  if (argv[0] === 'about') {
+    if (argv.length > 1) throw new Error(`Unknown option: ${argv[1]}`);
+    return { command: 'about' };
   }
 
   const [command, ...rest] = argv;
@@ -229,14 +245,35 @@ export function parseAevraArgs(argv: string[]): AevraCommand {
   }
 
   if (command === 'sessions') {
-    if (rest[0] !== 'revoke-others') {
-      throw new Error('sessions requires revoke-others [--yes]');
+    const action = rest[0];
+    if (action === 'list') {
+      if (rest.length !== 1) throw new Error('sessions list takes no arguments');
+      return { command: 'sessions', action: 'list' };
     }
-    const yes = rest.includes('--yes');
-    if (rest.length > 2 || (rest.length === 2 && !yes)) {
-      throw new Error('Unknown sessions option');
+    if (action === 'revoke') {
+      if (rest.length !== 2 || !rest[1]) throw new Error('sessions revoke requires an id');
+      return { command: 'sessions', action: 'revoke', id: rest[1] };
     }
-    return { command: 'sessions', action: 'revoke-others', yes };
+    if (action === 'revoke-others') {
+      const yes = rest.includes('--yes');
+      if (rest.length > 2 || (rest.length === 2 && !yes))
+        throw new Error('Unknown sessions option');
+      return { command: 'sessions', action: 'revoke-others', yes };
+    }
+    throw new Error('sessions requires list|revoke <id>|revoke-others [--yes]');
+  }
+
+  if (command === 'connections') {
+    const action = rest[0];
+    if (action === 'list') {
+      if (rest.length !== 1) throw new Error('connections list takes no arguments');
+      return { command: 'connections', action: 'list' };
+    }
+    if (action === 'revoke') {
+      if (rest.length !== 2 || !rest[1]) throw new Error('connections revoke requires an id');
+      return { command: 'connections', action: 'revoke', id: rest[1] };
+    }
+    throw new Error('connections requires list|revoke <id>');
   }
 
   if (command === 'connectors') {

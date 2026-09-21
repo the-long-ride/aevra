@@ -21,20 +21,52 @@ export async function runMaintenanceCommand<Config>(
   command: MaintenanceCommand,
   dependencies: MaintenanceCommandDependencies<Config>,
 ): Promise<number> {
-  if (!command.yes) {
-    if (command.command === 'audit') {
-      dependencies.error(
-        '[aevra] audit clear permanently removes audit event rows. Re-run with --yes to confirm.',
-      );
-    } else {
-      dependencies.error(
-        '[aevra] revoke-others removes non-connector MCP sessions and other admin sessions. Re-run with --yes to confirm.',
-      );
-    }
-    return 1;
-  }
-
   try {
+    if (command.command === 'sessions' && command.action === 'list') {
+      const response = await dependencies.api(config, '/api/sessions');
+      if (!response.ok) throw new Error(`Core returned ${response.status}`);
+      const items = (await response.json()) as Array<{
+        id: string;
+        actor?: string;
+        client?: string;
+        lastActivityAt?: string;
+      }>;
+      if (items.length === 0) {
+        dependencies.log('No active sessions.');
+        return 0;
+      }
+      for (const s of items) {
+        const actor = s.client ?? s.actor ?? 'session';
+        const last = s.lastActivityAt ? `  last active ${s.lastActivityAt}` : '';
+        dependencies.log(`${s.id}  ${actor}${last}`);
+      }
+      return 0;
+    }
+
+    if (command.command === 'sessions' && command.action === 'revoke') {
+      const response = await dependencies.api(
+        config,
+        `/api/sessions/${encodeURIComponent(command.id!)}/revoke`,
+        { method: 'POST', body: '{}' },
+      );
+      if (!response.ok) throw new Error(`Core returned ${response.status}`);
+      dependencies.log(`[aevra] Revoked session ${command.id}`);
+      return 0;
+    }
+
+    if (!command.yes) {
+      if (command.command === 'audit') {
+        dependencies.error(
+          '[aevra] audit clear permanently removes audit event rows. Re-run with --yes to confirm.',
+        );
+      } else {
+        dependencies.error(
+          '[aevra] revoke-others removes non-connector MCP sessions and other admin sessions. Re-run with --yes to confirm.',
+        );
+      }
+      return 1;
+    }
+
     if (command.command === 'audit') {
       const response = await dependencies.api(config, '/api/audit', {
         method: 'DELETE',
@@ -66,7 +98,14 @@ export async function runMaintenanceCommand<Config>(
     );
     return 0;
   } catch (error) {
-    const action = command.command === 'audit' ? 'audit clear' : 'sessions revoke-others';
+    const action =
+      command.command === 'audit'
+        ? 'audit clear'
+        : command.action === 'list'
+          ? 'sessions list'
+          : command.action === 'revoke'
+            ? 'sessions revoke'
+            : 'sessions revoke-others';
     dependencies.error(
       `[aevra] ${action} failed: ${dependencies.formatError(error)}. Is aevra start/service running?`,
     );
