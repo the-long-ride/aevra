@@ -38,7 +38,28 @@ async function loginCookie<Config>(
     },
     body: JSON.stringify(credentials),
   });
-  if (!response.ok) throw new Error(`Core returned ${response.status}`);
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const body = (await response.json()) as { error?: string | { message?: string } };
+      detail =
+        typeof body.error === 'string'
+          ? body.error
+          : typeof body.error?.message === 'string'
+            ? body.error.message
+            : '';
+    } catch {
+      // Keep the status-only fallback for non-JSON responses.
+    }
+
+    const error = new Error(
+      response.status === 429
+        ? `Admin login rate limited${response.headers.get('retry-after') ? `; retry in ${response.headers.get('retry-after')}s` : ''}`
+        : `Admin login failed (${response.status})${detail ? `: ${detail}` : ''}`,
+    ) as Error & { code?: string };
+    error.code = response.status === 429 ? 'ADMIN_LOGIN_RATE_LIMITED' : 'ADMIN_LOGIN_FAILED';
+    throw error;
+  }
   const cookie = (response.headers.get('set-cookie') ?? '').split(';')[0];
   if (!cookie) throw new Error('Core did not issue an admin session cookie');
   return cookie;

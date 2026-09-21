@@ -23,9 +23,16 @@ export async function runServiceCommand(
 ): Promise<number> {
   try {
     if (command.action === 'install') await service.install();
-    else if (command.action === 'start') await service.start();
-    else if (command.action === 'stop') await service.stop();
-    else if (command.action === 'restart') await service.restart();
+    else if (command.action === 'start' || command.action === 'restart') {
+      if ((await service.status()) === 'not-installed') {
+        dependencies.error(
+          `[aevra] service ${command.action} failed: Aevra service is not installed. Run "aevra service install" first.`,
+        );
+        return 1;
+      }
+      if (command.action === 'start') await service.start();
+      else await service.restart();
+    } else if (command.action === 'stop') await service.stop();
     else dependencies.log(await service.status());
     return 0;
   } catch (error) {

@@ -62,11 +62,31 @@ test('service action invokes matching adapter method', async () => {
   );
 
   assert.equal(code, 0);
-  assert.deepEqual(state.calls, ['restart']);
+  assert.deepEqual(state.calls, ['status', 'restart']);
+});
+
+test('service start reports an install hint when the service is not installed', async () => {
+  const state = fixture({
+    status: async () => {
+      state.calls.push('status');
+      return 'not-installed';
+    },
+  });
+
+  const code = await runServiceCommand(
+    { command: 'service', action: 'start' },
+    state.service,
+    state.dependencies,
+  );
+
+  assert.equal(code, 1);
+  assert.deepEqual(state.calls, ['status']);
+  assert.match(state.errors[0]!, /service install/);
 });
 
 test('service failures report action and error', async () => {
   const state = fixture({
+    status: async () => 'running',
     start: async () => {
       throw new Error('denied');
     },

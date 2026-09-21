@@ -14,6 +14,11 @@ test('version aliases parse', () => {
   }
 });
 
+test('about command parses', () => {
+  assert.deepEqual(parseAevraArgs(['about']), { command: 'about' });
+  assert.throws(() => parseAevraArgs(['about', '--flag']), /Unknown option/);
+});
+
 test('start selects no UI or the single React admin UI', () => {
   assert.deepEqual(parseAevraArgs(['start']), {
     command: 'start',

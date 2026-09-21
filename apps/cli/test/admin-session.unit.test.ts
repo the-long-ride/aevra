@@ -12,6 +12,7 @@ function response(
     status?: number;
     body?: Record<string, unknown>;
     setCookie?: string;
+    retryAfter?: string;
   } = {},
 ) {
   return {
@@ -19,7 +20,9 @@ function response(
     status: options.status ?? 200,
     headers: {
       get(name: string) {
-        return name.toLowerCase() === 'set-cookie' ? (options.setCookie ?? '') : null;
+        if (name.toLowerCase() === 'set-cookie') return options.setCookie ?? '';
+        if (name.toLowerCase() === 'retry-after') return options.retryAfter ?? null;
+        return null;
       },
     },
     async json() {
@@ -72,6 +75,28 @@ test('adminApi logs in with mandatory admin credentials before the requested API
     password: 'secret',
   });
   assert.equal(calls[1]!.init.headers?.cookie, 'aevra_admin=session-token');
+});
+
+test('adminApi reports login rate limiting instead of implying Core is down', async () => {
+  const { dependencies } = transport();
+  dependencies.fetch = async (_config, path) =>
+    path === '/api/auth/login'
+      ? response({
+          ok: false,
+          status: 429,
+          body: { error: 'Too many login attempts' },
+          retryAfter: '60',
+        })
+      : response();
+
+  await assert.rejects(
+    adminApi({}, '/api/connectors', { method: 'GET' }, dependencies),
+    (error: Error & { code?: string }) => {
+      assert.equal(error.code, 'ADMIN_LOGIN_RATE_LIMITED');
+      assert.match(error.message, /retry in 60s/);
+      return true;
+    },
+  );
 });
 
 test('createAuthenticatedUiUrl opens the login page without creating a session', async () => {
