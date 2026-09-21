@@ -1,4 +1,4 @@
-import type { Capability, RiskTier } from '../../protocol/src/index.js';
+import { normalizeYoloMode, type Capability, type RiskTier } from '../../protocol/src/index.js';
 import type { McpRuntimeContext } from './service-types.js';
 
 export function commandTextOf(args: any): string | undefined {
@@ -10,11 +10,14 @@ export function commandTextOf(args: any): string | undefined {
     .join(' ');
 }
 
-export function criticalConfirmRequired(context: McpRuntimeContext, risk: RiskTier) {
-  return (
-    risk === 'CRITICAL' &&
-    context.deps.settings?.get<boolean>('policy.critical.alwaysConfirm', false) === true
-  );
+export function criticalConfirmRequired(
+  context: McpRuntimeContext,
+  risk: RiskTier,
+  sessionId?: string,
+) {
+  if (risk !== 'CRITICAL') return false;
+  if (sessionId && context.sessions.isYolo?.(sessionId)) return true;
+  return context.deps.settings?.get<boolean>('policy.critical.alwaysConfirm', false) === true;
 }
 
 export function yoloAllows(
@@ -30,9 +33,9 @@ export function yoloAllows(
   },
 ) {
   if (!context.sessions.isYolo?.(sessionId)) return false;
-  if (criticalConfirmRequired(context, operation.risk)) return false;
-  const mode =
-    context.deps.settings?.get<{ mode?: string }>('policy.yolo', { mode: 'unrestricted' })?.mode ??
-    'unrestricted';
+  if (criticalConfirmRequired(context, operation.risk, sessionId)) return false;
+  const mode = normalizeYoloMode(
+    context.deps.settings?.get<{ mode?: string }>('policy.yolo', { mode: 'workspace' })?.mode,
+  );
   return mode === 'unrestricted' || operation.risk !== 'CRITICAL';
 }

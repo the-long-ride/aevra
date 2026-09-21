@@ -19,6 +19,11 @@ export class IpRateLimiter {
     return true;
   }
 
+  refund(ip: string): void {
+    const bucket = this.bucket(ip);
+    bucket.tokens = Math.min(this.capacity, bucket.tokens + 1);
+  }
+
   retryAfterSeconds(ip: string): number {
     const b = this.bucket(ip);
     if (b.tokens >= 1) return 0;

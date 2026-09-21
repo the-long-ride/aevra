@@ -48,11 +48,30 @@ test('Windows keep-awake uses SetThreadExecutionState without forcing the displa
   const script = Buffer.from(encoded, 'base64').toString('utf16le');
   assert.match(script, /SetThreadExecutionState/);
   assert.match(script, /ES_SYSTEM_REQUIRED/);
+  assert.match(script, /\[uint32\]2147483648/);
+  assert.doesNotMatch(script, /\[uint32\]0x80000000/);
+  assert.match(script, /while \(\$true\)[\s\S]*SetThreadExecutionState/);
+  assert.match(script, /if \(\$state -eq 0\)/);
   assert.doesNotMatch(script, /ES_DISPLAY_REQUIRED/);
 
   await inhibitor.release();
   assert.equal(child.killed, true);
 });
+
+test(
+  'Windows real keep-awake helper remains alive after initialization',
+  { skip: process.platform !== 'win32' },
+  async () => {
+    const inhibitor = createPlatformSleepInhibitor('win32');
+    try {
+      await inhibitor.acquire();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      assert.equal(inhibitor.supported(), true, inhibitor.message());
+    } finally {
+      await inhibitor.release();
+    }
+  },
+);
 
 test('macOS keep-awake uses caffeinate idle-sleep inhibition only', async () => {
   const calls: Array<{ executable: string; args: string[]; shell: boolean | undefined }> = [];
@@ -74,7 +93,7 @@ test('Linux keep-awake uses a logind idle inhibitor without shell interpolation'
   assert.deepEqual(calls, [
     {
       executable: 'systemd-inhibit',
-      args: ['--what=idle', '--mode=block', '--why=Aevra keep awake', 'sleep', 'infinity'],
+      args: ['--what=idle:sleep', '--mode=block', '--why=Aevra keep awake', 'sleep', 'infinity'],
       shell: false,
     },
   ]);

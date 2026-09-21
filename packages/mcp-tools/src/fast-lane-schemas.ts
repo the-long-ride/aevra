@@ -20,6 +20,10 @@ const workspaceTargetProperties = {
 const commandProperties = {
   executable: { type: 'string', description: 'Executable to run.' },
   args: { type: 'array', items: { type: 'string' }, description: 'Command arguments.' },
+  cwdLogical: {
+    type: 'string',
+    description: 'Logical working directory inside the active workspace. Defaults to /.',
+  },
   env: {
     type: 'object',
     additionalProperties: { type: 'string' },

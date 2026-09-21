@@ -50,7 +50,7 @@ export class SessionSkillAccessGate {
       if (ticket?.operation.family === SKILL_FAMILY)
         return this.resumeSkillApproval(sessionId, requestId);
     }
-    if (SKILL_READ_TOOLS.has(name) && !this.sessions.activeLease(sessionId)) {
+    if (SKILL_READ_TOOLS.has(name) && !this.sessions.leases(sessionId).length) {
       const access = await this.ensureSkillAccess(sessionId);
       if (!access.granted) return access.result;
     }
@@ -58,8 +58,8 @@ export class SessionSkillAccessGate {
   }
 
   async resourcesList(sessionId: string) {
-    const lease = this.sessions.activeLease(sessionId);
-    const workspaceCanReadSkills = lease?.capabilities.includes('skills.read') ?? false;
+    const leases = this.sessions.leases(sessionId);
+    const workspaceCanReadSkills = leases.some((l) => l.capabilities.includes('skills.read'));
     if (
       !workspaceCanReadSkills &&
       !this.grantedSessions.has(sessionId) &&
@@ -80,7 +80,7 @@ export class SessionSkillAccessGate {
       if (proxiedRead) return proxiedRead;
       throw new AevraToolError('INVALID_REQUEST', 'Upstream resources are unavailable');
     }
-    if (!this.sessions.activeLease(sessionId)) {
+    if (!this.sessions.leases(sessionId).length) {
       const access = await this.ensureSkillAccess(sessionId);
       if (!access.granted)
         throw new AevraToolError(

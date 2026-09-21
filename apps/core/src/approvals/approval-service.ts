@@ -4,6 +4,7 @@ import type { ApprovalRepository } from '../../../../packages/store/src/approval
 import type { AuditService } from '../audit/audit-service.js';
 import { notifySystem } from '../../../../packages/notifications/src/notify.js';
 import { recordTicketDecision } from './approval-audit.js';
+import { deleteCommandApprovalBinding } from './command-binding.js';
 import { presentApproval } from './request-presentation.js';
 import {
   assertTicketOwnership,
@@ -145,6 +146,7 @@ export class ApprovalService {
       t.state = 'EXPIRED';
       this.repo.put(t);
       this.volatilePayloads.delete(t.id);
+      deleteCommandApprovalBinding(t.id);
       this.record(t, 'expired', 'APPROVAL_TIMEOUT');
     }
     if (!t) return null;
@@ -190,6 +192,7 @@ export class ApprovalService {
     t.state = 'DENIED';
     this.repo.put(t);
     this.volatilePayloads.delete(t.id);
+    deleteCommandApprovalBinding(t.id);
     this.record(t, 'denied', 'APPROVAL_DENIED');
     return t;
   }
@@ -201,6 +204,7 @@ export class ApprovalService {
     t.cancellationReason = reason;
     this.repo.put(t);
     this.volatilePayloads.delete(t.id);
+    deleteCommandApprovalBinding(t.id);
     this.record(t, 'cancelled', reason);
     return t;
   }
@@ -211,12 +215,14 @@ export class ApprovalService {
         t.cancellationReason = 'CANCELLED_RESTART';
         this.repo.put(t);
         this.volatilePayloads.delete(t.id);
+        deleteCommandApprovalBinding(t.id);
         this.record(t, 'cancelled', 'CANCELLED_RESTART');
       } else if (t.state === 'EXECUTING') {
         t.state = 'INTERRUPTED';
         t.cancellationReason = 'INTERRUPTED_RESTART';
         this.repo.put(t);
         this.volatilePayloads.delete(t.id);
+        deleteCommandApprovalBinding(t.id);
         this.record(t, 'interrupted', 'INTERRUPTED_RESTART');
       }
     }
@@ -254,6 +260,7 @@ export class ApprovalService {
       if (transitioned) {
         t.state = 'CONTEXT_CHANGED';
         this.volatilePayloads.delete(t.id);
+        deleteCommandApprovalBinding(t.id);
         this.record(t, 'resume_rejected', 'APPROVAL_CONTEXT_CHANGED');
       }
       throw Object.assign(new Error(valid.reason), { code: 'APPROVAL_CONTEXT_CHANGED' });
@@ -270,6 +277,7 @@ export class ApprovalService {
       if (!post.ok) {
         this.repo.transitionExecution(id, 'FAILED', new Date().toISOString());
         this.volatilePayloads.delete(t.id);
+        deleteCommandApprovalBinding(t.id);
         this.record(t, 'resume_rejected', post.reason ?? 'APPROVAL_CONTEXT_CHANGED');
         throw Object.assign(new Error(post.reason ?? 'authority changed'), {
           code: 'APPROVAL_CONTEXT_CHANGED',
@@ -280,11 +288,13 @@ export class ApprovalService {
       const result = await execute(t);
       this.repo.transitionExecution(id, 'SUCCEEDED', new Date().toISOString());
       this.volatilePayloads.delete(t.id);
+      deleteCommandApprovalBinding(t.id);
       this.record(t, 'resume', 'SUCCEEDED');
       return result;
     } catch (e) {
       this.repo.transitionExecution(id, 'FAILED', new Date().toISOString());
       this.volatilePayloads.delete(t.id);
+      deleteCommandApprovalBinding(t.id);
       this.record(t, 'resume', 'FAILED');
       throw e;
     }

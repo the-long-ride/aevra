@@ -258,25 +258,32 @@ export class OperationService {
         code: 'CAPABILITY_REQUIRED',
       });
     }
-    const lease = this.sessions.activeLease(sessionId);
+    const lease =
+      (authorization?.workspaceId && typeof (this.sessions as any).leaseForWorkspace === 'function'
+        ? this.sessions.leaseForWorkspace(sessionId, authorization.workspaceId)
+        : null) ?? this.sessions.activeLease(sessionId);
     if (!lease) {
       throw Object.assign(new Error('Select a workspace'), {
         code: 'SESSION_WORKSPACE_REQUIRED',
       });
     }
-    if (lease.capabilities.includes(capability)) return lease;
-    const trusted =
-      authorization &&
-      authorization.sessionId === sessionId &&
-      authorization.workspaceId === lease.workspaceId &&
-      authorization.actor === lease.actor &&
-      authorization.capability === capability;
-    if (!trusted) {
-      throw Object.assign(new Error(`${capability} required`), {
-        code: 'CAPABILITY_REQUIRED',
-      });
+    if (authorization) {
+      const trusted =
+        authorization.sessionId === sessionId &&
+        authorization.workspaceId === lease.workspaceId &&
+        authorization.actor === lease.actor &&
+        authorization.capability === capability;
+      if (!trusted) {
+        throw Object.assign(new Error(`${capability} required`), {
+          code: 'CAPABILITY_REQUIRED',
+        });
+      }
+      return lease;
     }
-    return lease;
+    if (lease.capabilities.includes(capability)) return lease;
+    throw Object.assign(new Error(`${capability} required`), {
+      code: 'CAPABILITY_REQUIRED',
+    });
   }
 
   private changesRequired() {
@@ -290,11 +297,18 @@ export class OperationService {
 
   async runCommand(
     sessionId: string,
-    command: CommandRunInput,
-    executionMode?: 'sandbox' | 'host',
+    workspaceIdOrCommand: string | CommandRunInput,
+    commandOrExecutionMode?: CommandRunInput | 'sandbox' | 'host',
+    executionModeOrNetworkPolicy?: 'sandbox' | 'host' | NetworkPolicy,
     networkPolicy?: NetworkPolicy,
   ) {
-    return this.commandExecution.run(sessionId, command, executionMode, networkPolicy);
+    return (this.commandExecution.run as any)(
+      sessionId,
+      workspaceIdOrCommand,
+      commandOrExecutionMode,
+      executionModeOrNetworkPolicy,
+      networkPolicy,
+    );
   }
 
   async drainSession(sessionId: string, timeoutMs = 60_000) {

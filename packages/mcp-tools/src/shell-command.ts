@@ -9,6 +9,7 @@ export interface ShellRunInput {
   executionMode?: ExecutionMode;
   timeoutMs?: number;
   env?: Record<string, unknown>;
+  cwdLogical?: string;
 }
 
 const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -72,7 +73,11 @@ export function buildShellCommand(
       'INVALID_REQUEST',
       'PowerShell requires host execution because the current strict sandbox image is Linux-based',
     );
-  const base = { env: environment(input.env), timeoutMs: timeout(input.timeoutMs) };
+  const base = {
+    env: environment(input.env),
+    timeoutMs: timeout(input.timeoutMs),
+    ...(typeof input.cwdLogical === 'string' ? { cwdLogical: input.cwdLogical } : {}),
+  };
   if (shell === 'pwsh')
     return {
       executable: 'pwsh',

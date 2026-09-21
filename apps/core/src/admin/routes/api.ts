@@ -3,6 +3,7 @@ import { handleAccessRoutes } from './access-routes.js';
 import { handleActivityRoutes } from './activity-routes.js';
 import { handleApprovalPermissionRoutes } from './approval-permission-routes.js';
 import { handleBrowserRoutes } from './browser-routes.js';
+import { handleCommandExplainRoutes } from './command-explain-routes.js';
 import { handleConnectionRoutes } from './connection-routes.js';
 import { handleDesktopRoutes } from './desktop-routes.js';
 import { sendAdminResponse } from './http.js';
@@ -23,6 +24,7 @@ const handlers: AdminRouteHandler[] = [
   handleLocalFilesystemRoutes,
   handleWorkspaceRoutes,
   handleApprovalPermissionRoutes,
+  handleCommandExplainRoutes,
   handleConnectionRoutes,
   handleSessionConnectorRoutes,
   handleOperationRoutes,

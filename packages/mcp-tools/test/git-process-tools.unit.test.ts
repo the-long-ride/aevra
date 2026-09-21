@@ -2,93 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { gitTool } from '../src/git-tools.js';
 import { handleProcessChangeTool, processStart } from '../src/process-change-tools.js';
-
-function context(options: { yolo?: boolean; workerFailure?: boolean } = {}) {
-  const workerCalls: any[] = [];
-  const processCalls: any[] = [];
-  const changeCalls: any[] = [];
-  const lease = { workspaceId: 'w1', capabilities: [] };
-  const sessions: any = {
-    get: () => ({ id: 's1', actor: 'oauth:ChatGPT', subject: 'subject' }),
-    activeLease: () => lease,
-    isYolo: () => options.yolo ?? true,
-  };
-  const processes: any = {
-    start: async (...args: any[]) => {
-      processCalls.push(['start', ...args]);
-      return { id: 'p1', state: 'running' };
-    },
-    list: (sessionId: string) => {
-      processCalls.push(['list', sessionId]);
-      return [{ id: 'p1' }];
-    },
-    status: async (...args: any[]) => {
-      processCalls.push(['status', ...args]);
-      return { ok: true, value: { id: args[1], state: 'running' } };
-    },
-    wait: async (...args: any[]) => {
-      processCalls.push(['wait', ...args]);
-      return { ok: true, value: { id: args[1], state: 'completed' } };
-    },
-    command: async (...args: any[]) => {
-      processCalls.push(['command', ...args]);
-      return { ok: true, value: { id: args[2], kind: args[1], cursor: args[3] } };
-    },
-  };
-  const changes: any = {
-    begin: (...args: any[]) => {
-      changeCalls.push(['begin', ...args]);
-      return { id: 'c1' };
-    },
-    status: (...args: any[]) => {
-      changeCalls.push(['status', ...args]);
-      return { id: args[0], state: 'OPEN' };
-    },
-    commit: (...args: any[]) => {
-      changeCalls.push(['commit', ...args]);
-      return { id: args[0], state: 'COMMITTED' };
-    },
-    rollback: async (...args: any[]) => {
-      changeCalls.push(['rollback', ...args]);
-      return { id: args[0], state: 'ROLLED_BACK' };
-    },
-  };
-  const worker: any = {
-    execute: async (input: any) => {
-      workerCalls.push(input);
-      if (options.workerFailure)
-        return { ok: false, error: { code: 'INVALID_REQUEST', message: 'worker failed' } };
-      if (input.operation.kind === 'git.log' && input.operation.args?.includes('--format=%H')) {
-        return { ok: true, value: { stdout: 'abc123\n' } };
-      }
-      return { ok: true, value: { kind: input.operation.kind } };
-    },
-  };
-  return {
-    value: {
-      sessions,
-      workspaces: { capabilityRoots: () => [] },
-      worker,
-      reads: {} as any,
-      // Unrestricted YOLO keeps this dispatch coverage over every git operation; the
-      // workspace-scoped default sends git_push to approval by design.
-      deps: {
-        processes,
-        changes,
-        settings: {
-          get: (key: string, fallback: any) =>
-            key === 'policy.yolo' ? { mode: 'unrestricted' } : fallback,
-        },
-      },
-      oneTimeCapabilities: new Set<string>(),
-      processStart: async () => ({}),
-      callInner: async () => ({}),
-    } as any,
-    workerCalls,
-    processCalls,
-    changeCalls,
-  };
-}
+import { processGitTestContext as context } from './git-process-tools.fixture.js';
 
 test('git tool dispatches every git operation and snapshots repository state for mutations', async () => {
   const fx = context();
@@ -177,13 +91,78 @@ test('process start normalizes command lifecycle and process metadata', async ()
   assert.equal(result.id, 'p1');
   const call = fx.processCalls[0];
   assert.equal(call[0], 'start');
-  assert.equal(call[2].executable, 'node');
-  assert.equal(call[2].cwdLogical, '/');
-  assert.equal(call[3], 'keep-running');
-  assert.equal(call[4], 'Server');
+  assert.equal(call[2], 'w1');
+  assert.equal(call[3].executable, 'node');
+  assert.equal(call[3].cwdLogical, '/');
+  assert.equal(call[4], 'keep-running');
+  assert.equal(call[5], 'Server');
 
   await processStart(fx.value, 's1', { executable: 'npm', args: ['test'], lifecycle: 'invalid' });
-  assert.equal(fx.processCalls.at(-1)?.[3], 'stop-with-aevra');
+  assert.equal(fx.processCalls.at(-1)?.[4], 'stop-with-aevra');
+});
+
+test('process start preserves cwdLogical and YOLO overrides standing deny for non-critical work', async () => {
+  const yolo = context({ yolo: true, permissionOutcome: 'deny' });
+  await processStart(yolo.value, 's1', {
+    executable: 'node',
+    args: ['app.js'],
+    cwdLogical: '/packages/api',
+  });
+  assert.equal(yolo.processCalls[0]?.[3]?.cwdLogical, '/packages/api');
+
+  const allowed = context();
+  await processStart(allowed.value, 's1', {
+    executable: 'node',
+    args: ['app.js'],
+    cwdLogical: '/packages/api',
+  });
+  assert.equal(allowed.processCalls[0]?.[3]?.cwdLogical, '/packages/api');
+});
+
+test('process start keeps classifier CRITICAL risk as mandatory approval under unrestricted YOLO', async () => {
+  const fx = context({ yolo: true });
+  await assert.rejects(
+    () => processStart(fx.value, 's1', { executable: 'shutdown', args: [] }),
+    (error: any) => error.code === 'APPROVAL_PENDING',
+  );
+  assert.equal(fx.processCalls.length, 0);
+});
+
+test('process dispatcher uses workspace-first ProcessService signatures', async () => {
+  const fx = context();
+  fx.value.workspaceId = 'w1';
+
+  await handleProcessChangeTool(fx.value, 's1', 'process_status', { processId: 'p1' });
+  await handleProcessChangeTool(fx.value, 's1', 'process_wait', { processId: 'p1', timeoutMs: 25 });
+  await handleProcessChangeTool(fx.value, 's1', 'process_logs', {
+    processId: 'p1',
+    cursor: 'cur1',
+  });
+  await handleProcessChangeTool(fx.value, 's1', 'process_stop', { processId: 'p1' });
+  await handleProcessChangeTool(fx.value, 's1', 'process_restart', { processId: 'p1' });
+
+  assert.deepEqual(fx.processCalls.find((call) => call[0] === 'status')?.slice(1), [
+    's1',
+    'w1',
+    'p1',
+  ]);
+  assert.deepEqual(fx.processCalls.find((call) => call[0] === 'wait')?.slice(1), [
+    's1',
+    'w1',
+    'p1',
+    25,
+  ]);
+  const commandArgs = (kind: string) =>
+    fx.processCalls.find((call) => call[0] === 'command' && call[3] === kind)?.slice(1);
+  assert.deepEqual(commandArgs('process.logs'), ['s1', 'w1', 'process.logs', 'p1', 'cur1']);
+  assert.deepEqual(commandArgs('process.stop'), ['s1', 'w1', 'process.stop', 'p1', undefined]);
+  assert.deepEqual(commandArgs('process.restart'), [
+    's1',
+    'w1',
+    'process.restart',
+    'p1',
+    undefined,
+  ]);
 });
 
 test('process and change dispatcher covers every supported operation', async () => {

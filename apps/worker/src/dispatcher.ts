@@ -118,7 +118,11 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
       };
     }
 
-    const cwd = (await resolveCapabilityPath('/', roots, 'command')).canonicalHostPath;
+    const logicalCwd =
+      (op.kind === 'command.run' || op.kind === 'process.start') && op.command.cwdLogical
+        ? op.command.cwdLogical
+        : '/';
+    const cwd = (await resolveCapabilityPath(logicalCwd, roots, 'command')).canonicalHostPath;
     if (op.kind === 'command.run') {
       if (envelope.executionMode === 'sandbox') {
         const all = [new DockerBackend(), new PodmanBackend()];

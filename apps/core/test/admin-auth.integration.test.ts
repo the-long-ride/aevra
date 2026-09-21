@@ -265,6 +265,26 @@ test('password login is the only browser session issuance path', async () => {
   }
 });
 
+test('successful admin logins do not exhaust the failed-login limiter', async () => {
+  const fixture = await createHttpsAdmin(new IpRateLimiter(1, 0));
+  const attempt = () =>
+    request(fixture.server, '/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: fixture.server.url(),
+      },
+      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+    });
+  try {
+    for (let index = 0; index < 8; index++) {
+      assert.equal((await attempt()).status, 200);
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
 test('admin login returns 429 when the dedicated IP limiter is exhausted', async () => {
   const fixture = await createHttpsAdmin(new IpRateLimiter(1, 0));
   const attempt = () =>
@@ -278,7 +298,8 @@ test('admin login returns 429 when the dedicated IP limiter is exhausted', async
     });
   try {
     assert.equal((await attempt()).status, 401);
-    assert.equal((await attempt()).status, 429);
+    const limited = await attempt();
+    assert.equal(limited.status, 429);
   } finally {
     await fixture.close();
   }

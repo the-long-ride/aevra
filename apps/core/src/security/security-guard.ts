@@ -10,6 +10,7 @@ export type ResourceOperation = 'read' | 'search' | 'write' | 'patch' | 'move' |
 
 export interface ResourceAuthorizationInput {
   sessionId: string;
+  workspaceId?: string;
   capability: Capability;
   operation: ResourceOperation;
   logicalPath: string;
@@ -27,6 +28,7 @@ export interface ResourceAuthorizationResult {
 interface SecuritySessionReader {
   get(sessionId: string): { actor: string; subject: string } | null;
   activeLease(sessionId: string): { workspaceId: string } | null;
+  leaseForWorkspace?(sessionId: string, workspaceId: string): { workspaceId: string } | null;
 }
 
 interface SecurityWorkspaceReader {
@@ -58,11 +60,18 @@ export class SecurityGuard {
   authorizeResource(input: ResourceAuthorizationInput): ResourceAuthorizationResult {
     const session = this.sessions.get(input.sessionId);
     if (!session) throw Object.assign(new Error('Unknown Aevra session'), { code: 'UNAUTHORIZED' });
-    const lease = this.sessions.activeLease(input.sessionId);
+    const lease = input.workspaceId
+      ? this.sessions.leaseForWorkspace
+        ? this.sessions.leaseForWorkspace(input.sessionId, input.workspaceId)
+        : this.sessions.activeLease(input.sessionId)?.workspaceId === input.workspaceId
+          ? this.sessions.activeLease(input.sessionId)
+          : null
+      : this.sessions.activeLease(input.sessionId);
     if (!lease) {
-      throw Object.assign(new Error('Select a workspace first'), {
-        code: 'SESSION_WORKSPACE_REQUIRED',
-      });
+      throw Object.assign(
+        new Error(input.workspaceId ? 'Workspace access required' : 'Select a workspace first'),
+        { code: input.workspaceId ? 'WORKSPACE_ACCESS_REQUIRED' : 'SESSION_WORKSPACE_REQUIRED' },
+      );
     }
     if (!this.workspaces.getLocal(lease.workspaceId)) {
       throw Object.assign(new Error('Workspace not found'), { code: 'NOT_FOUND' });

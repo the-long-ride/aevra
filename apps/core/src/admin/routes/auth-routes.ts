@@ -88,10 +88,6 @@ export async function handleAuthRoutes(
       });
       return true;
     }
-    if (!context.loginLimiter.allow(context.clientIp)) {
-      sendAdminResponse(response, 429, { error: 'Too many login attempts' });
-      return true;
-    }
     if (!context.credentialVerifier) {
       sendAdminResponse(response, 503, { error: 'Admin authentication unavailable' });
       return true;
@@ -105,6 +101,15 @@ export async function handleAuthRoutes(
       sendAdminResponse(response, failure.status ?? 400, { error: 'Invalid request' });
       return true;
     }
+    if (!context.loginLimiter.allow(context.clientIp)) {
+      const retryAfter = context.loginLimiter.retryAfterSeconds(context.clientIp);
+      if (Number.isFinite(retryAfter) && retryAfter > 0) {
+        response.setHeader('retry-after', String(retryAfter));
+      }
+      sendAdminResponse(response, 429, { error: 'Too many login attempts' });
+      return true;
+    }
+
     const username = typeof body.username === 'string' ? body.username : '';
     const password = typeof body.password === 'string' ? body.password : '';
     const valid = await context.credentialVerifier.verify(username, password);
@@ -113,6 +118,10 @@ export async function handleAuthRoutes(
       sendAdminResponse(response, 401, { error: 'Invalid credentials' });
       return true;
     }
+
+    // The limiter protects failed credential attempts, not authenticated local
+    // CLI/UI traffic. Restore the reservation after a successful verification.
+    context.loginLimiter.refund(context.clientIp);
 
     const session = await context.sessions.issueSession();
     setSessionCookie(response, session.sessionId, context.secure);

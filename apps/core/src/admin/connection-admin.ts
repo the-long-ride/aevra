@@ -123,12 +123,9 @@ export class ConnectionAdminService {
   revoke(connectionId: string): boolean {
     const existing = this.oauth.getConnection(connectionId);
     if (!existing) return false;
-    if (this.sessions.revokeConnection) {
-      this.sessions.revokeConnection(connectionId, 'ADMIN_REVOKE');
-    } else {
-      this.oauth.revokeConnection(connectionId, 'ADMIN_REVOKE');
-      this.oauth.clearRememberedWorkspaceGrants(connectionId);
-    }
+    this.sessions.revokeConnection?.(connectionId, 'ADMIN_REVOKE');
+    this.oauth.revokeConnection(connectionId, 'ADMIN_REVOKE');
+    this.oauth.clearRememberedWorkspaceGrants(connectionId);
     this.onRevoke?.(connectionId);
     return true;
   }

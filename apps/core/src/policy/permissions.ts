@@ -15,6 +15,9 @@ export interface PermissionRule {
   createdAt: string;
   lastUsedAt?: string;
   expiresAt?: string;
+  version?: number;
+  status?: 'active' | 'needs-review';
+  predicate_json?: string;
 }
 export interface PermissionDecision {
   outcome: 'allow' | 'deny' | 'approval';
@@ -72,7 +75,11 @@ function fromRow(r: any): PermissionRule {
     sessionId: r.session_id ?? r.sessionId,
     matcher: r.matcher,
     createdAt: r.created_at ?? r.createdAt,
+    lastUsedAt: r.last_used_at ?? r.lastUsedAt,
     expiresAt: r.expires_at ?? r.expiresAt,
+    version: r.version ?? 1,
+    status: r.status ?? 'active',
+    predicate_json: r.predicate_json ?? r.predicateJson,
   };
 }
 function specificityScore(rule: PermissionRule) {
@@ -89,6 +96,10 @@ function specificity(a: PermissionRule, b: PermissionRule) {
 export class PermissionEngine {
   constructor(private repo: PermissionRepository) {}
 
+  listRules(): PermissionRule[] {
+    return (this.repo.list() as any[]).map(fromRow);
+  }
+
   private applicable(input: { workspaceId?: string; actor?: string; sessionId?: string }) {
     const now = Date.now();
     return (this.repo.list() as any[])
@@ -97,8 +108,13 @@ export class PermissionEngine {
         (r) =>
           (!r.expiresAt || Date.parse(r.expiresAt) > now) &&
           (!r.actor || r.actor === input.actor) &&
-          (!r.workspaceId || r.workspaceId === input.workspaceId) &&
-          (!r.sessionId || r.sessionId === input.sessionId),
+          (r.scope === 'workspace'
+            ? r.workspaceId === input.workspaceId
+            : !r.workspaceId || r.workspaceId === input.workspaceId) &&
+          (r.scope === 'session'
+            ? r.sessionId === input.sessionId
+            : !r.sessionId || r.sessionId === input.sessionId) &&
+          !(r.status === 'needs-review' && r.effect === 'allow'),
       );
   }
 

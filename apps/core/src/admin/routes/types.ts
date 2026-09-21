@@ -33,6 +33,11 @@ export interface AdminApiContext {
   systemCapabilities?: () => SystemCapabilitySnapshot;
   mcpDiagnostics?: () => unknown;
   safeMode?: () => boolean;
+  commandEvaluator?: (input: {
+    sessionId: string;
+    workspaceId?: string;
+    request: unknown;
+  }) => Promise<{ request?: unknown; analysis: unknown; decision: unknown }>;
 }
 
 export type AdminRouteHandler = (

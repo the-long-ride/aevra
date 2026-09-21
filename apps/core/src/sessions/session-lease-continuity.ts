@@ -102,16 +102,20 @@ export function grantRememberedWorkspaceAcrossSessions(input: {
 export function revokeConnectionSessions(input: {
   connectionId: string;
   sessions: Iterable<SecuritySession>;
-  disconnectedIdentities: Iterable<[string, { connectionId?: string }]>;
+  disconnectedIdentities: Iterable<[string, { connectionId?: string; subject?: string }]>;
   disconnect: (sessionId: string) => void;
   revokeSession: (sessionId: string) => void;
 }) {
   const ids = new Set<string>();
   for (const session of input.sessions) {
-    if (session.connectionId === input.connectionId) ids.add(session.id);
+    if (session.connectionId === input.connectionId || session.subject === input.connectionId) {
+      ids.add(session.id);
+    }
   }
   for (const [sessionId, identity] of input.disconnectedIdentities) {
-    if (identity.connectionId === input.connectionId) ids.add(sessionId);
+    if (identity.connectionId === input.connectionId || identity.subject === input.connectionId) {
+      ids.add(sessionId);
+    }
   }
   for (const sessionId of ids) {
     input.disconnect(sessionId);

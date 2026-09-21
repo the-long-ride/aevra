@@ -186,3 +186,4 @@ export type ToolResult<T> =
     };
 
 export * from './system-capabilities.js';
+export * from './command-analysis.js';

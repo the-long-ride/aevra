@@ -18,12 +18,35 @@ export class ProcessService {
 
   async start(
     sessionId: string,
-    command: CommandInput,
-    lifecycle: ProcessLifecycle,
+    workspaceIdOrCommand: string | CommandInput,
+    commandOrLifecycle?: CommandInput | ProcessLifecycle,
+    lifecycleOrName?: ProcessLifecycle | unknown,
     name?: unknown,
   ) {
-    const l = this.requiredLease(sessionId);
-    const processName = String(name ?? '').trim() || undefined;
+    let workspaceId: string | undefined;
+    let command: CommandInput;
+    let lifecycle: ProcessLifecycle;
+    let processName: unknown;
+
+    if (typeof workspaceIdOrCommand === 'string') {
+      workspaceId = workspaceIdOrCommand;
+      command = commandOrLifecycle as CommandInput;
+      lifecycle = (lifecycleOrName as ProcessLifecycle) ?? 'stop-with-aevra';
+      processName = name;
+    } else {
+      command = workspaceIdOrCommand;
+      workspaceId = (command as any)?.workspaceId;
+      lifecycle = (commandOrLifecycle as ProcessLifecycle) ?? 'stop-with-aevra';
+      processName = lifecycleOrName;
+    }
+
+    const l = this.leaseForWorkspace(sessionId, workspaceId);
+    if (!l) {
+      throw Object.assign(new Error('Workspace access required'), {
+        code: 'WORKSPACE_ACCESS_REQUIRED',
+      });
+    }
+    const safeProcessName = String(processName ?? '').trim() || undefined;
     const r = await this.worker.execute({
       sessionId,
       workspaceId: l.workspaceId,
@@ -34,7 +57,7 @@ export class ProcessService {
     const child = r.value as ManagedProcessStatus;
     this.repo.put({
       id: child.processId,
-      name: processName,
+      name: safeProcessName,
       workspaceId: l.workspaceId,
       lifecycle,
       ownership: 'owned',
@@ -49,7 +72,7 @@ export class ProcessService {
       signal: child.signal,
       finishedAt: child.finishedAt,
     });
-    return { ...this.remoteStatus(child), ...(processName ? { name: processName } : {}) };
+    return { ...this.remoteStatus(child), ...(safeProcessName ? { name: safeProcessName } : {}) };
   }
 
   listLocal() {
@@ -86,8 +109,13 @@ export class ProcessService {
     return r.value;
   }
 
-  async list(sessionId: string) {
-    const l = this.requiredLease(sessionId);
+  async list(sessionId: string, workspaceId?: string) {
+    const l = this.leaseForWorkspace(sessionId, workspaceId);
+    if (!l) {
+      throw Object.assign(new Error('Workspace access required'), {
+        code: 'WORKSPACE_ACCESS_REQUIRED',
+      });
+    }
     const records = this.repo.list(l.workspaceId) as any[];
     const known = new Set(records.map((record) => record.id));
     const observed = await this.worker.execute({
@@ -104,29 +132,77 @@ export class ProcessService {
     return (this.repo.list(l.workspaceId) as any[]).map((record) => this.remoteRecord(record));
   }
 
-  async status(sessionId: string, processId: string) {
-    return this.observe(sessionId, processId, { kind: 'process.status', processId });
+  async status(sessionId: string, workspaceIdOrProcessId: string, maybeProcessId?: string) {
+    const workspaceId = maybeProcessId ? workspaceIdOrProcessId : undefined;
+    const processId = maybeProcessId ?? workspaceIdOrProcessId;
+    return this.observe(sessionId, processId, { kind: 'process.status', processId }, workspaceId);
   }
 
-  async wait(sessionId: string, processId: string, timeoutMs?: number) {
-    return this.observe(sessionId, processId, { kind: 'process.wait', processId, timeoutMs });
+  async wait(
+    sessionId: string,
+    workspaceIdOrProcessId: string,
+    maybeProcessIdOrTimeout?: string | number,
+    maybeTimeoutMs?: number,
+  ) {
+    let workspaceId: string | undefined;
+    let processId: string;
+    let timeoutMs: number | undefined;
+    if (typeof maybeProcessIdOrTimeout === 'string') {
+      workspaceId = workspaceIdOrProcessId;
+      processId = maybeProcessIdOrTimeout;
+      timeoutMs = maybeTimeoutMs;
+    } else {
+      processId = workspaceIdOrProcessId;
+      timeoutMs = maybeProcessIdOrTimeout;
+    }
+    return this.observe(
+      sessionId,
+      processId,
+      { kind: 'process.wait', processId, timeoutMs },
+      workspaceId,
+    );
   }
 
   async command(
     sessionId: string,
-    kind: 'process.logs' | 'process.stop' | 'process.restart',
-    processId: string,
+    workspaceIdOrKind: string,
+    kindOrProcessId: 'process.logs' | 'process.stop' | 'process.restart' | string,
+    processIdOrCursor?: string,
     cursor?: string,
   ) {
-    const l = this.requiredLease(sessionId);
-    const record = (this.repo.list(l.workspaceId) as any[]).find((x) => x.id === processId);
-    if (!record) throw new Error('process not in active workspace');
+    let workspaceId: string | undefined;
+    let kind: 'process.logs' | 'process.stop' | 'process.restart';
+    let processId: string;
+    let cur: string | undefined;
+
+    if (workspaceIdOrKind.startsWith('process.')) {
+      kind = workspaceIdOrKind as any;
+      processId = kindOrProcessId as string;
+      cur = processIdOrCursor;
+    } else {
+      workspaceId = workspaceIdOrKind;
+      kind = kindOrProcessId as any;
+      processId = processIdOrCursor as string;
+      cur = cursor;
+    }
+
+    const record = this.repo.get(processId);
+    if (!record) throw new Error('process not found');
+    if (workspaceId && record.workspace_id !== workspaceId) {
+      throw new Error('process not in active workspace');
+    }
+    const l = this.leaseForWorkspace(sessionId, record.workspace_id);
+    if (!l) {
+      throw Object.assign(new Error('Workspace access required'), {
+        code: 'WORKSPACE_ACCESS_REQUIRED',
+      });
+    }
     const result = await this.worker.execute({
       sessionId,
       workspaceId: l.workspaceId,
       roots: this.workspaces.capabilityRoots(l.workspaceId),
       operation:
-        kind === 'process.logs' ? { kind, processId, cursor } : ({ kind, processId } as any),
+        kind === 'process.logs' ? { kind, processId, cursor: cur } : ({ kind, processId } as any),
     });
     if (result.ok && kind === 'process.logs') this.reconcileValue(result.value);
     if (result.ok && kind === 'process.restart') {
@@ -160,10 +236,23 @@ export class ProcessService {
     return result;
   }
 
-  private async observe(sessionId: string, processId: string, operation: any) {
-    const l = this.requiredLease(sessionId);
-    const record = (this.repo.list(l.workspaceId) as any[]).find((x) => x.id === processId);
-    if (!record) throw new Error('process not in active workspace');
+  private async observe(
+    sessionId: string,
+    processId: string,
+    operation: any,
+    workspaceId?: string,
+  ) {
+    const record = this.repo.get(processId);
+    if (!record) throw new Error('process not found');
+    if (workspaceId && record.workspace_id !== workspaceId) {
+      throw new Error('process not in active workspace');
+    }
+    const l = this.leaseForWorkspace(sessionId, record.workspace_id);
+    if (!l) {
+      throw Object.assign(new Error('Workspace access required'), {
+        code: 'WORKSPACE_ACCESS_REQUIRED',
+      });
+    }
     const result = await this.worker.execute({
       sessionId,
       workspaceId: l.workspaceId,
@@ -211,10 +300,13 @@ export class ProcessService {
     };
   }
 
-  private requiredLease(sessionId: string) {
+  private leaseForWorkspace(sessionId: string, workspaceId?: string) {
+    if (workspaceId && typeof (this.sessions as any).leaseForWorkspace === 'function') {
+      return this.sessions.leaseForWorkspace(sessionId, workspaceId);
+    }
     const l = this.sessions.activeLease(sessionId);
-    if (!l)
-      throw Object.assign(new Error('Select workspace'), { code: 'SESSION_WORKSPACE_REQUIRED' });
+    if (!l) return null;
+    if (workspaceId && l.workspaceId !== workspaceId) return null;
     return l;
   }
 }

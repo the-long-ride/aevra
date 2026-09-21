@@ -251,6 +251,15 @@ ALTER TABLE oauth_authorization_requests ADD COLUMN renewable INTEGER NOT NULL D
 ALTER TABLE oauth_authorization_codes ADD COLUMN renewable INTEGER NOT NULL DEFAULT 1;
 `,
   },
+  {
+    version: 16,
+    name: '016_command_rule_v2_predicates',
+    sql: `
+ALTER TABLE permission_rules ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE permission_rules ADD COLUMN predicate_json TEXT;
+ALTER TABLE permission_rules ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+`,
+  },
 ];
 export function applyMigrations(db: DatabaseSync) {
   db.exec(
