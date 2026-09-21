@@ -1,6 +1,6 @@
 # 06 — Workspaces & Execution
 
-**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `1.0.5`
+**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `1.1.0`
 
 A **workspace** is a registered host folder the AI may work in. Registration happens **only** in the localhost Web UI — the remote surface can never create or mutate roots.
 
@@ -43,9 +43,14 @@ command policy rather than file-resource classification.
 ## Command execution & system capabilities
 
 - **Strict sandbox by default**: Docker → Podman → fail (`EXECUTOR_UNAVAILABLE`). Host execution is a separate request with its own approval — never a silent fallback.
-- **Host system capabilities & shell resolution**: Aevra probes host OS information, available shells (`pwsh`, `powershell`, `cmd`, `bash`, `zsh`, `sh`, `wsl`), and installed toolchain categories (Git, JavaScript, Python, .NET, Rust, Go, JVM, Ruby, PHP, native build tools, container runtimes). `shell_run` automatically resolves an unspecified shell to the platform's recommended shell (`pwsh`/`powershell` on Windows, `bash`/`zsh` on unix-like systems).
+- **Host system capabilities & shell resolution**: Aevra probes host OS information, available shells (`pwsh`, `powershell`, `cmd`, `bash`, `zsh`, `sh`, `wsl`), and installed toolchain categories (Git, GitHub CLI `gh`, GitLab CLI `glab`, JavaScript, Python, .NET, Rust, Go, JVM, Ruby, PHP, native build tools including `rtk`, container runtimes). `shell_run` automatically resolves an unspecified shell to the platform's recommended shell (`pwsh`/`powershell` on Windows, `bash`/`zsh` on unix-like systems).
+- **Structured command understanding (`packages/command-analysis`)**: Commands are parsed into semantic syntax graphs with nodes, options, modifiers, and targets across PowerShell, CMD, Bash, sh, and zsh. Wrappers such as `rtk` are recognized and mapped to underlying tools without dropping arguments or flags.
+- **Canonical workspace scope & cwdLogical**: Commands and processes accept optional `cwdLogical`, resolved in Aevra's logical namespace against authorized capability roots. Raw absolute command operands keep native host semantics; relative operands resolve from the mapped logical cwd. This separation prevents logical `/` from being mistaken for the host filesystem root. Any command whose working directory or canonical targets escape authorized workspace roots (`OUTSIDE_WORKSPACE`) strictly prompts for human approval in ordinary and workspace YOLO modes.
+- **Scope-bearing syntax is explicit**: shell redirects, Bash background lists, copy/move destination options, grep/ripgrep pattern-file options, touch references, find input lists, Git cwd controls, and Node-package cwd controls are included in containment evidence. Unsupported or malformed scope-bearing syntax fails closed instead of disappearing from authorization.
+- **Package script evidence follows the effective package cwd**: npm/pnpm/yarn/bun `--prefix`, `--dir`, and `-C` are canonicalized once, including external mounts, before reading `package.json` and fingerprinting named scripts.
+- **Bound executable identity & batch shim safety**: Host command analysis resolves the actual invocation with the request child environment via `packages/command-analysis/src/executable-resolver.ts`; execution prepares Windows launch targets in `packages/executor/src/spawn-target.ts`. Both paths receive the effective child environment, explicit paths and PATH overrides are preserved, wrapper identities are fingerprinted separately, and sandbox analysis fails closed instead of substituting host executable evidence. On Windows, `.cmd`/`.bat` shims are wrapped via `windowsShimCommand` with per-argument validation.
 - Commands classify into effects: `READ_ONLY` `BUILD_OUTPUT` `SOURCE_MUTATION` `REPOSITORY_STATE` `UNKNOWN`. Read-only may run concurrently; mutations and unknowns take conservative workspace locks; build outputs may overlap when output areas don't conflict.
-- Risk + permission rules decide: run, ask (approval ticket), or deny. Aevra never auto-elevates and doesn't run as root/SYSTEM.
+- Risk + typed permission rules (V2) decide: run, ask (approval ticket), or deny. Aevra never auto-elevates and doesn't run as root/SYSTEM.
 - Network egress defaults to deny-all; destinations are explicit allow-rules, capability-gated (`network`).
 - `command_run_many` is the model-facing bounded command interface for one to 16 commands, including a single command. Aevra uses bounded concurrency for compatible effects and serializes potentially conflicting work. The singular `command_run` primitive remains internal/non-discoverable.
 - If a command may exceed the upstream tool-request window, use a managed process instead of extending one MCP HTTP response indefinitely.
@@ -70,7 +75,7 @@ For detached `keep-running` processes, the process host writes an atomic result 
 
 ## Keep-awake policy
 
-The persisted `power.keepAwake` setting supports `off`, `remote-connections` (default), `managed-processes`, and `always`. Aevra evaluates the selected policy every 5 seconds and uses a platform sleep inhibitor only while needed. Windows uses `SetThreadExecutionState`, macOS uses `caffeinate`, and Linux uses a logind inhibitor. The policy prevents system idle sleep only; it does **not** force the display on or disable screen locking. Unsupported platforms degrade to an explicit unavailable status rather than failing startup.
+The persisted `power.keepAwake` setting supports `off`, `remote-connections` (default), `managed-processes`, and `always`. Aevra evaluates the selected policy every 5 seconds and uses a platform sleep inhibitor only while needed. Windows reasserts `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)` every 30 seconds and fails visibly if the OS call returns an error, macOS uses `caffeinate -i`, and Linux holds both `idle` and `sleep` logind inhibitors. The policy does **not** force the display on or disable screen locking. Unsupported platforms degrade to an explicit unavailable status rather than failing startup.
 
 ## Change sets & recovery (short version)
 

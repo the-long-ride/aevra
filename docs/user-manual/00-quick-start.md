@@ -2,6 +2,10 @@
 
 Aevra gives an AI client controlled access to registered local workspaces. The Web UI is the administrative control plane for setup, approvals, recovery, processes, and security.
 
+## AI assistant setup (llm.txt)
+
+You can provide [llm.txt](https://raw.githubusercontent.com/the-long-ride/aevra/main/llm.txt) to an AI assistant (ChatGPT, Claude, Gemini, Cursor) to quickly learn how to set up, configure, and use Aevra for your workspace and workflows.
+
 ## Fast path
 
 1. Install and build Aevra.

@@ -97,10 +97,14 @@ jobs:
       - run: npm run build
       - run: npm run test:ui-parity:only
 
-  windows-portability:
-    name: Windows portability
-    runs-on: windows-latest
+  portability:
+    name: Portability (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

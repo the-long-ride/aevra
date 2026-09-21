@@ -31,15 +31,17 @@ test('full repository gate runs each expensive validation path once', () => {
   assert.equal(pkg.scripts.prepublishOnly, undefined);
 });
 
-test('quality gate parallelizes Linux validation and keeps a Windows portability gate', () => {
+test('quality gate parallelizes validation and runs portability across Windows macOS and Linux', () => {
   assert.match(workflow, /pull_request:/);
   assert.match(workflow, /ubuntu-latest/);
   assert.match(workflow, /windows-latest/);
+  assert.match(workflow, /macos-latest/);
   assert.match(workflow, /static-checks:/);
   assert.match(workflow, /node-coverage:/);
   assert.match(workflow, /web-coverage:/);
   assert.match(workflow, /browser-parity:/);
-  assert.match(workflow, /windows-portability:/);
+  assert.match(workflow, /portability:/);
+  assert.match(workflow, /os: \[windows-latest, macos-latest, ubuntu-latest\]/);
   assert.match(workflow, /actions\/checkout@v7/);
   assert.match(workflow, /actions\/setup-node@v7/);
   assert.match(workflow, /node-version:\s*24/);
@@ -54,12 +56,12 @@ test('quality gate parallelizes Linux validation and keeps a Windows portability
     workflow.indexOf('  node-coverage:'),
     workflow.indexOf('  web-coverage:'),
   );
-  const windowsPortability = workflow.slice(
-    workflow.indexOf('  windows-portability:'),
+  const portability = workflow.slice(
+    workflow.indexOf('  portability:'),
     workflow.indexOf('  desktop-helper:'),
   );
   assert.match(nodeCoverage, /playwright install --with-deps chromium/);
-  assert.match(windowsPortability, /playwright install chromium/);
+  assert.match(portability, /playwright install chromium/);
   assert.doesNotMatch(workflow, /npm run test:gate/);
   assert.doesNotMatch(workflow, /ci-skip|Exclude unchanged|mv packages\/executor\/test/);
 });
