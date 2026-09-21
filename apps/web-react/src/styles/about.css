@@ -1,0 +1,169 @@
+.about-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.about-card {
+  border: 1px solid var(--hairline);
+  background: var(--canvas);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.about-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 10px;
+}
+
+.about-card-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.about-version-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--surface-soft);
+  border: 1px solid var(--hairline);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.about-description {
+  color: var(--body);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.about-details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.about-detail-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.about-detail-row dt {
+  color: var(--mute);
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.about-detail-row dd {
+  margin: 0;
+  color: var(--ink);
+}
+
+.about-author-note {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.about-links-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.about-links-list li a {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.about-links-list li a:hover {
+  text-decoration: underline;
+}
+
+/* Guide AI section */
+.guide-ai-section {
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.guide-ai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.guide-ai-title-wrap h3 {
+  margin: 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.guide-ai-title-wrap p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--mute);
+  line-height: 1.5;
+}
+
+.guide-ai-title-wrap p a {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.guide-ai-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--stone);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.guide-ai-copy-button {
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+}
+
+.guide-ai-prompt-display pre {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+}

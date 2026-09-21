@@ -30,6 +30,7 @@ export interface DataTableProps<T> {
   searchPlaceholder?: string;
   emptyText?: string;
   rowKey?(row: T, index: number): string;
+  rowProps?(row: T, index: number): React.HTMLAttributes<HTMLTableRowElement>;
   paginationPosition?: 'toolbar' | 'footer';
   fillAvailableHeight?: boolean;
 }
@@ -68,6 +69,7 @@ export function DataTable<T>({
   searchPlaceholder = 'Search…',
   emptyText = 'No data',
   rowKey = (_, index) => String(index),
+  rowProps,
   paginationPosition = 'footer',
   fillAvailableHeight = false,
 }: DataTableProps<T>) {
@@ -183,47 +185,49 @@ export function DataTable<T>({
             }}
           />
         </label>
-        <div className="dt-filters">
-          {filters.map((filter) => (
-            <label className="dt-filter" key={filter.key}>
-              <span>{filter.label}</span>
-              <Dropdown
-                ariaLabel={filter.label}
-                value={selectedFilters[filter.key] ?? ''}
-                onChange={(value) => {
-                  setSelectedFilters((current) => ({
-                    ...current,
-                    [filter.key]: value,
-                  }));
-                  setPage(1);
-                }}
-                options={[
-                  { value: '', label: 'All' },
-                  ...filterOptions(filter).map((optionValue) => ({
-                    value: optionValue,
-                    label: filter.format?.(optionValue) ?? optionValue,
-                  })),
-                ]}
-              />
-            </label>
-          ))}
+        <div className="dt-control-strip">
+          <div className="dt-filters">
+            {filters.map((filter) => (
+              <label className="dt-filter" key={filter.key}>
+                <span>{filter.label}</span>
+                <Dropdown
+                  ariaLabel={filter.label}
+                  value={selectedFilters[filter.key] ?? ''}
+                  onChange={(value) => {
+                    setSelectedFilters((current) => ({
+                      ...current,
+                      [filter.key]: value,
+                    }));
+                    setPage(1);
+                  }}
+                  options={[
+                    { value: '', label: 'All' },
+                    ...filterOptions(filter).map((optionValue) => ({
+                      value: optionValue,
+                      label: filter.format?.(optionValue) ?? optionValue,
+                    })),
+                  ]}
+                />
+              </label>
+            ))}
+          </div>
+          <label className="dt-size">
+            <span>Rows</span>
+            <Dropdown
+              ariaLabel="Rows per page"
+              value={String(size)}
+              onChange={(value) => {
+                setSize(Number(value) as 5 | 10 | 25 | 50 | 100);
+                setPage(1);
+              }}
+              options={[5, 10, 25, 50, 100].map((value) => ({
+                value: String(value),
+                label: String(value),
+              }))}
+            />
+          </label>
+          {paginationPosition === 'toolbar' ? pagination : null}
         </div>
-        <label className="dt-size">
-          <span>Rows</span>
-          <Dropdown
-            ariaLabel="Rows per page"
-            value={String(size)}
-            onChange={(value) => {
-              setSize(Number(value) as 5 | 10 | 25 | 50 | 100);
-              setPage(1);
-            }}
-            options={[5, 10, 25, 50, 100].map((value) => ({
-              value: String(value),
-              label: String(value),
-            }))}
-          />
-        </label>
-        {paginationPosition === 'toolbar' ? pagination : null}
       </div>
       <div className="dt-scroll">
         <table className="data-table">
@@ -258,7 +262,7 @@ export function DataTable<T>({
           <tbody>
             {pageRows.length ? (
               pageRows.map((row, index) => (
-                <tr key={rowKey(row, start + index)}>
+                <tr key={rowKey(row, start + index)} {...rowProps?.(row, start + index)}>
                   {columns.map((column) => (
                     <td
                       key={column.key}

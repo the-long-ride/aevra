@@ -1,5 +1,13 @@
 import type { SystemCapabilitySnapshot } from '../../protocol/src/index.js';
 export type { SystemCapabilitySnapshot } from '../../protocol/src/index.js';
+export type {
+  CommandAnalysis,
+  CommandRuleV2,
+  CommandNode,
+  Reason,
+  ScopeStatus,
+  ParseStatus,
+} from '../../protocol/src/index.js';
 
 export type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type ApprovalState = 'PENDING' | 'APPROVED' | 'DENIED' | 'EXPIRED';

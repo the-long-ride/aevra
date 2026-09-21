@@ -4,6 +4,7 @@ import { AppShell } from '../components/AppShell';
 import { DialogProvider } from '../components/Dialog';
 import { AdminAuthGate } from '../features/auth/AdminAuthGate';
 import { AuditPage } from '../features/audit/AuditPage';
+import { AboutPage } from '../features/about/AboutPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { DataPage } from '../features/data/DataPage';
 import { GuidePage } from '../features/guide/GuidePage';
@@ -15,6 +16,7 @@ import { SessionsPage } from '../features/sessions/SessionsPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { WorkspacesPage } from '../features/workspaces/WorkspacesPage';
 import type { Theme } from '../hooks/theme-state';
+import { McpActivityProvider } from '../hooks/use-mcp-activity';
 import { useRuntimeStatus } from '../hooks/use-runtime-status';
 import { useTheme } from '../hooks/use-theme';
 import { useHashPage } from './use-hash-page';
@@ -28,6 +30,7 @@ const pageRegistry: Record<AdminPageId, ComponentType> = {
   settings: SettingsPage,
   data: DataPage,
   guide: GuidePage,
+  about: AboutPage,
 };
 
 function AuthenticatedApp({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
@@ -113,7 +116,9 @@ export function App() {
 
   return (
     <AdminAuthGate theme={theme} onToggleTheme={toggleTheme}>
-      <AuthenticatedApp theme={theme} onToggleTheme={toggleTheme} />
+      <McpActivityProvider>
+        <AuthenticatedApp theme={theme} onToggleTheme={toggleTheme} />
+      </McpActivityProvider>
     </AdminAuthGate>
   );
 }

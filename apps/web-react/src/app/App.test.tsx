@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, test } from 'vitest';
+import { act } from '@testing-library/react';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ADMIN_SURFACE } from '@aevra/admin-contracts';
 import { installApiFixtures } from '../test/api-fixtures';
 import { App } from './App';
@@ -39,6 +40,10 @@ describe('React admin shell', () => {
     await user.click(screen.getByRole('button', { name: 'Guide' }));
     expect(await screen.findByRole('heading', { name: 'Guide' })).toBeInTheDocument();
     expect(window.location.hash).toBe('#/guide');
+
+    await user.click(screen.getByRole('button', { name: 'About' }));
+    expect(await screen.findByRole('heading', { name: 'About' })).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/about');
   });
 
   test('marks the page container with the active tab id', async () => {
@@ -140,6 +145,100 @@ describe('React admin shell', () => {
 
     expect(await screen.findByTestId('react-admin-root')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Workspaces' })).toBeInTheDocument();
+  });
+
+  test('activity stream starts after login and drives the runtime chart without a page refresh', async () => {
+    class FakeEventSource {
+      static instances: FakeEventSource[] = [];
+      readonly listeners = new Map<string, Array<(event: MessageEvent<string>) => void>>();
+      onopen: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(readonly url: string) {
+        FakeEventSource.instances.push(this);
+      }
+
+      addEventListener(type: string, listener: EventListener) {
+        const listeners = this.listeners.get(type) ?? [];
+        listeners.push(listener as (event: MessageEvent<string>) => void);
+        this.listeners.set(type, listeners);
+      }
+
+      emit(type: string, value: unknown) {
+        for (const listener of this.listeners.get(type) ?? []) {
+          listener({ data: JSON.stringify(value) } as MessageEvent<string>);
+        }
+      }
+
+      close() {}
+    }
+
+    vi.stubGlobal('EventSource', FakeEventSource);
+
+    let authenticated = false;
+    const fetchMock = installApiFixtures();
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.pathname + input.search
+            : input.url;
+      const method = String(init?.method ?? 'GET').toUpperCase();
+      if (url === '/api/auth/session') {
+        return new Response(JSON.stringify({ authenticated }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url === '/api/auth/login' && method === 'POST') {
+        authenticated = true;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url === '/api/activity') {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return base(input, init);
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'Sign in to Aevra' });
+    expect(FakeEventSource.instances).toHaveLength(0);
+
+    await user.type(screen.getByLabelText('Username'), 'admin');
+    await user.type(screen.getByLabelText('Password'), 'secret');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(await screen.findByTestId('react-admin-root')).toBeInTheDocument();
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    const source = FakeEventSource.instances[0]!;
+    const now = new Date().toISOString();
+    act(() => {
+      source.emit('activity', {
+        id: 'live-after-login',
+        actor: 'oauth:ChatGPT',
+        sessionId: 'session-live',
+        workspaceId: 'ws-1',
+        kind: 'tool',
+        action: 'file_read',
+        state: 'running',
+        startedAt: now,
+        updatedAt: now,
+      });
+    });
+
+    expect(await screen.findByText('1 active now')).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   test('the approval modal closes even when the refresh that follows the decision fails', async () => {

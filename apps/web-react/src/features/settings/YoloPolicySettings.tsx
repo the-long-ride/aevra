@@ -42,7 +42,12 @@ export function YoloPolicySettings({
       <div className="panel-head compact-panel-head">
         <div>
           <h3>YOLO policy</h3>
-          <p>Workspace mode still requires confirmation for critical work.</p>
+          <p>
+            Workspace auto-allows every non-critical command proven to stay inside its workspace.
+            Unrestricted removes Aevra's workspace authorization boundary for non-critical commands;
+            in host mode they can affect the whole device. Sandboxes remain physically isolated, and
+            critical commands always require confirmation.
+          </p>
         </div>
       </div>
       <div className="yolo-policy-body">

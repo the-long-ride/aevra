@@ -103,6 +103,36 @@ export function DashboardPage() {
     }
   };
 
+  const revokeSingle = async (row: any) => {
+    const clientName = String(row.client ?? row.connectionId ?? row.sessionId ?? 'connection');
+    const confirmed = await dialog.confirm({
+      title: 'Revoke connection',
+      message: `Revoke ${clientName}?`,
+      confirmLabel: 'Revoke',
+      confirmTone: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await revokeActiveConnection(row);
+      const id = String(row.id ?? row.sessionId ?? '');
+      if (id) {
+        setSelectedConnectionIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+      }
+      if (selectedConnection?.id === row.id) setSelectedConnection(null);
+      await resource.refresh();
+    } catch (err: any) {
+      void dialog.message({
+        title: 'Revocation failed',
+        actionLabel: 'Close',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
   const sections = {
     onboarding: (
       <DashboardSection
@@ -270,13 +300,23 @@ export function DashboardPage() {
               sortable: false,
               search: false,
               render: (row: any) => (
-                <button
-                  type="button"
-                  data-surface-id="connections:details"
-                  onClick={() => setSelectedConnection(row)}
-                >
-                  Details
-                </button>
+                <div style={{ display: 'inline-flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    data-surface-id="connections:details"
+                    onClick={() => setSelectedConnection(row)}
+                  >
+                    Details
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-button"
+                    data-surface-id="connections:revoke"
+                    onClick={() => void revokeSingle(row)}
+                  >
+                    Revoke
+                  </button>
+                </div>
               ),
             },
           ]}

@@ -32,7 +32,14 @@ export function RequestActivityChart({ data }: { data: DashboardData }) {
     startedAt?: string;
     generatedAt?: string;
   };
-  const generatedAt = snapshot.generatedAt ?? new Date().toISOString();
+  const snapshotGeneratedAt = snapshot.generatedAt ?? new Date().toISOString();
+  const generatedAt = useMemo(() => {
+    const timestamps = [
+      Date.parse(snapshotGeneratedAt),
+      ...entries.flatMap((entry) => [Date.parse(entry.startedAt), Date.parse(entry.updatedAt)]),
+    ].filter(Number.isFinite);
+    return new Date(Math.max(...timestamps)).toISOString();
+  }, [entries, snapshotGeneratedAt]);
   const points = useMemo(() => buildRequestHistory(entries, generatedAt), [entries, generatedAt]);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
@@ -87,6 +94,7 @@ export function RequestActivityChart({ data }: { data: DashboardData }) {
   const widthScale = Math.max(1, historyDuration / visibleWindowMs);
   const width = Math.round(baseWidth * widthScale);
   const maxActive = Math.max(1, ...displayPoints.map((point) => point.active));
+  const requestLevels = Array.from({ length: maxActive + 1 }, (_, index) => maxActive - index);
   const x = (timestamp: number) =>
     LEFT + ((timestamp - historyStart) / historyDuration) * (width - LEFT - RIGHT);
   const y = (active: number) => TOP + ((maxActive - active) / maxActive) * (HEIGHT - TOP - BOTTOM);
@@ -248,7 +256,17 @@ export function RequestActivityChart({ data }: { data: DashboardData }) {
                 y2={HEIGHT - BOTTOM}
                 className="runtime-chart-axis"
               />
-              <line x1={LEFT} y1={TOP} x2={width - RIGHT} y2={TOP} className="runtime-chart-grid" />
+              {requestLevels.map((level) => (
+                <line
+                  key={level}
+                  x1={LEFT}
+                  y1={y(level)}
+                  x2={width - RIGHT}
+                  y2={y(level)}
+                  className="runtime-chart-grid"
+                  data-request-level={level}
+                />
+              ))}
               <path d={path} className="runtime-chart-line" fill="none" />
               {displayPoints.map((point, index) => {
                 const isPinned = tooltip?.pinned && tooltip.timestamp === point.timestamp;
@@ -287,51 +305,28 @@ export function RequestActivityChart({ data }: { data: DashboardData }) {
         </div>
         <div className="runtime-chart-y-axis" aria-label="Request count scale">
           <svg
-            viewBox="0 0 32 180"
+            viewBox={`0 0 32 ${HEIGHT}`}
             height={HEIGHT}
             style={{ height: `${HEIGHT}px`, width: '32px', display: 'block' }}
             role="img"
             aria-label={`Scale 0 to ${maxActive} requests`}
           >
             <line x1={0} y1={TOP} x2={0} y2={HEIGHT - BOTTOM} className="runtime-chart-axis" />
-            <line x1={0} y1={TOP} x2={4} y2={TOP} className="runtime-chart-axis" />
-            <line
-              x1={0}
-              y1={HEIGHT - BOTTOM}
-              x2={4}
-              y2={HEIGHT - BOTTOM}
-              className="runtime-chart-axis"
-            />
-            {maxActive > 1 ? (
-              <line
-                x1={0}
-                y1={(TOP + HEIGHT - BOTTOM) / 2}
-                x2={3}
-                y2={(TOP + HEIGHT - BOTTOM) / 2}
-                className="runtime-chart-axis"
-              />
-            ) : null}
-            <text x={8} y={TOP} dominantBaseline="central" className="runtime-chart-label">
-              {maxActive}
-            </text>
-            {maxActive > 1 ? (
-              <text
-                x={8}
-                y={(TOP + HEIGHT - BOTTOM) / 2}
-                dominantBaseline="central"
-                className="runtime-chart-label"
-              >
-                {Math.round(maxActive / 2)}
-              </text>
-            ) : null}
-            <text
-              x={8}
-              y={HEIGHT - BOTTOM}
-              dominantBaseline="central"
-              className="runtime-chart-label"
-            >
-              0
-            </text>
+            {requestLevels.map((level) => (
+              <g key={level}>
+                <line
+                  x1={0}
+                  y1={y(level)}
+                  x2={4}
+                  y2={y(level)}
+                  className="runtime-chart-axis"
+                  data-request-level={level}
+                />
+                <text x={8} y={y(level)} dominantBaseline="central" className="runtime-chart-label">
+                  {level}
+                </text>
+              </g>
+            ))}
           </svg>
         </div>
       </div>

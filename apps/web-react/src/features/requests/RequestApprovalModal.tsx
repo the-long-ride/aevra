@@ -2,6 +2,7 @@ import type { ApprovalItem, OauthRequestItem } from '@aevra/admin-contracts';
 import { useEffect, useRef, useState } from 'react';
 import { useDialog } from '../../components/Dialog';
 import { Switch } from '../../components/Switch';
+import { CommandExplanation } from '../permissions/CommandExplanation';
 import { actionsForApproval } from './request-actions';
 import {
   approveRequest,
@@ -89,7 +90,8 @@ function ApprovalModalCard({
   const enableYolo = async () => {
     const confirmed = await dialog.confirm({
       title: 'Enable YOLO session?',
-      message: 'YOLO enabled — immutable security approvals still require confirmation',
+      message:
+        'YOLO enabled — critical and immutable security approvals still require confirmation',
       confirmLabel: 'Enable YOLO',
       confirmTone: 'yolo',
     });
@@ -117,6 +119,9 @@ function ApprovalModalCard({
             <strong>Saved matcher</strong>
             <code>{matcher}</code>
           </span>
+        ) : null}
+        {item.payload?.commandAnalysis ? (
+          <CommandExplanation analysis={item.payload.commandAnalysis as any} />
         ) : null}
       </div>
       <div className="request-actions approval-modal-actions">

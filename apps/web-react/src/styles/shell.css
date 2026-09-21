@@ -374,6 +374,7 @@ button.health-chip {
 
   .health-cluster {
     gap: 4px;
+    justify-content: flex-end;
     scrollbar-width: none;
   }
 

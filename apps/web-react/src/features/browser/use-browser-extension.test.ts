@@ -59,12 +59,12 @@ it('detects installed extension via custom event and postMessage', async () => {
   // 2. Dispatch pong message
   window.dispatchEvent(
     new MessageEvent('message', {
-      data: { type: 'aevra:pong-extension', version: '1.0.6' },
+      data: { type: 'aevra:pong-extension', version: '1.1.0' },
     }),
   );
 
   await waitFor(() => {
-    expect(result.current.version).toBe('1.0.6');
+    expect(result.current.version).toBe('1.1.0');
   });
 });
 

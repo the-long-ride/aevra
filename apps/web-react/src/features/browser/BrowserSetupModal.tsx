@@ -1,20 +1,35 @@
-import {
-  BROWSER_CONTROL_GUIDE_URL,
-  BROWSER_EXTENSION_DOWNLOAD_URL,
-  browserExtensionZipUrl,
-} from '@aevra/admin-contracts';
-import { useEffect, useRef } from 'react';
+import { BROWSER_EXTENSION_DOWNLOAD_URL, browserExtensionZipUrl } from '@aevra/admin-contracts';
+import { useEffect, useRef, useState } from 'react';
+import { requestJson } from '../../services/api-client';
 import { useBrowserExtensionInfo } from './use-browser-extension';
+
+interface PairingCodeResponse {
+  code: string;
+  expiresAt: string;
+}
+
+const defaultCreateCode = () =>
+  requestJson<PairingCodeResponse>('/api/browser/code', {
+    method: 'POST',
+    body: '{}',
+  });
 
 export function BrowserSetupModal({
   onClose,
   aevraVersion,
+  createCode = defaultCreateCode,
 }: {
   onClose(): void;
   aevraVersion?: string;
+  createCode?: () => Promise<PairingCodeResponse>;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-  const { isInstalled, version: extVersion } = useBrowserExtensionInfo();
+  const { status, isInstalled, version: extVersion } = useBrowserExtensionInfo();
+
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [generatingCode, setGeneratingCode] = useState(false);
+  const [pairingError, setPairingError] = useState<string | null>(null);
 
   useEffect(() => {
     panel.current?.focus();
@@ -32,6 +47,31 @@ export function BrowserSetupModal({
     ? browserExtensionZipUrl(cleanAevra)
     : BROWSER_EXTENSION_DOWNLOAD_URL;
 
+  const handleGeneratePairingCode = async () => {
+    if (generatingCode) return;
+    setGeneratingCode(true);
+    setPairingError(null);
+    try {
+      const res = await createCode();
+      setPairingCode(res.code);
+    } catch (err) {
+      setPairingError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
+
+  const handleCopyCode = async () => {
+    if (!pairingCode) return;
+    try {
+      await navigator.clipboard.writeText(pairingCode);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    } catch {
+      // Ignore clipboard error
+    }
+  };
+
   return (
     <div
       className="modal-backdrop browser-setup-backdrop"
@@ -47,41 +87,100 @@ export function BrowserSetupModal({
         tabIndex={-1}
         ref={panel}
       >
-        <h2>Aevra can control your browser</h2>
+        <header className="browser-setup-header">
+          <h2>Aevra can control your browser</h2>
+          <p className="browser-modal-subtitle">
+            Safely drive browser navigation, form interaction, and testing under explicit security
+            controls.
+          </p>
+        </header>
+
         {isMismatch ? (
-          <div
-            className="extension-mismatch-banner"
-            style={{
-              padding: '10px 12px',
-              border: '1px solid var(--warning, #e6a23c)',
-              background: 'rgba(230, 162, 60, 0.1)',
-              borderRadius: '4px',
-              marginBottom: '12px',
-            }}
-          >
-            <strong style={{ color: 'var(--warning, #e6a23c)' }}>
-              Extension version mismatch detected
-            </strong>
-            <p style={{ margin: '4px 0 0', fontSize: '13px' }}>
+          <div className="extension-mismatch-banner" role="alert">
+            <div className="mismatch-badge">Extension version mismatch detected</div>
+            <p>
               Your browser extension is <strong>v{cleanExt}</strong>, but Aevra is{' '}
               <strong>v{cleanAevra}</strong>. We recommend downloading and reloading the matching
               browser extension to ensure full compatibility.
             </p>
           </div>
         ) : null}
-        <p>
-          With the Aevra extension installed, an agent can read pages, click, type, and navigate in
-          the browser profile you choose — through the same capability, approval, DLP, and audit
-          controls that govern files and commands.
-        </p>
-        <p className="section-note">
-          It stays off until you grant <code>browser.control</code> and pair the extension.
-          Password, one-time-code, and payment fields are always refused, and no approval can
-          override that.
-        </p>
+
+        <div className="browser-highlights-grid">
+          <div className="browser-highlight-item">
+            <span className="highlight-tag">DLP &amp; Privacy</span>
+            <p>
+              Password, one-time-code (OTP), and payment fields are unconditionally refused by the
+              extension. No approval can override this.
+            </p>
+          </div>
+          <div className="browser-highlight-item">
+            <span className="highlight-tag">Explicit Authority</span>
+            <p>
+              Automation remains completely disabled until you grant <code>browser.control</code>{' '}
+              and pair this browser.
+            </p>
+          </div>
+          <div className="browser-highlight-item">
+            <span className="highlight-tag">Audit &amp; Controls</span>
+            <p>
+              Reads, clicks, inputs, and navigation are subject to the same approval, capability,
+              and audit logs as shell commands.
+            </p>
+          </div>
+        </div>
+
+        <section className="browser-modal-pairing-section">
+          {status === 'paired' ? (
+            <div className="browser-pairing-status paired" data-surface-id="browser:paired-state">
+              <span className="pairing-status-dot" />
+              <span>Browser extension is paired and connected.</span>
+            </div>
+          ) : pairingCode ? (
+            <div className="browser-pairing-code-box" data-surface-id="browser:pairing-active">
+              <span className="pairing-code-title">
+                Enter this code in your extension popup or options:
+              </span>
+              <div className="browser-code-row">
+                <code className="browser-code-display">{pairingCode}</code>
+                <button
+                  type="button"
+                  className="browser-copy-code-btn"
+                  data-surface-id="browser:copy-pairing-code"
+                  onClick={handleCopyCode}
+                >
+                  {copiedCode ? 'Copied!' : 'Copy code'}
+                </button>
+              </div>
+              <small className="pairing-code-expiry">Code expires in 5 minutes.</small>
+            </div>
+          ) : (
+            <div className="browser-pair-action-row">
+              <button
+                type="button"
+                className="button-link browser-pair-trigger-btn"
+                data-surface-id="browser:pair"
+                disabled={generatingCode}
+                onClick={handleGeneratePairingCode}
+              >
+                {generatingCode ? 'Generating code…' : 'Pair extension'}
+              </button>
+              <span className="browser-pair-hint">
+                Generate a secure one-time code to link your browser extension directly.
+              </span>
+            </div>
+          )}
+
+          {pairingError ? (
+            <p role="alert" className="browser-pairing-error">
+              {pairingError}
+            </p>
+          ) : null}
+        </section>
+
         <div className="actions browser-setup-actions">
           <a
-            className="button-link"
+            className="button-link primary-action"
             data-surface-id="browser:download-extension"
             href={downloadUrl}
             target="_blank"
@@ -89,7 +188,6 @@ export function BrowserSetupModal({
           >
             Download the extension
           </a>
-          {/* Same chapter, served from this machine, so it works offline. */}
           <a
             className="button-link"
             data-surface-id="browser:open-guide"
@@ -102,13 +200,6 @@ export function BrowserSetupModal({
             Not now
           </button>
         </div>
-        <p className="section-note">
-          Prefer the published version?{' '}
-          <a href={BROWSER_CONTROL_GUIDE_URL} target="_blank" rel="noreferrer">
-            Browser control on GitHub
-          </a>
-          .
-        </p>
       </div>
     </div>
   );
