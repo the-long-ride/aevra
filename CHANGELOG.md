@@ -61,11 +61,12 @@
   - Successful Admin logins no longer consume failed-login rate-limit capacity. Rejected login bursts still return `429` with retry timing.
   - CLI Admin failures now distinguish authentication/rate-limit failures from transport failures instead of always suggesting the Core is stopped.
   - Windows `aevra service start` and `restart` now preflight service installation and direct the operator to `aevra service install` when the Scheduled Task is absent.
-  - Added CLI coverage for durable OAuth connections (`aevra connections list|revoke`), live session maintenance (`aevra sessions list|revoke|revoke-others`), upstream MCP management, audit clearing, and `aevra about` metadata output.
+  - Added CLI coverage for durable OAuth connections (`aevra connections list|revoke`), live session maintenance (`aevra sessions list|revoke|revoke-others`), upstream MCP management with aligned table output (`aevra mcp list`), audit clearing, and `aevra about` metadata output formatted as an aligned table with an updated capabilities description and no note line.
 
 - **Admin API & Web UI Enhancements**:
   - Reworked data-table controls so search, filters, row count, and toolbar pagination form a compact responsive control strip; Live MCP activity now keeps pagination with its filters, and mobile health chips align to the right.
-  - Removed the redundant standalone `Note` row from About while retaining the author annotation.
+  - Replaced the static MCP upstream list in Settings (`McpUpstreamsSettings`) with a full-featured paginated `DataTable` supporting search, status/transport/risk filters, configurable page size (5 to 100), and integrated server actions.
+  - Corrected author note from `make by <3` to `made by <3` across `@aevra/admin-contracts` and the Web UI About page, while removing the redundant standalone Note row.
   - Fixed the dashboard request-activity chart to render every integer request-count level on the same Y transform as the activity line, and start authenticated realtime activity streaming immediately after Web UI login without requiring a page refresh.
   - Added authenticated `POST /api/policy/commands/explain` endpoint for non-executing preview and policy explanation.
   - Added `CommandExplanation` UI component in `RequestApprovalModal` showing visual breakdown of application, operation, shell dialect, effective CWD, outside targets, and reason codes.

@@ -12,5 +12,6 @@ After onboarding, use the navigation to explore the control plane:
 - **Audit** for security events and integrity verification.
 - **Settings** for separate MCP/Admin exposure, Keep Awake, execution, command/network policy, environment profiles, secret references, and lifecycle hooks. Creation workflows use focused modals to keep the page compact.
 - **Guide** for this manual inside the Web UI.
+- **About** for version, system capabilities, author note, and project links.
 
 Start with read-only operations in a test workspace, then increase permissions only when the workflow needs them.

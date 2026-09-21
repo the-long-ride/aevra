@@ -60,13 +60,13 @@ aevra connectors list|create|revoke <id> manage static admission connector token
 aevra connections list|revoke <id>       inspect/revoke durable OAuth connections
 aevra sessions list|revoke <id>          inspect/revoke live MCP sessions
 aevra sessions revoke-others --yes       revoke other remote/admin sessions with confirmation
-aevra mcp list|add|remove|test            manage upstream MCP servers
+aevra mcp list|add|remove|test            manage upstream MCP servers (list renders aligned box table)
 aevra audit clear --yes                   clear audit rows while preserving chain checkpoint semantics
 aevra backup verify|restore <file>       verify or restore database backup
 aevra extension install [--dir <path>] [--yes]  download and unzip the browser extension for this version
 aevra service install|start|stop|restart|status  user-service lifecycle; start/restart require prior installation
 aevra completion bash|zsh|powershell     shell autocompletion
-aevra about                              display version, author, repository, and issue links
+aevra about                              display version, capabilities, and aligned metadata table
 aevra --version / aevra -v               display version
 aevra --help / aevra -h                  display help and usage
 ```

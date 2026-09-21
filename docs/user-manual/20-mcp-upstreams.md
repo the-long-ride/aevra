@@ -22,6 +22,22 @@ aevra mcp remove u1
 
 Registration connects once and fetches the catalog. If the handshake fails, nothing is stored.
 
+## Listing and pagination
+
+In the Web UI (**Settings → MCP servers**), registered servers are presented in a searchable, filterable, and paginated data table. Operators can configure page size (5, 10, 25, 50, or 100 rows per page), search server names/configurations, and filter by status (`Active`, `Degraded`, `Needs review`), transport (`stdio`, `http`, `sse`), and risk tier (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`).
+
+In the CLI, `aevra mcp list` formats registered upstream servers in an aligned box-drawing table displaying server ID, Name, Transport, State, Tool Count, and Risk Tier:
+
+```text
+┌─────────────────────────────────────────┬────────┬───────────┬────────┬─────────┬────────┐
+│ ID                                      │ Name   │ Transport │ State  │ Tools   │ Risk   │
+├─────────────────────────────────────────┼────────┼───────────┼────────┼─────────┼────────┤
+│ mu_e0e52809-be98-47f6-88e3-9aa7afaf1948 │ engram │ stdio     │ active │ 9 tools │ MEDIUM │
+└─────────────────────────────────────────┴────────┴───────────┴────────┴─────────┴────────┘
+```
+
+When no upstream servers are registered, `aevra mcp list` displays `No MCP servers registered.`
+
 ## Risk and advisory hints
 
 The operator-selected risk tier applies to every tool from the server and is the only source used for authorization. The server's `readOnlyHint` and `destructiveHint` annotations are shown as advisory only; they cannot lower the risk tier or bypass approval.
