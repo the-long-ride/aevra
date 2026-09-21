@@ -57,7 +57,7 @@ function mount(upstreams: UpstreamSummary[] = [active], overrides = {}) {
 describe('McpUpstreamsSettings', () => {
   it('lists status, tool count and risk', async () => {
     mount();
-    const row = await screen.findByRole('listitem', { name: /github/i });
+    const row = await screen.findByRole('row', { name: /github/i });
     expect(row.textContent).toMatch(/active/i);
     expect(row.textContent).toMatch(/12 tools/i);
     expect(row.textContent).toMatch(/HIGH/);
@@ -77,7 +77,7 @@ describe('McpUpstreamsSettings', () => {
         config: { command: 'node', args: ['server.js'] },
       },
     ]);
-    const row = await screen.findByRole('listitem', { name: /github/i });
+    const row = await screen.findByRole('row', { name: /github/i });
     expect(row.textContent).toMatch(/degraded/i);
     expect(row.textContent).toMatch(/node server\.js/);
   });
@@ -196,7 +196,7 @@ describe('McpUpstreamsSettings', () => {
         },
       },
     ]);
-    const row = await screen.findByRole('listitem', { name: /github/i });
+    const row = await screen.findByRole('row', { name: /github/i });
     expect(row.textContent).toMatch(/new_tool/);
     expect(row.textContent).toMatch(/old_tool/);
     fireEvent.click(screen.getByRole('button', { name: /acknowledge github/i }));
@@ -214,7 +214,7 @@ describe('McpUpstreamsSettings', () => {
         ],
       },
     ]);
-    const row = await screen.findByRole('listitem', { name: /github/i });
+    const row = await screen.findByRole('row', { name: /github/i });
     expect(row.textContent).toMatch(/advisory only/i);
     expect(row.textContent).toMatch(/does not affect the risk tier/i);
     expect(row.textContent).toMatch(/delete_repo/);

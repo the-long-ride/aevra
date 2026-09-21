@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Dropdown } from '../../components/Dropdown';
+import { useRuntimeStatus } from '../../hooks/use-runtime-status';
 import { requestJson, requestText } from '../../services/api-client';
+import { GuideAiPrompt } from './GuideAiPrompt';
 import { SAFE_COMMAND_MATCHERS } from './safe-command-matchers';
 
 interface GuideChapter {
@@ -149,6 +151,7 @@ function withoutTopHeading(source: string) {
 }
 
 export function GuidePage() {
+  const status = useRuntimeStatus();
   const [chapters, setChapters] = useState<GuideChapter[]>([]);
   const [selected, setSelected] = useState('');
   const [source, setSource] = useState('');
@@ -252,6 +255,9 @@ export function GuidePage() {
               <span>User manual</span>
               <h2>{selectedChapter?.title ?? 'Loading…'}</h2>
             </header>
+            {selectedChapter?.slug === 'quick-start' ? (
+              <GuideAiPrompt version={status.version} />
+            ) : null}
             <Markdown source={withoutTopHeading(source)} />
             {selected === 'safe-command-matchers' ? (
               <section className="safe-matcher-guide">

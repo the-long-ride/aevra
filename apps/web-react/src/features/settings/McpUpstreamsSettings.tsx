@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DataTable, type Column, type FilterDefinition } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { requestJson } from '../../services/api-client';
 import {
@@ -128,6 +129,163 @@ export function McpUpstreamsSettings({
       setBusy(false);
     }
   };
+
+  const columns: Column<UpstreamSummary>[] = useMemo(
+    () => [
+      {
+        key: 'name',
+        label: 'Server',
+        value: (row) => row.name,
+        render: (row) => (
+          <div>
+            <strong>{row.name}</strong>
+            {results[row.id] ? <p className="inline-result">{results[row.id]}</p> : null}
+            {row.state === 'needs-review' && row.pendingCatalogDiff ? (
+              <div className="inline-result warning-text">
+                <p>
+                  This server changed its catalog. Its tools are not served until you accept the
+                  change.
+                </p>
+                <ul>
+                  {row.pendingCatalogDiff.added.map((name) => (
+                    <li key={`a-${name}`}>Added: {name}</li>
+                  ))}
+                  {row.pendingCatalogDiff.removed.map((name) => (
+                    <li key={`r-${name}`}>Removed: {name}</li>
+                  ))}
+                  {row.pendingCatalogDiff.changed.map((name) => (
+                    <li key={`c-${name}`}>Changed: {name}</li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void run(() => acknowledge(row.id))}
+                >
+                  Acknowledge {row.name}
+                </button>
+              </div>
+            ) : null}
+            {row.advisory.length ? (
+              <details>
+                <summary>Hints this server claims about itself (advisory only)</summary>
+                <p className="section-note">Shown for context; it does not affect the risk tier.</p>
+                <ul>
+                  {row.advisory.map((hint) => (
+                    <li key={hint.tool}>
+                      {hint.tool}: {hint.readOnlyHint ? 'claims read-only' : 'no read-only claim'}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        key: 'state',
+        label: 'Status',
+        value: (row) => labels[row.state] ?? row.state,
+        render: (row) => <span className="status warning">{labels[row.state] ?? row.state}</span>,
+      },
+      {
+        key: 'risk',
+        label: 'Risk',
+        value: (row) => row.risk,
+        render: (row) => <span className="risk">{row.risk}</span>,
+      },
+      {
+        key: 'toolCount',
+        label: 'Tools',
+        value: (row) => row.toolCount,
+        render: (row) => <span className="section-note">{row.toolCount} tools</span>,
+      },
+      {
+        key: 'transport',
+        label: 'Transport',
+        value: (row) =>
+          `${row.transport} ${row.config.url ?? [row.config.command, ...(row.config.args ?? [])].filter(Boolean).join(' ')}`,
+        render: (row) => (
+          <span className="section-note">
+            {row.transport} ·{' '}
+            <code>
+              {row.config.url ??
+                [row.config.command, ...(row.config.args ?? [])].filter(Boolean).join(' ')}
+            </code>
+          </span>
+        ),
+      },
+      {
+        key: 'actions',
+        label: '',
+        sortable: false,
+        search: false,
+        render: (row) => (
+          <div className="actions compact-settings-actions">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const result = await test(row.id);
+                  setResults((previous) => ({
+                    ...previous,
+                    [row.id]: result.ok
+                      ? `${result.serverName ?? 'unknown'} ${result.serverVersion ?? ''} — ${result.toolCount} tools`
+                      : (result.message ?? 'The connection failed'),
+                  }));
+                })
+              }
+            >
+              Test {row.name}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setAdding(false);
+                setEditing(row);
+              }}
+            >
+              Edit {row.name}
+            </button>
+            <button
+              type="button"
+              className="danger-button"
+              disabled={busy}
+              aria-label={`Remove ${row.name}`}
+              onClick={() => void handleRemove(row)}
+            >
+              [x]
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [busy, results],
+  );
+
+  const filters: FilterDefinition<UpstreamSummary>[] = useMemo(
+    () => [
+      {
+        key: 'state',
+        label: 'Status',
+        value: (row) => labels[row.state] ?? row.state,
+      },
+      {
+        key: 'transport',
+        label: 'Transport',
+        value: (row) => row.transport,
+      },
+      {
+        key: 'risk',
+        label: 'Risk',
+        value: (row) => row.risk,
+      },
+    ],
+    [],
+  );
+
   return (
     <section
       className="panel settings-compact-panel wide"
@@ -151,108 +309,20 @@ export function McpUpstreamsSettings({
           Add server
         </button>
       </div>
-      {upstreams && upstreams.length === 0 ? (
-        <p className="section-note">No MCP servers are registered yet.</p>
-      ) : null}
-      <ul className="stack-list">
-        {(upstreams ?? []).map((upstream) => (
-          <li key={upstream.id} role="listitem" aria-label={upstream.name}>
-            <div className="row-head">
-              <strong>{upstream.name}</strong>
-              <span className="status warning">{labels[upstream.state]}</span>
-              <span className="risk">{upstream.risk}</span>
-              <span className="section-note">{upstream.toolCount} tools</span>
-            </div>
-            <p className="section-note">
-              {upstream.transport} ·{' '}
-              <code>
-                {upstream.config.url ??
-                  [upstream.config.command, ...(upstream.config.args ?? [])]
-                    .filter(Boolean)
-                    .join(' ')}
-              </code>
-            </p>
-            {upstream.state === 'needs-review' && upstream.pendingCatalogDiff ? (
-              <div className="inline-result warning-text">
-                <p>
-                  This server changed its catalog. Its tools are not served until you accept the
-                  change.
-                </p>
-                <ul>
-                  {upstream.pendingCatalogDiff.added.map((name) => (
-                    <li key={`a-${name}`}>Added: {name}</li>
-                  ))}
-                  {upstream.pendingCatalogDiff.removed.map((name) => (
-                    <li key={`r-${name}`}>Removed: {name}</li>
-                  ))}
-                  {upstream.pendingCatalogDiff.changed.map((name) => (
-                    <li key={`c-${name}`}>Changed: {name}</li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void run(() => acknowledge(upstream.id))}
-                >
-                  Acknowledge {upstream.name}
-                </button>
-              </div>
-            ) : null}
-            {upstream.advisory.length ? (
-              <details>
-                <summary>Hints this server claims about itself (advisory only)</summary>
-                <p className="section-note">Shown for context; it does not affect the risk tier.</p>
-                <ul>
-                  {upstream.advisory.map((hint) => (
-                    <li key={hint.tool}>
-                      {hint.tool}: {hint.readOnlyHint ? 'claims read-only' : 'no read-only claim'}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-            {results[upstream.id] ? <p className="inline-result">{results[upstream.id]}</p> : null}
-            <div className="actions compact-settings-actions">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    const result = await test(upstream.id);
-                    setResults((previous) => ({
-                      ...previous,
-                      [upstream.id]: result.ok
-                        ? `${result.serverName ?? 'unknown'} ${result.serverVersion ?? ''} — ${result.toolCount} tools`
-                        : (result.message ?? 'The connection failed'),
-                    }));
-                  })
-                }
-              >
-                Test {upstream.name}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setAdding(false);
-                  setEditing(upstream);
-                }}
-              >
-                Edit {upstream.name}
-              </button>
-              <button
-                type="button"
-                className="danger-button"
-                disabled={busy}
-                aria-label={`Remove ${upstream.name}`}
-                onClick={() => void handleRemove(upstream)}
-              >
-                [x]
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <DataTable
+        id="react-mcp-upstreams"
+        rows={upstreams ?? []}
+        columns={columns}
+        filters={filters}
+        pageSize={10}
+        defaultSort={{ key: 'name', direction: 'asc' }}
+        searchPlaceholder="Search servers…"
+        emptyText="No MCP servers are registered yet."
+        rowKey={(row) => row.id}
+        rowProps={(row) => ({
+          'aria-label': row.name,
+        })}
+      />
       {error ? (
         <p role="alert" className="inline-result warning-text">
           {error}

@@ -228,6 +228,27 @@ describe('RequestActivityChart interactions and tooltip', () => {
     expect(container.querySelector('.runtime-chart-tooltip')).not.toBeNull();
   });
 
+  test('renders every integer request-count level aligned to the chart scale', () => {
+    const { container } = render(
+      <DialogProvider>
+        <RequestActivityChart data={createDashboardData()} />
+      </DialogProvider>,
+    );
+
+    const axis = container.querySelector('.runtime-chart-y-axis svg');
+    expect(axis).not.toBeNull();
+    const labels = Array.from(axis!.querySelectorAll('text')).map((node) => node.textContent);
+    expect(labels).toEqual(['3', '2', '1', '0']);
+
+    const tickLines = Array.from(axis!.querySelectorAll('[data-request-level]'));
+    expect(tickLines.map((node) => node.getAttribute('data-request-level'))).toEqual([
+      '3',
+      '2',
+      '1',
+      '0',
+    ]);
+  });
+
   test('wheel events and keyboard navigation interact with viewport', () => {
     const { container } = render(
       <DialogProvider>

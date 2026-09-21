@@ -6,7 +6,12 @@ export interface ApprovalAction {
   scope: ApprovalScope | null;
 }
 
-const PERSISTABLE_CAPABILITIES = new Set(['commands.run', 'browser.control', 'desktop.control']);
+const PERSISTABLE_CAPABILITIES = new Set([
+  'commands.run',
+  'network',
+  'browser.control',
+  'desktop.control',
+]);
 
 export function actionsForApproval(item: ApprovalItem): ApprovalAction[] {
   const deny: ApprovalAction = { id: 'deny', label: 'Deny', scope: null };

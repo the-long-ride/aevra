@@ -8,6 +8,7 @@ export const ADMIN_SURFACE = {
     { id: 'settings', label: 'Settings' },
     { id: 'data', label: 'Data' },
     { id: 'guide', label: 'Guide' },
+    { id: 'about', label: 'About' },
   ],
   dashboardSections: [
     'onboarding',

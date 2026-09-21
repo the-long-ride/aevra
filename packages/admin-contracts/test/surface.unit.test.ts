@@ -15,7 +15,17 @@ test('typed contract matches the JSON parity manifest', () => {
 test('navigation and onboarding ordering are stable', () => {
   assert.deepEqual(
     ADMIN_SURFACE.navigation.map((item) => item.id),
-    ['dashboard', 'workspaces', 'permissions', 'sessions', 'audit', 'settings', 'data', 'guide'],
+    [
+      'dashboard',
+      'workspaces',
+      'permissions',
+      'sessions',
+      'audit',
+      'settings',
+      'data',
+      'guide',
+      'about',
+    ],
   );
   assert.deepEqual(ADMIN_SURFACE.dashboardSections, [
     'onboarding',

@@ -39,6 +39,7 @@ function McpActivityPanelContent({ workspaces }: { workspaces: WorkspaceSummary[
         id="react-dashboard-mcp-activity"
         rows={entries}
         pageSize={10}
+        paginationPosition="toolbar"
         searchPlaceholder="Search MCP activity…"
         rowKey={(entry) => entry.id}
         emptyText="No MCP activity yet."

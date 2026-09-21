@@ -94,9 +94,9 @@ test('live MCP activity merges lifecycle updates by operation id', () => {
   expect(within(table).getAllByText('file_read')).toHaveLength(1);
 });
 
-test('live MCP activity shows newest records first with pagination', () => {
+test('live MCP activity shows newest records first with compact toolbar pagination', () => {
   globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
-  renderPanel();
+  const { container } = renderPanel();
   const source = FakeEventSource.instances[0]!;
 
   act(() => {
@@ -116,6 +116,8 @@ test('live MCP activity shows newest records first with pagination', () => {
 
   expect(screen.getByText('1–10 of 12')).toBeInTheDocument();
   expect(screen.getByText('Page 1 / 2')).toBeInTheDocument();
+  expect(container.querySelector('.dt-toolbar .dt-pagination')).not.toBeNull();
+  expect(container.querySelector('.dt-footer .dt-pagination')).toBeNull();
   const rows = screen.getAllByRole('row');
   expect(within(rows[1]!).getByText('action_12')).toBeInTheDocument();
   expect(screen.queryByText('action_2')).not.toBeInTheDocument();

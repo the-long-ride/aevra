@@ -1,0 +1,237 @@
+# Aevra — Architecture & Usage Guide for AI Assistants (llm.txt)
+
+> **Specification & Operator Reference for Language Models**
+> Version: 1.1.0
+> Author: the-long-ride (make by <3)
+> Repository: https://github.com/the-long-ride/aevra
+> Issues: https://github.com/the-long-ride/aevra/issues
+
+---
+
+## 1. What is Aevra?
+
+Aevra is a workspace-scoped local MCP (Model Context Protocol) execution gateway that connects AI web clients and assistants (ChatGPT, Claude, Grok, Gemini, Manus, Cursor, Langdock, etc.) directly to your machine. It enables AI assistants to inspect directories, read and write files, execute shell commands, manage Git repositories, launch background processes, control Chromium browsers, and automate native Windows applications under explicit, human-controlled security boundaries.
+
+### Central Invariant
+
+> **The Core decides authority. The Worker executes only the exact authority it receives.**
+
+The gateway is architected as an out-of-process system where untrusted AI instructions never have direct operating system access. Instead, every request is verified against active capability profiles, explicit workspace grants, and policy rules before any instruction reaches the execution worker.
+
+---
+
+## 2. System Architecture & Topology
+
+```text
+AI Clients:
+  ChatGPT, Claude.ai, Grok, Gemini, Manus, Cursor, Custom Agents
+                             │
+                             ▼ (OAuth 2.0 PKCE / Bearer Auth)
+Public Gateway (Port 47830 - Direct HTTPS / Cloudflare / ngrok / Tailscale / SSH)
+                             │
+   ┌─────────────────────────┴─────────────────────────┐
+   │                                                   │
+MCP Data Plane (Port 47832)               Admin Control Plane (Port 47831)
+Aevra Core Daemon                         React 19 Admin Web UI
+- Session & Lease Manager                 - Interactive Approvals
+- Policy Engine & Capability Profiles     - Workspaces & Mount Points
+- Floating-IP OAuth Continuity            - Live MCP Activity Timeline
+- Token Bucket Rate Limiting              - System Capabilities & Settings
+   │
+   ▼ (Local Authenticated IPC - Named Pipe / Unix Domain Socket)
+Execution Worker (Port 47833 WebSocket for Browser Extension)
+   ├─ Filesystem Sandbox (Scoped to permitted workspace roots & mounts)
+   ├─ Shell Execution & Detached Background Processes
+   ├─ Desktop Automation (Windows UI Automation background & foreground)
+   ├─ Browser Control (Chromium MV3 Extension & CDP)
+   └─ Upstream MCP Proxies & Docker / Podman Sandbox
+```
+
+### Port Allocation
+
+- **Port 47830 (`AEVRA_PUBLIC_PORT`)**: Public gateway entry point for inbound web clients.
+- **Port 47831 (`AEVRA_ADMIN_PORT`)**: Local Admin Web UI and HTTP administrative API.
+- **Port 47832 (`AEVRA_MCP_PORT`)**: MCP HTTP / SSE transport protocol.
+- **Port 47833 (`AEVRA_BROWSER_PORT`)**: WebSocket listener for the paired Chromium browser extension.
+
+---
+
+## 3. Security Model & Policy Boundaries
+
+1. **Capability Profiles**:
+   - `Minimal`: Safe introspection only (`aevra_status`).
+   - `Read-Only`: Non-mutating directory listing, file reading, and searching.
+   - `Safe Dev`: Standard dev commands matching safe regex patterns (e.g. `npm test`, `git status`, `cargo check`) run without prompting; modifying critical paths requires approval.
+   - `Power Dev`: Full workspace file editing, command execution, and managed processes with step-up approvals for sensitive actions.
+   - `Full Access`: Complete execution access for local development.
+
+2. **Approval Scopes (Human-in-the-Loop)**:
+   - `once`: Approve a single execution of the exact command or tool call.
+   - `session`: Permit this tool/command for the duration of the AI connection session.
+   - `workspace`: Persist permission for this workspace across sessions.
+   - `global`: Persist permission across all workspaces on this machine.
+
+3. **Data Protection & DLP (Data Loss Prevention)**:
+   - `SECRET` Paths: Critical system paths (`~/.ssh`, `id_rsa`, `.env`, credentials) are strictly denied.
+   - `SENSITIVE` Paths: Token-bearing or internal configuration paths trigger step-up approval.
+   - DLP Redaction: Output streams automatically redact API keys, JWTs, bearer tokens, private keys, and high-entropy secrets before sending responses back to the LLM.
+   - Symlink Traversal Protection: Realpath canonicalization blocks directory traversal attacks using relative `..` segments, symlinks, or hard-link aliases.
+
+4. **Floating-IP OAuth Continuity**:
+   - Cloud AI runners (such as OpenAI ChatGPT or Anthropic Claude) rotate outbound egress IP addresses on every prompt.
+   - Aevra decouples identity from IP addresses using cryptographic session subjects and rotating refresh tokens, preserving workspace leases across runner IP shifts.
+   - Uses atomic execution claims (`claimExecution`) to guarantee that parallel cloud runners never double-execute the same approved operation.
+
+---
+
+## 4. Built-in MCP Tools Reference (67 Tools)
+
+### Workspaces & Context
+
+- `workspace_list`: List registered workspaces and active lease state.
+- `workspace_select`: Select or switch the active workspace for this session.
+- `workspace_info`: Inspect workspace root, mounts, git branch, and manifest.
+- `aevra_status`: Report detected host toolchains (Node, Python, Rust, Go, Git, .NET, JVM, Docker) and recommended shells (`pwsh`, `bash`, `zsh`, etc.).
+
+### File Operations (Single & Batch)
+
+- `file_read(workspace, path)`: Read file content within workspace boundaries.
+- `file_read_many(workspace, paths[])`: Read multiple files concurrently in a single round trip.
+- `file_write(workspace, path, content)`: Create or update a file.
+- `file_write_many(workspace, files[{path, content}])`: Atomically write multiple files in batch.
+- `search(workspace, query, isRegex?, maxResults?)`: High-performance parallel regex text search across files.
+
+### Shell & Command Execution
+
+- `command_run(workspace, command, args[], timeoutMs?)`: Execute a command synchronously within the workspace working directory.
+- `command_run_many(workspace, commands[])`: Run a bounded queue of commands.
+
+### Managed Background Processes
+
+- `process_start(workspace, command, args[], env?)`: Launch a non-blocking background daemon or long-running process (e.g. dev servers).
+- `process_logs(processId, tailLines?)`: Read stdout/stderr from a running or terminated background process.
+- `process_wait(processId, timeoutMs?)`: Wait for background process completion.
+- `process_stop(processId)`: Terminate a running background process.
+- `process_list`: List all active and recent managed processes.
+
+### Change Sets & Safe Rollback
+
+- `change_begin(workspace, description)`: Open a journaled multi-file change transaction.
+- `change_stage(changeId, path, content)`: Stage file changes into the active set.
+- `change_commit(changeId)`: Apply all staged changes atomically with 3-way conflict detection.
+- `change_rollback(changeId)`: Restore files to their state prior to the transaction.
+
+### Browser Automation (Chromium MV3 Extension & CDP)
+
+- `browser_navigate(url)`: Navigate active browser tab to target URL.
+- `browser_click(selector | point)`: Click elements on page.
+- `browser_type(selector, text)`: Input text into fields (automatically refuses password/OTP/payment fields).
+- `browser_snapshot()`: Capture DOM snapshot and visual viewport.
+- `browser_tabs()`: List and switch open tabs.
+
+### Desktop Automation (Windows)
+
+- **Silent Background UIA**:
+  - `desktop_describe`: Inspect window element hierarchies without moving the mouse.
+  - `desktop_invoke`, `desktop_set_value`, `desktop_select`, `desktop_toggle`: Trigger controls in native Windows applications without focus-stealing or mouse movement.
+- **Foreground UIA**:
+  - Element targeting, screenshot capture, and keyboard/mouse simulation with explicit user approval.
+
+### Upstream MCP Proxies
+
+- External MCP servers (stdio, SSE, HTTP) can be registered via Admin UI or `aevra mcp add`. Upstream tools are exposed with namespaced tool names (e.g. `upstream__tool_name`).
+
+---
+
+## 5. CLI Command Reference
+
+| Command                                                            | Description                                                                                         |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `aevra start [--ui]`                                               | Start the Core daemon and Execution Worker. Opens Admin UI if `--ui` is given.                      |
+| `aevra ui [--logout-all]`                                          | Open the Admin Web UI in the default browser with an authenticated single-use token.                |
+| `aevra setup`                                                      | Run interactive onboarding wizard to configure remote access, tunnels, and initial workspace.       |
+| `aevra service install\|start\|stop\|restart\|status`              | Manage Aevra as a native user service (Windows Scheduled Tasks, Linux systemd, macOS LaunchAgents). |
+| `aevra connectors list\|create <name>\|revoke <id>`                | Manage external AI connectors (e.g. ChatGPT, Claude).                                               |
+| `aevra connections list\|revoke <id>`                              | Inspect and revoke active client connections.                                                       |
+| `aevra mcp list\|add <name> --transport …\|remove <id>\|test <id>` | Configure and test upstream MCP server proxies.                                                     |
+| `aevra sessions list\|revoke <id>\|revoke-others --yes`            | Inspect and revoke active user or client sessions.                                                  |
+| `aevra audit clear --yes`                                          | Clear audit log history while preserving cryptographic checkpoint integrity.                        |
+| `aevra extension install [--dir <path>] [--yes]`                   | Download and stage the matching browser extension build.                                            |
+| `aevra status [--json]`                                            | Check gateway health, tunnel status, exposure mode, and browser extension pairing.                  |
+| `aevra backup verify <file>\|restore <file> [--yes]`               | Verify or restore configuration and policy backups.                                                 |
+| `aevra completion bash\|zsh\|powershell`                           | Output shell tab-completion scripts.                                                                |
+| `aevra about`                                                      | Display author, repository, issues link, and project information.                                   |
+| `aevra --version`                                                  | Output the installed Aevra version string.                                                          |
+| `aevra --help`                                                     | Display CLI command usage instructions.                                                             |
+
+---
+
+## 6. How to Connect AI Clients
+
+### Connecting ChatGPT (OpenAI)
+
+1. In Aevra Admin UI, go to **Dashboard** or **Settings** -> **Remote Access** and ensure a public tunnel (Cloudflare, ngrok, or Direct HTTPS) is active.
+2. In ChatGPT, create a Custom GPT or action.
+3. Set Authentication to **OAuth**:
+   - Authorization URL: `<Your-Public-Gateway-URL>/oauth/authorize`
+   - Token URL: `<Your-Public-Gateway-URL>/oauth/token`
+4. Provide the MCP Server URL: `<Your-Public-Gateway-URL>/mcp`.
+5. Authenticate via the browser prompt and grant permission to one or more workspaces.
+
+### Connecting Claude (Anthropic)
+
+1. Add an MCP server definition in Claude Desktop or Claude Web connector settings.
+2. URL: `<Your-Public-Gateway-URL>/mcp`.
+3. Complete OAuth PKCE handshake in the browser.
+
+---
+
+## 7. Crucial Tips for AI LLMs Assisting Users
+
+When you are acting as an AI assistant interacting with Aevra via MCP tools or guiding a human operator:
+
+### Tip 1: Always Target Workspaces Explicitly
+
+- When a user grants access to **multiple workspaces** in one connection session, `SessionManager.activeLease(sessionId)` intentionally returns `null` because no single workspace is unambiguous.
+- **Rule**: In every tool call (`file_read`, `file_write`, `command_run`, `search`, etc.), ALWAYS specify the `workspace` parameter explicitly:
+  ```json
+  {
+    "workspace": "my-project",
+    "path": "src/index.ts"
+  }
+  ```
+- Omitting `workspace` in multi-workspace sessions causes `SESSION_WORKSPACE_REQUIRED: Select a workspace first`.
+
+### Tip 2: Batch File Operations to Save Roundtrips
+
+- Instead of calling `file_read` 5 times sequentially, use `file_read_many`:
+  ```json
+  {
+    "workspace": "my-project",
+    "paths": ["package.json", "tsconfig.json", "src/index.ts"]
+  }
+  ```
+- Instead of writing files one by one, use `file_write_many` for multi-file edits.
+
+### Tip 3: Never Run Blocking Commands in `command_run`
+
+- Commands like `npm run dev`, `python -m http.server`, `vite`, `cargo watch`, or interactive prompts (`git log` without paging disabled) will block until the command timeout expires (default 60s) and fail!
+- **Rule**: For persistent servers or background watchers, always use:
+  1. `process_start(workspace, "npm", ["run", "dev"])` -> returns `processId`.
+  2. `process_logs(processId)` -> inspect stdout/stderr to verify startup.
+  3. `process_stop(processId)` -> terminate when work is finished.
+
+### Tip 4: Respect DLP and Security Boundaries
+
+- Never attempt to read files like `~/.ssh/id_rsa`, `.env.production`, or OS system directories. Aevra will block the request and log a policy violation.
+- If a command requires human approval, politely inform the user that an approval prompt is waiting in their Aevra Admin UI.
+
+### Tip 5: Safe Command Execution
+
+- Read-only commands such as `git status`, `git diff`, `npm test`, `cargo check`, `pytest` match safe command matchers and run instantly under the Safe Dev profile without interrupting the user.
+- Prefer non-interactive flags (e.g. `--yes`, `-y`, `--no-pager`, `CI=true`) to ensure commands do not wait for stdin.
+
+### Tip 6: Handling Browser & Desktop Actions
+
+- For browser actions, verify that the browser extension is paired (reportable via `aevra status` or `aevra_status`).
+- On Windows, prefer silent background UIA tools (`desktop_invoke`, `desktop_set_value`) to preserve the user's active keyboard focus and mouse cursor.

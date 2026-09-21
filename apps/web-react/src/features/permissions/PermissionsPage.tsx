@@ -1,66 +1,34 @@
-import type { RemoteSessionSummary, WorkspaceSummary } from '@aevra/admin-contracts';
+import type { CommandRuleV2 } from '@aevra/admin-contracts';
 import { useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { ManagementModal } from '../../components/ManagementModal';
 import { PageState } from '../../components/PageState';
-import { SearchableMultiSelect, type SearchOption } from '../../components/SearchableMultiSelect';
+import { SearchableMultiSelect } from '../../components/SearchableMultiSelect';
 import { Switch } from '../../components/Switch';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
-
-interface PermissionRule extends Record<string, unknown> {
-  id: string;
-  effect?: string;
-  capability?: string;
-  scope?: string;
-  actor?: string;
-  matcher?: string;
-}
-
-interface PermissionsPageData {
-  rules: PermissionRule[];
-  workspaces: WorkspaceSummary[];
-  sessions: RemoteSessionSummary[];
-}
-
-const CAPABILITIES = [
-  'files.read',
-  'files.search',
-  'git.read',
-  'skills.read',
-  'instructions.read',
-  'files.write',
-  'files.delete',
-  'commands.run',
-  'git.commit',
-  'git.push',
-  'network',
-  'skills.write',
-  'instructions.write',
-  'browser.control',
-  'desktop.control',
-  'mcp.proxy',
-] as const;
-
-async function load(signal: AbortSignal): Promise<PermissionsPageData> {
-  const [rules, workspaces, sessions] = await Promise.all([
-    requestJson<PermissionRule[]>('/api/permissions', { signal }),
-    requestJson<WorkspaceSummary[]>('/api/workspaces', { signal }).catch(() => []),
-    requestJson<RemoteSessionSummary[]>('/api/sessions', { signal }).catch(() => []),
-  ]);
-  return { rules, workspaces, sessions };
-}
+import { CommandRuleEditor } from './CommandRuleEditor';
+import {
+  CAPABILITIES,
+  buildSessionOptions,
+  buildWorkspaceOptions,
+  loadPermissionsData,
+} from './permissions-helpers';
 
 export function PermissionsPage() {
-  const resource = useApiResource(load);
+  const resource = useApiResource(loadPermissionsData);
   const dialog = useDialog();
   const [adding, setAdding] = useState(false);
   const [commandEnabled, setCommandEnabled] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  const [v2ModalOpen, setV2ModalOpen] = useState(false);
+  const [editingV2Row, setEditingV2Row] = useState<any | null>(null);
+  const [v2WorkspaceId, setV2WorkspaceId] = useState<string>('');
+  const [v2Error, setV2Error] = useState<string | null>(null);
 
   const closeAddRules = () => {
     setAdding(false);
@@ -68,6 +36,44 @@ export function PermissionsPage() {
     setSubmitError(null);
     setSelectedWorkspaceIds([]);
     setSelectedSessionIds([]);
+  };
+
+  const saveV2Rule = async (rule: CommandRuleV2) => {
+    setV2Error(null);
+    const targetWs = v2WorkspaceId || editingV2Row?.workspaceId || editingV2Row?.workspace_id;
+    if (!targetWs && (!editingV2Row || editingV2Row.scope === 'workspace')) {
+      setV2Error('Workspace is required for this rule');
+      return;
+    }
+    try {
+      const payload: any = editingV2Row
+        ? {
+            ...editingV2Row,
+            workspaceId: targetWs,
+            matcher: `${rule.application}:${rule.operation.join(':')}`,
+            version: 2,
+            predicate_json: JSON.stringify(rule),
+          }
+        : {
+            effect: 'allow',
+            capability: 'commands.run',
+            scope: 'workspace',
+            workspaceId: targetWs,
+            matcher: `${rule.application}:${rule.operation.join(':')}`,
+            version: 2,
+            status: 'active',
+            predicate_json: JSON.stringify(rule),
+          };
+      await requestJson('/api/permissions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      setV2ModalOpen(false);
+      setEditingV2Row(null);
+      await resource.refresh();
+    } catch (cause) {
+      setV2Error(cause instanceof Error ? cause.message : String(cause));
+    }
   };
 
   const revoke = async (id: string) => {
@@ -122,30 +128,8 @@ export function PermissionsPage() {
     }
   };
 
-  const workspaceOptions: SearchOption[] = (resource.data?.workspaces ?? []).map((w) => ({
-    value: w.id,
-    label: w.name || w.id,
-    description:
-      w.name !== w.id
-        ? `ID: ${w.id}${w.hostRoot ? ` · ${w.hostRoot}` : ''}`
-        : (w.hostRoot ?? `ID: ${w.id}`),
-  }));
-
-  const sessionOptions: SearchOption[] = (resource.data?.sessions ?? []).map((s) => {
-    const wsName = s.lease?.workspaceId
-      ? resource.data?.workspaces?.find((w) => w.id === s.lease?.workspaceId)?.name
-      : undefined;
-    const wsInfo = wsName
-      ? `Workspace: ${wsName}`
-      : s.lease?.workspaceId
-        ? `Workspace: ${s.lease.workspaceId}`
-        : '';
-    return {
-      value: s.id,
-      label: s.actor ? `${s.actor} (${s.id})` : s.id,
-      description: wsInfo ? `${wsInfo} · ID: ${s.id}` : `ID: ${s.id}`,
-    };
-  });
+  const workspaceOptions = buildWorkspaceOptions(resource.data?.workspaces);
+  const sessionOptions = buildSessionOptions(resource.data?.sessions, resource.data?.workspaces);
 
   return (
     <PageState loading={resource.loading} error={resource.error}>
@@ -154,17 +138,32 @@ export function PermissionsPage() {
           <h2>Permissions</h2>
           <p>Create connector permission records and manage remembered rules.</p>
         </div>
-        <button
-          type="button"
-          className="primary"
-          data-surface-id="permissions:add"
-          onClick={() => {
-            setSubmitError(null);
-            setAdding(true);
-          }}
-        >
-          Add rules
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            type="button"
+            className="secondary"
+            data-surface-id="permissions:add-typed"
+            onClick={() => {
+              setEditingV2Row(null);
+              setV2WorkspaceId(resource.data?.workspaces?.[0]?.id ?? '');
+              setV2Error(null);
+              setV2ModalOpen(true);
+            }}
+          >
+            Add typed rule
+          </button>
+          <button
+            type="button"
+            className="primary"
+            data-surface-id="permissions:add"
+            onClick={() => {
+              setSubmitError(null);
+              setAdding(true);
+            }}
+          >
+            Add rules
+          </button>
+        </div>
       </section>
       <ManagementModal open={adding} title="Add permission rules" onClose={closeAddRules}>
         <form className="permission-bulk permission-modal-form" onSubmit={createRules}>
@@ -275,6 +274,48 @@ export function PermissionsPage() {
           </div>
         </form>
       </ManagementModal>
+      <ManagementModal
+        open={v2ModalOpen}
+        title={editingV2Row ? 'Edit typed command rule' : 'Add typed command rule'}
+        onClose={() => {
+          setV2ModalOpen(false);
+          setV2Error(null);
+        }}
+      >
+        {v2Error ? (
+          <p className="error" style={{ color: '#ef4444', marginBottom: '0.5rem' }}>
+            {v2Error}
+          </p>
+        ) : null}
+        <div style={{ marginBottom: '0.75rem' }}>
+          <label>
+            <span
+              style={{ display: 'block', fontSize: '0.8rem', opacity: 0.8, marginBottom: '0.2rem' }}
+            >
+              Target Workspace:
+            </span>
+            <Dropdown
+              value={v2WorkspaceId}
+              options={workspaceOptions}
+              onChange={setV2WorkspaceId}
+            />
+          </label>
+        </div>
+        <CommandRuleEditor
+          initialRule={
+            editingV2Row
+              ? typeof editingV2Row.predicate_json === 'string'
+                ? JSON.parse(editingV2Row.predicate_json)
+                : editingV2Row.predicate
+              : undefined
+          }
+          onSave={saveV2Rule}
+          onCancel={() => {
+            setV2ModalOpen(false);
+            setV2Error(null);
+          }}
+        />
+      </ManagementModal>
       <section className="panel">
         <DataTable
           id="react-permissions-admin"
@@ -294,21 +335,56 @@ export function PermissionsPage() {
             { key: 'actor', label: 'Connector / actor' },
             { key: 'matcher', label: 'Matcher' },
             {
+              key: 'status',
+              label: 'Status',
+              render: (row: any) =>
+                row.status === 'needs-review' ? (
+                  <span style={{ color: '#f59e0b', fontWeight: 600 }}>needs-review</span>
+                ) : row.version === 2 ? (
+                  <span style={{ color: '#10b981' }}>v2</span>
+                ) : (
+                  <span>active</span>
+                ),
+            },
+            {
               key: 'actions',
               label: '',
               sortable: false,
               search: false,
               render: (row) => (
-                <button
-                  type="button"
-                  className="danger-button"
-                  aria-label="Revoke"
-                  title="Revoke"
-                  data-surface-id="permissions:revoke"
-                  onClick={() => void revoke(row.id)}
-                >
-                  [x]
-                </button>
+                <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                  {row.version === 2 ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-label="Edit"
+                      title="Edit rule"
+                      onClick={() => {
+                        setEditingV2Row(row);
+                        setV2WorkspaceId(
+                          row.workspaceId ??
+                            row.workspace_id ??
+                            resource.data?.workspaces?.[0]?.id ??
+                            '',
+                        );
+                        setV2Error(null);
+                        setV2ModalOpen(true);
+                      }}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="danger-button"
+                    aria-label="Revoke"
+                    title="Revoke"
+                    data-surface-id="permissions:revoke"
+                    onClick={() => void revoke(row.id)}
+                  >
+                    [x]
+                  </button>
+                </div>
               ),
             },
           ]}

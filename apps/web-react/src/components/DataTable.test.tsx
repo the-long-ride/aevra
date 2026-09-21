@@ -43,6 +43,26 @@ test('searches filters sorts and paginates rows', async () => {
   expect(screen.getByText('0 rows')).toBeInTheDocument();
 });
 
+test('toolbar controls group filters, rows, and pagination together', () => {
+  const { container } = render(
+    <DataTable
+      id="test-toolbar-layout"
+      rows={rows}
+      pageSize={10}
+      paginationPosition="toolbar"
+      filters={[{ key: 'state', label: 'State' }]}
+      columns={[{ key: 'name', label: 'Name' }]}
+      rowKey={(row) => row.id}
+    />,
+  );
+
+  const strip = container.querySelector('.dt-control-strip');
+  expect(strip).not.toBeNull();
+  expect(strip?.querySelector('.dt-filters')).not.toBeNull();
+  expect(strip?.querySelector('.dt-size')).not.toBeNull();
+  expect(strip?.querySelector('.dt-pagination')).not.toBeNull();
+});
+
 test('changes page size and navigates between pages', async () => {
   const user = userEvent.setup();
   render(

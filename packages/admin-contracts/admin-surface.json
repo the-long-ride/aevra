@@ -31,6 +31,10 @@
     {
       "id": "guide",
       "label": "Guide"
+    },
+    {
+      "id": "about",
+      "label": "About"
     }
   ],
   "dashboardSections": [

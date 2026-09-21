@@ -6,6 +6,7 @@
 .dt-footer,
 .dt-pagination,
 .dt-pages,
+.dt-control-strip,
 .dt-filters {
   display: flex;
   align-items: center;
@@ -13,26 +14,38 @@
 }
 
 .dt-toolbar {
-  flex-wrap: wrap;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(220px, 420px) minmax(0, 1fr);
+  align-items: end;
+  gap: 10px 16px;
   margin-bottom: 10px;
 }
 
 .dt-search {
-  flex: 1 1 220px;
-  max-width: 420px;
+  width: 100%;
+  min-width: 0;
+}
+
+.dt-control-strip {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: end;
 }
 
 .dt-filters {
-  flex: 1 1 auto;
+  min-width: 0;
+  flex: 0 1 auto;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: end;
 }
 
 .dt-filter,
 .dt-size {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: grid;
+  align-items: start;
+  gap: 4px;
   color: var(--mute);
   font-size: 11px;
 }
@@ -40,7 +53,7 @@
 .dt-filter .dropdown,
 .dt-size .dropdown {
   width: auto;
-  min-width: 100px;
+  min-width: 116px;
 }
 
 .dt-size .dropdown {
@@ -48,13 +61,13 @@
 }
 
 .dt-pagination {
-  justify-content: space-between;
   min-width: 0;
+  justify-content: space-between;
   color: var(--mute);
   font-size: 11px;
 }
 
-.dt-toolbar > .dt-pagination {
+.dt-control-strip > .dt-pagination {
   flex: 0 0 auto;
   margin-left: auto;
 }
@@ -153,18 +166,50 @@
 }
 
 @media (max-width: 760px) {
-  .dt-toolbar > .dt-pagination {
-    flex: 1 1 100%;
+  .dt-toolbar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .dt-control-strip {
+    display: grid;
+    grid-template-columns: minmax(80px, auto) minmax(0, 1fr);
+    width: 100%;
+    align-items: end;
+    gap: 10px 12px;
+  }
+
+  .dt-filters {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+
+  .dt-filter .dropdown {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dt-size {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .dt-control-strip > .dt-pagination {
+    grid-column: 2;
+    justify-self: end;
     margin-left: 0;
+  }
+
+  .dt-pagination {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
 
 @media (max-width: 640px) {
-  /*
-   * A flat 560px floor meant every table scrolled sideways on a phone even when
-   * it held two short columns. Narrow the floor so small tables fit; wide ones
-   * still scroll inside .dt-scroll rather than widening the page.
-   */
   .data-table,
   .simple-table {
     min-width: 380px;
@@ -176,7 +221,26 @@
     gap: 8px;
   }
 
+  .dt-pages {
+    gap: 4px;
+  }
+}
+
+@media (max-width: 360px) {
   .dt-filters {
     grid-template-columns: 1fr;
+  }
+
+  .dt-control-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .dt-size,
+  .dt-control-strip > .dt-pagination {
+    grid-column: 1;
+  }
+
+  .dt-control-strip > .dt-pagination {
+    justify-self: stretch;
   }
 }
