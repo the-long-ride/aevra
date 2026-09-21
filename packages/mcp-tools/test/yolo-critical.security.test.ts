@@ -7,13 +7,19 @@ import { authorizeCapability, gated } from '../src/authorization.js';
  * The documented security model promises critical operations never execute
  * unattended; YOLO used to short-circuit ahead of that check.
  */
-function fixture(options: { yolo: boolean; alwaysConfirm: boolean; yoloMode?: string }) {
+function fixture(options: {
+  yolo: boolean;
+  alwaysConfirm: boolean;
+  yoloMode?: string;
+  capabilities?: string[];
+  permission?: { outcome: 'allow' | 'deny' | 'approval'; reason: string };
+}) {
   const requests: any[] = [];
   const lease: any = {
     id: 'l1',
     workspaceId: 'w1',
     actor: 'oauth:ChatGPT',
-    capabilities: [],
+    capabilities: options.capabilities ?? [],
     expiresAt: 'later',
   };
   const session: any = { id: 's1', actor: 'oauth:ChatGPT', subject: 'subject' };
@@ -35,6 +41,7 @@ function fixture(options: { yolo: boolean; alwaysConfirm: boolean; yoloMode?: st
       status: () => ({ state: 'PENDING' }),
     },
     deps: {
+      ...(options.permission ? { permissions: { decide: () => options.permission } } : {}),
       settings: {
         get: (key: string, fallback: any) => {
           if (key === 'policy.critical.alwaysConfirm') return options.alwaysConfirm;
@@ -74,9 +81,15 @@ test('gated: YOLO still bypasses approval for non-critical work', async () => {
   assert.equal(await gated(fx.context, 's1', LOW, {}, {}, async () => 'EXECUTED'), 'EXECUTED');
 });
 
-test('gated: YOLO bypasses critical work when alwaysConfirm is off', async () => {
-  const fx = fixture({ yolo: true, alwaysConfirm: false });
-  assert.equal(await gated(fx.context, 's1', CRITICAL, {}, {}, async () => 'EXECUTED'), 'EXECUTED');
+test('gated: YOLO still requires critical approval when alwaysConfirm is off', async () => {
+  const fx = fixture({
+    yolo: true,
+    alwaysConfirm: false,
+    capabilities: ['commands.run'],
+  });
+  const result: any = await gated(fx.context, 's1', CRITICAL, {}, {}, async () => 'EXECUTED');
+  assert.equal(result.status, 'approval_pending');
+  assert.equal(fx.requests.length, 1);
 });
 
 test('gated: workspace-scoped YOLO stops at critical work even without alwaysConfirm', async () => {
@@ -85,8 +98,12 @@ test('gated: workspace-scoped YOLO stops at critical work even without alwaysCon
   assert.equal(result.status, 'approval_pending');
 });
 
-test('authorizeCapability: YOLO does not bypass a critical capability grant', async () => {
-  const fx = fixture({ yolo: true, alwaysConfirm: true });
+test('authorizeCapability: command YOLO defers CRITICAL confirmation to structured command policy', async () => {
+  const fx = fixture({
+    yolo: true,
+    alwaysConfirm: true,
+    permission: { outcome: 'deny', reason: 'remembered deny' },
+  });
   const gate: any = await authorizeCapability(
     fx.context,
     's1',
@@ -95,8 +112,12 @@ test('authorizeCapability: YOLO does not bypass a critical capability grant', as
     'shell:bash:*',
     'CRITICAL',
   );
-  assert.ok('response' in gate, 'a critical grant must go to approval, not straight through');
-  assert.equal(gate.response.status, 'approval_pending');
+  assert.equal(gate.authorization.capability, 'commands.run');
+  assert.equal(
+    fx.requests.length,
+    0,
+    'pre-analysis gate must not create a generic critical ticket',
+  );
 });
 
 test('authorizeCapability: YOLO still grants non-critical capabilities directly', async () => {
@@ -110,4 +131,30 @@ test('authorizeCapability: YOLO still grants non-critical capabilities directly'
     'HIGH',
   );
   assert.equal(gate.authorization.capability, 'files.write');
+});
+
+test('authorizeCapability: active command YOLO bypasses remembered command and network DENY preflight', async () => {
+  const permission = { outcome: 'deny' as const, reason: 'remembered deny' };
+
+  const commandFx = fixture({ yolo: true, alwaysConfirm: false, permission });
+  const commandGate: any = await authorizeCapability(
+    commandFx.context,
+    's1',
+    'commands.run',
+    { tool: 'command_run', args: {} },
+    'git:status',
+    'HIGH',
+  );
+  assert.equal(commandGate.authorization.capability, 'commands.run');
+
+  const networkFx = fixture({ yolo: true, alwaysConfirm: false, permission });
+  const networkGate: any = await authorizeCapability(
+    networkFx.context,
+    's1',
+    'network',
+    { tool: 'command_run', args: { networkDestinations: ['example.com'] } },
+    'domain:example.com',
+    'MEDIUM',
+  );
+  assert.equal(networkGate.authorization.capability, 'network');
 });

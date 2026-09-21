@@ -1,4 +1,7 @@
 import type { FrozenOperationTicket } from '../../../apps/core/src/approvals/approval-service.js';
+import { consumeCommandApproval } from '../../../apps/core/src/approvals/command-binding.js';
+import type { CommandAnalysis } from '../../protocol/src/index.js';
+import { freshCommandAnalysis } from './approval-command-freshness.js';
 import { AevraToolError } from './errors.js';
 import { repoState } from './git-state.js';
 import {
@@ -39,6 +42,8 @@ async function resumeGeneralApproval(
   sessionId: string,
   requestId: string,
 ) {
+  let freshAnalysisForClaim: CommandAnalysis | null = null;
+
   return context.approvals!.resume(
     requestId,
     async (current) => {
@@ -58,10 +63,27 @@ async function resumeGeneralApproval(
           return { ok: false, reason: 'repository state changed' };
         }
       }
+
+      const payload = current.payload as any;
+      if (
+        (payload?.tool === 'command_run' || payload?.tool === 'process_start') &&
+        payload.commandAnalysis
+      ) {
+        const fresh = await freshCommandAnalysis(context, sessionId, current, payload);
+        if (!fresh.ok) return fresh;
+        freshAnalysisForClaim = fresh.analysis;
+      }
       return { ok: true };
     },
     async (current) => executeFrozen(context, sessionId, current),
-    (current) => verifyTicketAuthority(context, sessionId, current),
+    (current) => {
+      const auth = verifyTicketAuthority(context, sessionId, current);
+      if (!auth.ok) return auth;
+      if (freshAnalysisForClaim) {
+        return consumeCommandApproval(requestId, freshAnalysisForClaim);
+      }
+      return { ok: true };
+    },
   );
 }
 
@@ -209,9 +231,10 @@ async function executeFrozen(
   }
 
   if (payload.tool === 'command_run') {
+    const commandPayload = { ...payload.args.command, workspaceId: ticket.workspaceId };
     return context.deps.operations!.runCommand(
       sessionId,
-      payload.args.command,
+      commandPayload,
       payload.args.executionMode,
       payload.args.networkPolicy,
     );
@@ -274,6 +297,24 @@ async function executeFrozen(
   }
 
   if (payload.tool === 'process_start') {
+    if (context.deps.processes) {
+      const pArgs = payload.args ?? {};
+      const command = {
+        executable: String(pArgs.executable ?? pArgs.command?.executable ?? ''),
+        args: Array.isArray(pArgs.args) ? pArgs.args : (pArgs.command?.args ?? []),
+        env: pArgs.env ?? pArgs.command?.env ?? {},
+        cwdLogical: String(pArgs.cwdLogical ?? pArgs.command?.cwdLogical ?? '/'),
+        timeoutMs: pArgs.timeoutMs,
+        workspaceId: ticket.workspaceId,
+      };
+      return context.deps.processes.start(
+        sessionId,
+        ticket.workspaceId,
+        command,
+        pArgs.lifecycle === 'keep-running' ? 'keep-running' : 'stop-with-aevra',
+        pArgs.name,
+      );
+    }
     return context.processStart(sessionId, payload.args);
   }
 

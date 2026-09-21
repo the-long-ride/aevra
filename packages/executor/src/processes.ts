@@ -86,11 +86,12 @@ export class ManagedProcessRuntime {
     const secrets = Object.values(command.env);
     const redact = (value: string) => this.redact(redactText(value, secrets).text);
     const id = `proc_${randomUUID()}`;
-    const resolved = resolveExecutable(command.executable);
+    const childEnv = buildChildEnvironment(command.env);
+    const resolved = resolveExecutable(command.executable, childEnv);
     const shim = windowsShimCommand(resolved, command.args);
     const child = spawn(shim?.executable ?? resolved, shim?.args ?? command.args, {
       cwd,
-      env: buildChildEnvironment(command.env),
+      env: childEnv,
       shell: false,
       windowsHide: true,
       ...(shim ? { windowsVerbatimArguments: true } : {}),

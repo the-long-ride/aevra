@@ -37,11 +37,14 @@ public static class AevraPower {
 }
 '@
 Add-Type -TypeDefinition $source
-$ES_CONTINUOUS = [uint32]0x80000000
+$ES_CONTINUOUS = [uint32]2147483648
 $ES_SYSTEM_REQUIRED = [uint32]0x00000001
-[void][AevraPower]::SetThreadExecutionState($ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED)
 try {
-  while ($true) { Start-Sleep -Seconds 3600 }
+  while ($true) {
+    $state = [AevraPower]::SetThreadExecutionState($ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED)
+    if ($state -eq 0) { throw 'SetThreadExecutionState failed' }
+    Start-Sleep -Seconds 30
+  }
 } finally {
   [void][AevraPower]::SetThreadExecutionState($ES_CONTINUOUS)
 }`;
@@ -59,7 +62,7 @@ function platformCommand(platform: NodeJS.Platform) {
   if (platform === 'linux') {
     return {
       executable: 'systemd-inhibit',
-      args: ['--what=idle', '--mode=block', '--why=Aevra keep awake', 'sleep', 'infinity'],
+      args: ['--what=idle:sleep', '--mode=block', '--why=Aevra keep awake', 'sleep', 'infinity'],
     };
   }
   return undefined;

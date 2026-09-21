@@ -3,6 +3,7 @@ import type { CommandInput, CommandResult } from '../../protocol/src/index.js';
 import { redactText } from '../../security/src/dlp.js';
 import { stripControlCharacters } from '../../security/src/untrusted.js';
 import { buildChildEnvironment } from './environment.js';
+import { resolveExecutable, windowsShimCommand } from './spawn-target.js';
 export const COMMAND_OUTPUT_LIMIT = 1024 * 1024;
 const TRUNCATED = '\n...[output truncated by Aevra]';
 export function appendCommandOutput(current: string, chunk: unknown) {
@@ -33,11 +34,15 @@ export async function runCommand(input: CommandInput, cwd?: string): Promise<Com
       stderrTruncated = false;
     // Resolve on 'close', never on 'exit': 'exit' can fire before the stdio
     // pipes have flushed, which silently truncated command output.
-    const child = spawn(input.executable, input.args, {
+    const childEnv = buildChildEnvironment(input.env);
+    const resolved = resolveExecutable(input.executable, childEnv);
+    const shim = windowsShimCommand(resolved, input.args);
+    const child = spawn(shim?.executable ?? resolved, shim?.args ?? input.args, {
       cwd,
-      env: buildChildEnvironment(input.env),
+      env: childEnv,
       shell: false,
       windowsHide: true,
+      ...(shim ? { windowsVerbatimArguments: true } : {}),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const timer = input.timeoutMs

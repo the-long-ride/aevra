@@ -2,6 +2,7 @@ import type { ApprovalService } from '../../../apps/core/src/approvals/approval-
 import type { ReadVersionCache } from '../../../apps/core/src/operations/read-version-cache.js';
 import type { SessionManager } from '../../../apps/core/src/sessions/session-manager.js';
 import type { WorkspaceService } from '../../../apps/core/src/workspaces/workspace-service.js';
+import type { CommandRequest } from '../../protocol/src/index.js';
 import {
   BASIC_TOOL_NAMES,
   handleBasicTool,
@@ -26,6 +27,7 @@ import {
   PROCESS_CHANGE_TOOL_NAMES,
 } from './process-change-tools.js';
 import { searchTool } from './search-tool.js';
+import { evaluateRuntimeCommand } from './command-evaluation.js';
 import { resolveWorkspaceLease } from './service-helpers.js';
 import type {
   McpProxyOperation,
@@ -56,13 +58,14 @@ const TARGETED_WORKSPACE_TOOLS = new Set([
 ]);
 
 function needsWorkspaceTarget(name: string, args: any) {
+  if (name === 'workspace_select') return false;
   if (TARGETED_WORKSPACE_TOOLS.has(name)) return true;
   const explicitTarget = Boolean(
     String(args?.workspace ?? '').trim() || String(args?.workspaceId ?? '').trim(),
   );
-  if (name === 'skills_list' || name === 'instructions_read') return explicitTarget;
+  if (explicitTarget) return true;
   if (name === 'skill_read' || name === 'skill_write' || name === 'instructions_write') {
-    return explicitTarget || args?.source === 'workspace';
+    return args?.source === 'workspace';
   }
   return false;
 }
@@ -195,6 +198,22 @@ export class McpToolService {
     if (BROWSER_TOOL_NAMES.has(name)) return handleBrowserTool(context, sessionId, name, args);
     if (DESKTOP_TOOL_NAMES.has(name)) return handleDesktopTool(context, sessionId, name, args);
     return callUpstreamTool(context, sessionId, name, args);
+  }
+
+  async evaluateCommand(
+    sessionId: string,
+    workspaceId: string | undefined,
+    rawRequest: CommandRequest,
+  ) {
+    return evaluateRuntimeCommand(this.context(workspaceId), sessionId, workspaceId, rawRequest);
+  }
+
+  async evaluateCommandInput(input: {
+    sessionId: string;
+    workspaceId?: string;
+    request: CommandRequest;
+  }) {
+    return this.evaluateCommand(input.sessionId, input.workspaceId, input.request);
   }
 
   async upstreamToolDefinitions() {

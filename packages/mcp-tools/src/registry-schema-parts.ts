@@ -44,6 +44,7 @@ export const commandProperties = {
   executable: stringProp('Executable to run in the active workspace.'),
   args: stringArray('Arguments passed directly to the executable.'),
   env: stringMap('Environment variables injected only into the child process.'),
+  cwdLogical: stringProp('Logical working directory inside the active workspace. Defaults to /.'),
   timeoutMs: {
     type: 'integer',
     minimum: 1,
@@ -53,7 +54,10 @@ export const commandProperties = {
 };
 export const processIdSchema: JsonSchema = {
   type: 'object',
-  properties: { processId: stringProp('Managed process ID.') },
+  properties: {
+    processId: stringProp('Managed process ID.'),
+    ...workspaceTargetProperties,
+  },
   required: ['processId'],
   additionalProperties: false,
 };

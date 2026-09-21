@@ -23,9 +23,9 @@ export async function workspaceSelect(context: McpRuntimeContext, sessionId: str
   const manifest = context.deps.manifests?.summarize(workspace.hostRoot ?? null);
 
   const session = context.sessions.get(sessionId)!;
-  const active = context.sessions.activeLease(sessionId);
-  if (active?.workspaceId === workspace.id) {
-    return workspaceResult(workspace, active.capabilities, manifest);
+  const existingLease = context.sessions.leaseForWorkspace(sessionId, workspace.id);
+  if (existingLease) {
+    return workspaceResult(workspace, existingLease.capabilities, manifest);
   }
 
   const bindings = session.actor.startsWith('connector:')
@@ -147,9 +147,8 @@ export async function authorizeCapability(
 ): Promise<CapabilityGate> {
   const lease = requiredLease(context, sessionId);
   const session = context.sessions.get(sessionId)!;
-  const forceCriticalApproval = criticalConfirmRequired(context, risk);
-  // `decide?.()` rather than `decide()`: this now runs before the YOLO short-circuit,
-  // so it is reached by callers that supply a permission engine without a decider.
+  const forceCriticalApproval = criticalConfirmRequired(context, risk, sessionId);
+  const authorization = authorizationContext(context, sessionId, capability, permissionMatcher);
   const lowDecision = context.deps.permissions?.decide?.({
     capability,
     matcher: permissionMatcher,
@@ -158,27 +157,35 @@ export async function authorizeCapability(
     sessionId,
     risk: 'LOW',
   });
-  // An explicit DENY outranks YOLO: the permission model promises DENY wins, and a
-  // session flag must not turn an operator's refusal into an unattended run.
+  const commandFlow =
+    capability === 'commands.run' ||
+    (capability === 'network' &&
+      (original.tool === 'command_run' || original.tool === 'shell_run'));
+  const yoloActive = Boolean(context.sessions.isYolo?.(sessionId));
+  const yoloAllowed = yoloAllows(context, sessionId, {
+    capability,
+    risk,
+    family: permissionMatcher,
+    executionMode: original.args?.executionMode,
+    networkDestinations: original.args?.networkDestinations,
+    commandText: commandTextOf(original.args),
+  });
+
+  // Raw command/shell execution always reaches the structured command policy
+  // while YOLO is active. That policy proves workspace scope (or unrestricted
+  // mode) and enforces mandatory CRITICAL confirmation. This also prevents an
+  // old remembered DENY from short-circuiting YOLO before command analysis.
+  if (commandFlow && yoloActive) {
+    return { authorization };
+  }
+
+  // Non-command permissions retain DENY precedence even when YOLO is enabled.
   if (lowDecision?.outcome === 'deny') {
     throw new AevraToolError('CAPABILITY_REQUIRED', lowDecision.reason);
   }
-  if (
-    yoloAllows(context, sessionId, {
-      capability,
-      risk,
-      family: permissionMatcher,
-      executionMode: original.args?.executionMode,
-      networkDestinations: original.args?.networkDestinations,
-      commandText: commandTextOf(original.args),
-    })
-  ) {
-    return {
-      authorization: authorizationContext(context, sessionId, capability, permissionMatcher),
-    };
+  if (yoloAllowed) {
+    return { authorization };
   }
-
-  const authorization = authorizationContext(context, sessionId, capability, permissionMatcher);
   if (
     !forceCriticalApproval &&
     (lease.capabilities.includes(capability) ||
@@ -240,7 +247,7 @@ export async function gated<T>(
 ) {
   const session = context.sessions.get(sessionId)!;
   const lease = requiredLease(context, sessionId);
-  const forceCriticalApproval = criticalConfirmRequired(context, normalized.risk);
+  const forceCriticalApproval = criticalConfirmRequired(context, normalized.risk, sessionId);
   const payloadArgs = (payload as any)?.args ?? payload;
   const once = oneTimeAllowed(context, sessionId, normalized.capability, normalized.family);
   const decision = context.deps.permissions?.decide?.({

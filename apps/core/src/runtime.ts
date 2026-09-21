@@ -17,12 +17,7 @@ import { ConnectionAdminService } from './admin/connection-admin.js';
 import { buildRuntimeHealth } from './admin/runtime-health.js';
 import { McpIngressServer } from './mcp/server.js';
 import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
-import {
-  buildAdminApiContext,
-  createCoreToolService,
-  createRuntimeAdminServer,
-  createRuntimeApprovalService,
-} from './admin/admin-api-context.js';
+import * as adminRuntime from './admin/admin-api-context.js';
 import { LocalFilesystemService } from './admin/local-filesystem.js';
 import type { WorkerClient } from '../../../packages/ipc/src/client.js';
 import { CapabilityProfileService } from './policy/capabilities.js';
@@ -200,7 +195,7 @@ export async function createCoreRuntime(
           operations.drainSession(sId, tMs ?? settings.get('workspace.drain.defaultMs', 60_000)),
         );
         if (!safeMode) await changes.reconcileIncompleteOperations();
-        const approvals = createRuntimeApprovalService(
+        const approvals = adminRuntime.createRuntimeApprovalService(
           approvalRepo,
           audit,
           config,
@@ -220,21 +215,28 @@ export async function createCoreRuntime(
           dataServices = await createRuntimeDataServices(config, db);
         const { vault, environment, databaseAdmin } = dataServices;
         const mcpUpstreams = createMcpUpstreams(db, workerGateway, dataServices.secretStore);
-        const tools = createCoreToolService(sessions, workspaces, workerGateway, reads, approvals, {
-          operations,
-          resumableOperations,
-          processes,
-          changes,
-          permissions,
-          security,
-          audit,
-          connectorBindings,
-          metrics,
-          settings,
-          systemCapabilities,
-          browserPolicy,
-          upstreams: mcpUpstreams,
-        });
+        const tools = adminRuntime.createCoreToolService(
+          sessions,
+          workspaces,
+          workerGateway,
+          reads,
+          approvals,
+          {
+            operations,
+            resumableOperations,
+            processes,
+            changes,
+            permissions,
+            security,
+            audit,
+            connectorBindings,
+            metrics,
+            settings,
+            systemCapabilities,
+            browserPolicy,
+            upstreams: mcpUpstreams,
+          },
+        );
         const remoteTools = new SessionSkillAccessGate(tools, sessions, approvals);
         const bootstrap = new AdminBootstrapService(raw);
         await bootstrap.revokeAll();
@@ -253,7 +255,7 @@ export async function createCoreRuntime(
         const localTls = tls.serverOptions;
         const staticDir = fileURLToPath(new URL('../../web', import.meta.url));
         const oauth = exposureWiring.oauth;
-        admin = createRuntimeAdminServer(
+        admin = adminRuntime.createRuntimeAdminServer(
           config,
           {
             bootstrap,
@@ -261,13 +263,10 @@ export async function createCoreRuntime(
             controlSecret,
             staticDir,
             localTls,
-            trustedOrigins: () =>
-              exposureWiring?.trustedAdminOrigins() ?? config.trustedAdminOrigins,
+            exposureWiring,
+            trustedAdminOrigins: config.trustedAdminOrigins,
             gatewayTrustSecret,
-            localHttpGatewayEnabled: () =>
-              exposureWiring?.currentConfig().provider === 'local' &&
-              exposureWiring.localProtocol() === 'http',
-            api: buildAdminApiContext({
+            api: adminRuntime.buildAdminApiContext({
               workspaces,
               approvals,
               permissions: permissionRepo,
@@ -296,6 +295,7 @@ export async function createCoreRuntime(
               systemCapabilities: () => systemCapabilities,
               getMcpDiagnostics: () => mcp?.diagnosticsSnapshot() ?? null,
               isSafeMode: () => safeMode,
+              commandEvaluator: tools.evaluateCommandInput.bind(tools),
             }),
           },
           () =>

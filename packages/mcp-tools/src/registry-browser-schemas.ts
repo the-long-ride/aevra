@@ -1,4 +1,9 @@
-import { emptySchema, stringProp, type JsonSchema } from './registry-schema-parts.js';
+import {
+  stringProp,
+  workspaceEmptySchema,
+  workspaceTargetProperties,
+  type JsonSchema,
+} from './registry-schema-parts.js';
 
 /**
  * Input schemas for the nine browser tools, kept apart from the rest so the
@@ -8,6 +13,7 @@ export const browserInputSchemas: Record<string, JsonSchema> = {
   browser_connect: {
     type: 'object',
     properties: {
+      ...workspaceTargetProperties,
       transport: {
         type: 'string',
         enum: ['extension', 'cdp'],
@@ -19,11 +25,12 @@ export const browserInputSchemas: Record<string, JsonSchema> = {
     required: ['transport'],
     additionalProperties: false,
   },
-  browser_status: emptySchema,
-  browser_disconnect: emptySchema,
+  browser_status: workspaceEmptySchema,
+  browser_disconnect: workspaceEmptySchema,
   browser_tabs: {
     type: 'object',
     properties: {
+      ...workspaceTargetProperties,
       action: { type: 'string', enum: ['list', 'open', 'close', 'focus'] },
       url: stringProp('URL to open, for action \"open\".'),
       tabId: stringProp('Target tab id.'),
@@ -34,6 +41,7 @@ export const browserInputSchemas: Record<string, JsonSchema> = {
   browser_navigate: {
     type: 'object',
     properties: {
+      ...workspaceTargetProperties,
       tabId: stringProp('Target tab id. Defaults to the active tab.'),
       url: stringProp('Absolute URL to navigate to.'),
       waitUntil: { type: 'string', enum: ['load', 'idle'] },
@@ -44,6 +52,7 @@ export const browserInputSchemas: Record<string, JsonSchema> = {
   browser_snapshot: {
     type: 'object',
     properties: {
+      ...workspaceTargetProperties,
       tabId: stringProp('Target tab id. Defaults to the active tab.'),
       mode: {
         type: 'string',
@@ -57,6 +66,7 @@ export const browserInputSchemas: Record<string, JsonSchema> = {
   browser_read: {
     type: 'object',
     properties: {
+      ...workspaceTargetProperties,
       tabId: stringProp('Target tab id. Defaults to the active tab.'),
       ref: stringProp('Element ref from a previous snapshot.'),
       selector: stringProp('CSS selector, when no ref is available.'),
@@ -67,6 +77,7 @@ export const browserInputSchemas: Record<string, JsonSchema> = {
   browser_act_many: {
     type: 'object',
     properties: {
+      ...workspaceTargetProperties,
       tabId: stringProp('Target tab id. Defaults to the active tab.'),
       actions: {
         type: 'array',
@@ -83,6 +94,7 @@ export const browserInputSchemas: Record<string, JsonSchema> = {
   browser_logs: {
     type: 'object',
     properties: {
+      ...workspaceTargetProperties,
       tabId: stringProp('Target tab id. Defaults to the active tab.'),
       kind: { type: 'string', enum: ['console', 'network'] },
       limit: { type: 'integer', minimum: 1, maximum: 500 },

@@ -151,6 +151,7 @@ export const inputSchemas: Record<string, JsonSchema> = {
       executionMode,
       timeoutMs: commandProperties.timeoutMs,
       env: commandProperties.env,
+      cwdLogical: commandProperties.cwdLogical,
       networkDestinations: stringArray(
         'Optional network destinations subject to Aevra network capability and approval policy.',
       ),
@@ -178,6 +179,7 @@ export const inputSchemas: Record<string, JsonSchema> = {
   process_wait: {
     type: 'object',
     properties: {
+      ...workspaceTargetProperties,
       processId: stringProp('Managed process ID.'),
       timeoutMs: {
         type: 'integer',
@@ -192,6 +194,7 @@ export const inputSchemas: Record<string, JsonSchema> = {
   process_logs: {
     type: 'object',
     properties: {
+      ...workspaceTargetProperties,
       processId: stringProp('Managed process ID.'),
       cursor: { type: ['integer', 'string'], description: 'Optional cursor from a previous call.' },
     },

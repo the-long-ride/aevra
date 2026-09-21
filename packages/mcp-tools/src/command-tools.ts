@@ -1,16 +1,19 @@
-import type { ExecutionMode, RiskTier } from '../../protocol/src/index.js';
-import { classifyCommand } from '../../../apps/core/src/policy/command-family.js';
 import {
-  commandPermissionMatcher,
-  needsCommandPermissionApproval,
-} from '../../../apps/core/src/policy/command-matcher.js';
+  normalizeYoloMode,
+  type CommandRequest,
+  type ExecutionMode,
+  type RiskTier,
+} from '../../protocol/src/index.js';
+import { classifyCommand } from '../../../apps/core/src/policy/command-family.js';
+import { commandPermissionMatcher } from '../../../apps/core/src/policy/command-matcher.js';
+import { evaluateAndDecideCommand } from './command-decision-bridge.js';
+import { bindCommandApproval } from '../../../apps/core/src/approvals/command-binding.js';
 import { resumeApproval } from './approval-resume.js';
 import { authorizeCapability } from './authorization.js';
 import { AevraToolError } from './errors.js';
 import { buildShellCommand, resolveShellKind, shellRiskFloor } from './shell-command.js';
 import { argsHash, maxRisk, oneTimeAllowed, requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
-import { commandTextOf, yoloAllows } from './yolo-mode.js';
 
 interface ShellSource {
   tool: 'shell_run';
@@ -72,6 +75,12 @@ export async function commandTool(
   const command = {
     executable: String(args.executable ?? args.command?.executable ?? ''),
     args: Array.isArray(args.args) ? args.args.map(String) : (args.command?.args ?? []).map(String),
+    cwdLogical:
+      typeof args.cwdLogical === 'string'
+        ? args.cwdLogical
+        : typeof args.command?.cwdLogical === 'string'
+          ? args.command.cwdLogical
+          : undefined,
     env: args.env ?? args.command?.env ?? {},
     timeoutMs: args.timeoutMs ?? args.command?.timeoutMs,
   };
@@ -90,6 +99,7 @@ export async function commandTool(
           networkDestinations: args.networkDestinations,
           env: command.env,
           timeoutMs: command.timeoutMs,
+          cwdLogical: command.cwdLogical,
         }
       : { ...args, executionMode: mode },
   };
@@ -122,6 +132,10 @@ export async function commandTool(
 
   let lease = requiredLease(context, sessionId);
   const session = context.sessions.get(sessionId)!;
+  const yoloMode = normalizeYoloMode(
+    context.deps.settings?.get<{ mode?: string }>('policy.yolo', { mode: 'workspace' })?.mode,
+  );
+  const isYolo = Boolean(context.sessions.isYolo?.(sessionId));
   const normalized = {
     family: permissionMatcher,
     capability: 'commands.run' as const,
@@ -133,7 +147,7 @@ export async function commandTool(
   const rawDestinations = Array.isArray(args.networkDestinations)
     ? args.networkDestinations.map(String)
     : [];
-  if (rawDestinations.length > 0 && !lease.capabilities.includes('network')) {
+  if (rawDestinations.length > 0 && !lease.capabilities.includes('network') && !isYolo) {
     const networkGate = await authorizeCapability(
       context,
       sessionId,
@@ -173,10 +187,10 @@ export async function commandTool(
         sessionId,
         risk: 'MEDIUM',
       });
-      if (decision?.outcome === 'deny') {
+      if (decision?.outcome === 'deny' && !isYolo) {
         throw new AevraToolError('CAPABILITY_REQUIRED', decision.reason);
       }
-      if (decision?.outcome !== 'allow' && !networkApproval) {
+      if (decision?.outcome !== 'allow' && !networkApproval && !isYolo) {
         networkApproval = {
           family: item.family,
           capability: 'network' as const,
@@ -195,26 +209,40 @@ export async function commandTool(
     sessionId,
     risk,
   });
-  if (commandDecision?.outcome === 'deny') {
-    throw new AevraToolError('CAPABILITY_REQUIRED', commandDecision.reason);
-  }
-  const once = oneTimeAllowed(context, sessionId, 'commands.run', permissionMatcher);
-  const needsCommandApproval = needsCommandPermissionApproval(commandDecision?.outcome, once);
-  // The capability gate above already cleared this command for an in-scope YOLO
-  // session; without the same check here every command still stopped for approval.
-  const yoloRuns = yoloAllows(context, sessionId, {
-    capability: 'commands.run',
-    risk,
-    family: permissionMatcher,
+
+  const commandRequest: CommandRequest = {
+    kind: source ? 'script' : 'argv',
+    executable: command.executable,
+    argv: [command.executable, ...command.args],
+    script: source?.script,
+    shell: source?.shell as any,
+    cwdLogical: command.cwdLogical ?? '/',
+    env: command.env,
+    timeoutMs: command.timeoutMs,
     executionMode: mode,
     networkDestinations: rawDestinations,
-    commandText: commandTextOf({ script: source?.script, command }),
+  };
+
+  const { analysis, decision } = await evaluateAndDecideCommand(context, sessionId, {
+    commandRequest,
+    permissionMatcher,
+    rawDestinations,
+    isYolo,
+    yoloMode,
+    networkApproval,
+    legacyDecision: commandDecision?.outcome === 'deny' ? commandDecision : undefined,
+    riskFloor: risk,
   });
-  const approvalNormalized = yoloRuns ? null : needsCommandApproval ? normalized : networkApproval;
+
   const payload = {
     tool: 'command_run',
     permissionMatcher,
     classificationFamily,
+    commandAnalysis: analysis,
+    commandRequest,
+    networkApproval,
+    riskFloor: risk,
+    workspaceId: lease.workspaceId,
     ...(source
       ? {
           sourceTool: 'shell_run',
@@ -225,22 +253,46 @@ export async function commandTool(
     args: { command, executionMode: mode, networkPolicy },
   };
 
-  if (approvalNormalized) {
+  const once = oneTimeAllowed(context, sessionId, 'commands.run', permissionMatcher);
+  const effectiveOutcome =
+    decision.outcome === 'approval' && once && !analysis.nodes.some((n) => n.risk === 'CRITICAL')
+      ? 'allow'
+      : decision.outcome;
+
+  const decisionReasons = 'reasons' in decision ? decision.reasons : [];
+  if (effectiveOutcome === 'deny') {
+    throw new AevraToolError(
+      'CAPABILITY_REQUIRED',
+      decisionReasons.map((r) => r.message).join('; ') || 'Denied by policy',
+    );
+  }
+
+  if (effectiveOutcome === 'invalid') {
+    throw new AevraToolError(
+      'INVALID_REQUEST',
+      decisionReasons.map((r) => r.message).join('; ') || 'Invalid command request',
+    );
+  }
+
+  if (effectiveOutcome === 'approval') {
     if (!context.approvals) {
       throw new AevraToolError('APPROVAL_PENDING', 'Local approval service unavailable');
     }
+    const approvalOp = networkApproval ?? normalized;
     const request = await context.approvals.request({
       actor: session.actor,
       sessionId,
       workspaceId: lease.workspaceId,
-      operation: approvalNormalized,
+      operation: approvalOp,
       payload,
       expectedState: {},
-      risk: approvalNormalized.risk,
+      risk: approvalOp.risk,
     });
+    bindCommandApproval(request.requestId, analysis, sessionId, lease.workspaceId);
     if (request.status === 'approval_pending') return request;
     return resumeApproval(context, sessionId, request.requestId);
   }
 
-  return context.deps.operations!.runCommand(sessionId, command, mode, networkPolicy);
+  const commandPayload = { ...command, workspaceId: lease.workspaceId };
+  return context.deps.operations!.runCommand(sessionId, commandPayload, mode, networkPolicy);
 }

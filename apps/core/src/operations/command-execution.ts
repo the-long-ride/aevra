@@ -8,6 +8,7 @@ import type { WorkspaceLockCoordinator } from '../policy/workspace-locks.js';
 export interface CommandRunInput {
   executable: string;
   args: string[];
+  cwdLogical?: string;
   env?: Record<string, string>;
   timeoutMs?: number;
 }
@@ -40,12 +41,37 @@ export class CommandExecution {
 
   async run(
     sessionId: string,
-    command: CommandRunInput,
-    executionMode?: 'sandbox' | 'host',
+    workspaceIdOrCommand: string | CommandRunInput,
+    commandOrExecutionMode?: CommandRunInput | 'sandbox' | 'host',
+    executionModeOrNetworkPolicy?: 'sandbox' | 'host' | NetworkPolicy,
     networkPolicy?: NetworkPolicy,
   ) {
-    const lease = this.sessions.activeLease(sessionId);
+    let workspaceId: string | undefined;
+    let command: CommandRunInput;
+    let executionMode: 'sandbox' | 'host' | undefined;
+    let policy: NetworkPolicy | undefined;
+
+    if (typeof workspaceIdOrCommand === 'string') {
+      workspaceId = workspaceIdOrCommand;
+      command = commandOrExecutionMode as CommandRunInput;
+      executionMode = executionModeOrNetworkPolicy as 'sandbox' | 'host' | undefined;
+      policy = networkPolicy;
+    } else {
+      command = workspaceIdOrCommand;
+      executionMode = commandOrExecutionMode as 'sandbox' | 'host' | undefined;
+      policy = executionModeOrNetworkPolicy as NetworkPolicy | undefined;
+      workspaceId = (command as any)?.workspaceId;
+    }
+
+    const lease = workspaceId
+      ? this.sessions.leaseForWorkspace(sessionId, workspaceId)
+      : this.sessions.activeLease(sessionId);
     if (!lease) {
+      if (workspaceId) {
+        throw Object.assign(new Error('Workspace access required'), {
+          code: 'WORKSPACE_ACCESS_REQUIRED',
+        });
+      }
       throw Object.assign(new Error('Select a workspace'), {
         code: 'SESSION_WORKSPACE_REQUIRED',
       });
@@ -69,10 +95,10 @@ export class CommandExecution {
       roots: this.workspaces.capabilityRoots(lease.workspaceId),
       operation: {
         kind: 'command.run',
-        command: { ...command, env: command.env ?? {}, cwdLogical: '/' },
+        command: { ...command, env: command.env ?? {}, cwdLogical: command.cwdLogical ?? '/' },
         sandboxBackend,
         cachePolicy: execution.cachePolicy ?? 'workspace',
-        networkPolicy: networkPolicy ?? {
+        networkPolicy: policy ?? {
           mode: 'deny-all',
           destinations: [],
           enforcement: 'backend',

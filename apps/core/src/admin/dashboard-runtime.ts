@@ -104,9 +104,12 @@ function sessionConnection(session: any, workspaceNames: Map<string, string>) {
 }
 
 function connectionInventory(context: any, sessions: any[], workspaceNames: Map<string, string>) {
-  const durable = context.connections?.list?.() ?? [];
-  if (!durable.length) return sessions.map((session) => sessionConnection(session, workspaceNames));
-  const durableIds = new Set(durable.map((row: any) => String(row.connectionId)));
+  const allDurable = context.connections?.list?.() ?? [];
+  const durable = allDurable.filter((row: any) => row.status !== 'REVOKED');
+  const allDurableIds = new Set(allDurable.map((row: any) => String(row.connectionId)));
+  if (!durable.length && !allDurableIds.size) {
+    return sessions.map((session) => sessionConnection(session, workspaceNames));
+  }
   const oauth = durable.map((row: any) => {
     const workspaceIds = Array.isArray(row.workspaceIds) ? row.workspaceIds.map(String) : [];
     const workspaces = workspaceIds.map((id: string) => workspaceNames.get(id) ?? id);
@@ -119,8 +122,8 @@ function connectionInventory(context: any, sessions: any[], workspaceNames: Map<
   });
   const otherSessions = sessions.filter(
     (session: any) =>
-      !session.actor?.startsWith?.('oauth:') ||
-      !durableIds.has(String(session.connectionId ?? session.subject)),
+      !allDurableIds.has(String(session.connectionId ?? '')) &&
+      !allDurableIds.has(String(session.subject ?? '')),
   );
   return [...oauth, ...otherSessions.map((session) => sessionConnection(session, workspaceNames))];
 }

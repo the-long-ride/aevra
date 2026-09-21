@@ -34,16 +34,17 @@ function resourceSecurity(
   logicalPath: string,
   mutation: boolean,
 ) {
+  const lease = requiredLease(context, sessionId);
   if (context.deps.security) {
     return context.deps.security.authorizeResource({
       sessionId,
+      workspaceId: lease.workspaceId,
       capability,
       operation,
       logicalPath,
       mutation,
     });
   }
-  const lease = requiredLease(context, sessionId);
   const sensitivity = classifySensitivity({ path: logicalPath });
   return {
     workspaceId: lease.workspaceId,

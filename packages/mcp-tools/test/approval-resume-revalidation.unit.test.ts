@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import {
+  bindCommandApproval,
+  clearExpiredBindings,
+} from '../../../apps/core/src/approvals/command-binding.js';
+import { evaluateAndDecideCommand } from '../src/command-decision-bridge.js';
 import { resumeApproval } from '../src/approval-resume.js';
 
 function ticket(overrides: any = {}) {
@@ -136,6 +144,86 @@ test('ordinary approval accepts remembered permission one-time capability and ma
   const repoTicket = ticket({ expectedState: { head: 'abc123' } });
   const repo = fixture(repoTicket);
   assert.deepEqual(await resumeApproval(repo.context, 's1', 'req1'), { ran: true });
+});
+
+test('command resume re-analyzes frozen request and rejects changed script evidence before execution', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'aevra-approval-freshness-'));
+  writeFileSync(
+    path.join(root, 'package.json'),
+    JSON.stringify({ scripts: { build: 'echo before' } }),
+  );
+
+  try {
+    const request: any = {
+      kind: 'argv',
+      executable: 'npm',
+      argv: ['npm', 'run', 'build'],
+      cwdLogical: '/',
+      env: {},
+      executionMode: 'host',
+      networkDestinations: [],
+    };
+    const t = ticket({
+      operation: {
+        family: 'npm:run:build',
+        capability: 'commands.run',
+        risk: 'MEDIUM',
+        argsHash: 'x',
+      },
+    });
+    const fx = fixture(t, { capabilities: ['commands.run'] });
+    fx.context.workspaces.getLocal = () => ({ id: 'w1', hostRoot: root });
+    fx.context.workspaces.capabilityRoots = () => [
+      {
+        kind: 'workspace',
+        id: 'root',
+        logicalPrefix: '/',
+        hostRoot: root,
+        capabilities: ['commands.run'],
+      },
+    ];
+    fx.context.deps.permissions = {
+      listRules: () => [],
+      decide: () => ({ outcome: 'approval', reason: 'not remembered' }),
+    };
+
+    const { analysis } = await evaluateAndDecideCommand(fx.context, 's1', {
+      commandRequest: request,
+      permissionMatcher: 'npm:run:build',
+      rawDestinations: [],
+      isYolo: false,
+      yoloMode: 'workspace',
+    });
+    t.payload = {
+      tool: 'command_run',
+      permissionMatcher: 'npm:run:build',
+      commandAnalysis: analysis,
+      commandRequest: request,
+      args: {
+        command: {
+          executable: 'npm',
+          args: ['run', 'build'],
+          cwdLogical: '/',
+          env: {},
+        },
+        executionMode: 'host',
+        networkPolicy: { mode: 'deny-all', destinations: [], enforcement: 'backend' },
+      },
+    };
+    bindCommandApproval('req1', analysis, 's1', 'w1');
+
+    writeFileSync(
+      path.join(root, 'package.json'),
+      JSON.stringify({ scripts: { build: 'echo after' } }),
+    );
+
+    const result = await resumeApproval(fx.context, 's1', 'req1');
+    assert.deepEqual(result, { ok: false, reason: 'Evidence or context changed since approval' });
+    assert.equal(fx.validations.at(-1)?.ok, false);
+  } finally {
+    clearExpiredBindings(-1);
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('workspace admission validates OAuth connection scope session scope non-OAuth and workspace existence', async () => {

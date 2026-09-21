@@ -107,6 +107,35 @@ test('Python aliases are normalized and successful candidate name is retained', 
   assert.equal(pip?.available, true);
 });
 
+test('source-control capabilities include GitHub CLI and GitLab CLI', async () => {
+  const snapshot = await detectSystemCapabilities({
+    platform: 'linux',
+    arch: 'x64',
+    env: {},
+    runner: fakeRunner({
+      git: 'git version 2.51.0',
+      gh: 'gh version 2.80.0 (2026-09-10)',
+      glab: 'glab 1.70.0 (abcdef)',
+    }),
+  });
+
+  assert.deepEqual(
+    snapshot.toolchains
+      .filter((tool) => tool.category === 'source-control')
+      .map((tool) => ({
+        id: tool.id,
+        label: tool.label,
+        available: tool.available,
+        version: tool.version,
+      })),
+    [
+      { id: 'git', label: 'Git', available: true, version: '2.51.0' },
+      { id: 'gh', label: 'GitHub CLI', available: true, version: '2.80.0' },
+      { id: 'glab', label: 'GitLab CLI', available: true, version: '1.70.0' },
+    ],
+  );
+});
+
 test('failed probes do not abort later probes and unavailable tools expose no path', async () => {
   const snapshot = await detectSystemCapabilities({
     platform: 'linux',

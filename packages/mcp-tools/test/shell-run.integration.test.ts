@@ -77,7 +77,7 @@ test('shell_run requires high-risk local approval and resumes through command_ru
     jsonrpc: '2.0',
     id: 1,
     method: 'tools/call',
-    params: { name: 'shell_run', arguments: { script: 'pwd' } },
+    params: { name: 'shell_run', arguments: { script: 'pwd', cwdLogical: '/packages/api' } },
   });
   assert.equal(pending.result.structuredContent.status, 'approval_pending');
   const ticket = x.approvals.status(pending.result.structuredContent.requestId)!;
@@ -94,6 +94,7 @@ test('shell_run requires high-risk local approval and resumes through command_ru
   assert.equal(x.executions.length, 1);
   assert.equal(x.executions[0][1].executable, 'bash');
   assert.deepEqual(x.executions[0][1].args, ['-lc', 'pwd']);
+  assert.equal(x.executions[0][1].cwdLogical, '/packages/api');
   assert.equal(x.executions[0][2], 'sandbox');
   assert.equal(resumed.result.structuredContent.ok, true);
   x.db.close();
@@ -106,6 +107,7 @@ test('read-only shell request asks once for the exact commands.run matcher and p
     script: 'echo "$NAME"',
     env: { NAME: 'aevra' },
     timeoutMs: 4321,
+    cwdLogical: '/packages/api',
   });
   assert.equal(first.status, 'approval_pending');
   const ticket = x.approvals.status(first.requestId)!;
@@ -121,6 +123,7 @@ test('read-only shell request asks once for the exact commands.run matcher and p
   await x.service.call(x.session.id, 'approval_wait', { requestId: ticket.id });
   assert.equal(x.executions.length, 1);
   assert.equal(x.executions[0][1].timeoutMs, 4321);
+  assert.equal(x.executions[0][1].cwdLogical, '/packages/api');
   assert.equal(x.executions[0][1].env.NAME, 'aevra');
   assert.deepEqual(x.executions[0][1].args, ['-lc', 'echo "$NAME"']);
   assert.ok(

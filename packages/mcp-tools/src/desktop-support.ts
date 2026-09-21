@@ -45,7 +45,9 @@ export function audit(
     window?: string;
   } = {},
 ) {
-  const lease = context.sessions.activeLease(sessionId);
+  const lease = context.workspaceId
+    ? context.sessions.leaseForWorkspace(sessionId, context.workspaceId)
+    : context.sessions.activeLease(sessionId);
   context.deps.audit?.append({
     sessionId,
     ...(lease ? { workspaceId: lease.workspaceId } : {}),

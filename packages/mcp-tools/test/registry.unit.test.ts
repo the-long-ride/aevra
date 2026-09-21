@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { inputSchemas } from '../src/registry-input-schemas.js';
 import { STABLE_TOOL_NAMES, toolDefinitions } from '../src/registry.js';
 
 type StableToolName = (typeof STABLE_TOOL_NAMES)[number];
@@ -139,6 +140,30 @@ test('shell_run publishes a concrete high-control script schema', () => {
   assert.deepEqual(shell.inputSchema.properties.executionMode.enum, ['sandbox', 'host']);
   assert.equal(shell.annotations.openWorldHint, true);
   assert.equal(shell.annotations.readOnlyHint, false);
+});
+
+test('command, shell, and process inputs publish cwdLogical', () => {
+  const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
+  const command = inputSchemas.command_run as any;
+  const shell = definitions.get('shell_run')?.inputSchema as any;
+  const process = definitions.get('process_start')?.inputSchema as any;
+
+  assert.ok(command?.properties?.cwdLogical, 'command_run.cwdLogical schema missing');
+  assert.ok(
+    command?.properties?.command?.properties?.cwdLogical,
+    'nested command cwdLogical schema missing',
+  );
+  assert.ok(shell?.properties?.cwdLogical, 'shell_run.cwdLogical schema missing');
+  assert.ok(process?.properties?.cwdLogical, 'process_start.cwdLogical schema missing');
+  const commandMany = definitions.get('command_run_many')?.inputSchema as any;
+  assert.ok(
+    commandMany?.properties?.commands?.items?.properties?.cwdLogical,
+    'command_run_many commands[].cwdLogical schema missing',
+  );
+  assert.ok(
+    commandMany?.properties?.commands?.items?.properties?.command?.properties?.cwdLogical,
+    'nested command_run_many cwdLogical schema missing',
+  );
 });
 
 test('workspace-scoped public tools accept explicit workspace name or ID', () => {

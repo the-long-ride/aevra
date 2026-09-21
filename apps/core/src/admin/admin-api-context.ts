@@ -57,6 +57,7 @@ export function buildAdminApiContext(input: {
   systemCapabilities: () => any;
   getMcpDiagnostics: () => any;
   isSafeMode: () => boolean;
+  commandEvaluator?: (input: any) => Promise<any>;
 }) {
   return {
     workspaces: input.workspaces,
@@ -88,6 +89,7 @@ export function buildAdminApiContext(input: {
     systemCapabilities: input.systemCapabilities,
     mcpDiagnostics: input.getMcpDiagnostics,
     safeMode: input.isSafeMode,
+    commandEvaluator: input.commandEvaluator,
   };
 }
 
@@ -127,9 +129,9 @@ export function createRuntimeAdminServer(
     controlSecret: string;
     staticDir: string;
     localTls?: any;
-    trustedOrigins: () => string[];
+    exposureWiring: any;
+    trustedAdminOrigins: string[];
     gatewayTrustSecret: string;
-    localHttpGatewayEnabled: () => boolean;
     api: any;
   },
   healthResolver: () => any,
@@ -141,9 +143,11 @@ export function createRuntimeAdminServer(
     staticDir: opts.staticDir,
     ...(opts.localTls ? { tls: opts.localTls } : {}),
     advertisedHost: 'localhost',
-    trustedOrigins: opts.trustedOrigins,
+    trustedOrigins: () => opts.exposureWiring?.trustedAdminOrigins() ?? opts.trustedAdminOrigins,
     gatewayTrustSecret: opts.gatewayTrustSecret,
-    localHttpGatewayEnabled: opts.localHttpGatewayEnabled,
+    localHttpGatewayEnabled: () =>
+      opts.exposureWiring?.currentConfig().provider === 'local' &&
+      opts.exposureWiring.localProtocol() === 'http',
     api: opts.api,
   });
 }
