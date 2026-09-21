@@ -107,9 +107,10 @@ Browser error codes: `BROWSER_NOT_CONNECTED` · `BROWSER_UNAVAILABLE` ·
 ### MCP upstream pattern
 
 Operators register HTTP, SSE, or stdio downstream MCP servers through the Admin
-UI or `aevra mcp`. Credentials are referenced by secret id and are resolved
-only in the Worker connection path; they never appear in catalogs, status, or
-tool results. Each server is catalogued before it is stored, and its tools,
+UI (presented as a searchable, filterable pagination table under **Settings → MCP servers**)
+or `aevra mcp` (with aligned box-table output for `aevra mcp list`). Credentials are referenced
+by secret id and are resolved only in the Worker connection path; they never appear in catalogs,
+status, or tool results. Each server is catalogued before it is stored, and its tools,
 prompts, and resources are republished under a validated namespace such as
 `github__tool`, `github__prompt`, or `mcp+github://`.
 

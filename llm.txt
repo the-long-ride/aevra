@@ -2,7 +2,7 @@
 
 > **Specification & Operator Reference for Language Models**
 > Version: 1.1.0
-> Author: the-long-ride (make by <3)
+> Author: the-long-ride (made by <3)
 > Repository: https://github.com/the-long-ride/aevra
 > Issues: https://github.com/the-long-ride/aevra/issues
 

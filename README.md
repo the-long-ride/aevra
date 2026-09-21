@@ -14,16 +14,19 @@
 [![Claude](https://img.shields.io/badge/Claude-%E2%9C%93-ffffff?style=flat-square&labelColor=000000&logo=anthropic&logoColor=ffffff)](https://claude.ai)
 [![Grok](https://img.shields.io/badge/Grok-%E2%9C%93-ffffff?style=flat-square&labelColor=000000&logo=x&logoColor=ffffff)](https://grok.com)
 [![Gemini](https://img.shields.io/badge/Gemini-%E2%9C%93-ffffff?style=flat-square&labelColor=000000&logo=googlegemini&logoColor=ffffff)](https://gemini.google.com)
+[![Cursor](https://img.shields.io/badge/Cursor-%E2%9C%93-ffffff?style=flat-square&labelColor=000000)](https://cursor.com)
+[![Coding Agents](https://img.shields.io/badge/Coding%20Agents-%E2%9C%93-ffffff?style=flat-square&labelColor=000000)](https://github.com/the-long-ride/aevra)
+[![MCP Gateway](https://img.shields.io/badge/MCP%20Gateway-%E2%9C%93-ffffff?style=flat-square&labelColor=000000)](https://modelcontextprotocol.io/)
 [![Langdock](https://img.shields.io/badge/Langdock-%E2%9C%93-ffffff?style=flat-square&labelColor=000000&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHRleHQgeD0iMyIgeT0iMTkiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjIwIiBmaWxsPSJ3aGl0ZSI+TDwvdGV4dD48L3N2Zz4=)](https://app.langdock.com)
 [![Manus](https://img.shields.io/badge/Manus-%E2%9C%93-ffffff?style=flat-square&labelColor=000000&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHRleHQgeD0iMSIgeT0iMTkiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjE3IiBmaWxsPSJ3aGl0ZSI+TTwvdGV4dD48L3N2Zz4=)](https://manus.im)
 
 </div>
 
-**aevra** lets AI assistants such as ChatGPT, Claude, and Grok work directly on your machine: edit files, run commands, manage Git repositories, automate desktop software, and drive browsers under explicit security boundaries.
+**aevra** is a local **MCP execution gateway** that lets AI assistants (such as ChatGPT, Claude, and Grok), any AI platform with an MCP connector, and all AI coding agents (such as Cursor, Windsurf, Claude Code, Cline, Roo Code, and Copilot) work directly on your machine: edit files, run commands, manage Git repositories, automate desktop software, drive browsers, and bridge upstream MCP servers under explicit security boundaries.
 
-When an AI assistant requests an action, aevra checks the request against your configured capability profile, prompts for human approval on sensitive operations, and records each action to an audit log.
+As a unified MCP gateway, aevra acts as both a secure execution host and an upstream proxy aggregator. It serves 60+ built-in system tools while republishing external downstream MCP servers under collision-resistant namespaces (`server__tool`). When an AI client requests an action, aevra validates the request against your configured capability profile, enforces fine-grained path and command policies, prompts for human approval on sensitive operations, and records each action to a tamper-evident audit log.
 
-It supports any client using the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) standard, runs on Windows, macOS, and Linux, and connects over local networks, public tunnels, or private VPNs.
+It supports any client or platform using the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) standard, runs on Windows, macOS, and Linux, and connects over local loopback, private networks, or public tunnels with floating-IP session continuity.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/the-long-ride/aevra/main/assets/aevra-architecture.png" alt="aevra architecture diagram" width="100%" />
@@ -33,18 +36,18 @@ It supports any client using the [Model Context Protocol (MCP)](https://modelcon
 <summary><strong>Architecture diagram details (text format)</strong></summary>
 
 ```text
-Clients:
-  - AI Web Clients (ChatGPT, Claude, Grok)
-  - Mobile Apps (ChatGPT, Claude, Grok mobile apps)
+Ingress Clients:
+  - AI Web Clients & Assistants (ChatGPT, Claude, Grok, Gemini, Langdock, Manus)
+  - AI Coding Agents & Other MCP Platforms (Cursor, Windsurf, Claude Code, Cline, Roo Code, any MCP connector)
   - Remote Supervisor Devices (Phones, tablets, secondary browsers accessing Admin Web UI)
                             │
-Public Gateway (Port 47830 - Direct HTTPS / Cloudflare / Tailscale / ngrok / SSH)
+Public MCP Gateway (Port 47830 - Direct HTTPS / Cloudflare / Tailscale / ngrok / SSH)
                             │
   ┌─────────────────────────┴─────────────────────────┐
   │                                                   │
 MCP Data Plane (Port 47832)               Admin Control Plane (Port 47831)
 aevra Core Daemon                         React Web UI
-(policy · sessions · floating-IP continuity) (approvals · live activity · settings)
+(policy · sessions · floating-IP continuity) (approvals · live activity · settings · MCP upstreams)
   │
 Local IPC (named pipe / unix socket)
   │
@@ -64,6 +67,7 @@ Execution Worker
 
 ## What makes aevra different?
 
+- **Unified MCP execution and aggregation gateway:** Functions as an all-in-one MCP hub for AI web assistants, platforms with MCP connectors, and AI coding agents (Cursor, Windsurf, Claude Code, Cline, etc.). It executes 60+ native host tools under strict workspace isolation while dynamically proxying, cataloging, and namespacing upstream MCP servers (`stdio`, `http`, `sse`).
 - **Batch operations with bounded concurrency:** First-class `file_read_many`, `file_write_many`, and `command_run_many` tools reduce model round trips, paired with parallel regex search (`search`).
 - **Silent background desktop automation:** Interact with native Windows applications through UI Automation pattern tools without moving the mouse cursor, changing clipboard contents, or stealing keyboard focus. See the [desktop control guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/19-desktop-control.md).
 - **Secure browser automation:** Drive Chromium browsers through the Aevra MV3 extension or Chrome DevTools Protocol (CDP) under strict DLP, risk, and approval controls, with automatic refusal on password, OTP, or payment fields. See the [browser control guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/18-browser-control.md).
