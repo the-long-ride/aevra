@@ -63,7 +63,13 @@ export const STABLE_TOOL_NAMES = [
   'browser_snapshot',
   'browser_read',
   'browser_act_many',
+  'browser_execute_script',
   'browser_logs',
+  'control_observe',
+  'control_execute',
+  'control_plan_status',
+  'control_plan_cancel',
+  'desktop_act_many',
   'desktop_status',
   'desktop_connect',
   'desktop_disconnect',
@@ -259,6 +265,8 @@ const readOnly = new Set<AevraToolName>([
   'desktop_windows',
   'desktop_describe',
   'desktop_capture',
+  'control_observe',
+  'control_plan_status',
 ]);
 // `destructive` here means "irreversible or unbounded-consequence", not
 // merely "mutates something" -- file_delete, git_push, change_rollback,
@@ -283,6 +291,8 @@ const destructive = new Set<AevraToolName>([
   'desktop_set_value',
   'desktop_select',
   'desktop_toggle',
+  'control_execute',
+  'desktop_act_many',
 ]);
 // `openWorld` marks a tool whose effect reaches outside the workspace
 // sandbox this codebase can see and reason about. The four desktop input
@@ -305,6 +315,8 @@ const openWorld = new Set<AevraToolName>([
   'desktop_set_value',
   'desktop_select',
   'desktop_toggle',
+  'control_execute',
+  'desktop_act_many',
 ]);
 
 export function toolDefinitions(): ToolDescriptor[] {

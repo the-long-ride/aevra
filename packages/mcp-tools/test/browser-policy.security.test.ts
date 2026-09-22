@@ -102,11 +102,72 @@ test('a vision snapshot is audited by content hash, not by image bytes', async (
   assert.equal(event.target.includes('AAAA'), false);
 });
 
-test('there is no tool that evaluates page script', async () => {
+test('script batches are MEDIUM on normal origins and HIGH on sensitive origins', async () => {
+  const normal = context(undefined, { yolo: true });
+  await handleBrowserTool(normal.value, 's1', 'browser_execute_script', {
+    script: 'page.keyboard.press("Enter")',
+  });
+  assert.equal(normal.audit.events.at(-1)?.risk, 'MEDIUM');
+
+  const sensitive = context('https://mail.google.com/mail/u/0/');
+  await assert.rejects(
+    () =>
+      handleBrowserTool(sensitive.value, 's1', 'browser_execute_script', {
+        script: 'page.keyboard.press("Enter")',
+      }),
+    /approval/i,
+  );
+  assert.equal(
+    sensitive.worker.calls.some((call: any) => call.operation.kind === 'browser.act'),
+    false,
+  );
+});
+
+test('invalid or secret-bearing script input is refused before approval construction', async () => {
+  const invalid = context();
+  await assert.rejects(
+    () =>
+      handleBrowserTool(invalid.value, 's1', 'browser_execute_script', {
+        script: 'page.evaluate("document.cookie")',
+      }),
+    /browser_execute_script|unsupported/,
+  );
+  assert.equal(
+    invalid.worker.calls.some((call: any) => call.operation.kind === 'browser.act'),
+    false,
+  );
+
+  const secret = randomBytes(32).toString('base64url');
+  const outbound = context();
+  await assert.rejects(
+    () =>
+      handleBrowserTool(outbound.value, 's1', 'browser_execute_script', {
+        script: `page.locator("#note").fill("${secret}")`,
+      }),
+    /will not type secret-shaped data/,
+  );
+  assert.equal(
+    outbound.worker.calls.some((call: any) => call.operation.kind === 'browser.act'),
+    false,
+  );
+});
+
+test('the script fast lane exists without exposing arbitrary page evaluation', async () => {
   const { BROWSER_TOOL_NAMES } = await import('../src/browser-tools.js');
-  for (const name of BROWSER_TOOL_NAMES) {
-    assert.equal(/eval|exec|script/i.test(name), false, `${name} suggests script execution`);
-  }
+  assert.equal(BROWSER_TOOL_NAMES.has('browser_execute_script'), true);
+  assert.equal(BROWSER_TOOL_NAMES.has('browser_evaluate'), false);
+  const ctx = context(undefined, { yolo: true });
+  await assert.rejects(
+    () =>
+      handleBrowserTool(ctx.value, 's1', 'browser_execute_script', {
+        script: 'page.evaluate("document.cookie")',
+      }),
+    /arbitrary JavaScript|unsupported/,
+  );
+  assert.equal(
+    ctx.worker.calls.some((call: any) => call.operation.kind === 'browser.act'),
+    false,
+  );
 });
 
 function withoutCapability(deny = false) {
@@ -130,7 +191,13 @@ test('an explicit deny refuses browser control and never reaches the worker', as
 });
 
 test('a session without browser.control cannot run any page operation', async () => {
-  for (const tool of ['browser_read', 'browser_snapshot', 'browser_act_many', 'browser_navigate']) {
+  for (const tool of [
+    'browser_read',
+    'browser_snapshot',
+    'browser_act_many',
+    'browser_execute_script',
+    'browser_navigate',
+  ]) {
     const ctx = withoutCapability();
     await assert.rejects(
       () =>
@@ -138,6 +205,7 @@ test('a session without browser.control cannot run any page operation', async ()
           format: 'text',
           url: 'https://example.com/',
           actions: [{ op: 'press_key', key: 'Enter' }],
+          script: 'page.keyboard.press("Enter")',
         }),
       /approval|capability/i,
       `${tool} ran without browser.control`,

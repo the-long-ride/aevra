@@ -6,11 +6,12 @@ import { browserContext as context } from './browser-context.js';
 
 test.beforeEach(() => resetVisited('s1'));
 
-test('the tool surface is exactly the nine designed tools', () => {
+test('the tool surface includes the bounded script fast lane', () => {
   assert.deepEqual([...BROWSER_TOOL_NAMES].sort(), [
     'browser_act_many',
     'browser_connect',
     'browser_disconnect',
+    'browser_execute_script',
     'browser_logs',
     'browser_navigate',
     'browser_read',
@@ -47,6 +48,19 @@ test('browser_act_many rejects an empty action list before dispatch', async () =
     () => handleBrowserTool(ctx.value, 's1', 'browser_act_many', { actions: [] }),
     /at least one action/,
   );
+});
+
+test('browser_execute_script compiles one bounded script into one browser.act operation', async () => {
+  const ctx = context(undefined, { yolo: true });
+  await handleBrowserTool(ctx.value, 's1', 'browser_execute_script', {
+    script: 'page.locator("#save").click(); page.getByText("Saved").waitFor()',
+  });
+  const browserActs = ctx.worker.calls.filter((call: any) => call.operation.kind === 'browser.act');
+  assert.equal(browserActs.length, 1);
+  assert.deepEqual(browserActs[0].operation.actions, [
+    { op: 'click', selector: '#save' },
+    { op: 'wait_for', text: 'Saved', timeoutMs: 5000 },
+  ]);
 });
 
 test('browser_status needs no live session and reports the paired epoch', async () => {

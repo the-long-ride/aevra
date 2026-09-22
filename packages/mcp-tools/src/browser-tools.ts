@@ -30,6 +30,7 @@ export const BROWSER_TOOL_NAMES = new Set([
   'browser_snapshot',
   'browser_read',
   'browser_act_many',
+  'browser_execute_script',
   'browser_logs',
 ]);
 
@@ -243,6 +244,12 @@ export async function handleBrowserTool(
         }
       : {}),
   });
+
+  // Pure request validation belongs before MEDIUM/HIGH approval creation so
+  // malformed scripts, oversized waits, and secret-shaped outbound values do
+  // not enter approval payloads or UI surfaces.
+  const operation = browserOperation(name, args, target.tabId);
+
   const gate = await authorizeCapability(
     context,
     sessionId,
@@ -253,7 +260,6 @@ export async function handleBrowserTool(
   );
   if ('response' in gate) return gate.response;
 
-  const operation = browserOperation(name, args, target.tabId);
   const execute = async () => {
     const value = await run(context, sessionId, operation);
     if (navigateUrl) noteVisited(sessionId, navigateUrl);

@@ -51,7 +51,6 @@ import { RuntimeExposureWiring } from './exposure/runtime-wiring.js';
 import type { KeepAwakeService } from './power/keep-awake-service.js';
 import { createRuntimeKeepAwakeService } from './power/runtime-keep-awake.js';
 export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
-// Same values as CommandEffect, kept as a runtime array purely to answer `.includes(value)` for an operator override read out of settings.
 const EFFECTS = ['READ_ONLY', 'BUILD_OUTPUT', 'SOURCE_MUTATION', 'REPOSITORY_STATE', 'UNKNOWN'];
 export async function createCoreRuntime(
   config: CoreConfig,
@@ -79,8 +78,6 @@ export async function createCoreRuntime(
     started = false;
   };
   return {
-    // Getters, not spread values: every server is created during `start()`, so these
-    // must read the live reference rather than a snapshot taken at return time.
     get adminUrl() {
       return admin ? admin.url() : `https://localhost:${config.adminPort}`;
     },
@@ -111,6 +108,7 @@ export async function createCoreRuntime(
           permissionRepo,
           approvalRepo,
           operationRepo,
+          controlPlanRepo,
           changeRepo,
           auditRepo,
           processRepo,
@@ -157,6 +155,7 @@ export async function createCoreRuntime(
           (sessionId) => sessions.connectionIdentity(sessionId)?.connectionId,
         );
         const resumableOperations = new ResumableOperationService(operationRepo, sessions);
+        controlPlanRepo.reconcileIncomplete();
         sessions.invalidateForRestart();
         oauthRepo.invalidateEphemeralForRestart();
         if (!safeMode) worker = await wm.start();
@@ -224,6 +223,7 @@ export async function createCoreRuntime(
           {
             operations,
             resumableOperations,
+            controlPlans: controlPlanRepo,
             processes,
             changes,
             permissions,

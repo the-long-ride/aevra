@@ -104,6 +104,7 @@ export function createCoreToolService(
   return new McpToolService(sessions, workspaces, workerGateway, reads, approvals, {
     operations: deps.operations,
     resumableOperations: deps.resumableOperations,
+    controlPlans: deps.controlPlans,
     processes: deps.processes,
     changes: deps.changes,
     permissions: deps.permissions,

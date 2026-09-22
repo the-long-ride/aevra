@@ -275,7 +275,7 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL 
 }
 
 impl DesktopBackend for WindowsBackend {
-    fn connect(&self) -> Capabilities {
+    fn connect(&self) -> Result<Capabilities, String> {
         // Every capability is now genuinely implemented: identity in 9a,
         // `describe` in 9b (`uia::describe_tree`), `act` in 9c, and
         // `capture` in 9d (`grab` + `capture`). Each flag was flipped only
@@ -283,10 +283,10 @@ impl DesktopBackend for WindowsBackend {
         // claiming one this binary cannot deliver would defeat the whole
         // point of a capability record, which is that the model can trust
         // what it says and stop guessing.
-        Capabilities { capture: true, tree: true, attribution: true, input: true, background_actions: Some(true) }
+        Ok(Capabilities { capture: true, tree: true, attribution: true, input: true, background_actions: Some(true) })
     }
 
-    fn windows(&self) -> Vec<WindowIdentity> {
+    fn windows(&self) -> Result<Vec<WindowIdentity>, String> {
         let mut state = EnumState { handles: Vec::new() };
         // SAFETY: `enum_windows_proc` only touches the `EnumState` behind the
         // pointer we pass as `lparam`, and `EnumWindows` runs it synchronously
@@ -294,28 +294,23 @@ impl DesktopBackend for WindowsBackend {
         unsafe {
             let _ = EnumWindows(Some(enum_windows_proc), LPARAM(&mut state as *mut EnumState as isize));
         }
-        state.handles.into_iter().map(Self::identity_for).collect()
+        Ok(state.handles.into_iter().map(Self::identity_for).collect())
     }
 
-    fn focused_window(&self) -> WindowIdentity {
+    fn focused_window(&self) -> Result<WindowIdentity, String> {
         // SAFETY: `GetForegroundWindow` takes no arguments; it may return a
         // null handle, which is the normal case when the desktop itself has
         // focus or during a lock-screen transition, not an error.
         let hwnd = unsafe { GetForegroundWindow() };
         if hwnd.0 as isize == 0 {
-            return WindowIdentity {
-                window_id: "0".to_string(),
-                process_name: None,
-                executable_path: None,
-                title: None,
-            };
+            return Err("DESKTOP_TARGET_CHANGED: no focused window".to_string());
         }
-        Self::identity_for(hwnd)
+        Ok(Self::identity_for(hwnd))
     }
 
-    fn screen_state(&self) -> ScreenState {
-        let window = self.focused_window();
-        let window_ids: Vec<String> = self.windows().into_iter().map(|w| w.window_id).collect();
+    fn screen_state(&self) -> Result<ScreenState, String> {
+        let window = self.focused_window()?;
+        let window_ids: Vec<String> = self.windows()?.into_iter().map(|w| w.window_id).collect();
         // Signature: a hash of the focused window's identity (window id,
         // process name, executable path -- title is deliberately excluded,
         // since it is attacker-influenceable and would let a page flip the
@@ -330,7 +325,7 @@ impl DesktopBackend for WindowsBackend {
         window_ids.hash(&mut hasher);
         self.focused_element_hint().hash(&mut hasher);
         let signature = format!("{:x}", hasher.finish());
-        ScreenState { window, window_ids, signature }
+        Ok(ScreenState { window, window_ids, signature })
     }
 
     fn describe(&self, request: DescribeRequest) -> Result<DescribeResult, String> {

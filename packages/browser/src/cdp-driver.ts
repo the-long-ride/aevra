@@ -9,7 +9,18 @@ import type {
   BrowserTransport,
 } from '../../protocol/src/browser.js';
 import { axTreeToNodes, markCredentialFields, type AxNode } from './cdp-ax.js';
-import { CdpClient } from './cdp-client.js';
+import {
+  cdpBoxForBackend,
+  cdpCenterForBackend,
+  clearFocusedCdpField,
+  clickCdpPoint,
+  resolveCdpSelector,
+} from './cdp-selector.js';
+import {
+  CdpTargetSessionRegistry,
+  type CdpTarget,
+  type CdpTargetState,
+} from './cdp-target-session.js';
 import { readDocument } from './cdp-read.js';
 import { captureViewport } from './cdp-vision.js';
 import { parseRef } from './dom-snapshot.js';
@@ -28,63 +39,39 @@ import {
   type TabRequest,
 } from './driver.js';
 
-interface CdpTarget {
-  id: string;
-  type: string;
-  url: string;
-  title: string;
-  webSocketDebuggerUrl?: string;
-}
-
-/**
- * Drives a browser over the Chrome DevTools Protocol. Refs come from the
- * accessibility tree, clicks from box models plus synthetic input events, and
- * text from serialized HTML — never from `Runtime.evaluate`, so neither the
- * page nor the model can get script executed through this driver.
- */
+/** Per-target CDP sessions; selecting a target does not activate it, and refs are target-safe. */
 export class CdpDriver implements BrowserDriver {
   readonly transport: BrowserTransport = 'cdp';
-  private client: CdpClient | null = null;
   private port = 9222;
-  private targetId = '';
-  private version = 0;
-  private backendIds: number[] = [];
-  private credentialRefs = new Set<string>();
+  private sessions: CdpTargetSessionRegistry | null = null;
+  private snapshotSequence = 0;
 
-  private require(): CdpClient {
-    if (!this.client) {
+  private registry(): CdpTargetSessionRegistry {
+    if (!this.sessions) {
       throw new BrowserDriverError('BROWSER_NOT_CONNECTED', 'No CDP session is connected');
     }
-    return this.client;
+    return this.sessions;
   }
 
   private async targets(): Promise<CdpTarget[]> {
-    const response = await fetch(`http://127.0.0.1:${this.port}/json/list`);
+    const response = await fetch('http://127.0.0.1:' + this.port + '/json/list');
     if (!response.ok) {
       throw new BrowserDriverError(
         'BROWSER_UNAVAILABLE',
-        `CDP endpoint returned ${response.status}`,
+        'CDP endpoint returned ' + response.status,
       );
     }
     return (await response.json()) as CdpTarget[];
   }
 
   async connect(options: ConnectOptions): Promise<BrowserSessionInfo> {
+    await this.disconnect();
     this.port = options.cdpPort ?? 9222;
-    const pages = (await this.targets()).filter((target) => target.type === 'page');
-    const page = options.tabId ? pages.find((target) => target.id === options.tabId) : pages[0];
-    if (!page?.webSocketDebuggerUrl) {
-      throw new BrowserDriverError('BROWSER_UNAVAILABLE', 'No debuggable page target was found');
-    }
-    this.targetId = page.id;
-    this.client = await CdpClient.connect(page.webSocketDebuggerUrl);
-    await this.client.send('Page.enable');
-    await this.client.send('DOM.enable');
-    await this.client.send('Accessibility.enable');
-    await this.client.send('Log.enable');
-    await this.client.send('Network.enable');
+    this.snapshotSequence = 0;
+    this.sessions = new CdpTargetSessionRegistry(() => this.targets());
+    const initial = await this.sessions.connectInitial(options.tabId);
     return {
-      sessionId: this.targetId,
+      sessionId: initial.id,
       transport: 'cdp',
       connected: true,
       tabs: await this.tabs({ action: 'list' }),
@@ -92,17 +79,22 @@ export class CdpDriver implements BrowserDriver {
   }
 
   async tabs(request: TabRequest): Promise<BrowserTabInfo[]> {
-    this.require();
+    const registry = this.registry();
     if (request.action === 'open' && request.url) {
-      await fetch(`http://127.0.0.1:${this.port}/json/new?${encodeURIComponent(request.url)}`, {
-        method: 'PUT',
-      });
+      await fetch(
+        'http://127.0.0.1:' + this.port + '/json/new?' + encodeURIComponent(request.url),
+        { method: 'PUT' },
+      );
     }
     if (request.action === 'close' && request.tabId) {
-      await fetch(`http://127.0.0.1:${this.port}/json/close/${request.tabId}`);
+      await fetch('http://127.0.0.1:' + this.port + '/json/close/' + request.tabId);
+      await registry.closeTarget(request.tabId);
+      const remaining = (await this.targets()).find((target) => target.type === 'page');
+      if (remaining && !registry.activeId()) registry.setActive(remaining.id);
     }
     if (request.action === 'focus' && request.tabId) {
-      await fetch(`http://127.0.0.1:${this.port}/json/activate/${request.tabId}`);
+      await fetch('http://127.0.0.1:' + this.port + '/json/activate/' + request.tabId);
+      registry.setActive(request.tabId);
     }
     return (await this.targets())
       .filter((target) => target.type === 'page')
@@ -110,60 +102,54 @@ export class CdpDriver implements BrowserDriver {
         tabId: target.id,
         url: target.url,
         title: target.title,
-        active: target.id === this.targetId,
+        active: target.id === registry.activeId(),
         originClass: classifyOrigin(target.url),
       }));
   }
 
   async navigate(request: NavigateRequest): Promise<NavigateResult> {
-    const client = this.require();
+    const state = await this.registry().target(request.tabId);
     let result: { frameId: string; errorText?: string } = { frameId: '' };
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      result = await client.send<{ frameId: string; errorText?: string }>('Page.navigate', {
+      result = await state.client.send<{ frameId: string; errorText?: string }>('Page.navigate', {
         url: request.url,
       });
       if (!result.errorText?.includes('ERR_ABORTED') || attempt === 2) break;
-      // Chromium can report a provisional navigation as aborted while the
-      // target is still settling after a newly opened page becomes usable.
       await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
     }
     if (result.errorText) {
       throw new BrowserDriverError('BROWSER_UNAVAILABLE', result.errorText);
     }
     await new Promise((resolve) => setTimeout(resolve, request.waitUntil === 'idle' ? 750 : 250));
-    const current = await this.currentUrl();
+    const current = await this.currentUrl(state);
     return {
-      tabId: this.targetId,
+      tabId: state.id,
       url: current,
       status: null,
       redirected: current !== request.url,
     };
   }
 
-  private async currentUrl(): Promise<string> {
-    const client = this.require();
-    const history = await client.send<{ entries: Array<{ url: string }>; currentIndex: number }>(
-      'Page.getNavigationHistory',
-    );
+  private async currentUrl(state: CdpTargetState): Promise<string> {
+    const history = await state.client.send<{
+      entries: Array<{ url: string }>;
+      currentIndex: number;
+    }>('Page.getNavigationHistory');
     return history.entries[history.currentIndex]?.url ?? 'about:blank';
   }
 
   async snapshot(request: SnapshotRequest): Promise<BrowserSnapshotResult> {
-    const client = this.require();
-    this.version += 1;
-    const url = await this.currentUrl();
-    const tree = await client.send<{ nodes: AxNode[] }>('Accessibility.getFullAXTree');
-    const mapping = axTreeToNodes(tree.nodes ?? [], this.version, request.maxNodes);
-    this.backendIds = mapping.backendIds;
+    const state = await this.registry().target(request.tabId);
+    state.version = ++this.snapshotSequence;
+    const url = await this.currentUrl(state);
+    const tree = await state.client.send<{ nodes: AxNode[] }>('Accessibility.getFullAXTree');
+    const mapping = axTreeToNodes(tree.nodes ?? [], state.version, request.maxNodes);
+    state.backendIds = mapping.backendIds;
 
     const attributesByIndex = new Map<number, string[]>();
     for (let index = 0; index < mapping.backendIds.length; index += 1) {
       try {
-        // `DOM.describeNode` already carries the flat attribute list. Going via
-        // `DOM.getAttributes` instead needs a frontend nodeId, which the DOM agent
-        // only populates once the document has been pushed — it comes back 0 here,
-        // and the credential guard then silently sees no attributes at all.
-        const described = await client.send<{ node: { attributes?: string[] } }>(
+        const described = await state.client.send<{ node: { attributes?: string[] } }>(
           'DOM.describeNode',
           { backendNodeId: mapping.backendIds[index] },
         );
@@ -173,24 +159,24 @@ export class CdpDriver implements BrowserDriver {
       }
     }
     markCredentialFields(mapping.nodes, attributesByIndex);
-    this.credentialRefs = new Set(
+    state.credentialRefs = new Set(
       mapping.nodes.filter((node) => node.credentialField).map((node) => node.ref),
     );
 
     const base = {
-      tabId: this.targetId,
+      tabId: state.id,
       url,
       originClass: classifyOrigin(url),
-      snapshotVersion: this.version,
+      snapshotVersion: state.version,
       mode: request.mode,
       nodes: mapping.nodes,
       truncated: mapping.truncated,
     };
     if (request.mode === 'a11y') return base;
-    const capture = await captureViewport(client);
+    const capture = await captureViewport(state.client);
     const boxes: Array<{ ref: string; label: string; box: BrowserBox }> = [];
     for (let index = 0; index < mapping.nodes.length; index += 1) {
-      const box = await this.boxFor(index).catch(() => null);
+      const box = await this.boxFor(state, index).catch(() => null);
       if (box) {
         boxes.push({ ref: mapping.nodes[index]!.ref, label: mapping.nodes[index]!.name, box });
       }
@@ -198,81 +184,88 @@ export class CdpDriver implements BrowserDriver {
     return { ...base, ...capture, boxes };
   }
 
-  private async boxFor(index: number): Promise<BrowserBox> {
-    const client = this.require();
-    const model = await client.send<{
-      model: { content: number[]; width: number; height: number };
-    }>('DOM.getBoxModel', { backendNodeId: this.backendIds[index] });
-    const [x1, y1, , , x3, y3] = model.model.content;
-    return {
-      x: Number(x1),
-      y: Number(y1),
-      width: Number(x3) - Number(x1),
-      height: Number(y3) - Number(y1),
-    };
+  private async boxFor(state: CdpTargetState, index: number): Promise<BrowserBox> {
+    return cdpBoxForBackend(state.client, Number(state.backendIds[index]));
   }
 
-  private resolveIndex(ref: string): number {
+  private resolveIndex(state: CdpTargetState, ref: string): number {
     const parsed = parseRef(ref);
-    if (parsed.version !== this.version || this.backendIds[parsed.index] === undefined) {
-      throw new BrowserDriverError('BROWSER_REF_STALE', `${ref} is not from the current snapshot`);
+    if (parsed.version !== state.version || state.backendIds[parsed.index] === undefined) {
+      throw new BrowserDriverError(
+        'BROWSER_REF_STALE',
+        ref + ' is not from the current target snapshot',
+      );
     }
     return parsed.index;
   }
 
   async read(request: ReadRequest): Promise<ReadResult> {
-    const client = this.require();
-    const url = await this.currentUrl();
-    const content = await readDocument(client, request, (ref) =>
-      Number(this.backendIds[this.resolveIndex(ref)]),
+    const state = await this.registry().target(request.tabId);
+    return this.readState(state, request);
+  }
+
+  private async readState(state: CdpTargetState, request: Omit<ReadRequest, 'tabId'>) {
+    const url = await this.currentUrl(state);
+    const content = await readDocument(state.client, request, (ref) =>
+      Number(state.backendIds[this.resolveIndex(state, ref)]),
     );
-    return { tabId: this.targetId, url, content };
+    return { tabId: state.id, url, content };
   }
 
   async act(actions: BrowserActionInput[], options: ActOptions): Promise<BrowserActionResult[]> {
+    const state = await this.registry().target(options.tabId);
     const results: BrowserActionResult[] = [];
     for (const action of actions) {
-      const result = await this.perform(action);
+      const result = await this.perform(state, action);
       results.push(result);
       if (options.stopOnError && !result.ok) break;
     }
     return results;
   }
 
-  private async perform(action: BrowserActionInput): Promise<BrowserActionResult> {
-    const client = this.require();
+  private async actionTarget(state: CdpTargetState, action: { ref?: string; selector?: string }) {
+    if (action.selector) return resolveCdpSelector(state.client, action.selector);
+    if (action.ref) {
+      const index = this.resolveIndex(state, action.ref);
+      return {
+        backendNodeId: Number(state.backendIds[index]),
+        credential: state.credentialRefs.has(action.ref),
+      };
+    }
+    throw new BrowserDriverError('INVALID_REQUEST', 'Browser action requires a ref or selector');
+  }
+
+  private async perform(
+    state: CdpTargetState,
+    action: BrowserActionInput,
+  ): Promise<BrowserActionResult> {
+    const client = state.client;
     try {
-      // Checked before any input is dispatched: approval cannot override it.
-      if (action.op === 'type' && this.credentialRefs.has(action.ref)) {
-        return {
-          op: 'type',
-          ok: false,
-          error: {
-            code: 'BROWSER_CREDENTIAL_FIELD_REFUSED',
-            message: 'Refusing to type into a credential field',
-          },
-        };
-      }
       if (action.op === 'click') {
         const point =
           action.x !== undefined && action.y !== undefined
             ? { x: action.x, y: action.y }
-            : await this.centerOf(this.resolveIndex(String(action.ref)));
-        for (const type of ['mousePressed', 'mouseReleased']) {
-          await client.send('Input.dispatchMouseEvent', {
-            type,
-            x: point.x,
-            y: point.y,
-            button: 'left',
-            clickCount: 1,
-          });
-        }
+            : await cdpCenterForBackend(
+                client,
+                (await this.actionTarget(state, action)).backendNodeId,
+              );
+        await clickCdpPoint(client, point);
         return { op: 'click', ok: true };
       }
       if (action.op === 'type') {
-        await client.send('DOM.focus', {
-          backendNodeId: this.backendIds[this.resolveIndex(action.ref)],
-        });
+        const target = await this.actionTarget(state, action);
+        if (target.credential) {
+          return {
+            op: 'type',
+            ok: false,
+            error: {
+              code: 'BROWSER_CREDENTIAL_FIELD_REFUSED',
+              message: 'Refusing to type into a credential field',
+            },
+          };
+        }
+        await client.send('DOM.focus', { backendNodeId: target.backendNodeId });
+        if (action.clear) await clearFocusedCdpField(client);
         await client.send('Input.insertText', { text: action.text });
         return { op: 'type', ok: true };
       }
@@ -285,7 +278,10 @@ export class CdpDriver implements BrowserDriver {
         const point =
           action.x !== undefined && action.y !== undefined
             ? { x: action.x, y: action.y }
-            : await this.centerOf(this.resolveIndex(String(action.ref)));
+            : await cdpCenterForBackend(
+                client,
+                (await this.actionTarget(state, action)).backendNodeId,
+              );
         await client.send('Input.dispatchMouseEvent', {
           type: 'mouseWheel',
           x: point.x,
@@ -296,14 +292,30 @@ export class CdpDriver implements BrowserDriver {
         return { op: 'scroll', ok: true };
       }
       if (action.op === 'select') {
-        await this.perform({ op: 'click', ref: action.ref });
+        const target = await this.actionTarget(state, action);
+        await clickCdpPoint(client, await cdpCenterForBackend(client, target.backendNodeId));
         await client.send('Input.insertText', { text: action.value });
         return { op: 'select', ok: true };
       }
+
       const deadline = Date.now() + action.timeoutMs;
       while (Date.now() < deadline) {
-        const read = await this.read({ format: 'text' });
-        if (!action.text || read.content.includes(action.text)) return { op: 'wait_for', ok: true };
+        if (action.selector) {
+          try {
+            await resolveCdpSelector(client, action.selector);
+            return { op: 'wait_for', ok: true };
+          } catch (error) {
+            if ((error as BrowserDriverError).code === 'INVALID_REQUEST') throw error;
+          }
+        } else {
+          const read = await this.readState(state, {
+            ...(action.ref ? { ref: action.ref } : {}),
+            format: 'text',
+          });
+          if (!action.text || read.content.includes(action.text)) {
+            return { op: 'wait_for', ok: true };
+          }
+        }
         await new Promise((resolve) => setTimeout(resolve, 150));
       }
       return {
@@ -321,19 +333,14 @@ export class CdpDriver implements BrowserDriver {
     }
   }
 
-  private async centerOf(index: number): Promise<{ x: number; y: number }> {
-    const box = await this.boxFor(index);
-    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-  }
-
   async logs(request: LogsRequest): Promise<BrowserLogEntry[]> {
-    return this.require().drain(request.logKind, request.limit);
+    const state = await this.registry().target(request.tabId);
+    return state.client.drain(request.logKind, request.limit);
   }
 
   async disconnect(): Promise<void> {
-    await this.client?.close();
-    this.client = null;
-    this.backendIds = [];
-    this.credentialRefs.clear();
+    const sessions = this.sessions;
+    this.sessions = null;
+    if (sessions) await sessions.closeAll();
   }
 }

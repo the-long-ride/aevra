@@ -5,20 +5,32 @@
 //! stream and make the TypeScript supervisor (`HelperProcess`) time out
 //! waiting for a reply that never parses. All diagnostics go to stderr.
 
+#[cfg(windows)]
 mod act;
 mod backend;
+#[cfg(windows)]
 mod background;
+#[cfg(windows)]
 mod background_snapshots;
+#[cfg(windows)]
 mod capture;
+#[cfg(windows)]
 mod grab;
+#[cfg(windows)]
 mod handles;
+#[cfg(windows)]
 mod input;
+#[cfg(windows)]
 mod keys;
 mod protocol;
 mod target_guard;
+#[cfg(windows)]
 mod uia;
+#[cfg(windows)]
 #[path = "windows.rs"]
 mod windows_backend;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod portable;
 
 use backend::{
     ActRequest, BackgroundActRequest, CaptureRequest, DescribeBackgroundRequest,
@@ -28,7 +40,10 @@ use protocol::{error_line, parse_request, structured_error_line, success_line, R
 use std::io::{self, BufRead, Write};
 
 fn main() {
+    #[cfg(windows)]
     let backend = windows_backend::WindowsBackend::new();
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    let backend = portable::PortableBackend::new();
     let stdin = io::stdin();
     let mut stdout = io::stdout();
 
@@ -67,24 +82,22 @@ fn map_err_line(id: i64, err: String) -> String {
     error_line(id, err)
 }
 
+fn result_line<T: serde::Serialize>(id: i64, result: Result<T, String>, label: &str) -> String {
+    match result {
+        Ok(value) => match serde_json::to_value(value) {
+            Ok(value) => success_line(id, value),
+            Err(err) => error_line(id, format!("failed to serialise {label} result: {err}")),
+        },
+        Err(err) => map_err_line(id, err),
+    }
+}
+
 fn handle(backend: &impl DesktopBackend, request: Request) -> String {
     match request.method.as_str() {
-        "connect" => match serde_json::to_value(backend.connect()) {
-            Ok(value) => success_line(request.id, value),
-            Err(err) => error_line(request.id, format!("failed to serialise connect result: {err}")),
-        },
-        "windows" => match serde_json::to_value(backend.windows()) {
-            Ok(value) => success_line(request.id, value),
-            Err(err) => error_line(request.id, format!("failed to serialise windows result: {err}")),
-        },
-        "focusedWindow" => match serde_json::to_value(backend.focused_window()) {
-            Ok(value) => success_line(request.id, value),
-            Err(err) => error_line(request.id, format!("failed to serialise focusedWindow result: {err}")),
-        },
-        "screenState" => match serde_json::to_value(backend.screen_state()) {
-            Ok(value) => success_line(request.id, value),
-            Err(err) => error_line(request.id, format!("failed to serialise screenState result: {err}")),
-        },
+        "connect" => result_line(request.id, backend.connect(), "connect"),
+        "windows" => result_line(request.id, backend.windows(), "windows"),
+        "focusedWindow" => result_line(request.id, backend.focused_window(), "focusedWindow"),
+        "screenState" => result_line(request.id, backend.screen_state(), "screenState"),
         "describe" => match serde_json::from_value::<DescribeRequest>(request.params.clone()) {
             Ok(describe_request) => match backend.describe(describe_request) {
                 Ok(result) => match serde_json::to_value(result) {

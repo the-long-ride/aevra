@@ -1,4 +1,5 @@
 import type { CapabilityRoot, SystemCapabilitySnapshot } from '../../protocol/src/index.js';
+import type { ControlPlanResult } from '../../protocol/src/control.js';
 import type { WorkerOperation, WorkerResult } from '../../protocol/src/worker.js';
 import type { ApprovalService } from '../../../apps/core/src/approvals/approval-service.js';
 import type { AuditService } from '../../../apps/core/src/audit/audit-service.js';
@@ -42,6 +43,66 @@ export interface ManifestSummary {
 export interface McpToolDependencies {
   operations?: OperationService;
   resumableOperations?: ResumableOperationService;
+  controlPlans?: {
+    claim(input: {
+      planId: string;
+      owner: string;
+      requestId: string;
+      digest: string;
+      mode: 'sharedSemantic' | 'isolated';
+      status: string;
+      createdAt: string;
+      updatedAt: string;
+    }): {
+      record: {
+        planId: string;
+        owner: string;
+        requestId: string;
+        digest: string;
+        mode: 'sharedSemantic' | 'isolated';
+        status: string;
+        cancelled: boolean;
+        result?: ControlPlanResult;
+        createdAt: string;
+        updatedAt: string;
+      };
+      existing: boolean;
+    };
+    get(
+      owner: string,
+      planId: string,
+    ):
+      | {
+          planId: string;
+          owner: string;
+          requestId: string;
+          digest: string;
+          mode: 'sharedSemantic' | 'isolated';
+          status: string;
+          cancelled: boolean;
+          result?: ControlPlanResult;
+          createdAt: string;
+          updatedAt: string;
+        }
+      | undefined;
+    digestKey(): Buffer;
+    updateStatus(owner: string, planId: string, status: string, cancelled?: boolean): boolean;
+    finish(
+      owner: string,
+      planId: string,
+      status: string,
+      result: ControlPlanResult,
+      cancelled?: boolean,
+    ): boolean;
+    recordStep(input: {
+      planId: string;
+      stepId: string;
+      attemptId: string;
+      action: string;
+      dispatchState: string;
+      status: string;
+    }): void;
+  };
   processes?: ProcessService;
   changes?: ChangeSetService;
   permissions?: PermissionEngine;

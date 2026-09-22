@@ -219,10 +219,10 @@ pub struct BackgroundActResult {
 }
 
 pub trait DesktopBackend {
-    fn connect(&self) -> Capabilities;
-    fn windows(&self) -> Vec<WindowIdentity>;
-    fn focused_window(&self) -> WindowIdentity;
-    fn screen_state(&self) -> ScreenState;
+    fn connect(&self) -> Result<Capabilities, String>;
+    fn windows(&self) -> Result<Vec<WindowIdentity>, String>;
+    fn focused_window(&self) -> Result<WindowIdentity, String>;
+    fn screen_state(&self) -> Result<ScreenState, String>;
     /// `Err` is a plain message suitable for a protocol-level error reply --
     /// used for a `windowId` that no longer exists (an error, per the brief,
     /// never an empty tree) and for a COM failure reading the root element

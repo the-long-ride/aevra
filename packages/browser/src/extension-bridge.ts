@@ -16,7 +16,7 @@ export interface ExtensionBridge {
   devicePixelRatio(tabId?: string): Promise<number>;
   apply(
     action: BrowserActionInput,
-    ref: string | null,
+    elementId: string | null,
     tabId?: string,
   ): Promise<{ ok: boolean; code?: string }>;
   captureVisible(tabId?: string): Promise<string>;
@@ -42,6 +42,7 @@ async function act(
   const results: BrowserActionResult[] = [];
   for (const action of actions) {
     const ref = 'ref' in action && action.ref ? String(action.ref) : null;
+    let elementId: string | null = null;
     if (ref) {
       if (!registry.has(ref)) {
         results.push(
@@ -63,8 +64,16 @@ async function act(
         if (params.stopOnError !== false) break;
         continue;
       }
+      elementId = registry.resolve(ref).elementId ?? null;
+      if (!elementId) {
+        results.push(
+          failure(action.op, 'BROWSER_REF_STALE', `${ref} has no isolated-world element identity`),
+        );
+        if (params.stopOnError !== false) break;
+        continue;
+      }
     }
-    const outcome = await bridge.apply(action, ref, params.tabId);
+    const outcome = await bridge.apply(action, elementId, params.tabId);
     // The page-side code reports *why* it refused - a credential field, a timed
     // out wait. Dropping the code here would surface every failure as a bare
     // false and leave the two transports disagreeing on error reporting.

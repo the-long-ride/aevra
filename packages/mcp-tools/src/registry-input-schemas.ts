@@ -18,10 +18,12 @@ export type { JsonSchema } from './registry-schema-parts.js';
 export { emptySchema } from './registry-schema-parts.js';
 
 import { browserInputSchemas } from './registry-browser-schemas.js';
+import { controlInputSchemas } from './registry-control-schemas.js';
 import { desktopInputSchemas } from './registry-desktop-schemas.js';
 
 export const inputSchemas: Record<string, JsonSchema> = {
   ...browserInputSchemas,
+  ...controlInputSchemas,
   ...desktopInputSchemas,
   aevra_status: emptySchema,
   workspace_list: emptySchema,

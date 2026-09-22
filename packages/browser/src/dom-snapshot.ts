@@ -1,6 +1,7 @@
 import type { BrowserBox, BrowserSnapshotNode } from '../../protocol/src/browser.js';
 
 export interface SnapshotElementLike {
+  elementId?: string;
   tagName: string;
   attributes: Record<string, string>;
   children: SnapshotElementLike[];

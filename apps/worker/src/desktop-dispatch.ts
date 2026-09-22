@@ -93,7 +93,10 @@ export async function dispatchDesktopOperation(
 
         return {
           window: describeResult.window,
-          nodes: describeResult.nodes,
+          nodes: describeResult.nodes.map((node) => {
+            const { handle: _handle, ...publicNode } = node;
+            return publicNode;
+          }),
           truncated: describeResult.truncated,
           snapshotId,
           windowLeaseId,

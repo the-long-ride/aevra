@@ -1,17 +1,38 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { applyPageAction, serializePage, type ApplyOutcome } from './content';
+import {
+  applyPageAction,
+  serializePage,
+  type ApplyOutcome,
+  type SerializedElement,
+} from './content';
+
+let snapshot: SerializedElement | null = null;
 
 function page(html: string) {
   document.body.innerHTML = html;
-  return serializePage();
+  snapshot = serializePage();
+  return snapshot;
 }
 
-function indexOf(selector: string): number {
-  return Number(document.querySelector(selector)?.getAttribute('data-aevra-index'));
+function elementIdOf(selector: string): string {
+  const target = document.querySelector(selector);
+  if (!target) throw new Error(`missing test element ${selector}`);
+  const id = target.getAttribute('id');
+  const find = (node: SerializedElement): SerializedElement | null => {
+    if (id && node.attributes.id === id) return node;
+    for (const child of node.children) {
+      const found = find(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  const found = snapshot ? find(snapshot) : null;
+  if (!found?.elementId) throw new Error(`missing opaque id for ${selector}`);
+  return found.elementId;
 }
 
-function apply(action: Record<string, unknown>, index: number | null): Promise<ApplyOutcome> {
-  return Promise.resolve(applyPageAction(action, index));
+function apply(action: Record<string, unknown>, elementId: string | null): Promise<ApplyOutcome> {
+  return Promise.resolve(applyPageAction(action, elementId));
 }
 
 beforeEach(() => {
@@ -28,16 +49,27 @@ describe('serializePage', () => {
     expect(root.children.some((child) => child.tagName === 'button')).toBe(true);
   });
 
-  it('marks every element with a distinct index the act pass finds again', () => {
-    page('<button>One</button><button>Two</button>');
-    const marks = Array.from(document.querySelectorAll('[data-aevra-index]'));
-    expect(marks.length).toBeGreaterThanOrEqual(2);
-    expect(new Set(marks.map((m) => m.getAttribute('data-aevra-index'))).size).toBe(marks.length);
+  it('keeps action authority out of page-visible DOM attributes', () => {
+    const root = page('<button id="one">One</button><button id="two">Two</button>');
+    expect(document.querySelectorAll('[data-aevra-index]')).toHaveLength(0);
+    const ids = [root.elementId, ...root.children.map((child) => child.elementId)];
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('reports the current value of form fields', () => {
     page('<input id="q" value="typed">');
     expect(serializePage().children.find((c) => c.tagName === 'input')?.value).toBe('typed');
+  });
+
+  it('never serializes credential-shaped input values', () => {
+    const root = page(
+      '<input id="password" type="password" value="secret">' +
+        '<input id="otp" autocomplete="one-time-code" value="123456">' +
+        '<input id="cardNumber" value="4111111111111111">',
+    );
+    const fields = root.children.filter((child) => child.tagName === 'input');
+    expect(fields).toHaveLength(3);
+    expect(fields.every((field) => field.value === undefined)).toBe(true);
   });
 
   it('captures a textarea value as well as an input', () => {
@@ -71,7 +103,7 @@ describe('serializePage', () => {
 describe('applyPageAction: the credential wall', () => {
   it('refuses to type into a password field', async () => {
     page('<input type="password" id="p">');
-    const outcome = await apply({ op: 'type', text: 'secret' }, indexOf('#p'));
+    const outcome = await apply({ op: 'type', text: 'secret' }, elementIdOf('#p'));
     expect(outcome.ok).toBe(false);
     expect(outcome.code).toBe('BROWSER_CREDENTIAL_FIELD_REFUSED');
     expect((document.querySelector('#p') as HTMLInputElement).value).toBe('');
@@ -80,7 +112,7 @@ describe('applyPageAction: the credential wall', () => {
   it('refuses one-time-code and payment autocomplete fields', async () => {
     for (const autocomplete of ['one-time-code', 'current-password', 'new-password', 'cc-number']) {
       page(`<input type="text" id="f" autocomplete="${autocomplete}">`);
-      const outcome = await apply({ op: 'type', text: 'x' }, indexOf('#f'));
+      const outcome = await apply({ op: 'type', text: 'x' }, elementIdOf('#f'));
       expect(outcome.code, autocomplete).toBe('BROWSER_CREDENTIAL_FIELD_REFUSED');
       expect((document.querySelector('#f') as HTMLInputElement).value).toBe('');
     }
@@ -92,7 +124,7 @@ describe('applyPageAction: the credential wall', () => {
     for (const type of ['input', 'change']) {
       document.querySelector('#q')!.addEventListener(type, () => seen.push(type));
     }
-    const outcome = await apply({ op: 'type', text: 'quarterly' }, indexOf('#q'));
+    const outcome = await apply({ op: 'type', text: 'quarterly' }, elementIdOf('#q'));
     expect(outcome.ok).toBe(true);
     expect((document.querySelector('#q') as HTMLInputElement).value).toBe('quarterly');
     expect(seen).toEqual(['input', 'change']);
@@ -100,7 +132,7 @@ describe('applyPageAction: the credential wall', () => {
 
   it('clear replaces rather than appends', async () => {
     page('<input type="text" id="q" value="old">');
-    await apply({ op: 'type', text: 'new', clear: true }, indexOf('#q'));
+    await apply({ op: 'type', text: 'new', clear: true }, elementIdOf('#q'));
     expect((document.querySelector('#q') as HTMLInputElement).value).toBe('new');
   });
 });
@@ -110,14 +142,46 @@ describe('applyPageAction: other actions', () => {
     page('<button id="b">Go</button>');
     let clicked = 0;
     document.querySelector('#b')!.addEventListener('click', () => (clicked += 1));
-    const outcome = await apply({ op: 'click' }, indexOf('#b'));
+    const outcome = await apply({ op: 'click' }, elementIdOf('#b'));
     expect(outcome.ok).toBe(true);
     expect(clicked).toBe(1);
   });
 
-  it('reports NOT_FOUND for an index that no longer resolves', async () => {
+  it('clicks and types through direct CSS selectors without a prior snapshot ref', async () => {
+    page('<input id="q"><button id="b">Go</button>');
+    let clicked = 0;
+    document.querySelector('#b')!.addEventListener('click', () => (clicked += 1));
+    expect((await apply({ op: 'click', selector: '#b' }, null)).ok).toBe(true);
+    expect((await apply({ op: 'type', selector: '#q', text: 'Aevra', clear: true }, null)).ok).toBe(
+      true,
+    );
+    expect(clicked).toBe(1);
+    expect((document.querySelector('#q') as HTMLInputElement).value).toBe('Aevra');
+  });
+
+  it('keeps the credential wall for direct selector typing', async () => {
+    page('<input id="p" type="password">');
+    const outcome = await apply({ op: 'type', selector: '#p', text: 'secret' }, null);
+    expect(outcome.code).toBe('BROWSER_CREDENTIAL_FIELD_REFUSED');
+    expect((document.querySelector('#p') as HTMLInputElement).value).toBe('');
+  });
+
+  it('reports NOT_FOUND for an opaque id that no longer resolves', async () => {
     page('<button id="b">Go</button>');
-    expect((await apply({ op: 'click' }, 9999)).code).toBe('NOT_FOUND');
+    expect((await apply({ op: 'click' }, 'element_missing')).code).toBe('NOT_FOUND');
+  });
+
+  it('ignores page-spoofed legacy index attributes when resolving a ref', async () => {
+    page('<button id="real">Real</button><button id="spoof">Spoof</button>');
+    let real = 0;
+    let spoof = 0;
+    document.querySelector('#real')!.addEventListener('click', () => (real += 1));
+    document.querySelector('#spoof')!.addEventListener('click', () => (spoof += 1));
+    document.querySelector('#spoof')!.setAttribute('data-aevra-index', '0');
+    const outcome = await apply({ op: 'click' }, elementIdOf('#real'));
+    expect(outcome.ok).toBe(true);
+    expect(real).toBe(1);
+    expect(spoof).toBe(0);
   });
 
   it('clicks by coordinate when the action carries a point', async () => {
@@ -138,7 +202,7 @@ describe('applyPageAction: other actions', () => {
     page('<select id="s"><option value="a">A</option><option value="b">B</option></select>');
     let changed = 0;
     document.querySelector('#s')!.addEventListener('change', () => (changed += 1));
-    const outcome = await apply({ op: 'select', value: 'b' }, indexOf('#s'));
+    const outcome = await apply({ op: 'select', value: 'b' }, elementIdOf('#s'));
     expect(outcome.ok).toBe(true);
     expect((document.querySelector('#s') as HTMLSelectElement).value).toBe('b');
     expect(changed).toBe(1);
@@ -162,7 +226,7 @@ describe('applyPageAction: other actions', () => {
     const scrolled: Array<[number, number]> = [];
     (document.querySelector('#list') as any).scrollBy = (dx: number, dy: number) =>
       scrolled.push([dx, dy]);
-    const outcome = await apply({ op: 'scroll', dx: 0, dy: 120 }, indexOf('#list'));
+    const outcome = await apply({ op: 'scroll', dx: 0, dy: 120 }, elementIdOf('#list'));
     expect(outcome.ok).toBe(true);
     expect(scrolled).toEqual([[0, 120]]);
   });
@@ -172,13 +236,13 @@ describe('applyPageAction: other actions', () => {
     const scrolled: Array<[number, number]> = [];
     (document.querySelector('#list') as any).scrollBy = (dx: number, dy: number) =>
       scrolled.push([dx, dy]);
-    await apply({ op: 'scroll' }, indexOf('#list'));
+    await apply({ op: 'scroll' }, elementIdOf('#list'));
     expect(scrolled).toEqual([[0, 0]]);
   });
 
   it('rejects an unknown action rather than silently succeeding', async () => {
     page('<button id="b">Go</button>');
-    expect((await apply({ op: 'teleport' }, indexOf('#b'))).code).toBe('INVALID_REQUEST');
+    expect((await apply({ op: 'teleport' }, elementIdOf('#b'))).code).toBe('INVALID_REQUEST');
   });
 });
 
@@ -187,6 +251,22 @@ describe('applyPageAction: wait_for', () => {
     page('<p>ran:quarterly</p>');
     const outcome = await apply({ op: 'wait_for', text: 'ran:quarterly', timeoutMs: 1000 }, null);
     expect(outcome.ok).toBe(true);
+  });
+
+  it('waits for a selector that appears later without requiring a snapshot', async () => {
+    page('<div id="root"></div>');
+    setTimeout(() => {
+      document.querySelector('#root')!.innerHTML = '<span class="ready">done</span>';
+    }, 100);
+    const outcome = await apply({ op: 'wait_for', selector: '.ready', timeoutMs: 1000 }, null);
+    expect(outcome.ok).toBe(true);
+  });
+
+  it('rejects invalid selectors instead of waiting until timeout', async () => {
+    page('<p>idle</p>');
+    expect((await apply({ op: 'wait_for', selector: '[', timeoutMs: 1000 }, null)).code).toBe(
+      'INVALID_REQUEST',
+    );
   });
 
   it('waits for text that appears later rather than failing on the first check', async () => {

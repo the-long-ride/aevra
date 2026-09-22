@@ -7,12 +7,20 @@ import type { SnapshotElementLike } from '../src/dom-snapshot.js';
  * a real browser.
  */
 export const FIXTURE_PAGE: SnapshotElementLike = {
+  elementId: 'fixture-body',
   tagName: 'body',
   attributes: {},
   textContent: 'Invoices',
   children: [
-    { tagName: 'h1', attributes: {}, children: [], textContent: 'Invoices' },
     {
+      elementId: 'fixture-heading',
+      tagName: 'h1',
+      attributes: {},
+      children: [],
+      textContent: 'Invoices',
+    },
+    {
+      elementId: 'fixture-button',
       tagName: 'button',
       attributes: { id: 'new' },
       children: [],
@@ -20,6 +28,7 @@ export const FIXTURE_PAGE: SnapshotElementLike = {
       box: { x: 10, y: 10, width: 100, height: 30 },
     },
     {
+      elementId: 'fixture-password',
       tagName: 'input',
       attributes: { type: 'password', name: 'password' },
       children: [],

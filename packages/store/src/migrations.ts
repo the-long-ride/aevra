@@ -260,6 +260,41 @@ ALTER TABLE permission_rules ADD COLUMN predicate_json TEXT;
 ALTER TABLE permission_rules ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
 `,
   },
+  {
+    version: 17,
+    name: '017_control_plan_journal',
+    sql: `
+CREATE TABLE IF NOT EXISTS control_plans(
+  plan_id TEXT PRIMARY KEY,
+  owner TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  digest TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  status TEXT NOT NULL,
+  cancelled INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(owner,request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_control_plans_owner_updated ON control_plans(owner,updated_at);
+CREATE TABLE IF NOT EXISTS control_plan_steps(
+  plan_id TEXT NOT NULL REFERENCES control_plans(plan_id) ON DELETE CASCADE,
+  step_id TEXT NOT NULL,
+  attempt_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  dispatch_state TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(plan_id,step_id,attempt_id)
+);
+`,
+  },
+  {
+    version: 18,
+    name: '018_control_plan_terminal_results',
+    sql: `ALTER TABLE control_plans ADD COLUMN result_json TEXT;`,
+  },
 ];
 export function applyMigrations(db: DatabaseSync) {
   db.exec(

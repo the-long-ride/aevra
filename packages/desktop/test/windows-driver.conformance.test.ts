@@ -146,3 +146,23 @@ test('WindowsDesktopDriver: repeated descriptions never reuse public refs', asyn
     await driver.disconnect();
   }
 });
+
+test('WindowsDesktopDriver: background snapshots separate public refs from native helper handles', async () => {
+  const helper = makeHelper();
+  const driver = new WindowsDesktopDriver(helper);
+  try {
+    await driver.connect();
+    const described = await driver.describeBackground({
+      windowId: 'w1',
+      snapshotId: 'snap-public-ref',
+      maxNodes: 100,
+      interactiveOnly: true,
+    });
+    const node = described.nodes.find((candidate) => candidate.name === 'Save') as any;
+    assert.ok(node.ref.startsWith('ref_bg_'));
+    assert.equal(node.handle, 'h1');
+    assert.notEqual(node.ref, node.handle);
+  } finally {
+    await driver.disconnect();
+  }
+});

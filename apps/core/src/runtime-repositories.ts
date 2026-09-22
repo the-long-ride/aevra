@@ -9,6 +9,7 @@ import { ProcessRepository } from '../../../packages/store/src/processes.js';
 import { ConnectorRepository } from '../../../packages/store/src/connectors.js';
 import { OAuthRepository } from '../../../packages/store/src/oauth.js';
 import { SettingsRepository } from '../../../packages/store/src/settings.js';
+import { ControlPlanRepository } from '../../../packages/store/src/control-plans.js';
 import { migratePermissionRules } from './policy/command-rule-migration.js';
 
 export function createRuntimeRepositories(raw: any) {
@@ -25,6 +26,7 @@ export function createRuntimeRepositories(raw: any) {
     permissionRepo,
     approvalRepo: new ApprovalRepository(raw),
     operationRepo: new OperationRepository(raw),
+    controlPlanRepo: new ControlPlanRepository(raw),
     changeRepo: new ChangeRepository(raw),
     auditRepo: new AuditRepository(raw),
     processRepo: new ProcessRepository(raw),

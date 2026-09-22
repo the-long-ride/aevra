@@ -45,6 +45,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function assertFocusSignal(
+  driver: WindowsDesktopDriver,
+  beforeWindowId: string,
+  reported: boolean,
+): Promise<void> {
+  const after = await driver.focusedWindow();
+  assert.equal(
+    reported,
+    after.windowId !== beforeWindowId,
+    'focusChanged must report the provider-induced foreground transition exactly',
+  );
+}
+
 test(
   'native background coexistence: execute operations without input injection',
   { skip: SKIP },
@@ -114,6 +127,7 @@ test(
       );
       assert.ok(invokeNode, 'Invoke button should be present with invoke action');
 
+      const beforeInvoke = await driver.focusedWindow();
       const invokeRes = await driver.backgroundAct({
         snapshotId,
         handle: invokeNode.handle ?? invokeNode.ref,
@@ -122,7 +136,7 @@ test(
       });
       assert.equal(invokeRes.ok, true);
       assert.equal(invokeRes.outcome, 'completed');
-      assert.equal(invokeRes.focusChanged, false);
+      await assertFocusSignal(driver, beforeInvoke.windowId, invokeRes.focusChanged);
 
       // 4. Background SetValue on editable textbox
       const editNode = desc.nodes.find(
@@ -133,6 +147,7 @@ test(
       );
       assert.ok(editNode, 'Editable textbox should be present with setValue action');
 
+      const beforeSetValue = await driver.focusedWindow();
       const setValueRes = await driver.backgroundAct({
         snapshotId,
         handle: editNode.handle ?? editNode.ref,
@@ -142,7 +157,7 @@ test(
       });
       assert.equal(setValueRes.ok, true);
       assert.equal(setValueRes.outcome, 'completed');
-      assert.equal(setValueRes.focusChanged, false);
+      await assertFocusSignal(driver, beforeSetValue.windowId, setValueRes.focusChanged);
 
       // 5. Background Select on ListBox item
       const itemBetaNode = desc.nodes.find(
@@ -150,6 +165,7 @@ test(
       );
       assert.ok(itemBetaNode, 'Item Beta should be present with select action');
 
+      const beforeSelect = await driver.focusedWindow();
       const selectRes = await driver.backgroundAct({
         snapshotId,
         handle: itemBetaNode.handle ?? itemBetaNode.ref,
@@ -158,7 +174,7 @@ test(
       });
       assert.equal(selectRes.ok, true);
       assert.equal(selectRes.outcome, 'completed');
-      assert.equal(selectRes.focusChanged, false);
+      await assertFocusSignal(driver, beforeSelect.windowId, selectRes.focusChanged);
 
       // 6. Background Toggle on CheckBox
       const toggleNode = desc.nodes.find(
@@ -166,6 +182,7 @@ test(
       );
       assert.ok(toggleNode, 'CheckBox should be present with toggle action');
 
+      const beforeToggle = await driver.focusedWindow();
       const toggleRes = await driver.backgroundAct({
         snapshotId,
         handle: toggleNode.handle ?? toggleNode.ref,
@@ -174,8 +191,12 @@ test(
       });
       assert.equal(toggleRes.ok, true);
       assert.equal(toggleRes.outcome, 'completed');
-      assert.equal(toggleRes.focusChanged, false);
+      await assertFocusSignal(driver, beforeToggle.windowId, toggleRes.focusChanged);
       assert.equal(toggleRes.toggleState, 'on');
+
+      // The semantic provider may itself move focus (WinForms InvokePattern does).
+      // Aevra must detect that truthfully; the control-plan adapter checkpoints
+      // after such a dispatched focus change instead of pretending coexistence.
 
       // 7. Modal Dialog opens -> focus change detection
       const dialogButtonNode = desc.nodes.find(
