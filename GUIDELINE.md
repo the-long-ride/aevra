@@ -2,9 +2,9 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current release is **1.1.0**. It includes command understanding,
-workspace containment, typed command rules, browser control, Windows desktop
-control, MCP upstream servers, and workspace manifests. The feature-specific
+The current release is **1.1.1**. It includes command understanding,
+workspace containment, typed command rules, efficient browser/control plans,
+cross-platform shared-semantic desktop control, MCP upstream servers, and workspace manifests. The feature-specific
 manuals and canonical specs linked below are the source of truth for detailed
 contracts and security limitations.
 
@@ -111,7 +111,7 @@ Aevra exposes a standard MCP endpoint (`/mcp`) that can be accessed either **dir
    - **Name**: `Aevra`
    - **Server URL**: `https://<your-aevra-host>/mcp/<token>` (or `https://<your-aevra-host>/mcp` with `Authorization: Bearer <token>`)
 
-### Browser control (1.0.5)
+### Browser control (1.1.1)
 
 Grant the `browser.control` capability explicitly; it is off by default and
 is not implied by `network`. Install the version-matched MV3 archive with
@@ -121,23 +121,31 @@ folder at a stable path because Chromium derives the unpacked extension id from
 that path. CDP is available as an alternative with a separate browser profile
 and `--remote-debugging-port`.
 
-Browser control refuses page-script evaluation, credential fields, privileged
-URLs, Aevra's own Admin UI, sensitive screenshots, and navigation URLs carrying
-secret-shaped data. **Disconnect all browsers** revokes the token epoch and
+Browser control refuses arbitrary page-script evaluation, credential fields,
+privileged URLs, Aevra's own Admin UI, sensitive screenshots, and navigation
+URLs carrying secret-shaped data. `browser_execute_script` is a bounded
+Playwright-like action grammar compiled to typed browser actions; it does not
+evaluate JavaScript or include navigation. **Disconnect all browsers** revokes the token epoch and
 drops both transports immediately. Full procedure: [Browser control](docs/user-manual/18-browser-control.md).
 
-### Desktop control (Windows only, 1.0.5)
+### Desktop and guarded control (1.1.1)
 
-Build the helper from `helper/` with `cargo build --release`, grant the
-`desktop.control` capability, and run Aevra in a real interactive Windows 10/11
-session. The shipped helper is unsigned and there is no macOS or Linux helper;
-those platforms report `DESKTOP_HELPER_NOT_INSTALLED`.
+Official packages include a native helper for Windows, macOS, and Linux. Source
+development can build it with `cargo build --release --manifest-path helper/Cargo.toml`;
+`AEVRA_DESKTOP_HELPER_PATH` is an explicit override. Grant
+`desktop.control` and run inside an interactive user session with the platform
+accessibility provider available.
 
-Use `desktop_describe` before input so actions target accessibility references,
-not stale coordinates. Screen reads remain available when attribution is
-missing, while input is refused for unattributable, elevated, terminal,
-credential, and password-manager windows by default. Typed text is never logged,
-screenshots are audited by hash only, and input actions remain approval-gated.
+Shared semantic control uses Windows UIA, macOS AX, or Linux AT-SPI and never
+synthesizes host pointer/keyboard input. Use background `desktop_describe` plus
+`desktop_invoke`, `desktop_set_value`, `desktop_select`, and
+`desktop_toggle`, or use `control_observe` + `control_execute` /
+`desktop_act_many` for bounded multi-step workflows. Windows retains explicit
+legacy foreground input and pixel capture; macOS/Linux portable mode reports
+those capabilities unavailable.
+
+Strict `isolated` mode is not a label for the ordinary worker: v1.1.1 refuses
+it until a separately provisioned runner has passed containment qualification.
 Read [Desktop control](docs/user-manual/19-desktop-control.md) before enabling it.
 
 ### MCP upstream servers
@@ -206,7 +214,7 @@ The codebase enforces strict isolation boundaries checked by automated tests:
 4. **Web UI (`apps/web-react`)**: React 19 single-page application communicating exclusively with the Admin REST API.
 5. **Store & Security (`packages/store`, `packages/security`)**: SQLite persistence (`node:sqlite`), encryption vaults, DLP redaction, and `SecurityGuard` data boundaries.
 6. **Browser & Extension (`packages/browser`, `apps/extension`)**: CDP and MV3 transports behind one browser-driver contract, with pairing and revocation handled by Core/Worker.
-7. **Desktop & Helper (`packages/desktop`, `helper/`)**: Windows accessibility/input helper supervised by the Worker and guarded by window identity and policy.
+7. **Desktop, Control & Helper (`packages/desktop`, `packages/control`, `helper/`)**: UIA/AX/AT-SPI semantic adapters plus bounded observations/plans, supervised by the Worker and guarded by live identity/policy.
 8. **MCP Upstream (`packages/mcp-upstream`, `apps/core`, `apps/worker`)**: Downstream transport, catalog review, namespace projection, credential isolation, and audited calls.
 
 ### Quality Gate Commands
@@ -263,18 +271,19 @@ The state folder stores:
 
 ## 8. Troubleshooting Common Issues
 
-| Issue / Error Code             | Cause                                                        | Solution                                                                                                        |
-| ------------------------------ | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `401 unauthorized` on `/mcp`   | Connection missing valid OAuth or Bearer token               | Authorize via OAuth dialog or pass valid `Authorization: Bearer <token>` connector header.                      |
-| `ADMIN_CREDENTIALS_REQUIRED`   | `AEVRA_USERNAME` or `AEVRA_PASSWORD` not set at startup      | Export both environment variables before launching `aevra start`.                                               |
-| `SESSION_WORKSPACE_REQUIRED`   | Client connected but has not selected an admitted workspace  | Call `workspace_select` with a registered workspace ID or name.                                                 |
-| `CAPABILITY_REQUIRED`          | Current capability profile or lease denies the operation     | Upgrade workspace profile in Admin UI or approve step-up permission in Requests.                                |
-| `APPROVAL_PENDING`             | High-risk or sensitive operation requires local confirmation | Open `aevra ui`, click Allow on the request ticket, then call `approval_wait`.                                  |
-| `APPROVAL_CONTEXT_CHANGED`     | State changed while approval was pending                     | Re-issue the tool call against the current repository / workspace state.                                        |
-| `WORKSPACE_ESCAPE`             | Path attempts traversal outside registered capability root   | Ensure files and links resolve inside workspace boundaries or configure an external mount.                      |
-| `EXECUTOR_UNAVAILABLE`         | Docker/Podman container sandbox backend unavailable          | Start Docker/Podman or explicitly configure host execution permission in workspace settings.                    |
-| `MERGE_CONFLICT`               | Concurrent conflicting writes on overlapping lines           | Aevra wrote nothing; re-read latest content via `file_read` and apply resolved patch.                           |
-| `SAFE_MODE`                    | Database integrity check failed on startup                   | Admin UI remains open in read-only diagnostic mode to export data and restore database backups.                 |
-| `BROWSER_ORIGIN_BLOCKED`       | Browser reached an Aevra or otherwise blocked origin         | Use an allowed origin and review **Settings → Browser control**; approvals cannot override structural refusals. |
-| `DESKTOP_HELPER_NOT_INSTALLED` | Desktop helper is unavailable on this platform               | Use Windows 10/11 with the helper built from `helper/`; macOS and Linux are not shipped targets in 1.0.5.       |
-| `UPSTREAM_CATALOG_CHANGED`     | A downstream MCP server changed its advertised catalog       | Review the catalog diff in **Settings → MCP servers** and acknowledge it before calls resume.                   |
+| Issue / Error Code              | Cause                                                          | Solution                                                                                                                                |
+| ------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `401 unauthorized` on `/mcp`    | Connection missing valid OAuth or Bearer token                 | Authorize via OAuth dialog or pass valid `Authorization: Bearer <token>` connector header.                                              |
+| `ADMIN_CREDENTIALS_REQUIRED`    | `AEVRA_USERNAME` or `AEVRA_PASSWORD` not set at startup        | Export both environment variables before launching `aevra start`.                                                                       |
+| `SESSION_WORKSPACE_REQUIRED`    | Client connected but has not selected an admitted workspace    | Call `workspace_select` with a registered workspace ID or name.                                                                         |
+| `CAPABILITY_REQUIRED`           | Current capability profile or lease denies the operation       | Upgrade workspace profile in Admin UI or approve step-up permission in Requests.                                                        |
+| `APPROVAL_PENDING`              | High-risk or sensitive operation requires local confirmation   | Open `aevra ui`, click Allow on the request ticket, then call `approval_wait`.                                                          |
+| `APPROVAL_CONTEXT_CHANGED`      | State changed while approval was pending                       | Re-issue the tool call against the current repository / workspace state.                                                                |
+| `WORKSPACE_ESCAPE`              | Path attempts traversal outside registered capability root     | Ensure files and links resolve inside workspace boundaries or configure an external mount.                                              |
+| `EXECUTOR_UNAVAILABLE`          | Docker/Podman container sandbox backend unavailable            | Start Docker/Podman or explicitly configure host execution permission in workspace settings.                                            |
+| `MERGE_CONFLICT`                | Concurrent conflicting writes on overlapping lines             | Aevra wrote nothing; re-read latest content via `file_read` and apply resolved patch.                                                   |
+| `SAFE_MODE`                     | Database integrity check failed on startup                     | Admin UI remains open in read-only diagnostic mode to export data and restore database backups.                                         |
+| `BROWSER_ORIGIN_BLOCKED`        | Browser reached an Aevra or otherwise blocked origin           | Use an allowed origin and review **Settings → Browser control**; approvals cannot override structural refusals.                         |
+| `DESKTOP_HELPER_NOT_INSTALLED`  | Native helper binary is missing for this platform/architecture | Reinstall the official package, build `helper/`, or set `AEVRA_DESKTOP_HELPER_PATH`.                                                    |
+| `CONTROL_ISOLATION_UNAVAILABLE` | A strict isolated plan has no verified isolated runner         | Use `sharedSemantic` only when that mode is acceptable, or provision/qualify a separate runner; Aevra will not downgrade automatically. |
+| `UPSTREAM_CATALOG_CHANGED`      | A downstream MCP server changed its advertised catalog         | Review the catalog diff in **Settings → MCP servers** and acknowledge it before calls resume.                                           |

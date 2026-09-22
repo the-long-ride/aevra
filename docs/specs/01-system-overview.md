@@ -1,6 +1,6 @@
 # 01 — System Overview
 
-**Audience:** engineers & AI agents · **Scope:** the whole product in one view · **Verified against:** `1.1.0`
+**Audience:** engineers & AI agents · **Scope:** the whole product in one view · **Verified against:** `1.1.1`
 
 Aevra is a **local, workspace-scoped MCP execution gateway**. An AI web client (Claude.ai, ChatGPT, Gemini CLI, anything MCP-capable) connects over HTTPS; Aevra decides what that client may do, and an isolated Worker does it.
 
@@ -23,18 +23,18 @@ Everything else in these specs is an elaboration of that sentence.
 
 ## Components
 
-| Component    | Location                            | Responsibility                                                                               |
-| ------------ | ----------------------------------- | -------------------------------------------------------------------------------------------- |
-| CLI          | `apps/cli`                          | startup/service, connectors/connections, MCP upstreams, sessions/audit, backup, status/about |
-| Core Daemon  | `apps/core`                         | sessions, leases, policy, approvals, audit, gateway                                          |
-| MCP ingress  | `apps/core/src/mcp/server.ts`       | admission (OAuth 2.0 / connector token), JSON-RPC                                            |
-| Admin server | `apps/core/src/admin/`              | React Web UI API, password auth, runtime projections                                         |
-| Worker       | `apps/worker` + `packages/executor` | file/git/command/process execution, sandboxing, hooks                                        |
-| Store        | `packages/store`                    | SQLite repositories (`node:sqlite`, WAL)                                                     |
-| Web UI       | `apps/web-react`                    | React 19 single-page dashboard with dark theme                                               |
-| Browser      | `packages/browser`                  | CDP and extension drivers behind one driver interface                                        |
-| Extension    | `apps/extension`                    | MV3 extension driving the user's own browser profile                                         |
-| Desktop      | `packages/desktop` + `helper/`      | Native Windows UIA driver and background semantic automation                                 |
+| Component    | Location                            | Responsibility                                                                                       |
+| ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| CLI          | `apps/cli`                          | startup/service, connectors/connections, MCP upstreams, sessions/audit, backup, status/about         |
+| Core Daemon  | `apps/core`                         | sessions, leases, policy, approvals, audit, gateway                                                  |
+| MCP ingress  | `apps/core/src/mcp/server.ts`       | admission (OAuth 2.0 / connector token), JSON-RPC                                                    |
+| Admin server | `apps/core/src/admin/`              | React Web UI API, password auth, runtime projections                                                 |
+| Worker       | `apps/worker` + `packages/executor` | file/git/command/process execution, sandboxing, hooks                                                |
+| Store        | `packages/store`                    | SQLite repositories (`node:sqlite`, WAL)                                                             |
+| Web UI       | `apps/web-react`                    | React 19 single-page dashboard with dark theme                                                       |
+| Browser      | `packages/browser`                  | CDP and extension drivers behind one driver interface                                                |
+| Extension    | `apps/extension`                    | MV3 extension driving the user's own browser profile                                                 |
+| Desktop      | `packages/desktop` + `helper/`      | Windows UIA plus macOS AX / Linux AT-SPI shared-semantic automation; Windows legacy foreground input |
 
 ## Dependency boundaries (enforced by tests)
 
@@ -46,7 +46,7 @@ Everything else in these specs is an elaboration of that sentence.
 
 ## Repository layout
 
-`apps/` (cli, core, extension, web-react, worker) · `packages/` (browser, desktop, executor, ipc, mcp-tools, notifications, protocol, secrets, security, store) · `helper/` (native Windows UIA helper) · `installers/` · `docs/` · `scripts/`.
+`apps/` (cli, core, extension, web-react, worker) · `packages/` (browser, desktop, executor, ipc, mcp-tools, notifications, protocol, secrets, security, store) · `helper/` (native UIA / AX / AT-SPI helper) · `installers/` · `docs/` · `scripts/`.
 
 **Boundaries:** no install instructions (manual `01`), no protocol detail (`03`), no security rationale (`02`).
 

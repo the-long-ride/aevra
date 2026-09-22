@@ -63,6 +63,26 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      - name: Download validated native desktop helpers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_SHA="$(git rev-parse HEAD)"
+          RUN_ID="$(
+            gh api \
+              --method GET \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/quality-gate.yml/runs" \
+              -f head_sha="$RELEASE_SHA" \
+              -f status=completed \
+              -f per_page=100 \
+              --jq '[.workflow_runs[] | select(.conclusion == "success" and .event == "push")] | .[0].id'
+          )"
+          echo "Taking native helpers from quality-gate run $RUN_ID"
+          gh run download "$RUN_ID" --pattern 'desktop-helper-*' --dir helper-artifacts
+          node scripts/stage-desktop-helpers.mjs helper-artifacts dist/helper desktop-helper-release-assets
+          test -d dist/helper
+
       - name: Publish to npm (Trusted Publishing / Provenance)
         run: npm publish --provenance --access public --registry=https://registry.npmjs.org
         env:
@@ -117,10 +137,11 @@ jobs:
 
       # `aevra extension install` asks for exactly this asset name at the running
       # version's tag, so the name and the tag are a contract with the CLI.
-      - name: Attach the browser extension to the release
+      - name: Attach validated control artifacts to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "$RELEASE_TAG" \
             extension-artifact/aevra-extension.zip \
+            desktop-helper-release-assets/* \
             --clobber

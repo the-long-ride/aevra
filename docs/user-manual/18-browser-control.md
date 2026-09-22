@@ -117,6 +117,35 @@ to Aevra.
 The tool names are identical on both transports, so an agent's plan survives a
 switch. One thing differs: network logs come only from CDP.
 
+## Background tabs and refs
+
+An explicit `tabId` does not mean Aevra will bring that tab to the foreground.
+CDP attaches to that target directly. Extension refs are backed by opaque
+isolated-world element identities, not attributes the page can rewrite.
+
+One exception is extension **vision capture**: Chrome can only capture the visible
+tab. If you request a screenshot of a named inactive tab, Aevra refuses with
+`BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB` instead of switching tabs behind you. Use
+accessibility mode, make the tab active yourself, or use CDP.
+
+## Faster multi-step actions
+
+When the agent already knows stable CSS selectors, it can avoid a
+snapshot → refs → action round trip with `browser_execute_script`. For example:
+
+```json
+{
+  "tabId": "target-tab-id",
+  "script": "await page.locator(\"#query\").fill(\"Aevra\"); await page.locator(\"#search\").click(); await page.getByText(\"Results\").waitFor({ timeout: 5000 });"
+}
+```
+
+This is Playwright-like syntax, not JavaScript execution. Aevra accepts only CSS
+`locator(...).click/fill/type/waitFor`, `getByText(...).waitFor`, and
+`keyboard.press`, with at most 32 statements. It compiles those statements to
+the same typed browser action batch used elsewhere. Navigation remains a
+separate `browser_navigate` call so origin and DLP checks cannot be bypassed.
+
 ## Keeping it up to date
 
 The extension is versioned with Aevra, and `aevra extension install` always asks
@@ -127,10 +156,12 @@ pairing survives.
 
 ## What it will not do
 
-- **No page-script evaluation.** There is no `browser_evaluate`, on any
-  transport. Every action is a typed, auditable operation.
-- **No typing into credential fields.** Password, one-time-code, and payment
-  fields are refused in the page and again in the worker. This is not
+- **No arbitrary page-script evaluation.** There is no `browser_evaluate`.
+  The Playwright-like fast path is a fixed action grammar and never evaluates
+  JavaScript in the page.
+- **No credential value egress or typing.** Credential-shaped field values are
+  omitted from extension snapshots, and password, one-time-code, and payment
+  fields refuse model typing in the page and again in the worker. This is not
   policy-configurable and approval cannot override it — you type those yourself.
 - **No privileged surfaces.** `chrome://`, `chrome-extension://`, `devtools://`,
   `file://`, `view-source:` and Aevra's own admin UI are refused outright.

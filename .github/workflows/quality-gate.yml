@@ -116,13 +116,40 @@ jobs:
       - run: npm run test:portability
 
   desktop-helper:
-    name: Desktop helper (Rust)
-    runs-on: windows-latest
+    name: Desktop helper (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
     defaults:
       run:
         working-directory: helper
     steps:
       - uses: actions/checkout@v7
-      - run: cargo build --locked
+      - name: Install Linux accessibility build prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libwayland-dev libxkbcommon-dev
+      - run: cargo build --locked --release
       - run: cargo test --locked
+      - id: package
+        name: Stage native helper artifact
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const slug = process.platform + '-' + process.arch;
+          const binary = 'aevra-desktop-helper' + (process.platform === 'win32' ? '.exe' : '');
+          const source = path.join('target', 'release', binary);
+          const destination = path.join('artifact', slug);
+          fs.mkdirSync(destination, { recursive: true });
+          fs.copyFileSync(source, path.join(destination, binary));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'slug=' + slug + '\n');
+          NODE
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-helper-${{ steps.package.outputs.slug }}
+          path: helper/artifact/${{ steps.package.outputs.slug }}/
+          if-no-files-found: error

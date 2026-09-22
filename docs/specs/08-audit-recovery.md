@@ -1,6 +1,6 @@
 # 08 — Audit & Recovery
 
-**Audience:** engineers & AI agents · **Scope:** audit chain, change sets, safe mode, crash semantics · **Verified against:** `1.1.0`
+**Audience:** engineers & AI agents · **Scope:** audit chain, change sets, safe mode, crash semantics · **Verified against:** `1.1.1`
 
 ## Audit chain
 
@@ -25,6 +25,8 @@ On restart, incomplete mutating operations are reconciled into explicit states:
 | `RECOVERY_REQUIRED`         | snapshots exist; rollback available |
 
 They are **never automatically replayed**. The client or dashboard decides.
+
+Control plans apply the same rule. The durable control journal stores a keyed plan digest, owner/request identity, action names, dispatch states, and a sanitized terminal step summary—never raw typed/set values or UI observations. Startup changes incomplete `running`/`awaitingApproval` plans to `unknown`; the same request/digest can reattach to a persisted terminal result, but an uncertain mutation is never redispatched.
 
 ## Durable operation inspection
 

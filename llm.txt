@@ -1,7 +1,7 @@
 # Aevra — Architecture & Usage Guide for AI Assistants (llm.txt)
 
 > **Specification & Operator Reference for Language Models**
-> Version: 1.1.0
+> Version: 1.1.1
 > Author: the-long-ride (made by <3)
 > Repository: https://github.com/the-long-ride/aevra
 > Issues: https://github.com/the-long-ride/aevra/issues
@@ -10,7 +10,7 @@
 
 ## 1. What is Aevra?
 
-Aevra is a workspace-scoped local MCP (Model Context Protocol) execution gateway that connects AI web clients and assistants (ChatGPT, Claude, Grok, Gemini, Manus, Cursor, Langdock, etc.) directly to your machine. It enables AI assistants to inspect directories, read and write files, execute shell commands, manage Git repositories, launch background processes, control Chromium browsers, and automate native Windows applications under explicit, human-controlled security boundaries.
+Aevra is a workspace-scoped local MCP (Model Context Protocol) execution gateway that connects AI web clients and assistants (ChatGPT, Claude, Grok, Gemini, Manus, Cursor, Langdock, etc.) directly to your machine. It enables AI assistants to inspect directories, read and write files, execute shell commands, manage Git repositories, launch background processes, control Chromium browsers, and automate native applications through Windows UIA, macOS Accessibility, and Linux AT-SPI under explicit, human-controlled security boundaries.
 
 ### Central Invariant
 
@@ -42,7 +42,7 @@ Aevra Core Daemon                         React 19 Admin Web UI
 Execution Worker (Port 47833 WebSocket for Browser Extension)
    ├─ Filesystem Sandbox (Scoped to permitted workspace roots & mounts)
    ├─ Shell Execution & Detached Background Processes
-   ├─ Desktop Automation (Windows UI Automation background & foreground)
+   ├─ Desktop Automation (Windows UIA · macOS AX · Linux AT-SPI semantic control)
    ├─ Browser Control (Chromium MV3 Extension & CDP)
    └─ Upstream MCP Proxies & Docker / Podman Sandbox
 ```
@@ -84,62 +84,63 @@ Execution Worker (Port 47833 WebSocket for Browser Extension)
 
 ---
 
-## 4. Built-in MCP Tools Reference (67 Tools)
+## 4. Built-in MCP Tools Reference (72 Tools)
 
-### Workspaces & Context
+The model-facing surface favors bounded batch interfaces; singular file/command
+primitives remain internal implementation details.
 
-- `workspace_list`: List registered workspaces and active lease state.
-- `workspace_select`: Select or switch the active workspace for this session.
-- `workspace_info`: Inspect workspace root, mounts, git branch, and manifest.
-- `aevra_status`: Report detected host toolchains (Node, Python, Rust, Go, Git, .NET, JVM, Docker) and recommended shells (`pwsh`, `bash`, `zsh`, etc.).
+### Workspace, Files, Commands, Git, Processes
 
-### File Operations (Single & Batch)
-
-- `file_read(workspace, path)`: Read file content within workspace boundaries.
-- `file_read_many(workspace, paths[])`: Read multiple files concurrently in a single round trip.
-- `file_write(workspace, path, content)`: Create or update a file.
-- `file_write_many(workspace, files[{path, content}])`: Atomically write multiple files in batch.
-- `search(workspace, query, isRegex?, maxResults?)`: High-performance parallel regex text search across files.
-
-### Shell & Command Execution
-
-- `command_run(workspace, command, args[], timeoutMs?)`: Execute a command synchronously within the workspace working directory.
-- `command_run_many(workspace, commands[])`: Run a bounded queue of commands.
-
-### Managed Background Processes
-
-- `process_start(workspace, command, args[], env?)`: Launch a non-blocking background daemon or long-running process (e.g. dev servers).
-- `process_logs(processId, tailLines?)`: Read stdout/stderr from a running or terminated background process.
-- `process_wait(processId, timeoutMs?)`: Wait for background process completion.
-- `process_stop(processId)`: Terminate a running background process.
-- `process_list`: List all active and recent managed processes.
-
-### Change Sets & Safe Rollback
-
-- `change_begin(workspace, description)`: Open a journaled multi-file change transaction.
-- `change_stage(changeId, path, content)`: Stage file changes into the active set.
-- `change_commit(changeId)`: Apply all staged changes atomically with 3-way conflict detection.
-- `change_rollback(changeId)`: Restore files to their state prior to the transaction.
+- Workspace: `workspace_list`, `workspace_select`, `workspace_current`.
+- Files/search: `file_list`, `file_read_many`, `file_search`, `search`,
+  `file_write_many`, `file_move`, `file_delete`.
+- Commands: `command_run_many` and `shell_run`. Use managed processes for
+  long-running work.
+- Processes: `process_start/list/status/wait/logs/stop/restart`.
+- Git: `git_status/add/diff/log/branch/commit/push`.
+- Durable mutation inspection: `operation_get`, `operation_list`.
+- Change sets: `change_begin/status/commit/rollback`.
+- Approvals: `approval_status/wait/cancel`.
+- Skills/instructions: `skills_list`, `skill_read/write`,
+  `instructions_read/write`.
 
 ### Browser Automation (Chromium MV3 Extension & CDP)
 
-- `browser_navigate(url)`: Navigate active browser tab to target URL.
-- `browser_click(selector | point)`: Click elements on page.
-- `browser_type(selector, text)`: Input text into fields (automatically refuses password/OTP/payment fields).
-- `browser_snapshot()`: Capture DOM snapshot and visual viewport.
-- `browser_tabs()`: List and switch open tabs.
+Ten `browser_*` tools provide lifecycle, tabs/navigation, accessibility or
+vision snapshots, page reads, ordered actions, a bounded Playwright-like
+`browser_execute_script` fast lane, and logs. There is no arbitrary page
+JavaScript evaluation. CDP operations are target-pinned without tab activation;
+extension public refs map to opaque identities held in Chrome's isolated world.
+Credential-shaped field values are omitted and model typing into credential
+fields is refused.
 
-### Desktop Automation (Windows)
+### Guarded Control Plans
 
-- **Silent Background UIA**:
-  - `desktop_describe`: Inspect window element hierarchies without moving the mouse.
-  - `desktop_invoke`, `desktop_set_value`, `desktop_select`, `desktop_toggle`: Trigger controls in native Windows applications without focus-stealing or mouse movement.
-- **Foreground UIA**:
-  - Element targeting, screenshot capture, and keyboard/mouse simulation with explicit user approval.
+- `control_observe`: bounded semantic browser/desktop observation.
+- `control_execute`: strict schema-version-1 finite plan with dependencies,
+  guards, postconditions, bounded output, and independent-surface concurrency.
+- `control_plan_status` / `control_plan_cancel`: owner-bound durable lifecycle.
+- `desktop_act_many`: semantic desktop batch convenience API.
+
+Matching request IDs use a durable keyed digest. Incomplete plans become unknown
+after restart and are not replayed. Strict `isolated` mode is fail-closed in
+v1.1.1 until a separately provisioned runner has verified containment.
+
+### Desktop Automation
+
+Shared semantic control is available through Windows UIA, macOS Accessibility
+(AX), and Linux AT-SPI2. Prefer `desktop_describe(mode:"background")` plus
+`desktop_invoke`, `desktop_set_value`, `desktop_select`, or
+`desktop_toggle`; these provider actions do not synthesize host mouse/keyboard
+input. Windows additionally supports explicit legacy foreground click/type/key/
+scroll and pixel capture. macOS/Linux portable mode intentionally reports those
+foreground/capture capabilities unavailable.
 
 ### Upstream MCP Proxies
 
-- External MCP servers (stdio, SSE, HTTP) can be registered via Admin UI or `aevra mcp add`. Upstream tools are exposed with namespaced tool names (e.g. `upstream__tool_name`).
+External MCP servers (stdio, SSE, HTTP) can be registered via Admin UI or
+`aevra mcp add`. Their tools are projected under namespaced tool names and
+remain subject to Aevra policy/audit boundaries.
 
 ---
 
@@ -193,7 +194,7 @@ When you are acting as an AI assistant interacting with Aevra via MCP tools or g
 ### Tip 1: Always Target Workspaces Explicitly
 
 - When a user grants access to **multiple workspaces** in one connection session, `SessionManager.activeLease(sessionId)` intentionally returns `null` because no single workspace is unambiguous.
-- **Rule**: In every tool call (`file_read`, `file_write`, `command_run`, `search`, etc.), ALWAYS specify the `workspace` parameter explicitly:
+- **Rule**: In workspace-scoped tool calls (`file_read_many`, `file_write_many`, `command_run_many`, `search`, etc.), ALWAYS specify the `workspace` parameter explicitly:
   ```json
   {
     "workspace": "my-project",
@@ -204,7 +205,7 @@ When you are acting as an AI assistant interacting with Aevra via MCP tools or g
 
 ### Tip 2: Batch File Operations to Save Roundtrips
 
-- Instead of calling `file_read` 5 times sequentially, use `file_read_many`:
+- Use `file_read_many` instead of repeated singular reads:
   ```json
   {
     "workspace": "my-project",
@@ -213,7 +214,7 @@ When you are acting as an AI assistant interacting with Aevra via MCP tools or g
   ```
 - Instead of writing files one by one, use `file_write_many` for multi-file edits.
 
-### Tip 3: Never Run Blocking Commands in `command_run`
+### Tip 3: Use managed processes for long-running commands
 
 - Commands like `npm run dev`, `python -m http.server`, `vite`, `cargo watch`, or interactive prompts (`git log` without paging disabled) will block until the command timeout expires (default 60s) and fail!
 - **Rule**: For persistent servers or background watchers, always use:
@@ -233,5 +234,5 @@ When you are acting as an AI assistant interacting with Aevra via MCP tools or g
 
 ### Tip 6: Handling Browser & Desktop Actions
 
-- For browser actions, verify that the browser extension is paired (reportable via `aevra status` or `aevra_status`).
-- On Windows, prefer silent background UIA tools (`desktop_invoke`, `desktop_set_value`) to preserve the user's active keyboard focus and mouse cursor.
+- For browser actions, verify that the browser extension/CDP transport is connected (reportable via `aevra status` or `aevra_status`).
+- Prefer shared semantic desktop actions on every supported OS. Use Windows foreground input only when explicitly required; never treat it as fallback for `sharedSemantic` or `isolated` plans.
