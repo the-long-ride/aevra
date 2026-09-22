@@ -6,7 +6,7 @@ import {
 } from './registry-schema-parts.js';
 
 /**
- * Input schemas for the nine browser tools, kept apart from the rest so the
+ * Input schemas for the ten browser tools, kept apart from the rest so the
  * shared schema module stays inside its line budget.
  */
 export const browserInputSchemas: Record<string, JsonSchema> = {
@@ -84,11 +84,24 @@ export const browserInputSchemas: Record<string, JsonSchema> = {
         minItems: 1,
         items: { type: 'object' },
         description:
-          'Ordered actions: click {ref|x,y}, type {ref,text,clear}, press_key {key}, scroll {ref|x,y,dx,dy}, select {ref,value}, wait_for {ref|text,timeoutMs}.',
+          'Ordered actions: click {ref|selector|x,y}, type {ref|selector,text,clear}, press_key {key}, scroll {ref|selector|x,y,dx,dy}, select {ref|selector,value}, wait_for {ref|selector|text,timeoutMs}.',
       },
       stopOnError: { type: 'boolean' },
     },
     required: ['actions'],
+    additionalProperties: false,
+  },
+  browser_execute_script: {
+    type: 'object',
+    properties: {
+      ...workspaceTargetProperties,
+      tabId: stringProp('Target tab id. Defaults to the active tab.'),
+      script: stringProp(
+        'Bounded Playwright-like script. Supported: locator(...).click/fill/type/waitFor, getByText(...).waitFor, and keyboard.press. Arbitrary JavaScript is rejected.',
+      ),
+      stopOnError: { type: 'boolean' },
+    },
+    required: ['script'],
     additionalProperties: false,
   },
   browser_logs: {

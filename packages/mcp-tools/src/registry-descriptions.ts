@@ -63,6 +63,17 @@ export const toolDescriptions: Partial<Record<AevraToolName, string>> = {
   skill_write: 'Write one bounded UTF-8 file inside an existing Aevra skill package.',
   instructions_read: 'Read merged Aevra/AGENTS.md instructions for the active workspace.',
   instructions_write: 'Write the user or active-workspace Aevra AGENTS.md instruction file.',
+  browser_execute_script:
+    'Execute a bounded Playwright-like script against one browser tab as a single policy-checked action batch; arbitrary JavaScript is not evaluated.',
+  control_observe:
+    'Observe one browser tab or desktop window as a bounded semantic control surface with owner-bound references.',
+  control_execute:
+    'Execute a strict bounded ControlPlan locally across previously observed surfaces, revalidating targets and policy between steps.',
+  control_plan_status: 'Read owner-bound status and terminal result for one control plan.',
+  control_plan_cancel:
+    'Cancel future steps of one owner-bound control plan without claiming already-dispatched external effects were rolled back.',
+  desktop_act_many:
+    'Execute an ordered batch of semantic desktop provider actions without synthesizing host cursor, keyboard, clipboard, or focus input.',
   desktop_status: 'Show the current Aevra desktop session, connection, and window state.',
   desktop_connect: 'Connect to the local Aevra desktop control helper for this session.',
   desktop_disconnect: 'Disconnect the local Aevra desktop control session.',

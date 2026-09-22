@@ -13,6 +13,7 @@ import {
 } from './basic-tools.js';
 import { BROWSER_TOOL_NAMES, handleBrowserTool } from './browser-tools.js';
 import { commandTool, shellTool } from './command-tools.js';
+import { CONTROL_TOOL_NAMES, handleControlTool } from './control-tools.js';
 import { DESKTOP_TOOL_NAMES, handleDesktopTool } from './desktop-tools.js';
 import { AevraToolError } from './errors.js';
 import { FAST_LANE_TOOL_NAMES, isFastLaneTool } from './fast-lane-schemas.js';
@@ -54,6 +55,7 @@ const TARGETED_WORKSPACE_TOOLS = new Set([
   'process_list',
   'change_begin',
   ...BROWSER_TOOL_NAMES,
+  ...CONTROL_TOOL_NAMES,
   ...DESKTOP_TOOL_NAMES,
 ]);
 
@@ -196,6 +198,7 @@ export class McpToolService {
       return handleProcessChangeTool(context, sessionId, name, args);
     }
     if (BROWSER_TOOL_NAMES.has(name)) return handleBrowserTool(context, sessionId, name, args);
+    if (CONTROL_TOOL_NAMES.has(name)) return handleControlTool(context, sessionId, name, args);
     if (DESKTOP_TOOL_NAMES.has(name)) return handleDesktopTool(context, sessionId, name, args);
     return callUpstreamTool(context, sessionId, name, args);
   }

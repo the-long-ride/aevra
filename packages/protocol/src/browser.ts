@@ -53,12 +53,20 @@ export interface BrowserSnapshotResult {
 }
 
 export type BrowserActionInput =
-  | { op: 'click'; ref?: string; x?: number; y?: number }
-  | { op: 'type'; ref: string; text: string; clear?: boolean }
+  | { op: 'click'; ref?: string; selector?: string; x?: number; y?: number }
+  | { op: 'type'; ref?: string; selector?: string; text: string; clear?: boolean }
   | { op: 'press_key'; key: string }
-  | { op: 'scroll'; ref?: string; x?: number; y?: number; dx: number; dy: number }
-  | { op: 'select'; ref: string; value: string }
-  | { op: 'wait_for'; ref?: string; text?: string; timeoutMs: number };
+  | {
+      op: 'scroll';
+      ref?: string;
+      selector?: string;
+      x?: number;
+      y?: number;
+      dx: number;
+      dy: number;
+    }
+  | { op: 'select'; ref?: string; selector?: string; value: string }
+  | { op: 'wait_for'; ref?: string; selector?: string; text?: string; timeoutMs: number };
 
 export interface BrowserActionResult {
   op: BrowserActionInput['op'];

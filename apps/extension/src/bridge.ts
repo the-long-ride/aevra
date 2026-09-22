@@ -5,7 +5,7 @@ import type {
 } from '../../../packages/protocol/src/browser.js';
 import type { NavigateResult } from '../../../packages/browser/src/driver.js';
 import type { ExtensionBridge } from '../../../packages/browser/src/extension-bridge.js';
-import { parseRef, type SnapshotElementLike } from '../../../packages/browser/src/dom-snapshot.js';
+import type { SnapshotElementLike } from '../../../packages/browser/src/dom-snapshot.js';
 import {
   applyPageAction,
   installConsoleCapture,
@@ -115,7 +115,7 @@ export function createChromeBridge(): ExtensionBridge {
     async serialize(tabId?: string): Promise<SnapshotElementLike> {
       const id = await activeTabId(tabId);
       await ensureConsoleCapture(id);
-      return inject(id, serializePage, []);
+      return inject(id, serializePage, [], 'ISOLATED');
     },
 
     async devicePixelRatio(tabId?: string): Promise<number> {
@@ -123,22 +123,27 @@ export function createChromeBridge(): ExtensionBridge {
       return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
     },
 
-    async apply(action: BrowserActionInput, ref: string | null, tabId?: string) {
+    async apply(action: BrowserActionInput, elementId: string | null, tabId?: string) {
       const id = await activeTabId(tabId);
-      // Parsed with the shared helper rather than split by hand, so the ref
-      // format has exactly one definition.
-      const index = ref ? parseRef(ref).index : null;
-      const outcome = await inject(id, applyPageAction, [action, index]);
+      const outcome = await inject(id, applyPageAction, [action, elementId], 'ISOLATED');
       return outcome?.ok === true
         ? { ok: true }
         : { ok: false, code: String(outcome?.code ?? 'BROWSER_UNAVAILABLE') };
     },
 
     async captureVisible(tabId?: string): Promise<string> {
-      // captureVisibleTab works on a window, not a tab, so an explicit tabId is
-      // honoured by focusing that tab first rather than being quietly ignored.
-      if (tabId) await chrome.tabs.update(Number(tabId), { active: true });
-      return chrome.tabs.captureVisibleTab(undefined as unknown as number, { format: 'png' });
+      // Chrome can only capture the currently visible tab. Shared mode must not
+      // activate a background target behind the user's back, so a named inactive
+      // tab is an explicit unsupported case rather than an activation side effect.
+      const id = await activeTabId(tabId);
+      const tab = await chrome.tabs.get(id);
+      if (tabId && tab.active !== true) {
+        throw Object.assign(
+          new Error('Extension vision capture requires the target tab to already be active'),
+          { code: 'BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB' },
+        );
+      }
+      return chrome.tabs.captureVisibleTab(tab.windowId as number, { format: 'png' });
     },
 
     async navigate(

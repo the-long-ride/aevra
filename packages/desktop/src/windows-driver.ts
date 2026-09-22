@@ -126,7 +126,7 @@ export class WindowsDesktopDriver implements DesktopDriver {
     return this.helper.call('targetIdentity', { windowId });
   }
 
-  describeBackground(request: {
+  async describeBackground(request: {
     windowId: string;
     snapshotId: string;
     maxNodes: number;
@@ -137,7 +137,18 @@ export class WindowsDesktopDriver implements DesktopDriver {
     nodes: DesktopNode[];
     truncated: boolean;
   }> {
-    return this.helper.call('describeBackground', request);
+    const raw = await this.helper.call<{
+      window: DesktopWindowIdentity;
+      windowInstance: { windowId: string; processId: number; processStartedAt: string };
+      nodes: (Omit<DesktopNode, 'ref'> & { handle: string })[];
+      truncated: boolean;
+    }>('describeBackground', request);
+    const generation = this.helper.generation();
+    const nodes = raw.nodes.map((node) => {
+      const ref = `ref_bg_${generation}_${this.nextRefId++}`;
+      return { ...node, ref };
+    });
+    return { ...raw, nodes };
   }
 
   releaseBackgroundSnapshot(snapshotId: string): Promise<boolean> {

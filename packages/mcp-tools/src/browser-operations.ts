@@ -2,6 +2,7 @@ import { MAX_WAIT_FOR_MS } from '../../browser/src/driver.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { redactText } from '../../security/src/dlp.js';
 import { AevraToolError } from './errors.js';
+import { parseBrowserScript } from './browser-script.js';
 
 /**
  * Clamps a model-supplied bound. `Number(...)` on junk yields NaN, and NaN
@@ -109,9 +110,14 @@ export function browserOperation(name: string, args: any, tabId?: string): Worke
       ...tab,
     };
   }
-  const actions = Array.isArray(args.actions) ? args.actions : [];
+  const actions =
+    name === 'browser_execute_script'
+      ? parseBrowserScript(args.script)
+      : Array.isArray(args.actions)
+        ? args.actions
+        : [];
   if (!actions.length) {
-    throw new AevraToolError('INVALID_REQUEST', 'browser_act_many requires at least one action');
+    throw new AevraToolError('INVALID_REQUEST', `${name} requires at least one action`);
   }
   refuseUnboundedWait(actions);
   refuseSecretOutbound(actions);

@@ -122,3 +122,32 @@ test('ordinary words typed into a page are left alone', () => {
   }) as any;
   assert.equal(acted.actions[0].text, 'the quick brown fox jumps over it');
 });
+
+test('script fast lane compiles to the existing browser.act worker operation', () => {
+  const acted = browserOperation(
+    'browser_execute_script',
+    {
+      script: 'page.locator("#name").fill("Aevra"); page.locator("#save").click()',
+      stopOnError: false,
+    },
+    't1',
+  ) as any;
+  assert.equal(acted.kind, 'browser.act');
+  assert.equal(acted.tabId, 't1');
+  assert.equal(acted.stopOnError, false);
+  assert.deepEqual(acted.actions, [
+    { op: 'type', selector: '#name', text: 'Aevra', clear: true },
+    { op: 'click', selector: '#save' },
+  ]);
+});
+
+test('script fast lane applies outbound DLP after parsing', () => {
+  const payload = randomBytes(32).toString('base64url');
+  assert.throws(
+    () =>
+      browserOperation('browser_execute_script', {
+        script: `page.locator("#note").fill("${payload}")`,
+      }),
+    /will not type secret-shaped data/,
+  );
+});

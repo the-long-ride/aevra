@@ -66,3 +66,83 @@ test('CdpDriver retries a transient ERR_ABORTED navigation', async () => {
     await new Promise<void>((resolve) => control?.close(() => resolve()) ?? resolve());
   }
 });
+
+test('CdpDriver pins an explicit tabId to that target without activating the initial tab', async () => {
+  let firstNavigations = 0;
+  let secondNavigations = 0;
+  const first = await WebSocketServer.start((message, reply) => {
+    const request = JSON.parse(message) as { id: number; method: string };
+    if (request.method === 'Page.navigate') firstNavigations += 1;
+    if (request.method === 'Page.getNavigationHistory') {
+      reply(
+        JSON.stringify({
+          id: request.id,
+          result: { currentIndex: 0, entries: [{ url: 'https://first.example/' }] },
+        }),
+      );
+      return;
+    }
+    reply(JSON.stringify({ id: request.id, result: { frameId: 'first-frame' } }));
+  });
+  const second = await WebSocketServer.start((message, reply) => {
+    const request = JSON.parse(message) as { id: number; method: string };
+    if (request.method === 'Page.navigate') secondNavigations += 1;
+    if (request.method === 'Page.getNavigationHistory') {
+      reply(
+        JSON.stringify({
+          id: request.id,
+          result: { currentIndex: 0, entries: [{ url: 'https://second.example/next' }] },
+        }),
+      );
+      return;
+    }
+    reply(JSON.stringify({ id: request.id, result: { frameId: 'second-frame' } }));
+  });
+
+  let control: Server | undefined;
+  try {
+    control = createServer((_request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(
+        JSON.stringify([
+          {
+            id: 'page-1',
+            type: 'page',
+            url: 'https://first.example/',
+            title: 'First',
+            webSocketDebuggerUrl: first.url,
+          },
+          {
+            id: 'page-2',
+            type: 'page',
+            url: 'https://second.example/',
+            title: 'Second',
+            webSocketDebuggerUrl: second.url,
+          },
+        ]),
+      );
+    });
+    await new Promise<void>((resolve) => control!.listen(0, '127.0.0.1', resolve));
+    const port = (control.address() as { port: number }).port;
+    const driver = new CdpDriver();
+    try {
+      await driver.connect({ transport: 'cdp', cdpPort: port, tabId: 'page-1' });
+      const result = await driver.navigate({
+        tabId: 'page-2',
+        url: 'https://second.example/next',
+        waitUntil: 'load',
+      });
+      assert.equal(result.tabId, 'page-2');
+      assert.equal(firstNavigations, 0);
+      assert.equal(secondNavigations, 1);
+      const tabs = await driver.tabs({ action: 'list' });
+      assert.equal(tabs.find((tab) => tab.tabId === 'page-1')?.active, true);
+    } finally {
+      await driver.disconnect();
+    }
+  } finally {
+    await first.stop();
+    await second.stop();
+    await new Promise<void>((resolve) => control?.close(() => resolve()) ?? resolve());
+  }
+});

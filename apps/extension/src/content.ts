@@ -8,6 +8,7 @@
 // jsdom in this package's own vitest project rather than being untestable.
 
 export interface SerializedElement {
+  elementId: string;
   tagName: string;
   attributes: Record<string, string>;
   children: SerializedElement[];
@@ -20,28 +21,64 @@ export type ApplyOutcome = { ok: boolean; code?: string };
 
 export function serializePage(): SerializedElement {
   const MAX_ELEMENTS = 5000;
+  const CREDENTIAL_AUTOCOMPLETE = /^(one-time-code|current-password|new-password|cc-[a-z-]+)$/i;
+  const CREDENTIAL_HINT =
+    /(pass(word|wd)?|otp|one.?time|cvv|cvc|csc|card.?number|cardnum|iban|ssn)/i;
+  const protectedValue = (element: Element): boolean => {
+    if (!(element instanceof HTMLInputElement)) return false;
+    if (element.type.toLowerCase() === 'password') return true;
+    if (CREDENTIAL_AUTOCOMPLETE.test(element.getAttribute('autocomplete') ?? '')) return true;
+    return CREDENTIAL_HINT.test(
+      ['name', 'id', 'aria-label', 'placeholder']
+        .map((name) => element.getAttribute(name) ?? '')
+        .join(' '),
+    );
+  };
   let budget = MAX_ELEMENTS;
-  let index = 0;
+  type ElementRegistry = {
+    ids: WeakMap<Element, string>;
+    elements: Map<string, Element>;
+    nextId: number;
+  };
+  const scope = window as unknown as { __aevraElementRegistry?: ElementRegistry };
+  let registry = scope.__aevraElementRegistry;
+  if (!registry) {
+    registry = { ids: new WeakMap(), elements: new Map(), nextId: 1 };
+    scope.__aevraElementRegistry = registry;
+  }
+  // Reverse lookup contains only nodes from the current snapshot. The WeakMap
+  // may retain an opaque identity for a still-live node, but a detached node
+  // cannot remain actionable merely because an older snapshot saw it.
+  registry.elements.clear();
+
+  const opaqueId = (element: Element): string => {
+    let id = registry!.ids.get(element);
+    if (!id) {
+      id = `element_${registry!.nextId++}`;
+      registry!.ids.set(element, id);
+    }
+    registry!.elements.set(id, element);
+    return id;
+  };
 
   const walk = (element: Element): SerializedElement => {
     const attributes: Record<string, string> = {};
     for (const attribute of Array.from(element.attributes)) {
       attributes[attribute.name] = attribute.value;
     }
-    // Marks the element so a later act pass finds the same node without holding
-    // a reference across injections.
-    element.setAttribute('data-aevra-index', String(index));
-    attributes['data-aevra-index'] = String(index);
-    index += 1;
 
     const rect = element.getBoundingClientRect();
     const node: SerializedElement = {
+      elementId: opaqueId(element),
       tagName: element.tagName.toLowerCase(),
       attributes,
       children: [],
       textContent: ((element as HTMLElement).innerText ?? element.textContent ?? '').slice(0, 400),
     };
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    if (
+      (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) &&
+      !protectedValue(element)
+    ) {
       node.value = element.value;
     }
     if (rect.width > 0 && rect.height > 0) {
@@ -139,7 +176,7 @@ export function installConsoleRelay(): boolean {
 
 export function applyPageAction(
   action: Record<string, any>,
-  elementIndex: number | null,
+  elementId: string | null,
 ): ApplyOutcome | Promise<ApplyOutcome> {
   // Inlined rather than shared: a module-scope constant would not survive
   // function serialization into the page.
@@ -150,8 +187,19 @@ export function applyPageAction(
     return CREDENTIAL_AUTOCOMPLETE.test(candidate.getAttribute('autocomplete') ?? '');
   };
 
-  const element =
-    elementIndex === null ? null : document.querySelector(`[data-aevra-index="${elementIndex}"]`);
+  type ElementRegistry = { elements: Map<string, Element> };
+  const registry = (window as unknown as { __aevraElementRegistry?: ElementRegistry })
+    .__aevraElementRegistry;
+  let element = elementId === null ? null : (registry?.elements.get(elementId) ?? null);
+  if (element && !element.isConnected) element = null;
+  const selector = typeof action.selector === 'string' ? action.selector : '';
+  if (!element && selector) {
+    try {
+      element = document.querySelector(selector);
+    } catch {
+      return { ok: false, code: 'INVALID_REQUEST' };
+    }
+  }
 
   if (action.op === 'press_key') {
     const target = document.activeElement ?? document.body;
@@ -163,16 +211,24 @@ export function applyPageAction(
 
   if (action.op === 'wait_for') {
     const text = String(action.text ?? '');
-    if (!text) return { ok: true };
+    if (!selector && !text) return { ok: true };
+    if (selector) {
+      try {
+        document.querySelector(selector);
+      } catch {
+        return { ok: false, code: 'INVALID_REQUEST' };
+      }
+    }
     // Polls to the deadline rather than checking once, so this transport agrees
-    // with the CDP driver instead of failing the moment the text is not there.
+    // with the CDP driver instead of failing the moment the target is not there.
     const deadline = Date.now() + Math.max(0, Number(action.timeoutMs ?? 5000));
     return new Promise<ApplyOutcome>((resolve) => {
       const check = () => {
         const body = document.body;
-        if (body.innerText?.includes(text) || body.textContent?.includes(text)) {
-          return resolve({ ok: true });
-        }
+        const selectorReady = selector ? Boolean(document.querySelector(selector)) : false;
+        const textReady =
+          Boolean(text) && (body.innerText?.includes(text) || body.textContent?.includes(text));
+        if (selectorReady || textReady) return resolve({ ok: true });
         if (Date.now() >= deadline) return resolve({ ok: false, code: 'BROWSER_TIMEOUT' });
         setTimeout(check, 50);
       };

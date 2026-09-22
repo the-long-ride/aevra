@@ -88,7 +88,9 @@ describe('tab targeting', () => {
   it('uses the active tab when none is named', async () => {
     const fake = installChrome([{ id: 7, active: true }]);
     await createChromeBridge().serialize();
-    expect(fake.calls.executeScript![0].target).toEqual({ tabId: 7 });
+    const snapshotCall = fake.calls.executeScript!.at(-1);
+    expect(snapshotCall.target).toEqual({ tabId: 7 });
+    expect(snapshotCall.world).toBe('ISOLATED');
   });
 
   it('uses the named tab when one is given', async () => {
@@ -104,13 +106,14 @@ describe('tab targeting', () => {
 });
 
 describe('apply', () => {
-  it('passes the ref index page-side, never an element reference', async () => {
+  it('passes only the isolated-world opaque element id page-side', async () => {
     const fake = installChrome([{ id: 1, active: true }]);
-    await createChromeBridge().apply({ op: 'click', ref: 'ref_3_5' } as never, 'ref_3_5');
-    expect(fake.calls.executeScript![0].args[1]).toBe(5);
+    await createChromeBridge().apply({ op: 'click', ref: 'ref_3_5' } as never, 'element_42');
+    expect(fake.calls.executeScript![0].args[1]).toBe('element_42');
+    expect(fake.calls.executeScript![0].world).toBe('ISOLATED');
   });
 
-  it('passes a null index when the action carries no ref', async () => {
+  it('passes a null opaque id when the action carries no ref', async () => {
     const fake = installChrome([{ id: 1, active: true }]);
     await createChromeBridge().apply({ op: 'press_key', key: 'Enter' } as never, null);
     expect(fake.calls.executeScript![0].args[1]).toBeNull();
@@ -180,10 +183,23 @@ describe('captureVisible', () => {
     expect(fake.calls.capture![0]).toEqual({ format: 'png' });
   });
 
-  it('focuses a named tab first, since capture works on a window', async () => {
-    const fake = installChrome([{ id: 1, active: true }, { id: 2 }]);
+  it('refuses vision capture for a named inactive tab instead of activating it', async () => {
+    const fake = installChrome([
+      { id: 1, active: true },
+      { id: 2, active: false },
+    ]);
+    await expect(createChromeBridge().captureVisible('2')).rejects.toMatchObject({
+      code: 'BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB',
+    });
+    expect(fake.calls.update).toHaveLength(0);
+    expect(fake.calls.capture).toHaveLength(0);
+  });
+
+  it('captures a named tab when it is already active without changing selection', async () => {
+    const fake = installChrome([{ id: 2, active: true }]);
     await createChromeBridge().captureVisible('2');
-    expect(fake.calls.update![0]).toEqual([2, { active: true }]);
+    expect(fake.calls.update).toHaveLength(0);
+    expect(fake.calls.capture).toHaveLength(1);
   });
 });
 
