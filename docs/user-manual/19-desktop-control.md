@@ -1,231 +1,165 @@
 # Desktop control
 
-Desktop control lets a model drive the computer Aevra runs on: read the
-windows that are open, read the contents of one of them through the
-accessibility API, take a screenshot, and click, type, press keys, and
-scroll.
+Aevra has two desktop-control paths in v1.1.1:
 
-It is the most powerful thing Aevra can do and the hardest to take back. A
-file write is recoverable through `change_rollback`; a click is not. Read
-"What it will not do" and "Residual risk" below before you turn it on.
+- **Shared semantic control** uses native accessibility providers and does not
+  synthesize host mouse/keyboard input. It is available on Windows (UIA), macOS
+  (Accessibility/AX), and Linux (AT-SPI2).
+- **Legacy foreground control** injects pointer/keyboard input and captures pixels.
+  That path remains Windows-only and is never an automatic fallback from semantic
+  control.
 
-## What ships today
+Desktop effects are external side effects: a button press cannot be rolled back by
+Aevra's file change-set machinery.
 
-**Windows only.** The Windows helper is implemented and tested. macOS and
-Linux are **not implemented at all** - not partially, not read-only. There
-is no helper binary for them, so `desktop_connect` on those platforms fails
-with `DESKTOP_HELPER_NOT_INSTALLED`.
+## Platform matrix
 
-The table below is the _design target_ for the four capabilities the helper
-reports at connect, reproduced from the design document. Only the Windows
-row describes shipped behaviour:
+| Platform          | Semantic tree/actions                      | Attribution                                | Pixel capture | Foreground input                         |
+| ----------------- | ------------------------------------------ | ------------------------------------------ | ------------- | ---------------------------------------- |
+| Windows 10/11     | UIA: invoke/value/select/toggle            | yes                                        | yes           | yes, subject to integrity/desktop checks |
+| macOS             | AX: supported provider actions/values      | yes                                        | no in v1.1.1  | no                                       |
+| Linux X11/Wayland | AT-SPI2: supported provider actions/values | yes when provider exposes process identity | no in v1.1.1  | no                                       |
 
-| Platform        | capture                     | tree                    | attribution | input                                    |
-| --------------- | --------------------------- | ----------------------- | ----------- | ---------------------------------------- |
-| Windows 10/11   | yes                         | UIA                     | yes         | yes - never into elevated windows (UIPI) |
-| macOS 13+       | yes (TCC: Screen Recording) | AX (TCC: Accessibility) | yes         | yes (TCC: Accessibility)                 |
-| Linux / X11     | yes                         | AT-SPI                  | yes         | yes                                      |
-| Linux / Wayland | portal only                 | AT-SPI, partial         | no          | **no - read-only**                       |
+The helper reports actual capability booleans. Missing macOS Accessibility
+permission, a missing Linux accessibility bus/provider, or an application with
+accessibility disabled is an explicit error, not an empty successful tree.
 
-When the other platforms land, Linux under Wayland will be **read-only**:
-it cannot attribute a window to a process, and this feature refuses to
-type into a window it cannot attribute. Do not plan around parity.
-
-`desktop_status` reports those four booleans for the host you are actually
-on, so the model learns "no input here" once instead of discovering it
-through a series of failures.
+Strict `isolated` execution is **not** advertised by the ordinary worker.
+v1.1.1 refuses that mode with `CONTROL_ISOLATION_UNAVAILABLE` until a separately
+provisioned runner has verified input/focus/clipboard containment. There is no
+silent downgrade to the host desktop.
 
 ## Before you start
 
-- Windows 10 or 11.
-- The desktop helper binary, built from `helper/` with `cargo build
---release`. There is no installer for it yet, and it is not signed - see
-  "Residual risk".
-- The `desktop.control` capability granted to the session. It is off by
-  default and is not implied by any other capability.
-- A real interactive desktop session. A service running with no desktop, or
-  a locked screen, has nothing to read or click; capture refuses a blank
-  screen rather than returning a black rectangle.
+- Grant the session the `desktop.control` capability. It is off by default.
+- Use an interactive desktop/session with the OS accessibility provider available.
+- macOS: grant Accessibility permission to the process running Aevra when macOS
+  requests it.
+- Linux: run inside the user's graphical session with an accessible AT-SPI bus;
+  applications that disable their accessibility bridge cannot be driven
+  semantically.
+- Official packages stage the platform helper under
+  `dist/helper/<platform>-<arch>/`. For source development, build
+  `helper/` with `cargo build --release`. `AEVRA_DESKTOP_HELPER_PATH`
+  overrides helper discovery and is authoritative when set.
 
-## The tools
+## Tools
 
-### Foreground control tools
+Base desktop tools:
 
-| Tool                                                          | What it does                                                |
-| ------------------------------------------------------------- | ----------------------------------------------------------- |
-| `desktop_connect`                                             | Starts the helper and reports its capabilities              |
-| `desktop_status`                                              | Answers even when nothing is connected                      |
-| `desktop_disconnect`                                          | Stops the helper and invalidates every element reference    |
-| `desktop_windows`                                             | Lists visible top-level windows with their process identity |
-| `desktop_describe`                                            | Accessibility tree of one window, as `ref_N` handles        |
-| `desktop_capture`                                             | A screenshot, only when asked for                           |
-| `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` | Foreground input injection (requires window focus)          |
+| Tool                                                          | Purpose                                                                    |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `desktop_connect` / `desktop_status` / `desktop_disconnect`   | helper lifecycle and capabilities                                          |
+| `desktop_apps`                                                | detected application inventory                                             |
+| `desktop_windows`                                             | visible top-level windows with attribution                                 |
+| `desktop_describe`                                            | accessibility tree; background mode also creates a semantic snapshot/lease |
+| `desktop_capture`                                             | Windows pixel capture; unsupported on portable semantic backends           |
+| `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` | explicit Windows foreground input                                          |
+| `desktop_invoke`                                              | native invoke/press action                                                 |
+| `desktop_set_value`                                           | native semantic value replacement                                          |
+| `desktop_select`                                              | native selection action                                                    |
+| `desktop_toggle`                                              | native toggle action                                                       |
+| `desktop_release_window`                                      | release a background window lease                                          |
 
-### Background automation tools
+Efficient control tools:
 
-| Tool                     | What it does                                                                     |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| `desktop_invoke`         | Invokes button or menu item in a background window without focus                 |
-| `desktop_set_value`      | Sets text value directly via UIA ValuePattern (never injects keystrokes)         |
-| `desktop_select`         | Selects a list/combo item via UIA SelectionItemPattern without opening dropdowns |
-| `desktop_toggle`         | Toggles checkbox/switch via UIA TogglePattern                                    |
-| `desktop_release_window` | Releases an active window lease before its 60-second TTL expires                 |
+| Tool                  | Purpose                                                    |
+| --------------------- | ---------------------------------------------------------- |
+| `control_observe`     | bounded browser/desktop semantic observation               |
+| `control_execute`     | validated finite local plan with guards and postconditions |
+| `desktop_act_many`    | ordered semantic desktop batch convenience API             |
+| `control_plan_status` | owner-bound durable plan status                            |
+| `control_plan_cancel` | stop future steps of an owner-bound plan                   |
 
-## Background desktop automation
+## Shared semantic workflow
 
-Background desktop automation allows models to interact with supported Windows applications without stealing window focus, moving your mouse, or modifying the system clipboard.
+For direct semantic tools:
 
-### How it works
+1. Call `desktop_windows` and choose an attributed `windowId`.
+2. Call `desktop_describe` with `mode:"background"`. Aevra creates an
+   exclusive 60-second window lease and maps public refs to private provider
+   handles.
+3. Use `desktop_invoke`, `desktop_set_value`, `desktop_select`, or
+   `desktop_toggle`.
+4. A mutation invalidates that snapshot. Re-describe before another direct
+   semantic action, or use a control plan so Aevra refreshes and verifies locally.
+5. Release the lease explicitly when finished.
 
-1. **Acquire and Describe**: Call `desktop_describe` with `windowId` and `mode: 'background'`. This grants a 60-second exclusive `windowLeaseId` to your session and workspace and takes a native UIA snapshot.
-2. **Execute Semantic Action**: Call `desktop_invoke`, `desktop_set_value`, `desktop_select`, or `desktop_toggle` passing the element `ref` and `windowLeaseId`.
-3. **Single-Snapshot Invalidation**: Because background mutations can alter control hierarchies, every mutating action invalidates the snapshot. To perform another action, call `desktop_describe` again to get a fresh snapshot.
-4. **Release or Timeout**: Call `desktop_release_window` when finished, or allow the lease to expire after 60 seconds.
+The portable AX/AT-SPI path rechecks the target process instance immediately before
+dispatch and rechecks focused-window identity after dispatch. If an action was sent
+but post-action state cannot be established, Aevra reports an unknown outcome rather
+than retrying.
 
-### Focus change detection & safety
+Protected/password controls do not expose their current value and never advertise a
+set-value action.
 
-- If an action triggers a modal dialog or focus change, Aevra suspends the lease and returns `focusChanged: true`. Subsequent actions against that lease will be refused with `DESKTOP_FOCUS_CHANGED` until you re-describe the target.
-- Password fields strictly refuse inspection and background input.
-- Read-only fields cannot receive `desktop_set_value`.
-- If an application is minimized to the system notification area (tray), it has no mapped top-level window; restore its window before attempting background automation.
+## Efficient plans
 
-## How a model is meant to use it
+`control_observe` returns an observation ID plus bounded semantic nodes. A
+`control_execute` plan can then perform up to 32 typed steps with dependencies,
+preconditions, and postconditions without returning to the model after every
+action.
 
-Read the tree, not the screen. `desktop_describe` returns named elements
-with stable-for-now `ref_N` handles, and `desktop_click` takes one of those
-refs. That is both cheaper and more accurate than looking at pixels and
-guessing coordinates - a screenshot-per-step loop costs tens of thousands
-of tokens across a task that the tree does for a fraction of it.
+A plan target is either:
 
-Every action returns a **delta** (`focusChanged`, `newWindow`,
-`subtreeChanged`) so the model does not have to re-read the screen after
-every click to find out whether anything happened. If the delta also
-carries `postActionStateUnknown: true`, the action really did happen but
-Aevra could not see the result, and the screen should be re-read before
-anything is concluded from it.
+- a ref from the expected observation, or
+- an exact, unique locator (role/name, optionally under an observed ancestor).
 
-A `ref_N` belongs to the `desktop_describe` that produced it. If the helper
-restarts, or a newer describe supersedes it, using the old ref fails with
-`DESKTOP_REF_STALE` instead of clicking whatever now occupies that
-position. Call describe again; do not fall back to coordinates.
+There is no fuzzy or positional fallback. If a rerender destroys a ref, only a
+predeclared locator can bind the replacement. Ambiguity, a policy change, missing
+context, or a new approval boundary produces a checkpoint instead of guessed input.
 
-## Screenshots
+Request IDs are durable and owner-bound. Aevra stores a keyed plan digest, redacted
+action/dispatch records, and sanitized terminal step summaries. Raw text values and
+UI observations are not stored in the control-plan journal. After a daemon crash,
+unfinished plans become `unknown` and are not replayed.
 
-`desktop_capture` returns a JPEG data URI and a `devicePixelRatio`.
+## Windows foreground control
 
-Things worth knowing before relying on it:
+`desktop_click`, `desktop_type`, `desktop_key`, and `desktop_scroll` are
+legacy foreground tools for Windows. They remain useful for controls that have no
+semantic UIA pattern, but they can interfere with the user's input state and are
+never selected automatically by shared semantic plans.
 
-- **It is lossy and size-capped.** The image is JPEG at quality 60 with its
-  longest edge capped at 1024 pixels. That is deliberate: the data URI is
-  billed as text, so its bytes are your tokens. Read text with
-  `desktop_describe`, which is exact and far cheaper; use capture for
-  layout, canvas, and game surfaces.
-- **With no `windowId` it captures the primary monitor**, not the focused
-  window. This is the only capture whose pixels map back to clickable
-  coordinates: `screenX = imageX / devicePixelRatio`.
-- **A window capture is not coordinate-mappable.** The result carries no
-  origin, so there is no way to convert a pixel in a window screenshot into
-  a screen coordinate. Look at it, then click by ref.
-- **Monitors other than the primary cannot be captured** for the same
-  reason. That is a gap, not a design decision, and it needs an origin
-  field on the wire to fix.
-- **A blank result is an error, not an image.** A locked or sleeping
-  display, or a window that blocks capture, produces a uniform frame, and
-  Aevra refuses it. A black rectangle returned as a successful screenshot
-  would be worse than no screenshot: the model would reason confidently
-  about a screen nobody ever saw.
+Windows also refuses higher-integrity/elevated and non-default secure-desktop
+targets. An unattributable target is denied unless the foreground policy explicitly
+allows it; background semantic mutation remains stricter.
 
-## What it will not do
+## Application policy and approvals
 
-**Reads and input fail differently, on purpose.** Screen reading is always
-permitted. Input is refused whenever Aevra cannot say which application
-would receive it.
+Settings → Desktop control controls which attributed applications can be touched.
+Allow/deny policy, protected/admin-surface defenses, capability checks, DLP,
+approvals, and audit rules remain in force for semantic batches. `desktop_act_many`
+and `control_execute` call the existing desktop/browser tool paths rather than
+creating a policy bypass.
 
-- **It cannot drive elevated windows or secure desktops.** Under Windows [User Interface Privilege Isolation (UIPI)](<https://learn.microsoft.com/en-us/previous-versions/dotnet/articles/bb625963(v=msdn.10)>), unelevated processes cannot inject window messages or cross-integrity synthetic input into elevated applications. Furthermore, secure desktops (e.g. `Winlogon`, UAC elevation prompts, screensavers) isolate UI Automation from standard interactive sessions. Aevra actively checks token elevation, token integrity levels, and thread desktops, returning `DESKTOP_INPUT_REFUSED`.
-- **It refuses input to a window it cannot attribute.** A window whose owning executable cannot be verified has no process identity, and input to it is refused. For foreground control, `unattributedInput: 'allow'` is an explicit opt-in policy; for background automation, unattributed windows are strictly and unconditionally refused.
-- **It refuses input to a denylisted application.** By default that covers
-  terminals and shells (`cmd.exe`, `powershell.exe`, `pwsh.exe`,
-  `WindowsTerminal.exe`, `conhost.exe`), password managers (1Password,
-  KeePass, KeePassXC, Bitwarden, Dashlane, LastPass), and the elevation and
-  credential dialogs (`consent.exe`, `CredentialUIBroker.exe`,
-  `LogonUI.exe`).
-- **It does not drag, use the clipboard, run OCR, record video, or move and
-  resize windows.** None of that is implemented.
+The approval dialog itself is outside the desktop action contract. In v1.1.1 long
+command previews are bounded with ellipsis, the dialog body scrolls within the
+viewport, and its action row remains reachable.
 
-### The admin UI defense is partial, and you should know why
+## What is recorded
 
-The first thing this feature must not be able to drive is Aevra's own admin
-UI - an agent that can click Approve can approve its own requests. But that
-UI is a web page, so at window granularity its identity is _the browser's_
-process, and denylisting your browser would remove the single surface a
-desktop agent most needs.
-
-So the protection is a title-pattern refusal: input is refused when the
-focused window's title is exactly `Aevra`, which is the title Aevra's own
-web UI sets. That is defense in depth and nothing more. Two specific holes,
-stated plainly because they are easy to overlook:
-
-- **Window titles are set by the page.** Any web page can call
-  `document.title`, so a title match is never proof of identity - and any
-  page can also avoid the match.
-- **It is blind to background tabs.** A browser window reports the title of
-  its _active_ tab. With the admin UI open in a background tab, the window
-  shows some other title, passes this check, and a single Ctrl+Tab away is
-  the approval button.
-
-Treat "the agent cannot reach the approval button" as likely, not certain,
-and keep approvals somewhere the agent has no hands - your phone, or a
-machine it is not driving.
-
-## What gets recorded
-
-- **Typed text is never logged.** The audit record for `desktop_type`
-  carries the character count and the target, never the characters. The
-  same is true of the approval prompt, so a passphrase typed through this
-  tool is not written to disk in the clear.
-- **Screenshots are never persisted.** The audit record stores a SHA-256
-  hash of the image; the image itself goes to the caller and is dropped.
-- **Window titles and accessible names pass through DLP redaction** before
-  the model sees them. They are attacker-influenceable text and are treated
-  as untrusted content, not as instructions.
-- **Every action records the gate verdict and the rule that decided it**,
-  including reads - so a screenshot leaves a row in the audit trail too.
-
-## Configuring allowed applications in the Web UI
-
-In `Settings → Desktop control`, operators can configure which applications the model can interact with:
-
-- **Application access modes (`Apps computer use can touch`):**
-  - `Allow all apps`: Allows input to any attributed application not covered by built-in refusals.
-  - `Only these apps`: Strict allowlist. Only selected and manually registered applications may receive input.
-  - `Deny all apps`: Full input lockdown; screen reading remains permitted.
-- **Application picker:** Under `Only these apps`, detected applications are presented in a searchable, filterable, and paginated table with individual toggles and status indicators (`Allowed` / `Blocked`).
-- **Custom applications with path:** If an application is missing from auto-detection, click `+ Add custom app with path` to register it by executable path (e.g. `C:\Tools\app.exe`), display name, and optional version. Custom records can be edited or deleted (`[x]`) with confirmation at any time.
-- **Show file paths to the AI:** An optional toggle to provide full executable paths to the AI during window discovery when detailed path context is required.
+- Typed/set values are redacted; raw values are not written to control-plan step
+  records.
+- Screenshots are audited by content hash rather than persisted as raw pixels.
+- Window titles and accessible names remain untrusted model-facing data and pass
+  through the normal redaction boundary.
+- Semantic operations and control-plan lifecycle events remain owner/audit bound.
 
 ## Turning it off
 
-Revoke the `desktop.control` capability, or call `desktop_disconnect`, which
-stops the helper process and invalidates every outstanding element
-reference. With the capability revoked, the tools refuse before reaching the
-helper.
+Revoke `desktop.control` or call `desktop_disconnect`. Disconnecting invalidates
+live helper state and outstanding native refs. Cancelling a control plan prevents
+future plan steps but does not claim an already-dispatched external action was
+rolled back.
 
-## Residual risk
+## Current limits
 
-- **The helper binary is unsigned.** Windows SmartScreen may warn about it.
-  Authenticode signing is planned and is not required for the feature to
-  work.
-- **A click cannot be rolled back.** Aevra's change/rollback machinery
-  covers files, not the world outside them. `desktop_click` currently goes
-  through the gate but not through the approval flow, so there is no
-  per-click confirmation to lean on yet.
-- **There is no human-takeover abort.** If you grab the mouse while an
-  agent is acting, nothing stops it. That needs a low-level input hook and
-  is not built.
-- **The gate judges the window that has focus at the moment of the check.**
-  For `desktop_type` and `desktop_key` there is a small window between that
-  check and the injection during which focus could move - a race an
-  application could in principle lose you keystrokes into. Prefer clicking
-  a named element to typing blind.
-- **`desktop_scroll` targets the window under the pointer**, not the window
-  the gate judged, and skips the pre-flight checks a click makes.
+- Strict isolated runner execution is fail-closed but not provisioned in v1.1.1.
+- Native event/watch streams are not yet used by the public plan adapters; they
+  report degraded watch health and perform bounded live refreshes between steps.
+- macOS/Linux shared mode is semantic-only in v1.1.1: no pixel capture and no host
+  input synthesis.
+- Frames, shadow DOM, canvas-only browser controls, and native custom controls may
+  require a checkpoint or a different supported interface rather than guessing.
+- Native helper binaries are not code-signed in this release.

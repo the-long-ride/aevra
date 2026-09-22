@@ -1,6 +1,6 @@
 # 07 — State & Schema
 
-**Audience:** engineers & AI agents · **Scope:** on-disk state and schema evolution · **Verified against:** `1.1.0`
+**Audience:** engineers & AI agents · **Scope:** on-disk state and schema evolution · **Verified against:** `1.1.1`
 
 ## State directory
 
@@ -32,6 +32,8 @@
 - **v14 `014_oauth_continuity_ownership_and_origins`** - pending approval connection subject association and bounded runner origin tracking (`oauth_connection_origins`).
 - **v15 `015_oauth_renewable_grants`** - renewable flags on authorization requests and codes.
 - **v16 `016_command_rule_v2_predicates`** - typed command rule predicates (`version`, `predicate_json`, `status`) on `permission_rules`.
+- **v17 `017_control_plan_journal`** - owner/request-bound control plans and redacted per-step dispatch-state journal.
+- **v18 `018_control_plan_terminal_results`** - sanitized terminal control-plan summaries for restart-safe idempotent reattachment.
 
 Migrations are applied transactionally and recorded in `schema_migrations`. Existing Aevra databases advance in version order; new databases receive the complete schema.
 

@@ -1,5 +1,71 @@
 # Changelog
 
+## [1.1.1] - 2026-09-22
+
+### Added - Guarded Control Plans & Cross-Platform Shared Desktop Semantics
+
+- **Bounded local control plans**: added `control_observe`, `control_execute`,
+  `control_plan_status`, `control_plan_cancel`, and `desktop_act_many`.
+  Schema-version-1 plans support at most 32 typed steps, explicit dependencies,
+  exact refs or unique exact locators, finite pre/postconditions, bounded output,
+  a 60-second plan deadline, and `maxConcurrency` up to four. Independent
+  surfaces can execute concurrently; same-surface work remains serialized.
+- **Observation and context cache**: added owner/surface-scoped observations,
+  immutable baseline IDs, event/validation epochs, generation invalidation,
+  bounded history/bytes/images, delta continuations, compact full fallback, and
+  deterministic context projection. Foreign owners cannot read another owner's
+  cached observations or deltas.
+- **Durable plan recovery**: migrations 017/018 add owner+request idempotency,
+  a persisted keyed plan digest, redacted per-step dispatch records, and
+  sanitized terminal step summaries. Raw set/type values and UI observations
+  are not persisted. Incomplete plans become `unknown` on restart and are
+  never blindly replayed; matching completed requests can reattach safely.
+- **Cross-platform semantic desktop helper**: Windows keeps the existing UIA
+  backend; macOS and Linux now have shared-semantic AX/AT-SPI2 providers through
+  pinned `xa11y` 0.15.0. Portable mode supports accessibility-tree reads and
+  provider invoke/value/select/toggle actions without host cursor, keyboard, or
+  clipboard synthesis. Permission/provider failures are explicit rather than
+  empty successful trees.
+- **Native helper packaging**: quality-gate CI builds/tests release helpers on
+  Windows, macOS, and Ubuntu. Release publishing downloads those exact validated
+  artifacts, stages `dist/helper/<platform>-<arch>`, preserves executable bits,
+  includes helpers in npm, and attaches native binaries to GitHub releases.
+
+### Changed - Browser Target Isolation & Faster Actions
+
+- **Browser script fast lane**: added `browser_execute_script`, a bounded
+  Playwright-like CSS action grammar that compiles up to 32 statements into the
+  existing typed browser action path. It never evaluates arbitrary JavaScript;
+  navigation remains separate so URL DLP and origin policy cannot be bypassed.
+- **Target-pinned CDP sessions**: CDP now holds a session per target. An explicit
+  `tabId` attaches/acts on that target without bringing it to the foreground,
+  and refs cannot cross target/snapshot boundaries.
+- **Extension ref hardening**: extension snapshots/actions now use opaque element
+  identities stored in Chrome's isolated world instead of page-writable
+  `data-aevra-index` attributes. Credential-shaped field values are omitted
+  from snapshots as well as remaining unwritable.
+- **Non-activating extension capture**: a named inactive tab now returns
+  `BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB` rather than silently selecting it.
+- **Policy ordering**: script/action parsing, bounds, and outbound DLP validation
+  happen before MEDIUM/HIGH approval construction, keeping invalid or
+  secret-bearing values out of approval payloads.
+- **Strict isolation stays fail-closed**: `mode:"isolated"` never downgrades to
+  the ordinary host worker. v1.1.1 returns `CONTROL_ISOLATION_UNAVAILABLE`
+  until a separately provisioned runner has passed containment qualification.
+
+### Fixed - Approval & Management UI
+
+- **Long approval commands**: approval dialogs now cap themselves to the viewport,
+  scroll the body, keep the action row reachable, and ellipsize long
+  command/preview/matcher text. The full value remains available through the
+  native title tooltip.
+- **Runtime table scrollbar spacing**: contained management tables reserve a
+  stable scrollbar gutter and right padding so filters and pagination are not
+  covered by the vertical scrollbar.
+- **Portable desktop outcome honesty**: AX/AT-SPI semantic actions revalidate
+  focused-window identity after dispatch and do not report stale pre-action
+  toggle state as a postcondition.
+
 ## [1.1.0] - 2026-09-21
 
 ### Added - Structured Command Understanding, Workspace Scope & Typed Rules

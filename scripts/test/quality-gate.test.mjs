@@ -66,6 +66,16 @@ test('quality gate parallelizes validation and runs portability across Windows m
   assert.doesNotMatch(workflow, /ci-skip|Exclude unchanged|mv packages\/executor\/test/);
 });
 
+test('quality gate builds native helpers on all supported desktop operating systems', () => {
+  const helper = workflow.slice(workflow.indexOf('  desktop-helper:'));
+  assert.match(helper, /os: \[windows-latest, macos-latest, ubuntu-latest\]/);
+  assert.match(helper, /cargo build --locked --release/);
+  assert.match(helper, /cargo test --locked/);
+  assert.match(helper, /desktop-helper-\$\{\{ steps\.package\.outputs\.slug \}\}/);
+  assert.match(helper, /libwayland-dev/);
+  assert.match(helper, /libxkbcommon-dev/);
+});
+
 test('node coverage batches tests, merges one complete V8 report, and requires 85 percent', () => {
   assert.match(coverageRunner, /TEST_BATCH_SIZE\s*=\s*20/);
   assert.match(coverageRunner, /NODE_V8_COVERAGE/);
@@ -115,6 +125,14 @@ test('the gate builds and publishes the extension archive the CLI asks for', () 
   assert.match(workflow, /name: aevra-extension/);
   assert.match(workflow, /aevra-extension\.zip/);
   assert.match(workflow, /if-no-files-found: error/);
+});
+
+test('release stages and publishes the validated native helper artifacts', () => {
+  const releaseWorkflow = readFileSync('.github/workflows/release.yml', 'utf8');
+  assert.match(releaseWorkflow, /--pattern 'desktop-helper-\*'/);
+  assert.match(releaseWorkflow, /stage-desktop-helpers\.mjs helper-artifacts dist\/helper/);
+  assert.match(releaseWorkflow, /desktop-helper-release-assets\/\*/);
+  assert.ok(pkg.files.includes('dist/helper'));
 });
 
 test('the release attaches the extension the gate built, never a fresh build', () => {

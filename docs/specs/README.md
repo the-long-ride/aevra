@@ -1,6 +1,6 @@
 # Aevra Software Specs
 
-For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.1.0`.
+For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.1.1`.
 
 | #   | File                                               | Answers the question                                      |
 | --- | -------------------------------------------------- | --------------------------------------------------------- |
@@ -18,6 +18,7 @@ Release feature contracts:
 
 - [Browser control](../browser-control.md) and [browser user manual](../user-manual/18-browser-control.md)
 - [Desktop control user manual](../user-manual/19-desktop-control.md)
+- [Control-efficiency implementation contract](../superpowers/specs/2026-09-22-control-efficiency-design.md)
 - [Desktop control design](2026-09-07-aevra-desktop-control-design.md)
 - [Background desktop automation design](2026-09-18-background-desktop-automation-design.md)
 - [MCP upstream servers user manual](../user-manual/20-mcp-upstreams.md)
