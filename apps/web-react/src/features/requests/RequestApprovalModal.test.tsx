@@ -62,6 +62,31 @@ test('approval modal shows request title, actor, and action buttons', () => {
   expect(screen.getByText('Approval request')).toBeInTheDocument();
 });
 
+test('long command text is exposed through a bounded ellipsis surface with full text in title', () => {
+  installApiFixtures();
+  const longCommand = 'node script.js ' + '--argument=value '.repeat(80);
+  renderModal(
+    makeData({
+      approvals: [
+        {
+          ...commandApproval,
+          presentation: {
+            ...commandApproval.presentation,
+            target: longCommand,
+            preview: '$ ' + longCommand,
+          },
+        } as any,
+      ],
+    }),
+  );
+
+  const dialog = screen.getByRole('dialog', { name: 'Approval request' });
+  const target = dialog.querySelector('.approval-command-target');
+  const preview = dialog.querySelector('.request-preview');
+  expect(target).toHaveAttribute('title', longCommand);
+  expect(preview).toHaveAttribute('title', '$ ' + longCommand);
+});
+
 test('approval modal shows pending count when multiple requests exist', () => {
   installApiFixtures();
   renderModal(

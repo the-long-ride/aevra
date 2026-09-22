@@ -93,12 +93,15 @@
 
 .data-table-fill-height .dt-toolbar {
   flex: 0 0 auto;
+  padding-inline-end: 8px;
 }
 
 .data-table-fill-height .dt-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  padding-inline-end: 8px;
+  scrollbar-gutter: stable;
 }
 
 .data-table,

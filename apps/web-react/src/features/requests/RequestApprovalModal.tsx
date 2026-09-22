@@ -110,14 +110,18 @@ function ApprovalModalCard({
       </div>
       <div className="request-detail">
         <b>{presentation.action}</b>
-        <span>{presentation.target}</span>
+        <span className="approval-command-target" title={presentation.target}>
+          {presentation.target}
+        </span>
         {presentation.preview ? (
-          <code className="request-preview">{presentation.preview}</code>
+          <code className="request-preview" title={presentation.preview}>
+            {presentation.preview}
+          </code>
         ) : null}
         {matcher ? (
           <span className="request-saved-matcher">
             <strong>Saved matcher</strong>
-            <code>{matcher}</code>
+            <code title={matcher}>{matcher}</code>
           </span>
         ) : null}
         {item.payload?.commandAnalysis ? (
