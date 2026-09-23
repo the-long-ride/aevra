@@ -50,7 +50,7 @@ Base desktop tools:
 | Tool                                                          | Purpose                                                                    |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `desktop_connect` / `desktop_status` / `desktop_disconnect`   | helper lifecycle and capabilities                                          |
-| `desktop_apps`                                                | configured/granted app labels only when using an allowlist                  |
+| `desktop_apps`                                                | configured/granted app labels only when using an allowlist                 |
 | `desktop_request_access`                                      | ask a human administrator to review access for a freshly observed window   |
 | `desktop_windows`                                             | visible top-level windows with attribution                                 |
 | `desktop_describe`                                            | accessibility tree; background mode also creates a semantic snapshot/lease |

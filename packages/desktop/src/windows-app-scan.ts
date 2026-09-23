@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { DesktopAppSource, DesktopCatalogApp } from '../../protocol/src/desktop.js';
 import { canonicalExecutablePath } from '../../security/src/window-gate.js';
 
-export const APP_SCAN_TIMEOUT_MS = 10_000;
+const APP_SCAN_TIMEOUT_MS = 10_000;
 export const APP_SCAN_ROW_LIMIT = 500;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 
@@ -44,12 +44,16 @@ export function readPowerShellRows<T>(
         'v1.0',
         'powershell.exe',
       );
-      child = spawn(powershellPath, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
-        shell: false,
-        windowsHide: true,
-        stdio: ['ignore', 'pipe', 'ignore'],
-        env: { ...process.env, ...env },
-      });
+      child = spawn(
+        powershellPath,
+        ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+        {
+          shell: false,
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'ignore'],
+          env: { ...process.env, ...env },
+        },
+      );
     } catch {
       resolve({ rows: [], warnings: [`${source} discovery could not start`] });
       return;
@@ -98,18 +102,26 @@ export function readPowerShellRows<T>(
         return;
       }
       try {
-        const text = Buffer.concat(chunks).toString('utf8').replace(/^\uFEFF/, '').trim();
+        const text = Buffer.concat(chunks)
+          .toString('utf8')
+          .replace(/^\uFEFF/, '')
+          .trim();
         const parsed: unknown = text ? JSON.parse(text) : [];
-        const envelope = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-          ? parsed as { rows?: unknown; warnings?: unknown }
-          : undefined;
+        const envelope =
+          parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? (parsed as { rows?: unknown; warnings?: unknown })
+            : undefined;
         const values = envelope?.rows ?? parsed;
         const rows = Array.isArray(values) ? values : values == null ? [] : [values];
         const warnings = Array.isArray(envelope?.warnings)
           ? envelope.warnings.filter((warning): warning is string => typeof warning === 'string')
           : [];
-        if (rows.length > APP_SCAN_ROW_LIMIT) warnings.push(`${source} discovery reached the 500 app limit`);
-        finish({ rows: rows.slice(0, APP_SCAN_ROW_LIMIT) as T[], warnings: [...new Set(warnings)] });
+        if (rows.length > APP_SCAN_ROW_LIMIT)
+          warnings.push(`${source} discovery reached the 500 app limit`);
+        finish({
+          rows: rows.slice(0, APP_SCAN_ROW_LIMIT) as T[],
+          warnings: [...new Set(warnings)],
+        });
       } catch {
         finish({ rows: [], warnings: [`${source} discovery returned unreadable results`] });
       }
@@ -134,13 +146,18 @@ export function expandWindowsEnvironmentVariables(value: string): string | undef
 export async function verifiedExecutablePath(value: unknown): Promise<string | undefined> {
   if (typeof value !== 'string' || !value.trim()) return undefined;
   const expanded = expandWindowsEnvironmentVariables(value.trim());
-  if (!expanded || !path.win32.isAbsolute(expanded) || path.win32.extname(expanded).toLowerCase() !== '.exe') {
+  if (
+    !expanded ||
+    !path.win32.isAbsolute(expanded) ||
+    path.win32.extname(expanded).toLowerCase() !== '.exe'
+  ) {
     return undefined;
   }
   try {
     const canonical = await realpath(expanded);
     const details = await stat(canonical);
-    if (!details.isFile() || path.win32.extname(canonical).toLowerCase() !== '.exe') return undefined;
+    if (!details.isFile() || path.win32.extname(canonical).toLowerCase() !== '.exe')
+      return undefined;
     return path.win32.normalize(canonical);
   } catch {
     return undefined;
@@ -179,16 +196,20 @@ export async function catalogAppsFromRows(
   rows: RawCatalogApp[],
   source: DesktopAppSource,
 ): Promise<DesktopCatalogApp[]> {
-  const apps = await Promise.all(rows.map(async (row) => {
-    const verifiedPath = await verifiedExecutablePath(row.executablePath);
-    if (verifiedPath && path.win32.basename(verifiedPath).toLowerCase() === 'msedgewebview2.exe') {
-      return catalogApp(row, source, verifiedPath, 'shared-runtime');
-    }
-    const executablePath = verifiedPath && !isInstallerOrUpdaterExecutable(verifiedPath)
-      ? verifiedPath
-      : undefined;
-    return catalogApp(row, source, executablePath);
-  }));
+  const apps = await Promise.all(
+    rows.map(async (row) => {
+      const verifiedPath = await verifiedExecutablePath(row.executablePath);
+      if (
+        verifiedPath &&
+        path.win32.basename(verifiedPath).toLowerCase() === 'msedgewebview2.exe'
+      ) {
+        return catalogApp(row, source, verifiedPath, 'shared-runtime');
+      }
+      const executablePath =
+        verifiedPath && !isInstallerOrUpdaterExecutable(verifiedPath) ? verifiedPath : undefined;
+      return catalogApp(row, source, executablePath);
+    }),
+  );
   return apps.filter((app): app is DesktopCatalogApp => app !== undefined);
 }
 

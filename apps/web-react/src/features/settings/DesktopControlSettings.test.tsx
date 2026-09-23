@@ -2,148 +2,22 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DialogProvider } from '../../components/Dialog';
-import { requestJson } from '../../services/api-client';
+import { DesktopControlSettings } from './DesktopControlSettings';
 import {
-  type AppCatalogRow,
-  DesktopControlSettings,
-  type DesktopPolicySnapshot,
-  type DetectedApp,
-} from './DesktopControlSettings';
+  apps,
+  configureDesktopApiMock,
+  customApp,
+  mount,
+  policy,
+  requestJsonMock,
+  resetDesktopControlTestState,
+} from './DesktopControlSettings.test-support';
 
 vi.mock('../../services/api-client', () => ({ requestJson: vi.fn() }));
-
-const policy: DesktopPolicySnapshot = {
-  mode: 'denylist',
-  applications: [],
-  unattributedInput: 'deny',
-};
-
-const apps: DetectedApp[] = [
-  {
-    displayName: 'Notepad Replacement',
-    version: '2.3.1',
-    executablePath: 'C:\\Program Files\\NotepadReplacement\\np.exe',
-    exeBasename: 'np.exe',
-  },
-];
-
-const requestJsonMock = vi.mocked(requestJson);
-let catalogRows: AppCatalogRow[] = [];
-let grantRows: Array<{
-  id: string;
-  executablePath: string;
-  displayName: string;
-  createdAt: string;
-}> = [];
-let customIdSequence = 0;
-let grantIdSequence = 0;
-
-function customApp(overrides: Partial<AppCatalogRow> = {}): AppCatalogRow {
-  return {
-    displayName: 'Old Tool',
-    version: '1.0.0',
-    executablePath: 'C:\\Tools\\OldTool.exe',
-    exeBasename: 'OldTool.exe',
-    sources: ['custom'],
-    grantable: true,
-    isCustom: true,
-    customAppId: 'custom-old-tool',
-    ...overrides,
-  };
-}
-
-function mount(
-  overrides: Partial<DesktopPolicySnapshot> = {},
-  initialApps: AppCatalogRow[] = apps,
-) {
-  const value = { ...policy, ...overrides };
-  const save = vi.fn().mockImplementation(async (next) => ({ ...value, ...next }));
-  catalogRows = initialApps.map((app) => ({ ...app }));
-  grantRows = [];
-  render(
-    <DialogProvider>
-      <DesktopControlSettings
-        load={() => Promise.resolve(value)}
-        save={save}
-        loadApps={() => Promise.resolve(catalogRows)}
-      />
-    </DialogProvider>,
-  );
-  return { save };
-}
-
-function configureDesktopApiMock() {
-  requestJsonMock.mockReset();
-  requestJsonMock.mockImplementation(async <T,>(path: string, init: RequestInit = {}) => {
-    if (path === '/api/desktop/app-grants' && init.method === 'POST') {
-      const input = JSON.parse(String(init.body)) as {
-        executablePath: string;
-        displayName: string;
-      };
-      const grant = {
-        id: `grant-${++grantIdSequence}`,
-        ...input,
-        createdAt: '2026-09-23T00:00:00.000Z',
-      };
-      grantRows = [...grantRows, grant];
-      catalogRows = catalogRows.map((app) =>
-        app.executablePath?.toLowerCase() === input.executablePath.toLowerCase()
-          ? { ...app, isGranted: true, grantId: grant.id }
-          : app,
-      );
-      return { grant } as T;
-    }
-    if (path === '/api/desktop/app-grants') return { grants: grantRows } as T;
-    if (path.startsWith('/api/desktop/app-grants/')) {
-      const id = decodeURIComponent(path.split('/').at(-1) ?? '');
-      grantRows = grantRows.filter((grant) => grant.id !== id);
-      catalogRows = catalogRows.map((app) =>
-        app.grantId === id ? { ...app, isGranted: false, grantId: undefined } : app,
-      );
-      return {} as T;
-    }
-    if (path === '/api/desktop/custom-apps' && init.method === 'PUT') {
-      const input = JSON.parse(String(init.body)) as {
-        id?: string;
-        executablePath: string;
-        displayName: string;
-        version: string | null;
-      };
-      const id = input.id ?? `custom-${++customIdSequence}`;
-      const exeBasename = input.executablePath.split(/[\\/]/).at(-1) ?? input.executablePath;
-      const app: AppCatalogRow = {
-        ...input,
-        displayName: input.displayName || exeBasename.replace(/\.exe$/i, ''),
-        exeBasename,
-        sources: ['custom'],
-        grantable: true,
-        isCustom: true,
-        isGranted: false,
-        customAppId: id,
-      };
-      catalogRows = [
-        ...catalogRows.filter((row) => row.customAppId !== id &&
-          row.executablePath?.toLowerCase() !== input.executablePath.toLowerCase()),
-        app,
-      ];
-      return { app } as T;
-    }
-    if (path.startsWith('/api/desktop/custom-apps/') && init.method === 'DELETE') {
-      const id = decodeURIComponent(path.split('/').at(-1) ?? '');
-      catalogRows = catalogRows.filter((app) => app.customAppId !== id);
-      return { app: { id } } as T;
-    }
-    throw new Error(`Unexpected desktop API request: ${init.method ?? 'GET'} ${path}`);
-  });
-}
-
 describe('DesktopControlSettings', () => {
   beforeEach(() => {
     window.localStorage.clear();
-    catalogRows = [];
-    grantRows = [];
-    customIdSequence = 0;
-    grantIdSequence = 0;
+    resetDesktopControlTestState();
     configureDesktopApiMock();
   });
 
@@ -166,6 +40,25 @@ describe('DesktopControlSettings', () => {
     mount({ mode: 'allowlist', applications: [] });
     expect(await screen.findByText(/notepad replacement/i)).toBeTruthy();
     expect(screen.getByText(/2\.3\.1/)).toBeTruthy();
+  });
+
+  it('shows readable labels for each app discovery source', async () => {
+    mount({ mode: 'allowlist', applications: [] }, [
+      customApp({
+        displayName: 'Catalog app',
+        version: null,
+        executablePath: 'C:\\Apps\\catalog.exe',
+        exeBasename: 'catalog.exe',
+        sources: ['registry', 'start-menu', 'running', 'packaged', 'custom', 'portable'],
+        isCustom: false,
+      }),
+    ]);
+
+    expect(
+      await screen.findByText(
+        'Registry, Start Menu, Running app, Packaged app, Custom app, portable',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('checking a detected app creates a path-specific grant', async () => {
@@ -342,10 +235,7 @@ describe('DesktopControlSettings', () => {
   });
 
   it('allows editing a custom application using the modal', async () => {
-    const { save } = mount(
-      { mode: 'allowlist', applications: [] },
-      [customApp()],
-    );
+    const { save } = mount({ mode: 'allowlist', applications: [] }, [customApp()]);
 
     expect(await screen.findByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
     const editBtn = await screen.findByRole('button', { name: /edit old tool/i });
@@ -388,16 +278,15 @@ describe('DesktopControlSettings', () => {
 
   it('allows deleting a custom application record', async () => {
     const user = userEvent.setup();
-    const { save } = mount(
-      { mode: 'allowlist', applications: [] },
-      [customApp({
+    const { save } = mount({ mode: 'allowlist', applications: [] }, [
+      customApp({
         displayName: 'To Delete',
         version: null,
         executablePath: 'C:\\Tools\\ToDelete.exe',
         exeBasename: 'ToDelete.exe',
         customAppId: 'custom-delete',
-      })],
-    );
+      }),
+    ]);
 
     const deleteBtn = await screen.findByRole('button', { name: /delete to delete/i });
     expect(deleteBtn).toBeInTheDocument();
@@ -418,16 +307,15 @@ describe('DesktopControlSettings', () => {
 
   it('cancelling custom app delete retains the app', async () => {
     const user = userEvent.setup();
-    const { save } = mount(
-      { mode: 'allowlist', applications: [] },
-      [customApp({
+    const { save } = mount({ mode: 'allowlist', applications: [] }, [
+      customApp({
         displayName: 'To Keep',
         version: null,
         executablePath: 'C:\\Tools\\ToKeep.exe',
         exeBasename: 'ToKeep.exe',
         customAppId: 'custom-keep',
-      })],
-    );
+      }),
+    ]);
     const deleteBtn = await screen.findByRole('button', { name: /delete to keep/i });
     await user.click(deleteBtn);
     const deleteDialog = screen.getByRole('dialog', { name: 'Delete custom app' });

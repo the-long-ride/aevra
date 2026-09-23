@@ -98,15 +98,22 @@ export function isValidDesktopPolicy(value: unknown): value is DesktopPolicy {
   }
   if (
     p.appGrants !== undefined &&
-    (!Array.isArray(p.appGrants) || p.appGrants.some((grant) => {
-      if (!grant || typeof grant !== 'object') return true;
-      const value = grant as unknown as Record<string, unknown>;
-      return typeof value.id !== 'string' || !value.id.trim() ||
-        typeof value.executablePath !== 'string' || !value.executablePath.trim() ||
-        typeof value.displayName !== 'string' || !value.displayName.trim() ||
-        typeof value.createdAt !== 'string' || !value.createdAt.trim() ||
-        (value.sessionId !== undefined && typeof value.sessionId !== 'string');
-    }))
+    (!Array.isArray(p.appGrants) ||
+      p.appGrants.some((grant) => {
+        if (!grant || typeof grant !== 'object') return true;
+        const value = grant as unknown as Record<string, unknown>;
+        return (
+          typeof value.id !== 'string' ||
+          !value.id.trim() ||
+          typeof value.executablePath !== 'string' ||
+          !value.executablePath.trim() ||
+          typeof value.displayName !== 'string' ||
+          !value.displayName.trim() ||
+          typeof value.createdAt !== 'string' ||
+          !value.createdAt.trim() ||
+          (value.sessionId !== undefined && typeof value.sessionId !== 'string')
+        );
+      }))
   ) {
     return false;
   }
@@ -136,13 +143,22 @@ export function sanitizeDesktopToolError(
   const safeWindow = rawWindow ? redactWindow(rawWindow, tally, policy) : undefined;
   const hostPath = typeof rawHost?.executablePath === 'string' ? rawHost.executablePath : undefined;
   const hostName = hostPath ? basename(hostPath) : undefined;
-  const gateRule = typeof details.gateRule === 'string' ? redact(details.gateRule, tally) : undefined;
-  const isWebView = rawWindow && [rawWindow.processName, rawWindow.executablePath ? basename(rawWindow.executablePath) : undefined]
-    .some((value) => value?.toLowerCase() === 'msedgewebview2.exe');
-  const accessRequestAvailable = source.code === 'DESKTOP_INPUT_REFUSED' &&
-    typeof rawWindow?.windowId === 'string' && rawWindow.windowId.length > 0 &&
+  const gateRule =
+    typeof details.gateRule === 'string' ? redact(details.gateRule, tally) : undefined;
+  const isWebView =
+    rawWindow &&
+    [
+      rawWindow.processName,
+      rawWindow.executablePath ? basename(rawWindow.executablePath) : undefined,
+    ].some((value) => value?.toLowerCase() === 'msedgewebview2.exe');
+  const accessRequestAvailable =
+    source.code === 'DESKTOP_INPUT_REFUSED' &&
+    typeof rawWindow?.windowId === 'string' &&
+    rawWindow.windowId.length > 0 &&
     policy.mode === 'allowlist' &&
-    String(details.gateRule ?? '').toLowerCase().includes('refused by allowlist') &&
+    String(details.gateRule ?? '')
+      .toLowerCase()
+      .includes('refused by allowlist') &&
     !isProtectedDesktopTitle(rawWindow, policy) &&
     (!isWebView || Boolean(hostPath));
   const {
@@ -160,12 +176,14 @@ export function sanitizeDesktopToolError(
     {
       ...safeDetails,
       ...(safeWindow ? { window: safeWindow } : {}),
-      ...(hostName ? {
-        verifiedHostApplication: {
-          displayName: redact(hostName, tally) ?? hostName,
-          ...(policy.exposeExecutablePaths ? { executablePath: redact(hostPath, tally) } : {}),
-        },
-      } : {}),
+      ...(hostName
+        ? {
+            verifiedHostApplication: {
+              displayName: redact(hostName, tally) ?? hostName,
+              ...(policy.exposeExecutablePaths ? { executablePath: redact(hostPath, tally) } : {}),
+            },
+          }
+        : {}),
       ...(gateRule ? { gateRule, reason: gateRule } : {}),
       ...(source.code === 'DESKTOP_INPUT_REFUSED' ? { accessRequestAvailable } : {}),
       ...(tally.count ? { redactionCount: tally.count } : {}),

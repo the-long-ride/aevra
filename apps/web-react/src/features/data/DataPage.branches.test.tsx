@@ -44,7 +44,9 @@ describe('DataPage failure paths', () => {
   });
 
   it('stringifies non-Error backup failures and passes portable mode through', async () => {
-    const fetchSpy = vi.spyOn(dataService, 'fetchAllDataForBackup').mockRejectedValue('plain words');
+    const fetchSpy = vi
+      .spyOn(dataService, 'fetchAllDataForBackup')
+      .mockRejectedValue('plain words');
     render(<DataPage />);
 
     fireEvent.click(screen.getByRole('switch', { name: /portable mode/i }));

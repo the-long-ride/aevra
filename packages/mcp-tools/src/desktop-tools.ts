@@ -18,12 +18,8 @@ import {
   isProtectedDesktopTitle,
 } from '../../security/src/window-gate.js';
 import { authorizeCapability } from './authorization.js';
-import { ACT_OP, desktopActRisk, handleAct, sanitizeArgsForAuthorization } from './desktop-act.js';
-import {
-  BACKGROUND_ACT_OP,
-  backgroundActRisk,
-  handleBackgroundAction,
-} from './desktop-background.js';
+import { handleAct, sanitizeArgsForAuthorization } from './desktop-act.js';
+import { BACKGROUND_ACT_OP, handleBackgroundAction } from './desktop-background.js';
 import {
   audit,
   policyFor,
@@ -37,26 +33,9 @@ import {
 import { AevraToolError } from './errors.js';
 import { requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
+import { DESKTOP_TOOL_NAMES, riskFor } from './desktop-tool-catalog.js';
 
-export const DESKTOP_TOOL_NAMES = new Set([
-  'desktop_status',
-  'desktop_connect',
-  'desktop_disconnect',
-  'desktop_apps',
-  'desktop_request_access',
-  'desktop_windows',
-  'desktop_describe',
-  'desktop_capture',
-  'desktop_click',
-  'desktop_type',
-  'desktop_key',
-  'desktop_scroll',
-  'desktop_invoke',
-  'desktop_set_value',
-  'desktop_select',
-  'desktop_toggle',
-  'desktop_release_window',
-]);
+export { DESKTOP_TOOL_NAMES } from './desktop-tool-catalog.js';
 
 // A screenshot's `window` field, and every accessible name/title, is
 // attacker-controlled text (see the DLP redaction in `desktop-support`), so
@@ -149,8 +128,8 @@ async function handleApps(context: McpRuntimeContext, sessionId: string, risk: R
     const pathKey = canonicalExecutablePath(grant.executablePath);
     if (representedPaths.has(pathKey)) continue;
     representedPaths.add(pathKey);
-    const found = detected.find((app) =>
-      app.executablePath && canonicalExecutablePath(app.executablePath) === pathKey,
+    const found = detected.find(
+      (app) => app.executablePath && canonicalExecutablePath(app.executablePath) === pathKey,
     );
     const displayName = found?.displayName ?? grant.displayName;
     const version = found?.version ? (redact(found.version, tally) ?? null) : null;
@@ -255,18 +234,6 @@ async function handleCapture(
   });
 }
 
-/**
- * Reads are LOW, `desktop_connect` is MEDIUM, and input is priced by
- * `desktopActRisk` - see there for why input is no longer uniformly LOW.
- */
-function riskFor(name: string): RiskTier {
-  if (name === 'desktop_connect') return 'MEDIUM';
-  if (name === 'desktop_request_access') return 'LOW';
-  if (ACT_OP[name]) return desktopActRisk(name);
-  if (BACKGROUND_ACT_OP[name] || name === 'desktop_release_window') return backgroundActRisk(name);
-  return 'LOW';
-}
-
 export async function handleDesktopTool(
   context: McpRuntimeContext,
   sessionId: string,
@@ -325,7 +292,10 @@ export async function handleDesktopTool(
     }
     const verdict = evaluateDesktopTargetGate(identity, policy, 'background', sessionId);
     if (verdict.allowed) {
-      throw new AevraToolError('DESKTOP_ACCESS_ALREADY_ALLOWED', 'This app already has desktop access.');
+      throw new AevraToolError(
+        'DESKTOP_ACCESS_ALREADY_ALLOWED',
+        'This app already has desktop access.',
+      );
     }
     if (verdict.reason.includes('WebView2 host could not be verified')) {
       throw new AevraToolError('DESKTOP_HOST_UNVERIFIED', verdict.reason);
@@ -335,7 +305,8 @@ export async function handleDesktopTool(
     }
     const lease = requiredLease(context, sessionId);
     const session = context.sessions.get(sessionId);
-    if (!lease || !session) throw new AevraToolError('CAPABILITY_REQUIRED', 'Desktop session is no longer active');
+    if (!lease || !session)
+      throw new AevraToolError('CAPABILITY_REQUIRED', 'Desktop session is no longer active');
     const result = context.deps.desktopAccess.request({
       actor: session.actor,
       sessionId,
@@ -345,7 +316,10 @@ export async function handleDesktopTool(
       identity,
     });
     audit(context, sessionId, name, result.application, risk, 'SUCCEEDED');
-    return markUntrusted({ ...result, application: redact(result.application, { count: 0 }) ?? result.application });
+    return markUntrusted({
+      ...result,
+      application: redact(result.application, { count: 0 }) ?? result.application,
+    });
   }
   if (name === 'desktop_describe') return handleDescribe(context, sessionId, args, risk);
   if (name === 'desktop_capture') return handleCapture(context, sessionId, args, risk);

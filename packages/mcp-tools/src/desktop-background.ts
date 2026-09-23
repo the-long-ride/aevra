@@ -4,7 +4,14 @@ import type { RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { markUntrusted } from '../../security/src/untrusted.js';
 import { gated } from './authorization.js';
-import { audit, policyFor, redactWindow, run, sanitizeDesktopToolError, targetOf } from './desktop-support.js';
+import {
+  audit,
+  policyFor,
+  redactWindow,
+  run,
+  sanitizeDesktopToolError,
+  targetOf,
+} from './desktop-support.js';
 import { asToolError } from './errors.js';
 import { argsHash } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';

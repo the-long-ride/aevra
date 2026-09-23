@@ -20,8 +20,14 @@ function code(fn: () => unknown): string {
 const stdio = { name: 'local', transport: 'stdio', risk: 'LOW' };
 
 test('missing name, transport and risk fields are refused', () => {
-  assert.equal(code(() => parseUpstreamInput({})), 'UPSTREAM_NAME_INVALID');
-  assert.equal(code(() => parseUpstreamInput({ name: 'x' })), 'UPSTREAM_TRANSPORT_INVALID');
+  assert.equal(
+    code(() => parseUpstreamInput({})),
+    'UPSTREAM_NAME_INVALID',
+  );
+  assert.equal(
+    code(() => parseUpstreamInput({ name: 'x' })),
+    'UPSTREAM_TRANSPORT_INVALID',
+  );
   assert.equal(
     code(() => parseUpstreamInput({ name: 'x', transport: 'sse' })),
     'UPSTREAM_RISK_INVALID',
@@ -29,7 +35,10 @@ test('missing name, transport and risk fields are refused', () => {
 });
 
 test('a stdio server without config or args runs its command bare', () => {
-  assert.equal(code(() => parseUpstreamInput({ ...stdio })), 'UPSTREAM_CONFIG_INVALID');
+  assert.equal(
+    code(() => parseUpstreamInput({ ...stdio })),
+    'UPSTREAM_CONFIG_INVALID',
+  );
   const input = parseUpstreamInput({ ...stdio, config: { command: ' node ', args: 'x', cwd: '' } });
   assert.deepEqual(input.config, { command: 'node', args: [] });
 });
@@ -41,7 +50,10 @@ test('stdio args are stringified', () => {
 
 test('http and sse servers need a parseable URL', () => {
   const base = { name: 'remote', transport: 'sse', risk: 'MEDIUM' };
-  assert.equal(code(() => parseUpstreamInput({ ...base })), 'UPSTREAM_CONFIG_INVALID');
+  assert.equal(
+    code(() => parseUpstreamInput({ ...base })),
+    'UPSTREAM_CONFIG_INVALID',
+  );
   assert.equal(
     code(() => parseUpstreamInput({ ...base, config: { url: 'not a url' } })),
     'UPSTREAM_CONFIG_INVALID',
@@ -74,14 +86,21 @@ test('stdio auth: empty env means none, bad names and raw values are refused', (
 });
 
 test('header auth: no header or reference means none, invalid header names are refused', () => {
-  const http = { name: 'remote', transport: 'http', risk: 'HIGH', config: { url: 'https://h.test' } };
+  const http = {
+    name: 'remote',
+    transport: 'http',
+    risk: 'HIGH',
+    config: { url: 'https://h.test' },
+  };
   assert.deepEqual(parseUpstreamInput({ ...http, auth: {} }).auth, { kind: 'none' });
   assert.equal(
     code(() => parseUpstreamInput({ ...http, auth: { secretRefId: 'sr_a' } })),
     'UPSTREAM_CONFIG_INVALID',
   );
   assert.equal(
-    code(() => parseUpstreamInput({ ...http, auth: { header: 'Bad Header', secretRefId: 'sr_a' } })),
+    code(() =>
+      parseUpstreamInput({ ...http, auth: { header: 'Bad Header', secretRefId: 'sr_a' } }),
+    ),
     'UPSTREAM_CONFIG_INVALID',
   );
   assert.equal(

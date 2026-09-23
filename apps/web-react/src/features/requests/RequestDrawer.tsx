@@ -195,7 +195,10 @@ export function RequestDrawer({
   const pending = data?.approvals.filter((item) => item.state === 'PENDING') ?? [];
   const history = data?.approvals.filter((item) => item.state !== 'PENDING') ?? [];
 
-  const decideDesktopAccess = async (item: DesktopAccessRequest, decision: 'deny' | 'session' | 'persistent') => {
+  const decideDesktopAccess = async (
+    item: DesktopAccessRequest,
+    decision: 'deny' | 'session' | 'persistent',
+  ) => {
     setDesktopAccessError('');
     try {
       await decideDesktopAccessRequest(item.id, decision);
@@ -243,7 +246,8 @@ export function RequestDrawer({
             className={tab === 'pending' ? 'active' : ''}
             onClick={() => setTab('pending')}
           >
-            Pending <span>{pending.length + (data?.oauth.length ?? 0) + desktopAccessRequests.length}</span>
+            Pending{' '}
+            <span>{pending.length + (data?.oauth.length ?? 0) + desktopAccessRequests.length}</span>
           </button>
           <button
             type="button"
@@ -256,7 +260,11 @@ export function RequestDrawer({
         <div className="request-panel">
           {tab === 'pending' ? (
             <>
-              {desktopAccessError ? <p role="alert" className="inline-result warning-text">{desktopAccessError}</p> : null}
+              {desktopAccessError ? (
+                <p role="alert" className="inline-result warning-text">
+                  {desktopAccessError}
+                </p>
+              ) : null}
               {desktopAccessRequests.map((item) => (
                 <article className="request-card" key={item.id} data-request-id={item.id}>
                   <div className="request-card-head">
@@ -268,20 +276,39 @@ export function RequestDrawer({
                   </div>
                   <div className="request-detail">
                     <b>
-                      {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() === 'msedgewebview2.exe'
+                      {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() ===
+                      'msedgewebview2.exe'
                         ? 'Verified host app'
-                        : 'Application'}: {item.hostExecutablePath}
+                        : 'Application'}
+                      : {item.hostExecutablePath}
                     </b>
-                    {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() === 'msedgewebview2.exe' ? (
+                    {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() ===
+                    'msedgewebview2.exe' ? (
                       <span>WebView2 process: {item.targetExecutablePath}</span>
                     ) : null}
-                    <span>Requested: {item.requestedDuration} · expires {new Date(item.expiresAt).toLocaleTimeString()}</span>
-                    <span>Allowing this app grants desktop input to windows Aevra verifies as belonging to this executable. Desktop capability and action approvals still apply.</span>
+                    <span>
+                      Requested: {item.requestedDuration} · expires{' '}
+                      {new Date(item.expiresAt).toLocaleTimeString()}
+                    </span>
+                    <span>
+                      Allowing this app grants desktop input to windows Aevra verifies as belonging
+                      to this executable. Desktop capability and action approvals still apply.
+                    </span>
                   </div>
                   <div className="request-actions">
-                    <button type="button" onClick={() => void decideDesktopAccess(item, 'deny')}>Deny</button>
-                    <button type="button" onClick={() => void decideDesktopAccess(item, 'session')}>Allow this session</button>
-                    <button type="button" className="primary" onClick={() => void decideDesktopAccess(item, 'persistent')}>Persist for this app</button>
+                    <button type="button" onClick={() => void decideDesktopAccess(item, 'deny')}>
+                      Deny
+                    </button>
+                    <button type="button" onClick={() => void decideDesktopAccess(item, 'session')}>
+                      Allow this session
+                    </button>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => void decideDesktopAccess(item, 'persistent')}
+                    >
+                      Persist for this app
+                    </button>
                   </div>
                 </article>
               ))}
@@ -322,7 +349,9 @@ export function RequestDrawer({
                   onChanged={refresh}
                 />
               ))}
-              {pending.length === 0 && (data?.oauth.length ?? 0) === 0 && desktopAccessRequests.length === 0 ? (
+              {pending.length === 0 &&
+              (data?.oauth.length ?? 0) === 0 &&
+              desktopAccessRequests.length === 0 ? (
                 <div className="empty-panel">No pending requests</div>
               ) : null}
             </>

@@ -23,7 +23,7 @@ export async function migrateLocalCustomApps(
   const remaining: DetectedApp[] = [];
   for (const app of local) {
     try {
-      const saved = await save(app) as { executablePath?: unknown } | null;
+      const saved = (await save(app)) as { executablePath?: unknown } | null;
       if (
         !saved ||
         typeof saved.executablePath !== 'string' ||

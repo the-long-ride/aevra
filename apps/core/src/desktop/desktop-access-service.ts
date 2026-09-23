@@ -2,121 +2,26 @@ import { randomUUID } from 'node:crypto';
 import type {
   DesktopAppGrant,
   DesktopTargetIdentity,
-  VerifiedWindowHost,
 } from '../../../../packages/protocol/src/desktop.js';
-import type { WorkerOperation, WorkerResult } from '../../../../packages/protocol/src/worker.js';
 import {
-  DesktopAccessRepository,
   type DesktopAccessDuration,
   type DesktopAccessRequestRecord,
   type DesktopAppGrantRecord,
   type NewDesktopAppGrant,
 } from '../../../../packages/store/src/desktop-access.js';
-import { canonicalExecutablePath, basename } from '../../../../packages/security/src/window-gate.js';
-
-const REQUEST_LIFETIME_MS = 10 * 60_000;
-
-interface WorkerLike {
-  execute(input: {
-    sessionId: string;
-    workspaceId: string;
-    roots: any[];
-    operation: WorkerOperation;
-    executionMode: 'host';
-  }): Promise<WorkerResult>;
-}
-
-interface SessionLike {
-  get(sessionId: string): { actor: string } | null;
-  leaseForWorkspace(sessionId: string, workspaceId: string): { capabilities: string[] } | null;
-}
-
-interface DesktopAccessServiceDeps {
-  repository: DesktopAccessRepository;
-  worker: WorkerLike;
-  sessions: SessionLike;
-  capabilityRoots(workspaceId: string): any[];
-  audit?: { append(input: any): unknown };
-}
-
-interface HostBinding {
-  targetPath: string;
-  host: VerifiedWindowHost;
-  displayName: string;
-}
-
-function fail(code: string, message: string): never {
-  throw Object.assign(new Error(message), { code });
-}
-
-function isWebViewRuntime(identity: DesktopTargetIdentity): boolean {
-  return [identity.window.processName, identity.window.executablePath ? basename(identity.window.executablePath) : undefined]
-    .some((value) => value?.toLowerCase() === 'msedgewebview2.exe');
-}
-
-function executablePath(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const path = value.trim().replaceAll('/', '\\');
-  const canonical = canonicalExecutablePath(path);
-  const absolute = /^[a-z]:\\/i.test(canonical) || /^\\\\[^\\]+\\[^\\]+\\/.test(canonical);
-  if (!absolute || !canonical.toLowerCase().endsWith('.exe')) return undefined;
-  return path;
-}
-
-function bindingFor(identity: DesktopTargetIdentity): HostBinding {
-  const targetPath = executablePath(identity.window.executablePath);
-  if (!targetPath || !identity.window.processName) {
-    fail('DESKTOP_IDENTITY_UNAVAILABLE', 'The target executable identity is unavailable');
-  }
-  if (identity.windowInstance.windowId !== identity.window.windowId) {
-    fail('DESKTOP_TARGET_CHANGED', 'The target HWND changed while its identity was read');
-  }
-
-  let host: VerifiedWindowHost;
-  if (isWebViewRuntime(identity)) {
-    if (!identity.hostApplication) {
-      fail('DESKTOP_HOST_UNVERIFIED', 'Aevra could not verify which application owns this WebView2 window');
-    }
-    host = identity.hostApplication;
-  } else {
-    host = { executablePath: targetPath, instance: identity.windowInstance };
-  }
-
-  const hostPath = executablePath(host.executablePath);
-  if (!hostPath || host.instance.processId === identity.windowInstance.processId && isWebViewRuntime(identity)) {
-    fail('DESKTOP_HOST_UNVERIFIED', 'The verified host identity is incomplete');
-  }
-  const name = basename(hostPath).replace(/\.exe$/i, '') || basename(hostPath);
-  return { targetPath, host: { ...host, executablePath: hostPath }, displayName: name };
-}
-
-function sameBinding(request: DesktopAccessRequestRecord, identity: DesktopTargetIdentity): boolean {
-  let binding: HostBinding;
-  try {
-    binding = bindingFor(identity);
-  } catch {
-    return false;
-  }
-  return request.windowId === identity.window.windowId &&
-    request.targetProcessId === identity.windowInstance.processId &&
-    request.targetProcessStartedAt === identity.windowInstance.processStartedAt &&
-    canonicalExecutablePath(request.targetExecutablePath) === canonicalExecutablePath(binding.targetPath) &&
-    request.hostWindowId === binding.host.instance.windowId &&
-    request.hostProcessId === binding.host.instance.processId &&
-    request.hostProcessStartedAt === binding.host.instance.processStartedAt &&
-    canonicalExecutablePath(request.hostExecutablePath) === canonicalExecutablePath(binding.host.executablePath);
-}
-
-function publicGrant(grant: DesktopAppGrantRecord): DesktopAppGrant & { createdBy: string } {
-  return {
-    id: grant.id,
-    executablePath: grant.executablePath,
-    displayName: grant.displayName,
-    createdAt: grant.createdAt,
-    ...(grant.sessionId ? { sessionId: grant.sessionId } : {}),
-    createdBy: grant.createdBy,
-  };
-}
+import {
+  basename,
+  canonicalExecutablePath,
+} from '../../../../packages/security/src/window-gate.js';
+import {
+  bindingFor,
+  executablePath,
+  fail,
+  publicGrant,
+  REQUEST_LIFETIME_MS,
+  sameBinding,
+  type DesktopAccessServiceDeps,
+} from './desktop-access-support.js';
 
 export class DesktopAccessService {
   constructor(private readonly deps: DesktopAccessServiceDeps) {}
@@ -155,7 +60,10 @@ export class DesktopAccessService {
       liveSession.actor !== input.actor ||
       !liveLease?.capabilities.includes('desktop.control')
     ) {
-      fail('DESKTOP_ACCESS_SESSION_ENDED', 'The requesting desktop-control session is no longer active');
+      fail(
+        'DESKTOP_ACCESS_SESSION_ENDED',
+        'The requesting desktop-control session is no longer active',
+      );
     }
     const binding = bindingFor(input.identity);
     const now = new Date();
@@ -218,7 +126,12 @@ export class DesktopAccessService {
     return pending.filter((request) => {
       const session = this.deps.sessions.get(request.sessionId);
       const lease = this.deps.sessions.leaseForWorkspace(request.sessionId, request.workspaceId);
-      if (session && session.actor === request.actor && lease?.capabilities.includes('desktop.control')) return true;
+      if (
+        session &&
+        session.actor === request.actor &&
+        lease?.capabilities.includes('desktop.control')
+      )
+        return true;
       this.deps.repository.expireRequest(request.id, new Date().toISOString());
       return false;
     });
@@ -238,7 +151,8 @@ export class DesktopAccessService {
   grantExplicitApp(input: { executablePath: string; displayName: string }, decidedBy = 'admin') {
     const path = executablePath(input.executablePath);
     if (!path) fail('INVALID_REQUEST', 'executablePath must be an absolute .exe path');
-    const displayName = input.displayName.trim().slice(0, 120) || basename(path).replace(/\.exe$/i, '');
+    const displayName =
+      input.displayName.trim().slice(0, 120) || basename(path).replace(/\.exe$/i, '');
     const createdAt = new Date().toISOString();
     const grant = this.deps.repository.saveGrant({
       id: randomUUID(),
@@ -277,9 +191,16 @@ export class DesktopAccessService {
 
     const session = this.deps.sessions.get(request.sessionId);
     const lease = this.deps.sessions.leaseForWorkspace(request.sessionId, request.workspaceId);
-    if (!session || session.actor !== request.actor || !lease?.capabilities.includes('desktop.control')) {
+    if (
+      !session ||
+      session.actor !== request.actor ||
+      !lease?.capabilities.includes('desktop.control')
+    ) {
       this.deps.repository.expireRequest(request.id, new Date().toISOString());
-      fail('DESKTOP_ACCESS_SESSION_ENDED', 'The requesting desktop-control session is no longer active');
+      fail(
+        'DESKTOP_ACCESS_SESSION_ENDED',
+        'The requesting desktop-control session is no longer active',
+      );
     }
 
     const observed = await this.deps.worker.execute({
@@ -290,7 +211,11 @@ export class DesktopAccessService {
       executionMode: 'host',
     });
     if (!observed.ok) {
-      if (['DESKTOP_TARGET_CHANGED', 'DESKTOP_HOST_UNVERIFIED', 'DESKTOP_INPUT_REFUSED'].includes(observed.error.code)) {
+      if (
+        ['DESKTOP_TARGET_CHANGED', 'DESKTOP_HOST_UNVERIFIED', 'DESKTOP_INPUT_REFUSED'].includes(
+          observed.error.code,
+        )
+      ) {
         this.deps.repository.expireRequest(request.id, new Date().toISOString());
       }
       fail(observed.error.code, observed.error.message);
@@ -301,14 +226,20 @@ export class DesktopAccessService {
     }
 
     const currentSession = this.deps.sessions.get(request.sessionId);
-    const currentLease = this.deps.sessions.leaseForWorkspace(request.sessionId, request.workspaceId);
+    const currentLease = this.deps.sessions.leaseForWorkspace(
+      request.sessionId,
+      request.workspaceId,
+    );
     if (
       !currentSession ||
       currentSession.actor !== request.actor ||
       !currentLease?.capabilities.includes('desktop.control')
     ) {
       this.deps.repository.expireRequest(request.id, new Date().toISOString());
-      fail('DESKTOP_ACCESS_SESSION_ENDED', 'The requesting desktop-control session is no longer active');
+      fail(
+        'DESKTOP_ACCESS_SESSION_ENDED',
+        'The requesting desktop-control session is no longer active',
+      );
     }
 
     const hostPath = request.hostExecutablePath;
@@ -328,7 +259,8 @@ export class DesktopAccessService {
       new Date().toISOString(),
       grantInput,
     );
-    if (!approved) fail('DESKTOP_ACCESS_REQUEST_NOT_PENDING', 'Desktop access request is no longer pending');
+    if (!approved)
+      fail('DESKTOP_ACCESS_REQUEST_NOT_PENDING', 'Desktop access request is no longer pending');
     this.deps.audit?.append({
       actor: decidedBy,
       sessionId: request.sessionId,
@@ -346,8 +278,13 @@ export class DesktopAccessService {
   }
 
   deny(requestId: string, decidedBy = 'admin') {
-    const request = this.deps.repository.denyRequest(requestId, decidedBy, new Date().toISOString());
-    if (!request) fail('DESKTOP_ACCESS_REQUEST_NOT_PENDING', 'Desktop access request is no longer pending');
+    const request = this.deps.repository.denyRequest(
+      requestId,
+      decidedBy,
+      new Date().toISOString(),
+    );
+    if (!request)
+      fail('DESKTOP_ACCESS_REQUEST_NOT_PENDING', 'Desktop access request is no longer pending');
     this.deps.audit?.append({
       actor: decidedBy,
       sessionId: request.sessionId,

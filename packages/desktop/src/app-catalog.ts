@@ -18,7 +18,7 @@ const APP_SOURCES: AppSourceReader[] = [
 ];
 
 /** Merges only rows with the same canonical executable path. Basenames are labels, never identities. */
-export function mergeAppSources(rows: DesktopCatalogApp[]): DesktopCatalogApp[] {
+function mergeAppSources(rows: DesktopCatalogApp[]): DesktopCatalogApp[] {
   const merged = new Map<string, DesktopCatalogApp>();
   rows.forEach((row, index) => {
     const identity = row.executablePath

@@ -188,23 +188,36 @@ export function canonicalExecutablePath(value: string): string {
 }
 
 function isSharedWebViewRuntime(identity: DesktopWindowIdentity): boolean {
-  return [identity.processName, identity.executablePath ? basename(identity.executablePath) : undefined]
-    .some((field) => field?.toLowerCase() === 'msedgewebview2.exe');
+  return [
+    identity.processName,
+    identity.executablePath ? basename(identity.executablePath) : undefined,
+  ].some((field) => field?.toLowerCase() === 'msedgewebview2.exe');
 }
 
-export function isProtectedDesktopTitle(identity: DesktopWindowIdentity, policy: DesktopPolicy): boolean {
+export function isProtectedDesktopTitle(
+  identity: DesktopWindowIdentity,
+  policy: DesktopPolicy,
+): boolean {
   const title = identity.title?.toLowerCase();
-  return Boolean(title && policy.deniedTitlePatterns?.some((pattern) => title === pattern.toLowerCase()));
+  return Boolean(
+    title && policy.deniedTitlePatterns?.some((pattern) => title === pattern.toLowerCase()),
+  );
 }
 
-function hasExactGrant(path: string | undefined, policy: DesktopPolicy, sessionId?: string): boolean {
+function hasExactGrant(
+  path: string | undefined,
+  policy: DesktopPolicy,
+  sessionId?: string,
+): boolean {
   if (!path) return false;
   const identity = canonicalExecutablePath(path);
   if (!identity) return false;
-  return Boolean(policy.appGrants?.some((grant) => {
-    if (grant.sessionId !== undefined && grant.sessionId !== sessionId) return false;
-    return canonicalExecutablePath(grant.executablePath) === identity;
-  }));
+  return Boolean(
+    policy.appGrants?.some((grant) => {
+      if (grant.sessionId !== undefined && grant.sessionId !== sessionId) return false;
+      return canonicalExecutablePath(grant.executablePath) === identity;
+    }),
+  );
 }
 
 /**
@@ -226,12 +239,16 @@ export function evaluateDesktopTargetGate(
     if (!targetVerdict.allowed) return targetVerdict;
     if (isSharedWebViewRuntime(target) && identity.hostApplication) {
       const host = identity.hostApplication;
-      const hostVerdict = evaluateWindowGate({
-        windowId: host.instance.windowId,
-        processName: basename(host.executablePath),
-        executablePath: host.executablePath,
-        ...(target.title ? { title: target.title } : {}),
-      }, policy, direction);
+      const hostVerdict = evaluateWindowGate(
+        {
+          windowId: host.instance.windowId,
+          processName: basename(host.executablePath),
+          executablePath: host.executablePath,
+          ...(target.title ? { title: target.title } : {}),
+        },
+        policy,
+        direction,
+      );
       if (!hostVerdict.allowed) {
         return {
           ...hostVerdict,

@@ -109,9 +109,7 @@ function normalizeVersion(result: CapabilityProbeResult): string | undefined {
   return match?.[1]?.slice(0, VERSION_OUTPUT_LIMIT);
 }
 
-function normalizePlatform(
-  platform: NodeJS.Platform,
-): SystemCapabilitySnapshot['os']['platform'] {
+function normalizePlatform(platform: NodeJS.Platform): SystemCapabilitySnapshot['os']['platform'] {
   if (platform === 'win32') return 'windows';
   if (platform === 'darwin') return 'macos';
   if (platform === 'linux') return 'linux';

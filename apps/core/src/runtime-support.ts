@@ -31,8 +31,42 @@ import type { McpUpstreamSessionStatus } from '../../../packages/protocol/src/mc
 import type { WorkerOperation } from '../../../packages/protocol/src/worker.js';
 import type { SecretStore } from '../../../packages/secrets/src/store.js';
 import type { SessionManager } from './sessions/session-manager.js';
+import type { OperationService } from './operations/operation-service.js';
+import type { ChangeSetService } from './changes/change-service.js';
 import type { WorkspaceService } from './workspaces/workspace-service.js';
 import type { AuditService } from './audit/audit-service.js';
+import type { CommandEffect } from '../../../packages/protocol/src/index.js';
+
+const COMMAND_EFFECTS: string[] = [
+  'READ_ONLY',
+  'BUILD_OUTPUT',
+  'SOURCE_MUTATION',
+  'REPOSITORY_STATE',
+  'UNKNOWN',
+];
+
+export function configureRuntimeOperations(
+  operations: OperationService,
+  changes: ChangeSetService,
+  sessions: SessionManager,
+  settings: SettingsRepository,
+) {
+  operations.attachChangeService(changes);
+  operations.setCommandEffectResolver((family, defaultEffect) => {
+    const value = settings.get<Record<string, string>>('command.family.overrides', {})[family];
+    return COMMAND_EFFECTS.includes(value) ? (value as CommandEffect) : defaultEffect;
+  });
+  operations.setExecutionSettingsResolver(() =>
+    settings.get('execution.settings', { sandboxBackend: 'auto', cachePolicy: 'workspace' }),
+  );
+  sessions.setSwitchDrainHandler((sessionId, _oldSession, _newSession, timeoutMs) =>
+    operations.drainSession(
+      sessionId,
+      timeoutMs ?? settings.get('workspace.drain.defaultMs', 60_000),
+    ),
+  );
+}
+
 export function createRuntimeWorkerManager(config: CoreConfig, deps: RuntimeDependencies) {
   return (
     deps.worker ??
@@ -172,7 +206,7 @@ export function createMcpUpstreams(
   });
 }
 
-export async function resolveRuntimeTls(config: CoreConfig, deps: RuntimeDependencies) {
+async function resolveRuntimeTls(config: CoreConfig, deps: RuntimeDependencies) {
   if (deps.tls) return deps.tls;
   if (deps.ensureTls) return deps.ensureTls(config);
   return ensureLocalTls(config.stateDir, {
@@ -190,7 +224,7 @@ export function createCachedSystemCapabilityResolver<T>(scan: () => Promise<T>):
 const resolveDefaultSystemCapabilities =
   createCachedSystemCapabilityResolver(detectSystemCapabilities);
 
-export async function resolveRuntimeSystemCapabilities(deps: RuntimeDependencies) {
+async function resolveRuntimeSystemCapabilities(deps: RuntimeDependencies) {
   try {
     return await (deps.detectSystemCapabilities ?? resolveDefaultSystemCapabilities)();
   } catch {
@@ -198,12 +232,33 @@ export async function resolveRuntimeSystemCapabilities(deps: RuntimeDependencies
   }
 }
 
-export async function closeRuntimeResource(fn: () => Promise<unknown>) {
+export async function prepareRuntimeStartup(config: CoreConfig, deps: RuntimeDependencies) {
+  const systemCapabilities = await resolveRuntimeSystemCapabilities(deps);
+  const tls = await resolveRuntimeTls(config, deps);
+  const adminCredentialVerifier = await config.createAdminCredentialVerifier();
+  return { systemCapabilities, tls, adminCredentialVerifier };
+}
+
+async function closeRuntimeResource(fn: () => Promise<unknown>) {
   try {
     await fn();
   } catch {
     /* Preserve the original startup/shutdown error. */
   }
+}
+
+export async function closeRuntimeResources(
+  resources: Array<{ close: () => Promise<unknown> } | undefined>,
+  worker: { close: () => Promise<unknown> } | undefined,
+  database?: { close: () => void },
+) {
+  for (const resource of resources) {
+    if (resource) await closeRuntimeResource(() => resource.close());
+  }
+  if (worker) await closeRuntimeResource(() => worker.close());
+  try {
+    database?.close();
+  } catch {}
 }
 
 export function runtimeWorkerGateway(

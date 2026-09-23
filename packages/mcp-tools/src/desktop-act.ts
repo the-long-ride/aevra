@@ -3,7 +3,14 @@ import type { DesktopWindowIdentity } from '../../protocol/src/desktop.js';
 import type { RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { gated } from './authorization.js';
-import { audit, policyFor, redactWindow, run, sanitizeDesktopToolError, targetOf } from './desktop-support.js';
+import {
+  audit,
+  policyFor,
+  redactWindow,
+  run,
+  sanitizeDesktopToolError,
+  targetOf,
+} from './desktop-support.js';
 import { asToolError } from './errors.js';
 import { argsHash } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
@@ -122,9 +129,7 @@ export async function handleAct(
       const window: DesktopWindowIdentity | undefined = value?.window;
       const policy = policyFor(context, sessionId);
       const tally = { count: 0 };
-      const safeValue = window
-        ? { ...value, window: redactWindow(window, tally, policy) }
-        : value;
+      const safeValue = window ? { ...value, window: redactWindow(window, tally, policy) } : value;
       audit(context, sessionId, name, auditTarget, risk, 'SUCCEEDED', {
         window: targetOf(window),
         redactionCount: tally.count,

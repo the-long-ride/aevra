@@ -295,6 +295,7 @@ mod tests {
         assert_eq!(require_same_instance(&expected, &diff_win), Err(TargetError::Changed));
     }
 
+    #[cfg(windows)]
     #[test]
     fn test_check_desktop() {
         let res = native::check_desktop();

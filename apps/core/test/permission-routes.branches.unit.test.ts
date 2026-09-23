@@ -144,7 +144,12 @@ test('an existing typed rule can be edited without resending its predicate', asy
 
 test('an existing legacy rule without a version stays version 1 when edited', async () => {
   const { context, permsStore } = fixture();
-  permsStore.set('p-legacy', { id: 'p-legacy', effect: 'allow', session_id: 's1', scope: 'session' });
+  permsStore.set('p-legacy', {
+    id: 'p-legacy',
+    effect: 'allow',
+    session_id: 's1',
+    scope: 'session',
+  });
   const result = await post(context, { id: 'p-legacy', matcher: 'git:status' });
   assert.equal(result.status, 200);
   assert.equal(permsStore.get('p-legacy').version, 1);

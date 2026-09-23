@@ -13,7 +13,9 @@ const ACCESS_REQUESTS_PATH = '/api/desktop/access-requests';
 const APP_GRANTS_PATH = '/api/desktop/app-grants';
 
 export const handleDesktopRoutes: AdminRouteHandler = async (req, res, url, context) => {
-  const requestDecision = url.pathname.match(/^\/api\/desktop\/access-requests\/([^/]+)\/(approve|deny)$/);
+  const requestDecision = url.pathname.match(
+    /^\/api\/desktop\/access-requests\/([^/]+)\/(approve|deny)$/,
+  );
   const grantRevocation = url.pathname.match(/^\/api\/desktop\/app-grants\/([^/]+)$/);
   const customAppDeletion = url.pathname.match(/^\/api\/desktop\/custom-apps\/([^/]+)$/);
   if (
@@ -22,7 +24,8 @@ export const handleDesktopRoutes: AdminRouteHandler = async (req, res, url, cont
     !requestDecision &&
     !grantRevocation &&
     !customAppDeletion
-  ) return false;
+  )
+    return false;
   const method = req.method ?? 'GET';
 
   // Detection is a stateless OS inventory read with no dependency on policy
@@ -39,19 +42,28 @@ export const handleDesktopRoutes: AdminRouteHandler = async (req, res, url, cont
 
   if (url.pathname === '/api/desktop/custom-apps' && method === 'PUT') {
     if (!context.desktopAppCatalog) {
-      sendAdminResponse(res, 503, { error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop app catalog is unavailable' } });
+      sendAdminResponse(res, 503, {
+        error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop app catalog is unavailable' },
+      });
       return true;
     }
-    sendAdminResponse(res, 200, { app: await context.desktopAppCatalog.saveCustom(await readAdminBody(req)) });
+    sendAdminResponse(res, 200, {
+      app: await context.desktopAppCatalog.saveCustom(await readAdminBody(req)),
+    });
     return true;
   }
   if (customAppDeletion && method === 'DELETE') {
     if (!context.desktopAppCatalog) {
-      sendAdminResponse(res, 503, { error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop app catalog is unavailable' } });
+      sendAdminResponse(res, 503, {
+        error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop app catalog is unavailable' },
+      });
       return true;
     }
     sendAdminResponse(res, 200, {
-      app: context.desktopAppCatalog.deleteCustom(decodeURIComponent(customAppDeletion[1]!), 'admin'),
+      app: context.desktopAppCatalog.deleteCustom(
+        decodeURIComponent(customAppDeletion[1]!),
+        'admin',
+      ),
     });
     return true;
   }
@@ -59,7 +71,9 @@ export const handleDesktopRoutes: AdminRouteHandler = async (req, res, url, cont
   if (url.pathname === ACCESS_REQUESTS_PATH && method === 'GET') {
     const desktopAccess = context.desktopAccess;
     if (!desktopAccess) {
-      sendAdminResponse(res, 503, { error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop access review is unavailable' } });
+      sendAdminResponse(res, 503, {
+        error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop access review is unavailable' },
+      });
       return true;
     }
     sendAdminResponse(res, 200, { requests: desktopAccess.listPending() });
@@ -68,7 +82,9 @@ export const handleDesktopRoutes: AdminRouteHandler = async (req, res, url, cont
   if (requestDecision && method === 'POST') {
     const desktopAccess = context.desktopAccess;
     if (!desktopAccess) {
-      sendAdminResponse(res, 503, { error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop access review is unavailable' } });
+      sendAdminResponse(res, 503, {
+        error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop access review is unavailable' },
+      });
       return true;
     }
     const requestId = decodeURIComponent(requestDecision[1]!);
@@ -83,7 +99,9 @@ export const handleDesktopRoutes: AdminRouteHandler = async (req, res, url, cont
   if (url.pathname === APP_GRANTS_PATH && method === 'GET') {
     const desktopAccess = context.desktopAccess;
     if (!desktopAccess) {
-      sendAdminResponse(res, 503, { error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop grants are unavailable' } });
+      sendAdminResponse(res, 503, {
+        error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop grants are unavailable' },
+      });
       return true;
     }
     sendAdminResponse(res, 200, { grants: desktopAccess.listGrants() });
@@ -91,7 +109,9 @@ export const handleDesktopRoutes: AdminRouteHandler = async (req, res, url, cont
   }
   if (url.pathname === APP_GRANTS_PATH && method === 'POST') {
     if (!context.desktopAppCatalog) {
-      sendAdminResponse(res, 503, { error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop app catalog is unavailable' } });
+      sendAdminResponse(res, 503, {
+        error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop app catalog is unavailable' },
+      });
       return true;
     }
     sendAdminResponse(res, 200, {
@@ -102,10 +122,16 @@ export const handleDesktopRoutes: AdminRouteHandler = async (req, res, url, cont
   if (grantRevocation && method === 'DELETE') {
     const desktopAccess = context.desktopAccess;
     if (!desktopAccess) {
-      sendAdminResponse(res, 503, { error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop grants are unavailable' } });
+      sendAdminResponse(res, 503, {
+        error: { code: 'DESKTOP_UNAVAILABLE', message: 'Desktop grants are unavailable' },
+      });
       return true;
     }
-    sendAdminResponse(res, 200, desktopAccess.revokeGrant(decodeURIComponent(grantRevocation[1]!), 'admin'));
+    sendAdminResponse(
+      res,
+      200,
+      desktopAccess.revokeGrant(decodeURIComponent(grantRevocation[1]!), 'admin'),
+    );
     return true;
   }
 
