@@ -12,6 +12,8 @@ import {
 
 export type DialogTone = 'default' | 'primary' | 'danger' | 'yolo';
 
+export type DialogSize = 'default' | 'wide';
+
 export interface DialogAction {
   id: string;
   label: string;
@@ -32,6 +34,7 @@ interface DialogRequest {
   actions: DialogAction[];
   cancelId?: string;
   input?: DialogInput;
+  size?: DialogSize;
 }
 
 interface DialogResolution {
@@ -43,6 +46,7 @@ interface MessageOptions {
   title: string;
   message?: ReactNode;
   actionLabel?: string;
+  size?: DialogSize;
 }
 
 interface ConfirmOptions {
@@ -128,7 +132,7 @@ function CommonDialog({
       }}
     >
       <form
-        className="modal common-dialog"
+        className={`modal common-dialog${request.size === 'wide' ? ' wide' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -202,6 +206,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         await open({
           title: options.title,
           message: options.message,
+          size: options.size,
           cancelId: 'ok',
           actions: [{ id: 'ok', label: options.actionLabel ?? 'OK', tone: 'primary' }],
         });

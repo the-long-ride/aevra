@@ -2,14 +2,42 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Switch } from '../../components/Switch';
 import { requestJson } from '../../services/api-client';
 import { DesktopAppPicker } from './DesktopAppPicker';
+import { migrateLocalCustomApps } from './custom-app-migration';
 
-export interface DetectedApp {
+export interface AppCatalogRow {
   displayName: string;
   version: string | null;
+  executablePath?: string;
+  exeBasename?: string;
+  sources?: string[];
+  grantable?: boolean;
+  reason?: 'needs-manual-path' | 'shared-runtime';
+  isCustom?: boolean;
+  isGranted?: boolean;
+  grantId?: string;
+  customAppId?: string;
+}
+
+export interface DetectedApp extends AppCatalogRow {
   executablePath: string;
   exeBasename: string;
-  isCustom?: boolean;
 }
+
+export interface DesktopAppGrantRow {
+  id: string;
+  executablePath: string;
+  displayName: string;
+  createdAt: string;
+  createdBy?: string;
+  sessionId?: string;
+}
+
+export interface DesktopAppCatalogResponse {
+  apps: AppCatalogRow[];
+  warnings?: string[];
+}
+
+export type DesktopAppsLoadResult = DesktopAppCatalogResponse | AppCatalogRow[];
 
 export interface DesktopPolicySnapshot {
   mode: 'allowlist' | 'denylist';
@@ -47,7 +75,37 @@ export const saveDesktopPolicy = (next: Partial<DesktopPolicySnapshot>) =>
   });
 
 export const loadDetectedApps = () =>
-  requestJson<{ apps: DetectedApp[] }>('/api/desktop/apps').then((response) => response.apps);
+  requestJson<DesktopAppCatalogResponse>('/api/desktop/apps');
+
+export const saveCustomApp = (app: DetectedApp, id?: string) =>
+  requestJson<{ app: DetectedApp }>('/api/desktop/custom-apps', {
+    method: 'PUT',
+    body: JSON.stringify({
+      ...(id ? { id } : {}),
+      executablePath: app.executablePath,
+      displayName: app.displayName,
+      version: app.version,
+    }),
+  });
+
+export const deleteCustomApp = (id: string) =>
+  requestJson<{ app: unknown }>(`/api/desktop/custom-apps/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+
+export const loadDesktopAppGrants = () =>
+  requestJson<{ grants: DesktopAppGrantRow[] }>('/api/desktop/app-grants');
+
+export const grantDesktopApp = (app: { executablePath: string; displayName: string }) =>
+  requestJson<{ grant: DesktopAppGrantRow }>('/api/desktop/app-grants', {
+    method: 'POST',
+    body: JSON.stringify(app),
+  });
+
+export const revokeDesktopAppGrant = (id: string) =>
+  requestJson<DesktopAppGrantRow>(`/api/desktop/app-grants/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 
 interface DesktopModeSelectorProps {
   mode: 'allowlist' | 'denylist';
@@ -149,11 +207,13 @@ export function DesktopControlSettings({
 }: {
   load?: () => Promise<DesktopPolicySnapshot>;
   save?: (next: Partial<DesktopPolicySnapshot>) => Promise<DesktopPolicySnapshot>;
-  loadApps?: () => Promise<DetectedApp[]>;
+  loadApps?: () => Promise<DesktopAppsLoadResult>;
 }) {
   const [policy, setPolicy] = useState<DesktopPolicySnapshot | null>(null);
-  const [apps, setApps] = useState<DetectedApp[]>([]);
-  const [customApps, setCustomApps] = useState<DetectedApp[]>(loadStoredCustomApps);
+  const [apps, setApps] = useState<AppCatalogRow[]>([]);
+  const [localCustomApps, setLocalCustomApps] = useState<DetectedApp[]>(loadStoredCustomApps);
+  const [grants, setGrants] = useState<DesktopAppGrantRow[]>([]);
+  const [appWarnings, setAppWarnings] = useState<string[]>([]);
   const [busyTarget, setBusyTarget] = useState<'mode' | 'apps' | 'path' | null>(null);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -162,6 +222,20 @@ export function DesktopControlSettings({
   policyRef.current = policy;
 
   const busyTargetRef = useRef<'mode' | 'apps' | 'path' | null>(null);
+
+  const refreshCatalog = useCallback(async () => {
+    const result = await loadApps();
+    const nextApps = Array.isArray(result) ? result : result.apps;
+    const warnings = Array.isArray(result) ? [] : result.warnings ?? [];
+    setApps(nextApps);
+    setAppWarnings(warnings);
+    try {
+      const resultGrants = await loadDesktopAppGrants();
+      setGrants(resultGrants.grants);
+    } catch {
+      setGrants([]);
+    }
+  }, [loadApps]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -178,17 +252,14 @@ export function DesktopControlSettings({
       .catch((cause: unknown) => {
         if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
       });
-    void loadApps()
-      .then((next) => {
-        if (!cancelled) setApps(next);
-      })
+    void refreshCatalog()
       .catch(() => {
-        /* An empty picker is a safe degradation; the policy load above already surfaces errors. */
+        if (!cancelled) setAppWarnings(['Some app sources could not be read.']);
       });
     return () => {
       cancelled = true;
     };
-  }, [load, loadApps]);
+  }, [load, refreshCatalog]);
 
   const submit = useCallback(
     async (next: Partial<DesktopPolicySnapshot>, target: 'mode' | 'apps' | 'path') => {
@@ -219,15 +290,66 @@ export function DesktopControlSettings({
   );
 
   const onToggleApp = useCallback(
-    (exeBasename: string, checked: boolean) => {
+    async (
+      exeBasename: string,
+      checked: boolean,
+      row?: {
+        exeBasename: string;
+        executablePath?: string;
+        displayName?: string;
+        grantId?: string;
+        status?: string;
+      },
+    ) => {
       const current = policyRef.current;
       if (!current) return;
-      const applications = checked
-        ? [...current.applications, exeBasename]
-        : current.applications.filter((entry) => entry.toLowerCase() !== exeBasename.toLowerCase());
-      void submit({ applications }, 'apps');
+      if (busyTargetRef.current !== null) return;
+      busyTargetRef.current = 'apps';
+      setBusyTarget('apps');
+      setError('');
+      try {
+        if (row?.exeBasename.toLowerCase() === 'msedgewebview2.exe') {
+          // WebView2 is a shared runtime. Its catalog toggle is deliberately
+          // the explicit broad legacy rule, never an exact-path runtime grant.
+          if (row.grantId) await revokeDesktopAppGrant(row.grantId);
+          const alreadyListed = current.applications.some(
+            (entry) => entry.toLowerCase() === exeBasename.toLowerCase(),
+          );
+          const applications = checked
+            ? alreadyListed ? current.applications : [...current.applications, exeBasename]
+            : current.applications.filter((entry) => entry.toLowerCase() !== exeBasename.toLowerCase());
+          setPolicy(await save({ applications }));
+          await refreshCatalog();
+          setToast(checked ? '// Broad WebView2 access enabled.' : '// WebView2 access revoked.');
+          return;
+        }
+        if (row?.executablePath) {
+          if (checked) {
+            await grantDesktopApp({ executablePath: row.executablePath, displayName: row.displayName ?? exeBasename });
+          } else {
+            if (row.grantId) await revokeDesktopAppGrant(row.grantId);
+            const applications = current.applications.filter(
+              (entry) => entry.toLowerCase() !== exeBasename.toLowerCase(),
+            );
+            if (applications.length !== current.applications.length) setPolicy(await save({ applications }));
+          }
+          await refreshCatalog();
+          setToast(checked ? '// App access granted.' : '// App access revoked.');
+        } else {
+          const applications = checked
+            ? [...current.applications, exeBasename]
+            : current.applications.filter((entry) => entry.toLowerCase() !== exeBasename.toLowerCase());
+          setPolicy(await save({ applications }));
+          setToast('// Desktop policy saved.');
+        }
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        busyTargetRef.current = null;
+        setBusyTarget(null);
+      }
     },
-    [submit],
+    [refreshCatalog, save],
   );
 
   const onAddManualApp = useCallback(
@@ -240,59 +362,54 @@ export function DesktopControlSettings({
   );
 
   const onSaveCustomApp = useCallback(
-    (app: DetectedApp, previousExeBasename?: string) => {
-      const prevLower = previousExeBasename?.toLowerCase();
-      const nextLower = app.exeBasename.toLowerCase();
-
-      setCustomApps((prev) => {
-        const filtered = prev.filter((entry) => {
-          const l = entry.exeBasename.toLowerCase();
-          return l !== nextLower && (!prevLower || l !== prevLower);
-        });
-        const next = [...filtered, app];
-        saveStoredCustomApps(next);
-        return next;
-      });
-
-      const current = policyRef.current;
-      if (!current) return;
-
-      let nextApps = current.applications;
-      if (prevLower && prevLower !== nextLower) {
-        nextApps = nextApps.map((exe) => (exe.toLowerCase() === prevLower ? app.exeBasename : exe));
+    async (app: DetectedApp, _previousExeBasename?: string, customAppId?: string) => {
+      try {
+        await saveCustomApp(app, customAppId);
+        await refreshCatalog();
+        setToast(customAppId ? '// Custom application updated.' : '// Custom application added.');
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
       }
-      if (!nextApps.some((exe) => exe.toLowerCase() === nextLower)) {
-        nextApps = [...nextApps, app.exeBasename];
-      }
-      if (nextApps !== current.applications) {
-        void submit({ applications: nextApps }, 'apps');
-      }
-      setToast(
-        previousExeBasename ? '// Custom application updated.' : '// Custom application added.',
-      );
     },
-    [submit],
+    [refreshCatalog],
   );
 
   const onDeleteCustomApp = useCallback(
-    (exeBasename: string) => {
-      const lower = exeBasename.toLowerCase();
-      setCustomApps((prev) => {
-        const next = prev.filter((entry) => entry.exeBasename.toLowerCase() !== lower);
-        saveStoredCustomApps(next);
-        return next;
-      });
-
-      const current = policyRef.current;
-      if (!current) return;
-      const filtered = current.applications.filter((exe) => exe.toLowerCase() !== lower);
-      if (filtered.length !== current.applications.length) {
-        void submit({ applications: filtered }, 'apps');
+    async (_exeBasename: string, customAppId?: string) => {
+      if (!customAppId) return;
+      try {
+        await deleteCustomApp(customAppId);
+        await refreshCatalog();
+        setToast('// Custom application removed.');
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
       }
-      setToast('// Custom application removed.');
     },
-    [submit],
+    [refreshCatalog],
   );
+
+  const onMigrateLocalApps = useCallback(async () => {
+    if (localCustomApps.length === 0 || busyTargetRef.current !== null) return;
+    busyTargetRef.current = 'apps';
+    setBusyTarget('apps');
+    setError('');
+    try {
+      const result = await migrateLocalCustomApps(
+        localCustomApps,
+        (app) => saveCustomApp(app).then((saved) => saved.app),
+      );
+      saveStoredCustomApps(result.remaining);
+      setLocalCustomApps(result.remaining);
+      await refreshCatalog();
+      setToast(`// Imported ${result.imported} custom app${result.imported === 1 ? '' : 's'}.`);
+      if (result.failed > 0) setError(`${result.failed} app${result.failed === 1 ? '' : 's'} could not be imported. They remain saved in this browser so you can retry.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      busyTargetRef.current = null;
+      setBusyTarget(null);
+    }
+  }, [localCustomApps, refreshCatalog]);
 
   const onPathExposureChange = useCallback(
     (checked: boolean) => {
@@ -301,14 +418,7 @@ export function DesktopControlSettings({
     [submit],
   );
 
-  const allApps = useMemo(() => {
-    const customMap = new Map(customApps.map((c) => [c.exeBasename.toLowerCase(), c]));
-    const systemApps = apps
-      .filter((a) => !customMap.has(a.exeBasename.toLowerCase()))
-      .map((a) => ({ ...a, isCustom: false }));
-    const markedCustom = customApps.map((c) => ({ ...c, isCustom: true }));
-    return [...systemApps, ...markedCustom];
-  }, [apps, customApps]);
+  const allApps = useMemo(() => apps, [apps]);
 
   if (!policy) {
     return (
@@ -344,6 +454,14 @@ export function DesktopControlSettings({
         disabled={busyTarget === 'mode'}
         onModeChange={onModeChange}
       />
+      {localCustomApps.length > 0 ? (
+        <div className="desktop-custom-app-migration" role="status">
+          <span>{localCustomApps.length} custom app{localCustomApps.length === 1 ? '' : 's'} are saved in this browser.</span>
+          <button type="button" disabled={busyTarget !== null} onClick={() => void onMigrateLocalApps()}>
+            Import to Aevra
+          </button>
+        </div>
+      ) : null}
       {policy.mode === 'allowlist' ? (
         <DesktopAppPicker
           applications={policy.applications}
@@ -354,6 +472,35 @@ export function DesktopControlSettings({
           onSaveCustomApp={onSaveCustomApp}
           onDeleteCustomApp={onDeleteCustomApp}
         />
+      ) : null}
+      {grants.length > 0 ? (
+        <div className="desktop-app-grants" aria-label="Granted apps">
+          <h4>Exact app grants</h4>
+          {grants.map((grant) => (
+            <div className="desktop-app-grant-row" key={grant.id}>
+              <span>
+                <strong>{grant.displayName}</strong>
+                <small>{grant.sessionId ? 'This session' : 'Persistent'} · {grant.executablePath}</small>
+              </span>
+              <button
+                type="button"
+                className="danger-button"
+                disabled={busyTarget !== null}
+                onClick={() => void revokeDesktopAppGrant(grant.id)
+                  .then(refreshCatalog)
+                  .then(() => setToast('// App grant revoked.'))
+                  .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))}
+              >
+                Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {appWarnings.length > 0 ? (
+        <p className="section-note" role="status">
+          App discovery is partial: {appWarnings.join('; ')}
+        </p>
       ) : null}
       <DesktopPathExposure
         exposeExecutablePaths={policy.exposeExecutablePaths === true}

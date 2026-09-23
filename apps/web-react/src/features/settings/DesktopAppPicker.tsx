@@ -3,26 +3,31 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { Switch } from '../../components/Switch';
 import { AddCustomAppModal } from './AddCustomAppModal';
-import type { DetectedApp } from './DesktopControlSettings';
+import type { AppCatalogRow, DetectedApp } from './DesktopControlSettings';
 
 export interface AppRow extends Record<string, unknown> {
+  rowId: string;
   exeBasename: string;
   displayName: string;
   version: string;
+  sources: string;
   executablePath?: string;
-  status: 'Allowed' | 'Blocked';
+  status: 'Allowed' | 'Blocked' | 'Needs manual path' | 'Shared runtime';
   allowed: boolean;
+  grantable: boolean;
   isCustom: boolean;
+  grantId?: string;
+  customAppId?: string;
 }
 
 export interface DesktopAppPickerProps {
   applications: string[];
-  apps: DetectedApp[];
+  apps: AppCatalogRow[];
   busy: boolean;
-  onToggleApp: (exeBasename: string, checked: boolean) => void;
+  onToggleApp: (exeBasename: string, checked: boolean, row?: AppRow) => void;
   onAddManualApp: (exeBasename: string) => void;
-  onSaveCustomApp: (app: DetectedApp, previousExeBasename?: string) => void;
-  onDeleteCustomApp: (exeBasename: string) => void;
+  onSaveCustomApp: (app: DetectedApp, previousExeBasename?: string, customAppId?: string) => void;
+  onDeleteCustomApp: (exeBasename: string, customAppId?: string) => void;
 }
 
 function areArraysEqual(a: string[], b: string[]) {
@@ -32,6 +37,21 @@ function areArraysEqual(a: string[], b: string[]) {
     if (a[i] !== b[i]) return false;
   }
   return true;
+}
+
+function isWebViewRuntime(value: string): boolean {
+  return value.split(/[\\/]/).pop()?.toLowerCase() === 'msedgewebview2.exe';
+}
+
+function formatSource(source: string): string {
+  switch (source) {
+    case 'registry': return 'Registry';
+    case 'start-menu': return 'Start Menu';
+    case 'running': return 'Running app';
+    case 'packaged': return 'Packaged app';
+    case 'custom': return 'Custom app';
+    default: return source;
+  }
 }
 
 function DesktopAppPickerComponent({
@@ -55,31 +75,61 @@ function DesktopAppPickerComponent({
 
   const isAllowed = (exeBasename: string) => allowed.has(exeBasename.toLowerCase());
 
+  const confirmBroadWebViewAccess = () => dialog.confirm({
+    title: 'Allow WebView2 across apps?',
+    message: 'WebView2 is shared by multiple applications. Adding msedgewebview2.exe applies broadly and does not identify QuotaShift. For scoped access, approve the host app after Aevra verifies its window relationship.',
+    confirmLabel: 'Allow broad WebView2 access',
+    confirmTone: 'danger',
+  });
+
+  const handleToggleApp = async (row: AppRow, checked: boolean) => {
+    if (!row.grantable || row.exeBasename === '—') return;
+    if (checked && isWebViewRuntime(row.exeBasename) && !(await confirmBroadWebViewAccess())) return;
+    onToggleApp(row.exeBasename, checked, row);
+  };
+
   const appRows: AppRow[] = useMemo(() => {
-    const knownBasenames = new Set(apps.map((app) => app.exeBasename.toLowerCase()));
+    const knownBasenames = new Set(
+      apps.flatMap((app) => app.exeBasename ? [app.exeBasename.toLowerCase()] : []),
+    );
     const unlistedAllowed = applications.filter(
       (entry) => !knownBasenames.has(entry.toLowerCase()),
     );
 
     return [
-      ...apps.map((app) => ({
-        exeBasename: app.exeBasename,
-        displayName: app.displayName,
-        version: app.version ?? '—',
-        executablePath: app.executablePath,
-        status: (allowed.has(app.exeBasename.toLowerCase()) ? 'Allowed' : 'Blocked') as
-          'Allowed' | 'Blocked',
-        allowed: allowed.has(app.exeBasename.toLowerCase()),
-        isCustom: Boolean(app.isCustom),
-      })),
+      ...apps.map((app, index) => {
+        const exeBasename = app.exeBasename ?? '—';
+        const grantable = (app.grantable !== false || isWebViewRuntime(exeBasename)) && Boolean(app.exeBasename);
+        const isAppAllowed = grantable && (Boolean(app.isGranted) || allowed.has(exeBasename.toLowerCase()));
+        const sources = app.isCustom ? ['Custom'] : (app.sources ?? []).map(formatSource);
+        return {
+          rowId: app.executablePath?.replaceAll('/', '\\').toLowerCase()
+            ?? `unresolved:${sources.join(',')}:${app.displayName}:${index}`,
+          exeBasename,
+          displayName: app.displayName,
+          version: app.version ?? '—',
+          sources: sources.length > 0 ? sources.join(', ') : '—',
+          executablePath: app.executablePath,
+          status: (app.reason === 'shared-runtime' || isWebViewRuntime(exeBasename)
+            ? 'Shared runtime'
+            : grantable ? (isAppAllowed ? 'Allowed' : 'Blocked') : 'Needs manual path') as AppRow['status'],
+          allowed: isAppAllowed,
+          grantable,
+          isCustom: Boolean(app.isCustom),
+          ...(app.grantId ? { grantId: app.grantId } : {}),
+          ...(app.customAppId ? { customAppId: app.customAppId } : {}),
+        };
+      }),
       ...unlistedAllowed.map((exeBasename) => ({
+        rowId: `policy:${exeBasename.toLowerCase()}`,
         exeBasename,
         displayName: exeBasename,
         version: '—',
-        executablePath: exeBasename,
+        sources: 'Policy',
         status: 'Allowed' as const,
         allowed: true,
-        isCustom: true,
+        grantable: true,
+        isCustom: false,
       })),
     ];
   }, [apps, applications, allowed]);
@@ -90,12 +140,14 @@ function DesktopAppPickerComponent({
   };
 
   const handleOpenEdit = (row: AppRow) => {
+    if (!row.executablePath || row.exeBasename === '—') return;
     setEditingApp({
       displayName: row.displayName,
       version: row.version === '—' ? null : row.version,
       executablePath: row.executablePath || row.exeBasename,
       exeBasename: row.exeBasename,
       isCustom: true,
+      customAppId: row.customAppId,
     });
     setModalOpen(true);
   };
@@ -105,8 +157,8 @@ function DesktopAppPickerComponent({
     setEditingApp(null);
   };
 
-  const handleSaveModal = (app: DetectedApp, previousExeBasename?: string) => {
-    onSaveCustomApp(app, previousExeBasename);
+  const handleSaveModal = async (app: DetectedApp, previousExeBasename?: string) => {
+    onSaveCustomApp(app, previousExeBasename, editingApp?.customAppId);
     handleCloseModal();
   };
 
@@ -118,7 +170,8 @@ function DesktopAppPickerComponent({
       confirmTone: 'danger',
     });
     if (!confirmed) return;
-    onDeleteCustomApp(row.exeBasename);
+    if (row.exeBasename === '—') return;
+    onDeleteCustomApp(row.exeBasename, row.customAppId);
   };
 
   const appColumns: Column<AppRow>[] = useMemo(
@@ -131,8 +184,8 @@ function DesktopAppPickerComponent({
         render: (row) => (
           <Switch
             checked={row.allowed}
-            disabled={busy}
-            onChange={(event) => onToggleApp(row.exeBasename, event.currentTarget.checked)}
+            disabled={busy || !row.grantable}
+              onChange={(event) => void handleToggleApp(row, event.currentTarget.checked)}
             containerClassName="desktop-app-table-label"
             label={
               <>
@@ -153,11 +206,25 @@ function DesktopAppPickerComponent({
         render: (row) => <code className="desktop-app-exe">{row.exeBasename}</code>,
       },
       {
+        key: 'sources',
+        label: 'Found in',
+        sortable: true,
+        search: true,
+        render: (row) => <span>{row.sources}</span>,
+      },
+      {
         key: 'status',
         label: 'Status',
         sortable: true,
         render: (row) => (
-          <span className={`desktop-app-status ${row.allowed ? 'is-allowed' : 'is-blocked'}`}>
+          <span
+            className={`desktop-app-status ${
+              row.allowed ? 'is-allowed' : row.grantable ? 'is-blocked' : 'is-unavailable'
+            }`}
+            title={row.status === 'Shared runtime'
+              ? 'This shared process cannot identify the application that hosts its window.'
+              : undefined}
+          >
             {row.status}
           </span>
         ),
@@ -168,7 +235,7 @@ function DesktopAppPickerComponent({
         sortable: false,
         search: false,
         render: (row) =>
-          row.isCustom ? (
+          row.isCustom && row.grantable ? (
             <div className="actions desktop-app-row-actions">
               <button
                 type="button"
@@ -199,10 +266,11 @@ function DesktopAppPickerComponent({
     [busy, onToggleApp, handleDeleteWithConfirm],
   );
 
-  const handleAddManual = () => {
+  const handleAddManual = async () => {
     const entry = manual.trim();
-    setManual('');
     if (!entry || isAllowed(entry)) return;
+    if (isWebViewRuntime(entry) && !(await confirmBroadWebViewAccess())) return;
+    setManual('');
     onAddManualApp(entry);
   };
 
@@ -217,13 +285,13 @@ function DesktopAppPickerComponent({
           pageSize={10}
           searchPlaceholder="Search apps…"
           emptyText="No apps found."
-          rowKey={(row) => row.exeBasename}
+          rowKey={(row) => row.rowId}
         />
       </div>
       <div className="desktop-manual-app-section">
         <div className="desktop-manual-app-header">
           <label htmlFor="desktopManualApp" className="desktop-manual-app-label">
-            Add an app by program file name
+            Add a legacy rule by program file name
           </label>
           <button
             type="button"
@@ -253,8 +321,8 @@ function DesktopAppPickerComponent({
           </button>
         </div>
         <p className="section-note">
-          Detection only finds apps that register a program file, so some are missing above. Use the
-          name the app runs as, not its installer.
+          The catalog checks installed registrations, Start Menu shortcuts, visible windows, and
+          packaged apps. Closed portable apps may still be missing; add their executable path above.
         </p>
       </div>
       {modalOpen ? (
@@ -262,7 +330,7 @@ function DesktopAppPickerComponent({
           key={editingApp?.exeBasename ?? 'new'}
           open={modalOpen}
           initialApp={editingApp}
-          existingExes={applications}
+          existingPaths={apps.flatMap((app) => app.executablePath ? [app.executablePath] : [])}
           onClose={handleCloseModal}
           onSave={handleSaveModal}
         />

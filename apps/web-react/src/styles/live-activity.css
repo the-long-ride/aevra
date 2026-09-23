@@ -57,36 +57,6 @@
   white-space: nowrap;
 }
 
-.activity-detail {
-  display: grid;
-  gap: 12px;
-}
-
-.activity-detail-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--mute);
-  font-size: 11px;
-}
-
-.activity-detail section {
-  display: grid;
-  gap: 6px;
-}
-
-.activity-detail pre {
-  max-height: 280px;
-  margin: 0;
-  overflow: auto;
-  border: 1px solid var(--hairline);
-  padding: 10px;
-  background: var(--surface-soft);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: 11px;
-}
-
 .json-detail-view {
   min-width: 0;
   overflow: hidden;

@@ -45,7 +45,8 @@ describe('RequestApprovalModal coverage', () => {
 
     renderWithDialog(<RequestApprovalModal data={data} onActioned={vi.fn()} onDismiss={vi.fn()} />);
 
-    expect(screen.getByText('git:diff:--cached')).toBeInTheDocument();
+    const decision = document.querySelector('.approval-modal-main') as HTMLElement;
+    expect(within(decision).getByText('git:diff:--cached')).toBeInTheDocument();
     expect(screen.getByText('ws-unknown')).toBeInTheDocument();
   });
 

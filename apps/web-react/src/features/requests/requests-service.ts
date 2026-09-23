@@ -10,6 +10,41 @@ export interface RequestsData {
   approvals: ApprovalItem[];
   oauth: OauthRequestItem[];
   workspaces: WorkspaceSummary[];
+  desktopAccess?: DesktopAccessRequest[];
+}
+
+export interface DesktopAccessRequest {
+  id: string;
+  actor: string;
+  sessionId: string;
+  workspaceId: string;
+  windowId: string;
+  targetExecutablePath: string;
+  hostExecutablePath: string;
+  requestedDuration: 'session' | 'persistent';
+  expiresAt: string;
+}
+
+export async function loadDesktopAccessRequests(): Promise<DesktopAccessRequest[]> {
+  const result = await requestJson<{ requests: DesktopAccessRequest[] }>('/api/desktop/access-requests');
+  return result.requests;
+}
+
+export async function decideDesktopAccessRequest(
+  id: string,
+  decision: 'deny' | 'session' | 'persistent',
+) {
+  if (decision === 'deny') {
+    await requestJson(`/api/desktop/access-requests/${encodeURIComponent(id)}/deny`, {
+      method: 'POST',
+      body: '{}',
+    });
+    return;
+  }
+  await requestJson(`/api/desktop/access-requests/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ scope: decision }),
+  });
 }
 
 export async function loadRequests(): Promise<RequestsData> {

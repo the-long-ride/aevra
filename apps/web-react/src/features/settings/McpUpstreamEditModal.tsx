@@ -3,7 +3,7 @@ import { SettingsFormModal } from './SettingsFormModal';
 
 export type UpstreamTransport = 'stdio' | 'http' | 'sse';
 export type UpstreamRiskTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-export const RISK_TIERS: UpstreamRiskTier[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const RISK_TIERS: UpstreamRiskTier[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 export interface UpstreamDraft {
   name: string;
   transport: UpstreamTransport;

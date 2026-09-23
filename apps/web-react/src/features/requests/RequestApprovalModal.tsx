@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDialog } from '../../components/Dialog';
 import { Switch } from '../../components/Switch';
 import { CommandExplanation } from '../permissions/CommandExplanation';
+import { ApprovalPayloadPanel, hasApprovalDetails } from './ApprovalPayloadPanel';
 import { actionsForApproval } from './request-actions';
 import {
   approveRequest,
@@ -100,66 +101,70 @@ function ApprovalModalCard({
   };
 
   return (
-    <>
-      <div className="approval-modal-head">
-        <div>
-          <b>{presentation.title}</b>
-          <span>{item.actor}</span>
+    <div className="approval-modal-split">
+      {/* Details come first so the decision buttons stay the last Tab stop. */}
+      {hasApprovalDetails(item.payload) ? <ApprovalPayloadPanel payload={item.payload} /> : null}
+      <div className="approval-modal-main">
+        <div className="approval-modal-head">
+          <div>
+            <b>{presentation.title}</b>
+            <span>{item.actor}</span>
+          </div>
+          <span className={`risk ${item.risk.toLowerCase()}`}>{item.risk}</span>
         </div>
-        <span className={`risk ${item.risk.toLowerCase()}`}>{item.risk}</span>
-      </div>
-      <div className="request-detail">
-        <b>{presentation.action}</b>
-        <span className="approval-command-target" title={presentation.target}>
-          {presentation.target}
-        </span>
-        {presentation.preview ? (
-          <code className="request-preview" title={presentation.preview}>
-            {presentation.preview}
-          </code>
-        ) : null}
-        {matcher ? (
-          <span className="request-saved-matcher">
-            <strong>Saved matcher</strong>
-            <code title={matcher}>{matcher}</code>
+        <div className="request-detail">
+          <b>{presentation.action}</b>
+          <span className="approval-command-target" title={presentation.target}>
+            {presentation.target}
           </span>
-        ) : null}
-        {item.payload?.commandAnalysis ? (
-          <CommandExplanation analysis={item.payload.commandAnalysis as any} />
+          {presentation.preview ? (
+            <code className="request-preview" title={presentation.preview}>
+              {presentation.preview}
+            </code>
+          ) : null}
+          {matcher ? (
+            <span className="request-saved-matcher">
+              <strong>Saved matcher</strong>
+              <code title={matcher}>{matcher}</code>
+            </span>
+          ) : null}
+          {item.payload?.commandAnalysis ? (
+            <CommandExplanation analysis={item.payload.commandAnalysis as any} />
+          ) : null}
+        </div>
+        <div className="request-actions approval-modal-actions">
+          {actionsForApproval(item).map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className={action.scope === 'once' ? 'primary' : ''}
+              data-surface-id={`approval-modal:${action.id}`}
+              disabled={busy}
+              onClick={() => void perform(action.scope)}
+            >
+              {action.label}
+            </button>
+          ))}
+          {yoloEligible ? (
+            <button
+              type="button"
+              className="yolo-action"
+              data-surface-id="approval-modal:yolo-session"
+              title="Allow this connector session to skip future approval prompts"
+              disabled={busy}
+              onClick={() => void enableYolo()}
+            >
+              Enable YOLO
+            </button>
+          ) : null}
+        </div>
+        {failure ? (
+          <p className="approval-modal-failure" role="alert">
+            {failure}
+          </p>
         ) : null}
       </div>
-      <div className="request-actions approval-modal-actions">
-        {actionsForApproval(item).map((action) => (
-          <button
-            key={action.id}
-            type="button"
-            className={action.scope === 'once' ? 'primary' : ''}
-            data-surface-id={`approval-modal:${action.id}`}
-            disabled={busy}
-            onClick={() => void perform(action.scope)}
-          >
-            {action.label}
-          </button>
-        ))}
-        {yoloEligible ? (
-          <button
-            type="button"
-            className="yolo-action"
-            data-surface-id="approval-modal:yolo-session"
-            title="Allow this connector session to skip future approval prompts"
-            disabled={busy}
-            onClick={() => void enableYolo()}
-          >
-            Enable YOLO
-          </button>
-        ) : null}
-      </div>
-      {failure ? (
-        <p className="approval-modal-failure" role="alert">
-          {failure}
-        </p>
-      ) : null}
-    </>
+    </div>
   );
 }
 
@@ -321,6 +326,7 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
   if (!showItem) return null;
 
   const isOauth = 'pairingCode' in showItem;
+  const wide = !isOauth && hasApprovalDetails((showItem as ApprovalItem).payload);
 
   return (
     <div
@@ -331,7 +337,7 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
     >
       <article
         ref={dialogRef}
-        className="approval-modal"
+        className={`approval-modal${wide ? ' wide' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label="Approval request"

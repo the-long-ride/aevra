@@ -271,6 +271,48 @@
   margin: 10px 0;
 }
 
+.desktop-custom-app-migration,
+.desktop-app-grants {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--surface-soft);
+}
+
+.desktop-custom-app-migration {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.desktop-app-grants h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.desktop-app-grant-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.desktop-app-grant-row > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.desktop-app-grant-row small {
+  color: var(--mute);
+  overflow-wrap: anywhere;
+}
+
 .desktop-app-picker-table .dt-scroll {
   max-height: 280px;
   overflow-y: auto;
@@ -319,6 +361,12 @@
   background: var(--surface-soft);
   color: var(--mute);
   border: 1px solid var(--hairline);
+}
+
+.desktop-app-status.is-unavailable {
+  background: var(--surface-soft);
+  color: var(--warning);
+  border: 1px solid var(--hairline-strong);
 }
 
 .desktop-manual-app-section {
