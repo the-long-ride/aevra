@@ -31,7 +31,7 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 | Skills     | `skills_list` `skill_read` `skill_write` `instructions_read` `instructions_write`                                                                                                                                                                                                           |
 | Browser    | `browser_connect` `browser_status` `browser_disconnect` `browser_tabs` `browser_navigate` `browser_snapshot` `browser_read` `browser_act_many` `browser_execute_script` `browser_logs`                                                                                                      |
 | Control    | `control_observe` `control_execute` `control_plan_status` `control_plan_cancel` `desktop_act_many`                                                                                                                                                                                          |
-| Desktop    | `desktop_status` `desktop_connect` `desktop_disconnect` `desktop_apps` `desktop_windows` `desktop_describe` `desktop_capture` `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` `desktop_invoke` `desktop_set_value` `desktop_select` `desktop_toggle` `desktop_release_window` |
+| Desktop    | `desktop_status` `desktop_connect` `desktop_disconnect` `desktop_apps` `desktop_request_access` `desktop_windows` `desktop_describe` `desktop_capture` `desktop_click` `desktop_type` `desktop_key` `desktop_scroll` `desktop_invoke` `desktop_set_value` `desktop_select` `desktop_toggle` `desktop_release_window` |
 
 The public MCP discovery surface exposes batch tools as the normal interface for file reads, file mutations, and bounded commands, including single-item operations:
 
@@ -90,6 +90,16 @@ keyboard, or clipboard input. Each native snapshot has an exclusive window lease
 mutations invalidate it, process-instance identity is rechecked before dispatch,
 protected text values are neither exposed nor writable, and focus is revalidated
 after portable AX/AT-SPI actions.
+
+When an allowlist refuses an attributed app, `desktop_request_access` submits a
+pending request for the observed `windowId` and a requested duration. The host
+binds it to the requesting actor/session/workspace, target process instance, and
+verified host process when the target is WebView2. Requests expire after ten
+minutes and require an administrator decision; submission does not grant access.
+An approval creates either a session grant or a persistent exact-executable-path
+grant. Session grants end with their caller session, and administrators can
+revoke persistent grants. Grants do not replace `desktop.control`, window identity,
+protected-title, policy, or per-action approval checks.
 
 ### Guarded control-plan pattern
 

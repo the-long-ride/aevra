@@ -50,7 +50,8 @@ Base desktop tools:
 | Tool                                                          | Purpose                                                                    |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `desktop_connect` / `desktop_status` / `desktop_disconnect`   | helper lifecycle and capabilities                                          |
-| `desktop_apps`                                                | detected application inventory                                             |
+| `desktop_apps`                                                | configured/granted app labels only when using an allowlist                  |
+| `desktop_request_access`                                      | ask a human administrator to review access for a freshly observed window   |
 | `desktop_windows`                                             | visible top-level windows with attribution                                 |
 | `desktop_describe`                                            | accessibility tree; background mode also creates a semantic snapshot/lease |
 | `desktop_capture`                                             | Windows pixel capture; unsupported on portable semantic backends           |
@@ -132,6 +133,41 @@ Allow/deny policy, protected/admin-surface defenses, capability checks, DLP,
 approvals, and audit rules remain in force for semantic batches. `desktop_act_many`
 and `control_execute` call the existing desktop/browser tool paths rather than
 creating a policy bypass.
+
+### Windows app discovery and WebView2
+
+The Settings app picker combines bounded scans of uninstall registrations, Start Menu
+shortcuts, currently visible application windows, and registered packaged apps. It
+shows which sources found each app and reports partial-source failures. Some portable
+apps, closed tray apps, and applications without a usable executable mapping may not
+appear. Restore a tray app to a visible window before using it; Aevra does not wake or
+activate hidden windows to discover them. You can add an existing Windows `.exe` path
+to the shared catalog. Custom names are stored by the Aevra host, so every authenticated
+admin device sees the same entry.
+
+For an app that uses WebView2, the window process is often the shared
+`msedgewebview2.exe` runtime. Aevra does not infer the host from a title or guessed
+process name. When the helper can verify the native window relationship, allowlisting
+the host app grants only WebView2 windows attributed to that exact executable path.
+When it cannot verify the relationship, access stays refused.
+
+After a policy refusal, the agent may call `desktop_request_access` with the visible
+`windowId` and a requested duration. This creates a pending request; it does not grant
+access. Open Requests and choose Deny, Allow this session, or Persist for this app.
+Requests expire after ten minutes and require the requesting desktop-control session
+to remain active while they are reviewed. A grant does not bypass `desktop.control`,
+per-action approvals, title protections, or Windows integrity and secure-desktop
+checks. Persistent grants can be revoked in Settings → Desktop control. Enabling the
+shared `msedgewebview2.exe` runtime directly is a broad rule and requires a separate
+confirmation in the picker.
+
+Legacy browser-local custom app entries can be imported from Settings. Aevra removes
+each local entry only after the host confirms it was stored, so failed imports can be
+retried from that browser.
+
+`desktop_apps` uses the same catalog to label configured entries, but does not reveal
+the full installed-app inventory to the model. In denylist mode it does not enumerate
+apps because desktop control is not scoped to a selected app list.
 
 The approval dialog itself is outside the desktop action contract. In v1.1.1 long
 command previews are bounded with ellipsis, the dialog body scrolls within the

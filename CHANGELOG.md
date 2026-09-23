@@ -30,6 +30,11 @@
   Windows, macOS, and Ubuntu. Release publishing downloads those exact validated
   artifacts, stages `dist/helper/<platform>-<arch>`, preserves executable bits,
   includes helpers in npm, and attaches native binaries to GitHub releases.
+- **Shared desktop app catalog and access review**: added bounded Windows app
+  discovery, host-stored custom app metadata, exact-path grants, and
+  `desktop_request_access`. Requests are owner/window/process bound, expire after
+  ten minutes, and require administrator review before a session or persistent
+  grant is created. WebView2 grants require a verified native host relationship.
 
 ### Changed - Browser Target Isolation & Faster Actions
 
@@ -52,6 +57,12 @@
 - **Strict isolation stays fail-closed**: `mode:"isolated"` never downgrades to
   the ordinary host worker. v1.1.1 returns `CONTROL_ISOLATION_UNAVAILABLE`
   until a separately provisioned runner has passed containment qualification.
+
+### Changed - Activity and Approval Details
+
+- **Structured activity and approval details**: added readable, expandable views
+  for tool inputs/results and approval payloads, with raw-text mode and exact-value
+  copy support for long or nested content.
 
 ### Fixed - Approval & Management UI
 
