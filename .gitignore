@@ -23,3 +23,6 @@ helper/target/
 docs/plans/
 docs/wayfinder/
 docs/research/
+.test-dist-mcp/
+.test-dist-cxb/
+.test-dist-core/

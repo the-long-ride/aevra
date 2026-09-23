@@ -3,7 +3,7 @@ import type { DesktopWindowIdentity } from '../../protocol/src/desktop.js';
 import type { RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { gated } from './authorization.js';
-import { audit, policyFor, run, targetOf } from './desktop-support.js';
+import { audit, policyFor, redactWindow, run, sanitizeDesktopToolError, targetOf } from './desktop-support.js';
 import { asToolError } from './errors.js';
 import { argsHash } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
@@ -101,7 +101,7 @@ export async function handleAct(
     ...(op === 'type' ? { text: String(args.text ?? '') } : {}),
     ...(op === 'key' ? { keys: String(args.keys ?? '') } : {}),
     ...(args.deltaY !== undefined ? { deltaY: Number(args.deltaY) } : {}),
-    policy: policyFor(context),
+    policy: policyFor(context, sessionId),
   };
   // Never the text/keys themselves - only what was targeted and, for
   // `desktop_type`, its length.
@@ -120,11 +120,17 @@ export async function handleAct(
       // since this tool layer has no window identity of its own without an
       // extra describe round trip.
       const window: DesktopWindowIdentity | undefined = value?.window;
+      const policy = policyFor(context, sessionId);
+      const tally = { count: 0 };
+      const safeValue = window
+        ? { ...value, window: redactWindow(window, tally, policy) }
+        : value;
       audit(context, sessionId, name, auditTarget, risk, 'SUCCEEDED', {
         window: targetOf(window),
+        redactionCount: tally.count,
         ...(value?.gateVerdict ? { gateVerdict: value.gateVerdict, gateRule: value.gateRule } : {}),
       });
-      return value;
+      return safeValue;
     } catch (error) {
       const err = asToolError(error);
       // A refused action's `details` carries the same window/verdict pair (see
@@ -140,7 +146,7 @@ export async function handleAct(
           ? { gateVerdict: details.gateVerdict, gateRule: details.gateRule }
           : {}),
       });
-      throw err;
+      throw sanitizeDesktopToolError(context, sessionId, err);
     }
   };
 

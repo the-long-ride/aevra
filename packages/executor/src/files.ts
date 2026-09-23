@@ -14,10 +14,10 @@ import {
 } from '../../security/src/sensitive.js';
 import { compileProtectedGlobs, type CompiledProtection } from './protected-globs.js';
 
-export const MAX_FULL_FILE_BYTES = 16 * 1024 * 1024;
-export const MAX_RANGE_READ_CHARACTERS = 1024 * 1024;
+const MAX_FULL_FILE_BYTES = 16 * 1024 * 1024;
+const MAX_RANGE_READ_CHARACTERS = 1024 * 1024;
 
-export function sha256(data: Buffer | string) {
+function sha256(data: Buffer | string) {
   return `sha256:${createHash('sha256').update(data).digest('hex')}` as const;
 }
 

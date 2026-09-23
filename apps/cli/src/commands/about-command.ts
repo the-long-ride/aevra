@@ -13,7 +13,7 @@ export interface AboutDependencies {
   log(message: string): void;
 }
 
-export function formatAboutTable(rows: Array<[string, string]>): string[] {
+function formatAboutTable(rows: Array<[string, string]>): string[] {
   const col1Width = Math.max(...rows.map(([left]) => left.length));
   const col2Width = Math.max(...rows.map(([, right]) => right.length));
   const border = (left: string, mid: string, right: string) =>

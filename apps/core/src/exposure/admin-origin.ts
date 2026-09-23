@@ -21,7 +21,7 @@ export function normalizeAdminPublicUrl(value?: string): string | undefined {
   return url.toString().replace(/\/$/, '');
 }
 
-export function normalizeAdminOrigin(value: string): string {
+function normalizeAdminOrigin(value: string): string {
   return parseAdminUrl(value.trim(), 'Trusted Admin origin').origin;
 }
 

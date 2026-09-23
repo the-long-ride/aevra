@@ -1,5 +1,5 @@
 {
-  "exclude": ["exports", "types"],
+  "exclude": ["types"],
   "workspaces": {
     ".": {
       "entry": [
@@ -11,7 +11,10 @@
         "tests/ui-parity/static-server.mjs",
         "scripts/run-ts-tests.mjs",
         "scripts/ts-loader.mjs",
-        "scripts/test/*.test.mjs"
+        "scripts/test/*.test.mjs",
+        "apps/*/test/**/*.test.ts",
+        "packages/*/test/**/*.test.ts",
+        "tests/**/*.test.{ts,mjs}"
       ],
       "project": [
         "apps/cli/**/*.{ts,js,mjs}",
@@ -24,7 +27,7 @@
       "paths": {
         "@aevra/admin-contracts": ["packages/admin-contracts/src/index.ts"]
       },
-      "ignoreDependencies": ["@types/chrome", "@vitest/coverage-v8", "c8", "jsdom", "vitest"]
+      "ignoreDependencies": ["@types/chrome", "c8"]
     },
     "apps/web-react": {
       "paths": {

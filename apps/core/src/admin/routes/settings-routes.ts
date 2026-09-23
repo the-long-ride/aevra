@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readAdminBody, sendAdminResponse } from './http.js';
 import { DEFAULT_ONBOARDING, GUIDE_CHAPTERS, onboardingState, revision } from './route-state.js';
 import type { AdminRouteHandler } from './types.js';
+import { HOOK_PERMISSIONS } from '../../../../../packages/mcp-tools/src/hook-service.js';
 
 const HOOK_EVENTS = new Set([
   'session_start',
@@ -17,14 +18,7 @@ const HOOK_EVENTS = new Set([
   'response_failed',
 ]);
 
-const HOOK_PERMISSIONS = new Set([
-  'observe',
-  'block',
-  'modifyPrompt',
-  'modifyToolInput',
-  'modifyToolOutput',
-  'modifyResponse',
-]);
+const HOOK_PERMISSION_SET = new Set<string>(HOOK_PERMISSIONS);
 
 function normalizeHook(input: any, id = input?.id ?? `hook_${randomUUID()}`) {
   const event = String(input?.event ?? 'before_tool_call');
@@ -43,7 +37,7 @@ function normalizeHook(input: any, id = input?.id ?? `hook_${randomUUID()}`) {
     ),
   ];
   for (const permission of permissions) {
-    if (!HOOK_PERMISSIONS.has(permission))
+    if (!HOOK_PERMISSION_SET.has(permission))
       throw new Error(`Unsupported hook permission: ${permission}`);
   }
   if (!permissions.includes('observe')) permissions.unshift('observe');

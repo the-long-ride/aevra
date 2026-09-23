@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AnalysisContext, CommandRequest } from './types.js';
 
-export function sha256(data: string | Buffer): string {
+function sha256(data: string | Buffer): string {
   return createHash('sha256').update(data).digest('hex');
 }
 

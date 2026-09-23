@@ -6,7 +6,7 @@ import { readZipEntries, safeEntryPath, type ArchiveEntry } from './extension-ar
 type ExtensionCommand = Extract<AevraCommand, { command: 'extension' }>;
 
 /** The folder the archive unpacks into, and the folder Chrome is pointed at. */
-export const EXTENSION_FOLDER = 'aevra-extension';
+const EXTENSION_FOLDER = 'aevra-extension';
 
 interface PlannedFile {
   file: string;

@@ -7,7 +7,7 @@ import type {
   ScopeStatus,
 } from './types.js';
 
-export function isPathContained(rootDir: string, candidateDir: string, isWin = false): boolean {
+function isPathContained(rootDir: string, candidateDir: string, isWin = false): boolean {
   const normRoot = isWin ? path.resolve(rootDir).toLowerCase() : path.resolve(rootDir);
   const normCandidate = isWin
     ? path.resolve(candidateDir).toLowerCase()
@@ -17,7 +17,7 @@ export function isPathContained(rootDir: string, candidateDir: string, isWin = f
   return !rel.startsWith(`..${path.sep}`) && rel !== '..' && !path.isAbsolute(rel);
 }
 
-export function isLogicalContained(
+function isLogicalContained(
   logicalPrefix: string,
   candidateLogical: string,
   isWin = false,

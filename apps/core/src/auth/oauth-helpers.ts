@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
-export const SUPPORTED_SCOPES = ['mcp', 'offline_access'] as const;
+const SUPPORTED_SCOPES = ['mcp', 'offline_access'] as const;
 
 export function base64urlSha256(value: string) {
   return createHash('sha256').update(value).digest('base64url');
@@ -46,7 +46,7 @@ export function normalizeScope(value: string | undefined) {
   return unique.join(' ');
 }
 
-export function canonicalResource(value: string) {
+function canonicalResource(value: string) {
   return value.trim().replace(/\/+$/, '');
 }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseControlPlan } from '../src/control.js';
+import { parseControlPlan } from '../src/control-parse.js';
 
 function validPlan(): Record<string, unknown> {
   return {
@@ -49,7 +49,9 @@ test('accepts the bounded typed control plan contract', () => {
   const plan = parseControlPlan(validPlan());
 
   assert.equal(plan.schemaVersion, 1);
-  assert.equal(plan.steps[1]?.target.locator?.requireUnique, true);
+  const target = plan.steps[1]?.target;
+  assert.ok(target && 'locator' in target);
+  assert.equal(target.locator.requireUnique, true);
   assert.deepEqual(plan.steps[0]?.dependsOn, []);
 });
 

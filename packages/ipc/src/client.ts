@@ -12,7 +12,7 @@ export const IPC_DEFAULT_DEADLINE_MS = 120_000;
 export const IPC_MAX_DEADLINE_MS = 24 * 60 * 60_000 + IPC_OVERHEAD_MS;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 
-export class WorkerTransportError extends Error {
+class WorkerTransportError extends Error {
   constructor(
     message: string,
     readonly code: 'WORKER_TIMEOUT' | 'WORKER_DISCONNECTED',

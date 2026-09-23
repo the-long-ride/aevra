@@ -148,7 +148,7 @@ export function revokeWorkspaceAccess(input: {
   input.revokeLease(lease.id);
   return true;
 }
-export function revokeRememberedWorkspaceAcrossSessions(input: {
+function revokeRememberedWorkspaceAcrossSessions(input: {
   repo: SessionRepository;
   sessions: Iterable<SecuritySession>;
   source: SecuritySession;

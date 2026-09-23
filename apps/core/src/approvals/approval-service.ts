@@ -12,8 +12,6 @@ import {
   type CallerApprovalIdentity,
 } from './approval-ownership.js';
 
-export { assertTicketOwnership, isTicketOwnedByCaller, type CallerApprovalIdentity };
-
 export type ApprovalState =
   | 'PENDING'
   | 'APPROVED'

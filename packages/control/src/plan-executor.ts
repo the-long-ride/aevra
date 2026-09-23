@@ -11,6 +11,13 @@ import { ObservationStore } from './observation-store.js';
 import type { ControlAdapter } from './adapter.js';
 import { ControlAdapterError } from './adapter.js';
 import { ControlPlanJournal } from './plan-journal.js';
+import {
+  asControlError,
+  failedPlanOutcome,
+  failedStepStatus,
+  nodeBudget,
+  preflightFailure,
+} from './plan-outcome.js';
 import { ResourceScheduler } from './resource-scheduler.js';
 import {
   evaluateControlPredicate,
@@ -19,34 +26,6 @@ import {
 } from './target-resolver.js';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-function asControlError(error: unknown, stepId?: string): ControlError {
-  if (error instanceof ControlAdapterError) {
-    return {
-      code: error.code,
-      ...(stepId ? { stepId } : {}),
-      dispatchState: error.dispatchState,
-      recovery: error.recovery,
-      message: error.message,
-    };
-  }
-  const value = error as {
-    code?: string;
-    message?: string;
-    dispatchState?: ControlError['dispatchState'];
-  };
-  return {
-    code: value?.code ?? 'CONTROL_EXECUTION_FAILED',
-    ...(stepId ? { stepId } : {}),
-    dispatchState: value?.dispatchState ?? 'notDispatched',
-    recovery: 'none',
-    message: value?.message ?? String(error),
-  };
-}
-
-function nodeBudget(maxOutputTokens: number): number {
-  return Math.max(1, Math.min(500, Math.floor(maxOutputTokens / 12)));
-}
 
 export class PlanExecutor {
   constructor(
@@ -85,65 +64,10 @@ export class PlanExecutor {
     const results = new Map<string, ControlPlanStepResult>();
 
     try {
-      for (const surfaceId of plan.surfaceIds) {
-        const adapter = adapters.get(surfaceId);
-        if (!adapter) {
-          return this.finish(owner, {
-            planId,
-            status: 'needsContext',
-            steps: [],
-            error: {
-              code: 'CONTROL_SURFACE_NOT_FOUND',
-              dispatchState: 'notDispatched',
-              recovery: 'needsContext',
-              message: `Surface ${surfaceId} has not been observed in this session`,
-            },
-            checkpoint: {
-              reason: 'needsContext',
-              nextAction: `Observe ${surfaceId} again before executing the plan.`,
-            },
-          });
-        }
-        if (adapter.mode !== plan.mode) {
-          return this.finish(owner, {
-            planId,
-            status: 'needsContext',
-            steps: [],
-            error: {
-              code: 'CONTROL_MODE_MISMATCH',
-              dispatchState: 'notDispatched',
-              recovery: plan.mode === 'isolated' ? 'chooseIsolatedRunner' : 'needsContext',
-              message: `Surface ${surfaceId} is bound to ${adapter.mode}, not ${plan.mode}`,
-            },
-            checkpoint: {
-              reason: plan.mode === 'isolated' ? 'chooseIsolatedRunner' : 'needsContext',
-              nextAction:
-                plan.mode === 'isolated'
-                  ? 'Choose a verified isolated runner for this plan.'
-                  : 'Observe the surface in shared semantic mode.',
-            },
-          });
-        }
-        const current = this.observations.get(owner, surfaceId);
-        if (!current || current.observationId !== plan.expectedObservations[surfaceId]) {
-          return this.finish(owner, {
-            planId,
-            status: 'needsContext',
-            steps: [],
-            error: {
-              code: 'CONTROL_OBSERVATION_STALE',
-              dispatchState: 'notDispatched',
-              recovery: 'refresh',
-              observationId: current?.observationId,
-              message: `Expected observation for ${surfaceId} is no longer current`,
-            },
-            checkpoint: {
-              reason: 'needsContext',
-              nextAction: `Refresh ${surfaceId} and submit a plan against the new observation.`,
-            },
-          });
-        }
-      }
+      const blocked = preflightFailure(plan, adapters, (surfaceId) =>
+        this.observations.get(owner, surfaceId),
+      );
+      if (blocked) return this.finish(owner, { planId, ...blocked });
 
       const pending = new Map(plan.steps.map((step) => [step.id, step]));
       while (pending.size > 0) {
@@ -222,14 +146,7 @@ export class PlanExecutor {
           );
           results.set(step.id, {
             id: step.id,
-            status:
-              controlError.recovery === 'needsApproval'
-                ? 'awaitingApproval'
-                : controlError.recovery === 'needsContext' || controlError.recovery === 'refresh'
-                  ? 'needsContext'
-                  : controlError.dispatchState === 'unknown'
-                    ? 'unknown'
-                    : 'failed',
+            status: failedStepStatus(controlError),
             postcondition: 'notChecked',
           });
         }
@@ -239,35 +156,13 @@ export class PlanExecutor {
             results.set(step.id, { id: step.id, status: 'skipped', postcondition: 'notChecked' });
           }
           const failedStep = results.get(firstError.stepId ?? '');
-          const status =
-            failedStep?.status === 'awaitingApproval'
-              ? 'awaitingApproval'
-              : failedStep?.status === 'needsContext'
-                ? 'needsContext'
-                : results.size > 1
-                  ? 'partial'
-                  : 'failed';
+          const outcome = failedPlanOutcome(failedStep, results.size);
           return this.finish(owner, {
             planId,
-            status,
+            status: outcome.status,
             steps: plan.steps.map((step) => results.get(step.id)!).filter(Boolean),
             error: firstError,
-            ...(status === 'awaitingApproval'
-              ? {
-                  checkpoint: {
-                    reason: 'needsApproval' as const,
-                    nextAction:
-                      'Approve the pending step, then submit a fresh plan against current state.',
-                  },
-                }
-              : status === 'needsContext'
-                ? {
-                    checkpoint: {
-                      reason: 'needsContext' as const,
-                      nextAction: 'Refresh the affected surface before continuing.',
-                    },
-                  }
-                : {}),
+            ...(outcome.checkpoint ? { checkpoint: outcome.checkpoint } : {}),
           });
         }
       }
