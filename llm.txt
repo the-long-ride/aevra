@@ -84,7 +84,7 @@ Execution Worker (Port 47833 WebSocket for Browser Extension)
 
 ---
 
-## 4. Built-in MCP Tools Reference (72 Tools)
+## 4. Built-in MCP Tools Reference (73 Tools)
 
 The model-facing surface favors bounded batch interfaces; singular file/command
 primitives remain internal implementation details.
@@ -134,7 +134,9 @@ Shared semantic control is available through Windows UIA, macOS Accessibility
 `desktop_toggle`; these provider actions do not synthesize host mouse/keyboard
 input. Windows additionally supports explicit legacy foreground click/type/key/
 scroll and pixel capture. macOS/Linux portable mode intentionally reports those
-foreground/capture capabilities unavailable.
+foreground/capture capabilities unavailable. `desktop_request_access` submits a
+pending request for human review when an attributed application is refused; it
+does not grant access by itself.
 
 ### Upstream MCP Proxies
 
