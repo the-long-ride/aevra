@@ -7,7 +7,7 @@ export interface ExtensionTokenClaims {
   expiresAt: string;
 }
 
-export class ExtensionTokenError extends Error {
+class ExtensionTokenError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ExtensionTokenError';

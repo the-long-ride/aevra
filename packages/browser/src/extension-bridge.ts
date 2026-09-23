@@ -153,7 +153,7 @@ async function snapshot(
  * serialized tree. It exists so a scoped read returns one element rather than
  * the whole document; anything richer belongs in the page, not here.
  */
-export function findBySelector(
+function findBySelector(
   node: SnapshotElementLike,
   selector: string,
 ): SnapshotElementLike | null {

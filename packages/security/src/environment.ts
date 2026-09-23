@@ -22,7 +22,7 @@ const WINDOWS_KEYS = new Set([
   'USERPROFILE',
 ]);
 
-export function safeBaseEnvironment(
+function safeBaseEnvironment(
   source: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
   extraAllowedKeys: readonly string[] = [],

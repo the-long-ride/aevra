@@ -1,1 +1,1 @@
-export { buildChildEnvironment, safeBaseEnvironment } from '../../security/src/environment.js';
+export { buildChildEnvironment } from '../../security/src/environment.js';

@@ -8,9 +8,9 @@ import type {
 } from '../../../../packages/protocol/src/index.js';
 import { TOOL_PROBES, type Candidate, type ToolProbe } from './capability-tool-probes.js';
 
-export const PROBE_TIMEOUT_MS = 1_500;
-export const PROBE_KILL_GRACE_MS = 250;
-export const PROBE_OUTPUT_LIMIT = 4_096;
+const PROBE_TIMEOUT_MS = 1_500;
+const PROBE_KILL_GRACE_MS = 250;
+const PROBE_OUTPUT_LIMIT = 4_096;
 const VERSION_OUTPUT_LIMIT = 160;
 
 export interface CapabilityProbeResult {
@@ -42,7 +42,7 @@ const SHELL_PROBES = [
   { id: 'wsl', label: 'WSL', args: ['--status'] },
 ] as const;
 
-export class DefaultCapabilityProbeRunner implements CapabilityProbeRunner {
+class DefaultCapabilityProbeRunner implements CapabilityProbeRunner {
   async run(
     executable: string,
     args: readonly string[],
@@ -109,7 +109,7 @@ function normalizeVersion(result: CapabilityProbeResult): string | undefined {
   return match?.[1]?.slice(0, VERSION_OUTPUT_LIMIT);
 }
 
-export function normalizePlatform(
+function normalizePlatform(
   platform: NodeJS.Platform,
 ): SystemCapabilitySnapshot['os']['platform'] {
   if (platform === 'win32') return 'windows';

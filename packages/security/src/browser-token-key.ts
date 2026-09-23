@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 
-export const BROWSER_TOKEN_KEY_LABEL = 'aevra:browser:extension-token:v1';
+const BROWSER_TOKEN_KEY_LABEL = 'aevra:browser:extension-token:v1';
 
 /**
  * Domain-separates the extension token key from the IPC envelope MAC key. Both

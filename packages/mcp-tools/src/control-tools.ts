@@ -2,8 +2,8 @@ import { ContextComposer } from '../../control/src/context-composer.js';
 import { PlanExecutor } from '../../control/src/plan-executor.js';
 import { ControlPlanJournal } from '../../control/src/plan-journal.js';
 import type { ControlAdapter } from '../../control/src/adapter.js';
+import { parseControlPlan } from '../../protocol/src/control-parse.js';
 import {
-  parseControlPlan,
   type ControlAction,
   type ControlMode,
   type ControlPlan,
@@ -58,6 +58,13 @@ function ownerSurfaces(ownerKey: string): Map<string, ControlAdapter> {
   return entries;
 }
 
+function adapterForSession(adapter: ControlAdapter, sessionId: string): ControlAdapter {
+  if (adapter instanceof McpBrowserControlAdapter || adapter instanceof McpDesktopControlAdapter) {
+    return adapter.forSession(sessionId);
+  }
+  return adapter;
+}
+
 function maxNodesFromTokens(value: unknown): number {
   const tokens = Number(value ?? 2000);
   if (!Number.isFinite(tokens)) return 160;
@@ -72,7 +79,7 @@ async function observe(context: McpRuntimeContext, sessionId: string, args: any)
   if (kind === 'desktop' && !windowId) {
     throw new AevraToolError('INVALID_REQUEST', 'control_observe desktop mode requires windowId');
   }
-  const adapter: ControlAdapter =
+  const adapter =
     kind === 'browser'
       ? new McpBrowserControlAdapter(
           context,
@@ -81,7 +88,17 @@ async function observe(context: McpRuntimeContext, sessionId: string, args: any)
           mode,
         )
       : new McpDesktopControlAdapter(context, sessionId, windowId, mode);
-  const observation = await adapter.observe();
+  let observation = await adapter.observe();
+  const previous = executorFor(context).observations.get(ownerKey, observation.surfaceId);
+  if (
+    previous &&
+    observation.observationId !== previous.observationId &&
+    observation.generation === previous.generation &&
+    observation.revision <= previous.revision
+  ) {
+    adapter.advanceAfter(previous);
+    observation = await adapter.observe();
+  }
   ownerSurfaces(ownerKey).set(observation.surfaceId, adapter);
   executorFor(context).observations.record(ownerKey, observation);
   const projected = composer.compose(observation, {
@@ -109,7 +126,11 @@ async function execute(context: McpRuntimeContext, sessionId: string, rawPlan: u
   const adapters = new Map<string, ControlAdapter>();
   for (const surfaceId of plan.surfaceIds) {
     const adapter = known.get(surfaceId);
-    if (adapter) adapters.set(surfaceId, adapter);
+    if (adapter) {
+      const currentAdapter = adapterForSession(adapter, sessionId);
+      known.set(surfaceId, currentAdapter);
+      adapters.set(surfaceId, currentAdapter);
+    }
   }
   const result = await executorFor(context).execute(ownerKey, plan, adapters);
   context.deps.audit?.append({

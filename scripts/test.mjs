@@ -63,7 +63,16 @@ if (ts.length) {
   );
   if (c.status !== 0) process.exit(c.status ?? 1);
   const mapped = ts.map((f) => path.join(out, f).replace(/\.ts$/, '.js'));
-  runNodeTests(mapped, `Node ${suite} suite`);
+  // This integration test measures the real foreground window, so keep it away
+  // from other test processes that can launch or focus windows concurrently.
+  const nativeWindowTests = mapped.filter((file) =>
+    file.endsWith(path.join('packages', 'desktop', 'test', 'background-native.integration.test.js')),
+  );
+  const otherTests = mapped.filter((file) => !nativeWindowTests.includes(file));
+  if (otherTests.length) runNodeTests(otherTests, `Node ${suite} suite`);
+  for (const file of nativeWindowTests) {
+    runNodeTests([file], `Node ${suite} native desktop suite`);
+  }
 }
 if (suite === 'all' || suite === 'scripts') {
   const js = collect('scripts/test', (f) => f.endsWith('.test.mjs'));

@@ -7,8 +7,8 @@ import { protectedGlobsFor } from './protected-paths.js';
 import { requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
-export const SEARCH_HARD_MAX_QUERIES = 32;
-export const DEFAULT_SEARCH_MAX_QUERIES = 8;
+const SEARCH_HARD_MAX_QUERIES = 32;
+const DEFAULT_SEARCH_MAX_QUERIES = 8;
 
 const workspaceTargetProperties = {
   workspace: { type: 'string', description: 'Workspace name for this search.' },

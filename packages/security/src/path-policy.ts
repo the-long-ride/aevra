@@ -5,7 +5,7 @@ import type {
   CapabilityRoot,
   ResolvedCapabilityPath,
 } from '../../protocol/src/index.js';
-export class WorkspaceEscapeError extends Error {
+class WorkspaceEscapeError extends Error {
   code = 'WORKSPACE_ESCAPE' as const;
   constructor(public logicalPath: string) {
     super(`Path escapes registered capability roots: ${logicalPath}`);

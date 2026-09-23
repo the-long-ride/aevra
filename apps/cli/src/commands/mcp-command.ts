@@ -41,7 +41,7 @@ function registrationBody(command: McpCommand): Record<string, unknown> {
     risk: command.risk ?? 'MEDIUM',
   };
 }
-export function formatMcpTable(
+function formatMcpTable(
   upstreams: Array<{
     id: string;
     name: string;

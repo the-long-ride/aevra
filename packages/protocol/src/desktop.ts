@@ -4,6 +4,7 @@ export const DESKTOP_OPERATION_KINDS = [
   'desktop.disconnect',
   'desktop.apps',
   'desktop.windows',
+  'desktop.targetIdentity',
   'desktop.describe',
   'desktop.capture',
   'desktop.act',
@@ -48,6 +49,24 @@ export interface DesktopWindowIdentity {
   processName?: string;
   executablePath?: string;
   title?: string;
+}
+
+export interface DesktopWindowInstance {
+  windowId: string;
+  processId: number;
+  processStartedAt: string;
+}
+
+export interface VerifiedWindowHost {
+  executablePath: string;
+  instance: DesktopWindowInstance;
+}
+
+/** Private policy identity read directly from the desktop helper. */
+export interface DesktopTargetIdentity {
+  window: DesktopWindowIdentity;
+  windowInstance: DesktopWindowInstance;
+  hostApplication?: VerifiedWindowHost;
 }
 
 export interface DesktopNode {
@@ -124,6 +143,16 @@ export interface DesktopPolicy {
    * proof of identity -- it is one more speed bump, not a fix.
    */
   deniedTitlePatterns?: string[];
+  /** Exact executable grants for verified app hosts, optionally session scoped. */
+  appGrants?: DesktopAppGrant[];
+}
+
+export interface DesktopAppGrant {
+  id: string;
+  executablePath: string;
+  displayName: string;
+  createdAt: string;
+  sessionId?: string;
 }
 
 export interface BackgroundSnapshot {
@@ -162,4 +191,26 @@ export interface DetectedApp {
   version: string | null;
   executablePath: string;
   exeBasename: string;
+}
+
+export type DesktopAppSource = 'registry' | 'start-menu' | 'running' | 'packaged' | 'custom';
+
+/** An operator-facing app inventory row. Only rows with verified executable paths are grantable. */
+export interface DesktopCatalogApp {
+  displayName: string;
+  version?: string | null;
+  executablePath?: string;
+  exeBasename?: string;
+  sources: DesktopAppSource[];
+  grantable: boolean;
+  reason?: 'needs-manual-path' | 'shared-runtime';
+  isCustom?: boolean;
+  isGranted?: boolean;
+  grantId?: string;
+  customAppId?: string;
+}
+
+export interface DesktopAppCatalogResult {
+  apps: DesktopCatalogApp[];
+  warnings: string[];
 }

@@ -18,5 +18,6 @@ test('control efficiency tools are discoverable with bounded schemas and annotat
   assert.equal(definitions.get('control_plan_status')!.annotations.readOnlyHint, true);
   assert.equal(definitions.get('control_execute')!.annotations.destructiveHint, true);
   assert.equal(definitions.get('control_execute')!.annotations.openWorldHint, true);
-  assert.equal(definitions.get('desktop_act_many')!.inputSchema.properties?.actions?.maxItems, 32);
+  const actMany = definitions.get('desktop_act_many') as any;
+  assert.equal(actMany.inputSchema.properties.actions.maxItems, 32);
 });

@@ -48,7 +48,7 @@ function durationMs(env: NodeJS.ProcessEnv, key: string, fallback: number, allow
   return value;
 }
 
-export function defaultStateDir(env: NodeJS.ProcessEnv = process.env): string {
+function defaultStateDir(env: NodeJS.ProcessEnv = process.env): string {
   if (env.AEVRA_STATE_DIR) return path.resolve(env.AEVRA_STATE_DIR);
   if (process.platform === 'win32') return path.join(env.LOCALAPPDATA ?? os.homedir(), 'Aevra');
   if (process.platform === 'darwin')

@@ -25,7 +25,7 @@ export const WS_CLOSE = 0x8;
  */
 export const MAX_FRAME_BYTES = 8 * 1024 * 1024;
 
-export class WsFrameError extends Error {
+class WsFrameError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'WsFrameError';

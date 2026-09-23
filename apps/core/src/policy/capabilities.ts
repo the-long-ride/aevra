@@ -26,7 +26,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   'instructions.write',
 ];
 
-export const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
+const BUILTIN_CAPABILITY_PROFILES: CapabilityProfile[] = [
   {
     id: 'read-only',
     name: 'Read Only',

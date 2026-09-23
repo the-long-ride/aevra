@@ -2,7 +2,7 @@ import path from 'node:path';
 import { ANALYSIS_BOUNDS } from './types.js';
 import type { CommandNode, ParseShellResult, Reason } from './types.js';
 
-export function resolveLogicalPath(baseLogical: string, relativeOrAbsolute: string): string {
+function resolveLogicalPath(baseLogical: string, relativeOrAbsolute: string): string {
   const norm = relativeOrAbsolute.replaceAll('\\', '/');
   if (/^[a-zA-Z]:\//.test(norm) || norm.startsWith('/')) {
     return path.posix.normalize(norm);

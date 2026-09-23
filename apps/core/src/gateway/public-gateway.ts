@@ -61,10 +61,10 @@ const HOP_BY_HOP = new Set([
  * the origin recorded against every operation.
  */
 /** Client-IP hints, believable only when an upstream proxy is declared trusted. */
-export const CLIENT_IP_HEADERS = new Set(['cf-connecting-ip', 'true-client-ip', 'x-real-ip']);
+const CLIENT_IP_HEADERS = new Set(['cf-connecting-ip', 'true-client-ip', 'x-real-ip']);
 
 /** Routing and trust headers a client may never set for itself, under any configuration. */
-export const ALWAYS_STRIPPED_HEADERS = new Set([
+const ALWAYS_STRIPPED_HEADERS = new Set([
   'forwarded',
   'x-forwarded-for',
   'x-forwarded-host',

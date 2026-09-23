@@ -31,6 +31,7 @@ test('envelope accepts every desktop operation kind', () => {
     'desktop.disconnect': { kind: 'desktop.disconnect' },
     'desktop.apps': { kind: 'desktop.apps' },
     'desktop.windows': { kind: 'desktop.windows' },
+    'desktop.targetIdentity': { kind: 'desktop.targetIdentity', windowId: 'win_1' },
     'desktop.describe': { kind: 'desktop.describe', maxNodes: 200, interactiveOnly: false },
     'desktop.capture': { kind: 'desktop.capture' },
     'desktop.act': {

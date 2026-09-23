@@ -27,7 +27,12 @@ export type AevraErrorCode =
   | 'BROWSER_ORIGIN_BLOCKED'
   | 'BROWSER_REF_STALE'
   | 'BROWSER_CREDENTIAL_FIELD_REFUSED'
-  | 'BROWSER_TIMEOUT';
+  | 'BROWSER_TIMEOUT'
+  | 'DESKTOP_INPUT_REFUSED'
+  | 'DESKTOP_UNAVAILABLE'
+  | 'DESKTOP_ACCESS_REQUEST_UNAVAILABLE'
+  | 'DESKTOP_ACCESS_ALREADY_ALLOWED'
+  | 'DESKTOP_HOST_UNVERIFIED';
 export type Capability =
   | 'files.read'
   | 'files.search'
@@ -188,3 +193,4 @@ export type ToolResult<T> =
 export * from './system-capabilities.js';
 export * from './command-analysis.js';
 export * from './control.js';
+export * from './control-parse.js';

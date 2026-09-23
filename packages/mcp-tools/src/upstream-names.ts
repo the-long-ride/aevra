@@ -1,7 +1,7 @@
 /** Public naming for entries proxied from a registered upstream MCP server. */
 export const UPSTREAM_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/;
-export const PROXY_SEPARATOR = '__';
-export const PROXY_URI_PREFIX = 'mcp+';
+const PROXY_SEPARATOR = '__';
+const PROXY_URI_PREFIX = 'mcp+';
 
 export interface ProxyRef {
   server: string;

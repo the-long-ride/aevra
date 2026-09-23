@@ -6,7 +6,7 @@ export interface CommandRunner {
   run(file: string, args: string[]): Promise<CommandRunResult>;
   spawn(file: string, args: string[]): ChildProcess;
 }
-export class SpawnCommandRunner implements CommandRunner {
+class SpawnCommandRunner implements CommandRunner {
   async run(file: string, args: string[]): Promise<CommandRunResult> {
     return await new Promise<CommandRunResult>((resolve, reject) => {
       const c = spawn(file, args, { shell: false, windowsHide: true });

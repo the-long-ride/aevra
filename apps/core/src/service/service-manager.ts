@@ -19,7 +19,7 @@ export interface ServiceIo {
   home: string;
   uid?: number;
 }
-export function defaultServiceIo(): ServiceIo {
+function defaultServiceIo(): ServiceIo {
   return {
     home: os.homedir(),
     uid: process.getuid?.(),

@@ -130,6 +130,7 @@ export type WorkerOperation =
   | { kind: 'desktop.disconnect' }
   | { kind: 'desktop.apps' }
   | { kind: 'desktop.windows' }
+  | { kind: 'desktop.targetIdentity'; windowId: string }
   | {
       kind: 'desktop.describe';
       windowId?: string;
