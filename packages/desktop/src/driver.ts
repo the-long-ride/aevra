@@ -4,6 +4,8 @@ import type {
   DesktopCaptureResult,
   DesktopDescribeResult,
   DesktopNode,
+  DesktopTargetIdentity,
+  DesktopWindowInstance,
   DesktopWindowIdentity,
 } from '../../protocol/src/desktop.js';
 
@@ -61,10 +63,7 @@ export interface DesktopDriver {
   act(request: ActRequest): Promise<ActResult>;
   disconnect(): Promise<void>;
 
-  targetIdentity?(windowId: string): Promise<{
-    window: DesktopWindowIdentity;
-    windowInstance: { windowId: string; processId: number; processStartedAt: string };
-  }>;
+  targetIdentity?(windowId: string): Promise<DesktopTargetIdentity>;
   describeBackground?(request: {
     windowId: string;
     snapshotId: string;
@@ -72,7 +71,8 @@ export interface DesktopDriver {
     interactiveOnly: boolean;
   }): Promise<{
     window: DesktopWindowIdentity;
-    windowInstance: { windowId: string; processId: number; processStartedAt: string };
+    windowInstance: DesktopWindowInstance;
+    hostApplication?: DesktopTargetIdentity['hostApplication'];
     nodes: DesktopNode[];
     truncated: boolean;
   }>;
@@ -82,7 +82,8 @@ export interface DesktopDriver {
     handle: string;
     op: string;
     value?: string;
-    expectedInstance: { windowId: string; processId: number; processStartedAt: string };
+    expectedInstance: DesktopWindowInstance;
+    expectedHost?: DesktopTargetIdentity['hostApplication'];
   }): Promise<{
     ok: boolean;
     outcome: string;

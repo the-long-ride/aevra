@@ -7,8 +7,9 @@ import type { RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { defaultDesktopPolicy } from '../../security/src/desktop-policy-defaults.js';
 import { redactText } from '../../security/src/dlp.js';
-import { basename } from '../../security/src/window-gate.js';
+import { basename, isProtectedDesktopTitle } from '../../security/src/window-gate.js';
 import { AevraToolError } from './errors.js';
+import { asToolError } from './errors.js';
 import { requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
@@ -95,12 +96,81 @@ export function isValidDesktopPolicy(value: unknown): value is DesktopPolicy {
   ) {
     return false;
   }
+  if (
+    p.appGrants !== undefined &&
+    (!Array.isArray(p.appGrants) || p.appGrants.some((grant) => {
+      if (!grant || typeof grant !== 'object') return true;
+      const value = grant as unknown as Record<string, unknown>;
+      return typeof value.id !== 'string' || !value.id.trim() ||
+        typeof value.executablePath !== 'string' || !value.executablePath.trim() ||
+        typeof value.displayName !== 'string' || !value.displayName.trim() ||
+        typeof value.createdAt !== 'string' || !value.createdAt.trim() ||
+        (value.sessionId !== undefined && typeof value.sessionId !== 'string');
+    }))
+  ) {
+    return false;
+  }
   return true;
 }
 
-export function policyFor(context: McpRuntimeContext): DesktopPolicy {
+export function policyFor(context: McpRuntimeContext, sessionId?: string): DesktopPolicy {
   const stored = context.deps.settings?.get<unknown>('desktop.policy', defaultDesktopPolicy());
-  return isValidDesktopPolicy(stored) ? stored : defaultDesktopPolicy();
+  const policy = isValidDesktopPolicy(stored) ? stored : defaultDesktopPolicy();
+  const grants = context.deps.desktopAccess?.policyGrants(sessionId) ?? [];
+  return { ...policy, appGrants: grants };
+}
+
+/** Strip native executable paths from desktop errors before returning them to an agent. */
+export function sanitizeDesktopToolError(
+  context: McpRuntimeContext,
+  sessionId: string,
+  error: unknown,
+): AevraToolError {
+  const source = asToolError(error);
+  const details = source.details;
+  if (!details || typeof details !== 'object') return source;
+  const rawWindow = details.window as DesktopWindowIdentity | undefined;
+  const rawHost = details.hostApplication as { executablePath?: unknown } | undefined;
+  const policy = policyFor(context, sessionId);
+  const tally = { count: 0 };
+  const safeWindow = rawWindow ? redactWindow(rawWindow, tally, policy) : undefined;
+  const hostPath = typeof rawHost?.executablePath === 'string' ? rawHost.executablePath : undefined;
+  const hostName = hostPath ? basename(hostPath) : undefined;
+  const gateRule = typeof details.gateRule === 'string' ? redact(details.gateRule, tally) : undefined;
+  const isWebView = rawWindow && [rawWindow.processName, rawWindow.executablePath ? basename(rawWindow.executablePath) : undefined]
+    .some((value) => value?.toLowerCase() === 'msedgewebview2.exe');
+  const accessRequestAvailable = source.code === 'DESKTOP_INPUT_REFUSED' &&
+    typeof rawWindow?.windowId === 'string' && rawWindow.windowId.length > 0 &&
+    policy.mode === 'allowlist' &&
+    String(details.gateRule ?? '').toLowerCase().includes('refused by allowlist') &&
+    !isProtectedDesktopTitle(rawWindow, policy) &&
+    (!isWebView || Boolean(hostPath));
+  const {
+    window: _rawWindow,
+    hostApplication: _rawHost,
+    gateRule: _rawGateRule,
+    ...safeDetails
+  } = details;
+  const safeMessage = redact(source.message, tally) ?? source.message;
+  return new AevraToolError(
+    source.code,
+    source.code === 'DESKTOP_INPUT_REFUSED' && accessRequestAvailable
+      ? `${safeMessage} A human can review app access with desktop_request_access for this window.`
+      : safeMessage,
+    {
+      ...safeDetails,
+      ...(safeWindow ? { window: safeWindow } : {}),
+      ...(hostName ? {
+        verifiedHostApplication: {
+          displayName: redact(hostName, tally) ?? hostName,
+          ...(policy.exposeExecutablePaths ? { executablePath: redact(hostPath, tally) } : {}),
+        },
+      } : {}),
+      ...(gateRule ? { gateRule, reason: gateRule } : {}),
+      ...(source.code === 'DESKTOP_INPUT_REFUSED' ? { accessRequestAvailable } : {}),
+      ...(tally.count ? { redactionCount: tally.count } : {}),
+    },
+  );
 }
 
 export function redact(text: string | undefined, tally: { count: number }): string | undefined {
@@ -128,6 +198,7 @@ export function redactWindow(
       : window.executablePath;
   return {
     ...window,
+    ...(window.processName !== undefined ? { processName: redact(window.processName, tally) } : {}),
     title: redact(window.title, tally),
     executablePath: redact(executablePath, tally),
   };

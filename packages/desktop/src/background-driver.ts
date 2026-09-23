@@ -95,6 +95,7 @@ export async function executeBackgroundAction(
       processId: resolved.window.processId,
       processStartedAt: resolved.window.processStartedAt,
     },
+    ...(resolved.hostApplication ? { expectedHost: resolved.hostApplication } : {}),
   };
 
   let dispatched = false;

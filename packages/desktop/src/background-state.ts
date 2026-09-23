@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type { BackgroundTarget, DesktopOwner } from '../../protocol/src/desktop.js';
+import type {
+  BackgroundTarget,
+  DesktopOwner,
+  DesktopWindowInstance,
+  VerifiedWindowHost,
+} from '../../protocol/src/desktop.js';
+import { canonicalExecutablePath } from '../../security/src/window-gate.js';
 import { DesktopDriverError } from './driver.js';
 
-export interface WindowInstance {
-  windowId: string;
-  processId: number;
-  processStartedAt: string;
-}
+export type WindowInstance = DesktopWindowInstance;
 
 export interface SnapshotNodeBinding {
   ref: string;
@@ -22,7 +24,7 @@ interface WindowLease {
   leaseId: string;
   owner: DesktopOwner;
   window: WindowInstance;
-  scopeKey: string;
+  hostApplication?: VerifiedWindowHost;
   epoch: number;
   expiresAt: number;
   activeSnapshot?: {
@@ -36,10 +38,19 @@ interface WindowLease {
 const DEFAULT_TTL_MS = 60_000;
 const MAX_LEASES_PER_OWNER = 8;
 const MAX_LEASES_HOST = 32;
-export const MAX_NODES_PER_SNAPSHOT = 5_000;
+const MAX_NODES_PER_SNAPSHOT = 5_000;
 
 function windowScopeKey(window: WindowInstance): string {
   return `${window.windowId}:${window.processId}:${window.processStartedAt}`;
+}
+
+function hostScopeKey(host?: VerifiedWindowHost): string {
+  if (!host) return '';
+  return `${host.instance.windowId}:${host.instance.processId}:${host.instance.processStartedAt}:${canonicalExecutablePath(host.executablePath)}`;
+}
+
+function sameHost(a?: VerifiedWindowHost, b?: VerifiedWindowHost): boolean {
+  return hostScopeKey(a) === hostScopeKey(b);
 }
 
 function isSameOwner(a: DesktopOwner, b: DesktopOwner): boolean {
@@ -69,15 +80,22 @@ export class BackgroundDesktopState {
     owner: DesktopOwner,
     window: WindowInstance,
     epoch: number,
+    hostApplication?: VerifiedWindowHost,
   ): { windowLeaseId: string; leaseExpiresAt: string } {
     this.pruneExpired();
     const currentTime = this.now();
-    const scopeKey = windowScopeKey(window);
+    const targetKey = windowScopeKey(window);
 
     // Check if target window is already leased
     let existingLease: WindowLease | undefined;
     for (const lease of this.leases.values()) {
-      if (lease.scopeKey === scopeKey) {
+      if (windowScopeKey(lease.window) === targetKey) {
+        if (!sameHost(lease.hostApplication, hostApplication)) {
+          throw new DesktopDriverError(
+            'DESKTOP_TARGET_CHANGED',
+            'Verified host application changed for the leased target window',
+          );
+        }
         if (!isSameOwner(lease.owner, owner)) {
           const retryAfterMs = Math.max(1_000, lease.expiresAt - currentTime);
           throw new DesktopDriverError(
@@ -131,7 +149,7 @@ export class BackgroundDesktopState {
       leaseId,
       owner,
       window,
-      scopeKey,
+      ...(hostApplication ? { hostApplication } : {}),
       epoch,
       expiresAt,
     };
@@ -180,7 +198,7 @@ export class BackgroundDesktopState {
     owner: DesktopOwner,
     target: BackgroundTarget,
     epoch: number,
-  ): { handle: string; window: WindowInstance } {
+  ): { handle: string; window: WindowInstance; hostApplication?: VerifiedWindowHost } {
     this.pruneExpired();
     const currentTime = this.now();
     const lease = this.leases.get(target.windowLeaseId);
@@ -234,6 +252,7 @@ export class BackgroundDesktopState {
     return {
       handle,
       window: lease.window,
+      ...(lease.hostApplication ? { hostApplication: lease.hostApplication } : {}),
     };
   }
 

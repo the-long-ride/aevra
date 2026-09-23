@@ -29,6 +29,8 @@ export interface AdminApiContext {
   browser?: any;
   browserPolicy?: any;
   desktopPolicy?: any;
+  desktopAccess?: any;
+  desktopAppCatalog?: any;
   mcpUpstreams?: UpstreamRegistryService;
   systemCapabilities?: () => SystemCapabilitySnapshot;
   mcpDiagnostics?: () => unknown;

@@ -4,7 +4,7 @@ import type { RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { markUntrusted } from '../../security/src/untrusted.js';
 import { gated } from './authorization.js';
-import { audit, policyFor, run, targetOf } from './desktop-support.js';
+import { audit, policyFor, redactWindow, run, sanitizeDesktopToolError, targetOf } from './desktop-support.js';
 import { asToolError } from './errors.js';
 import { argsHash } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
@@ -22,7 +22,7 @@ export function backgroundActRisk(name: string): RiskTier {
   return 'MEDIUM';
 }
 
-export function sanitizeBackgroundArgs(name: string, args: any): any {
+function sanitizeBackgroundArgs(name: string, args: any): any {
   if (name === 'desktop_set_value' && typeof args?.value === 'string') {
     const { value, ...rest } = args;
     const requestNonce = args.requestNonce ?? randomUUID();
@@ -52,7 +52,7 @@ export async function handleBackgroundAction(
     } catch (error) {
       const err = asToolError(error);
       audit(context, sessionId, name, target, risk, 'FAILED');
-      throw err;
+      throw sanitizeDesktopToolError(context, sessionId, err);
     }
   }
 
@@ -93,7 +93,7 @@ export async function handleBackgroundAction(
   const operation: WorkerOperation = {
     kind: 'desktop.backgroundAct',
     action: actionInput,
-    policy: policyFor(context),
+    policy: policyFor(context, sessionId),
   };
 
   const target = `${windowId}:${ref}`;
@@ -104,13 +104,19 @@ export async function handleBackgroundAction(
     try {
       const result = (await run(context, sessionId, operation)) as any;
       const window: DesktopWindowIdentity | undefined = result?.window;
+      const policy = policyFor(context, sessionId);
+      const tally = { count: 0 };
+      const safeResult = window
+        ? { ...result, window: redactWindow(window, tally, policy) }
+        : result;
       audit(context, sessionId, name, auditTarget, risk, 'SUCCEEDED', {
         window: targetOf(window),
+        redactionCount: tally.count,
         ...(result?.gateVerdict
           ? { gateVerdict: result.gateVerdict, gateRule: result.gateRule }
           : {}),
       });
-      return markUntrusted(result);
+      return markUntrusted(safeResult);
     } catch (error) {
       const err = asToolError(error);
       const details = err.details as
@@ -122,7 +128,7 @@ export async function handleBackgroundAction(
           ? { gateVerdict: details.gateVerdict, gateRule: details.gateRule }
           : {}),
       });
-      throw err;
+      throw sanitizeDesktopToolError(context, sessionId, err);
     }
   };
 

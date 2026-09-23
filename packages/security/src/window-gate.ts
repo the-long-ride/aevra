@@ -1,4 +1,8 @@
-import type { DesktopPolicy, DesktopWindowIdentity } from '../../protocol/src/desktop.js';
+import type {
+  DesktopPolicy,
+  DesktopTargetIdentity,
+  DesktopWindowIdentity,
+} from '../../protocol/src/desktop.js';
 
 export type GateDirection = 'capture' | 'input' | 'background';
 
@@ -124,10 +128,7 @@ function matches(identity: DesktopWindowIdentity, policy: DesktopPolicy): boolea
  * to that blind spot.
  */
 function titleDenied(identity: DesktopWindowIdentity, policy: DesktopPolicy): boolean {
-  const patterns = policy.deniedTitlePatterns;
-  if (!patterns?.length || !identity.title) return false;
-  const title = identity.title.toLowerCase();
-  return patterns.some((pattern) => title === pattern.toLowerCase());
+  return isProtectedDesktopTitle(identity, policy);
 }
 
 export function evaluateWindowGate(
@@ -173,4 +174,104 @@ export function evaluateWindowGate(
     reason: baseAllowed ? `permitted by ${policy.mode}` : `refused by ${policy.mode}`,
     attribution,
   };
+}
+
+/** Canonical comparison for executable paths returned by Windows and stored by Core. */
+export function canonicalExecutablePath(value: string): string {
+  let normalized = value.trim().replaceAll('/', '\\');
+  if (/^\\\\\?\\UNC\\/i.test(normalized)) {
+    normalized = `\\\\${normalized.slice(8)}`;
+  } else if (/^\\\\\?\\/i.test(normalized)) {
+    normalized = normalized.slice(4);
+  }
+  return normalized.replace(/\\+$/, '').toLowerCase();
+}
+
+function isSharedWebViewRuntime(identity: DesktopWindowIdentity): boolean {
+  return [identity.processName, identity.executablePath ? basename(identity.executablePath) : undefined]
+    .some((field) => field?.toLowerCase() === 'msedgewebview2.exe');
+}
+
+export function isProtectedDesktopTitle(identity: DesktopWindowIdentity, policy: DesktopPolicy): boolean {
+  const title = identity.title?.toLowerCase();
+  return Boolean(title && policy.deniedTitlePatterns?.some((pattern) => title === pattern.toLowerCase()));
+}
+
+function hasExactGrant(path: string | undefined, policy: DesktopPolicy, sessionId?: string): boolean {
+  if (!path) return false;
+  const identity = canonicalExecutablePath(path);
+  if (!identity) return false;
+  return Boolean(policy.appGrants?.some((grant) => {
+    if (grant.sessionId !== undefined && grant.sessionId !== sessionId) return false;
+    return canonicalExecutablePath(grant.executablePath) === identity;
+  }));
+}
+
+/**
+ * Evaluates direct app rules and exact-path grants. A WebView2 target may
+ * inherit an allowlist grant only from a helper-verified native host identity.
+ * Legacy basename rules continue to apply to ordinary apps and to an
+ * explicitly configured broad WebView2 rule.
+ */
+export function evaluateDesktopTargetGate(
+  identity: DesktopTargetIdentity,
+  policy: DesktopPolicy,
+  direction: GateDirection,
+  sessionId?: string,
+): GateVerdict {
+  const target = identity.window;
+  const targetVerdict = evaluateWindowGate(target, policy, direction);
+  if (direction === 'capture') return targetVerdict;
+  if (policy.mode === 'denylist') {
+    if (!targetVerdict.allowed) return targetVerdict;
+    if (isSharedWebViewRuntime(target) && identity.hostApplication) {
+      const host = identity.hostApplication;
+      const hostVerdict = evaluateWindowGate({
+        windowId: host.instance.windowId,
+        processName: basename(host.executablePath),
+        executablePath: host.executablePath,
+        ...(target.title ? { title: target.title } : {}),
+      }, policy, direction);
+      if (!hostVerdict.allowed) {
+        return {
+          ...hostVerdict,
+          reason: `refused by denylist (verified host ${basename(host.executablePath)})`,
+        };
+      }
+    }
+    return targetVerdict;
+  }
+  if (!targetVerdict.allowed) {
+    if (isProtectedDesktopTitle(target, policy)) return targetVerdict;
+
+    if (isSharedWebViewRuntime(target)) {
+      const host = identity.hostApplication;
+      if (!host) {
+        return {
+          ...targetVerdict,
+          reason: 'WebView2 host could not be verified; no host grant applies',
+        };
+      }
+      if (hasExactGrant(host.executablePath, policy, sessionId)) {
+        return {
+          allowed: true,
+          reason: 'permitted by exact-path grant for verified host application',
+          attribution: targetVerdict.attribution,
+        };
+      }
+      return {
+        ...targetVerdict,
+        reason: 'refused by allowlist (verified host has no exact-path grant)',
+      };
+    }
+
+    if (hasExactGrant(target.executablePath, policy, sessionId)) {
+      return {
+        allowed: true,
+        reason: 'permitted by exact-path application grant',
+        attribution: targetVerdict.attribution,
+      };
+    }
+  }
+  return targetVerdict;
 }

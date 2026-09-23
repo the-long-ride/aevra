@@ -74,6 +74,7 @@ export const STABLE_TOOL_NAMES = [
   'desktop_connect',
   'desktop_disconnect',
   'desktop_apps',
+  'desktop_request_access',
   'desktop_windows',
   'desktop_describe',
   'desktop_capture',
