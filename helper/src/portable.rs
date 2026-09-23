@@ -4,8 +4,8 @@
 use crate::backend::{
     ActRequest, BackgroundActRequest, BackgroundActResult, Capabilities, CaptureRequest,
     CaptureResult, DescribeBackgroundRequest, DescribeBackgroundResult, DescribeNode,
-    DescribeRequest, DescribeResult, DesktopBackend, ReleaseBackgroundSnapshotRequest,
-    ScreenState, TargetIdentityRequest, TargetIdentityResult, WindowIdentity,
+    DescribeRequest, DescribeResult, DesktopBackend, ReleaseBackgroundSnapshotRequest, ScreenState,
+    TargetIdentityRequest, TargetIdentityResult, WindowIdentity,
 };
 use crate::target_guard::WindowInstance;
 use std::cell::RefCell;
@@ -62,9 +62,7 @@ impl PortableBackend {
         self.windows_elements()?
             .into_iter()
             .find(|window| window_id_for(window) == window_id)
-            .ok_or_else(|| {
-                format!("DESKTOP_TARGET_CHANGED: window {window_id:?} no longer exists")
-            })
+            .ok_or_else(|| format!("DESKTOP_TARGET_CHANGED: window {window_id:?} no longer exists"))
     }
 
     fn focused_window_element(&self) -> Result<Element, String> {
@@ -148,7 +146,11 @@ impl PortableBackend {
             }
             let handle = self.next_handle();
             let protected = protected_field(&element);
-            let value = if protected { None } else { element.value.clone() };
+            let value = if protected {
+                None
+            } else {
+                element.value.clone()
+            };
             let read_only = matches!(element.role, Role::TextField | Role::TextArea)
                 .then_some(!element.states.editable);
             let toggle_state = element.states.checked.map(toggle_name);
@@ -205,7 +207,11 @@ impl DesktopBackend for PortableBackend {
 
     fn screen_state(&self) -> Result<ScreenState, String> {
         let window = self.focused_window()?;
-        let window_ids: Vec<String> = self.windows()?.into_iter().map(|entry| entry.window_id).collect();
+        let window_ids: Vec<String> = self
+            .windows()?
+            .into_iter()
+            .map(|entry| entry.window_id)
+            .collect();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         window.window_id.hash(&mut hasher);
         window.process_name.hash(&mut hasher);
@@ -236,7 +242,10 @@ impl DesktopBackend for PortableBackend {
     }
 
     fn capture(&self, _request: CaptureRequest) -> Result<CaptureResult, String> {
-        Err("DESKTOP_CAPTURE_UNSUPPORTED: portable shared-semantic backend does not capture pixels".into())
+        Err(
+            "DESKTOP_CAPTURE_UNSUPPORTED: portable shared-semantic backend does not capture pixels"
+                .into(),
+        )
     }
 
     fn act(&self, _request: ActRequest) -> Result<bool, String> {
@@ -246,11 +255,15 @@ impl DesktopBackend for PortableBackend {
         )
     }
 
-    fn target_identity(&self, request: TargetIdentityRequest) -> Result<TargetIdentityResult, String> {
+    fn target_identity(
+        &self,
+        request: TargetIdentityRequest,
+    ) -> Result<TargetIdentityResult, String> {
         let window = self.resolve_window(&request.window_id)?;
         Ok(TargetIdentityResult {
             window: self.identity(&window),
             window_instance: self.process_instance(&window)?,
+            host_application: None,
         })
     }
 
@@ -272,6 +285,7 @@ impl DesktopBackend for PortableBackend {
         Ok(DescribeBackgroundResult {
             window: self.identity(&window),
             window_instance: instance,
+            host_application: None,
             nodes,
             truncated,
         })
@@ -281,23 +295,30 @@ impl DesktopBackend for PortableBackend {
         &self,
         request: ReleaseBackgroundSnapshotRequest,
     ) -> Result<bool, String> {
-        Ok(self.snapshots.borrow_mut().remove(&request.snapshot_id).is_some())
+        Ok(self
+            .snapshots
+            .borrow_mut()
+            .remove(&request.snapshot_id)
+            .is_some())
     }
 
     fn background_act(&self, request: BackgroundActRequest) -> Result<BackgroundActResult, String> {
         self.verify_instance(&request.expected_instance)?;
-        let before_focus = self.focused_window_element().map(|window| window_id_for(&window))?;
+        let before_focus = self
+            .focused_window_element()
+            .map(|window| window_id_for(&window))?;
         let snapshots = self.snapshots.borrow();
         let snapshot = snapshots
             .get(&request.snapshot_id)
             .ok_or_else(|| "DESKTOP_REF_STALE: background snapshot expired".to_string())?;
         if snapshot.instance != request.expected_instance {
-            return Err("DESKTOP_TARGET_CHANGED: snapshot belongs to an older process instance".into());
+            return Err(
+                "DESKTOP_TARGET_CHANGED: snapshot belongs to an older process instance".into(),
+            );
         }
-        let element = snapshot
-            .elements
-            .get(&request.handle)
-            .ok_or_else(|| "DESKTOP_REF_STALE: element handle is not in the snapshot".to_string())?;
+        let element = snapshot.elements.get(&request.handle).ok_or_else(|| {
+            "DESKTOP_REF_STALE: element handle is not in the snapshot".to_string()
+        })?;
         if !element.states.enabled {
             return Err("DESKTOP_ELEMENT_DISABLED: element is disabled".into());
         }
@@ -340,7 +361,11 @@ impl DesktopBackend for PortableBackend {
 
 fn supported_actions(element: &Element) -> Vec<String> {
     let mut actions = Vec::new();
-    if element.actions.iter().any(|action| action == "press" || action == "click") {
+    if element
+        .actions
+        .iter()
+        .any(|action| action == "press" || action == "click")
+    {
         actions.push("invoke".into());
     }
     if element.states.editable && !protected_field(element) {
@@ -398,7 +423,9 @@ fn map_a11y(error: A11yError) -> String {
             format!("DESKTOP_PERMISSION_REQUIRED: {instructions}")
         }
         A11yError::AccessibilityNotEnabled { app, instructions } => {
-            format!("DESKTOP_PROVIDER_UNAVAILABLE: accessibility is disabled for {app}: {instructions}")
+            format!(
+                "DESKTOP_PROVIDER_UNAVAILABLE: accessibility is disabled for {app}: {instructions}"
+            )
         }
         A11yError::ElementStale { .. } | A11yError::SelectorNotMatched { .. } => {
             format!("DESKTOP_REF_STALE: {error}")

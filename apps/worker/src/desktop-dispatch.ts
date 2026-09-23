@@ -1,11 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import type { WorkerOperation } from '../../../packages/protocol/src/worker.js';
-import type { DesktopOwner } from '../../../packages/protocol/src/desktop.js';
+import type {
+  DesktopOwner,
+  DesktopTargetIdentity,
+  VerifiedWindowHost,
+} from '../../../packages/protocol/src/desktop.js';
 import { executeBackgroundAction } from '../../../packages/desktop/src/background-driver.js';
 import { DesktopDriverError } from '../../../packages/desktop/src/driver.js';
 import { detectInstalledApps } from '../../../packages/desktop/src/installed-apps.js';
 import type { DesktopSessionRegistry } from '../../../packages/desktop/src/registry.js';
-import { evaluateWindowGate } from '../../../packages/security/src/window-gate.js';
+import {
+  canonicalExecutablePath,
+  evaluateDesktopTargetGate,
+  evaluateWindowGate,
+} from '../../../packages/security/src/window-gate.js';
 
 type DesktopOperation = Extract<WorkerOperation, { kind: `desktop.${string}` }>;
 
@@ -16,6 +24,21 @@ type DesktopOperation = Extract<WorkerOperation, { kind: `desktop.${string}` }>;
  */
 export function isDesktopOperation(op: WorkerOperation): op is DesktopOperation {
   return op.kind.startsWith('desktop.');
+}
+
+function sameHostApplication(a?: VerifiedWindowHost, b?: VerifiedWindowHost): boolean {
+  if (!a || !b) return a === b;
+  return a.instance.windowId === b.instance.windowId &&
+    a.instance.processId === b.instance.processId &&
+    a.instance.processStartedAt === b.instance.processStartedAt &&
+    canonicalExecutablePath(a.executablePath) === canonicalExecutablePath(b.executablePath);
+}
+
+function sameWindowInstance(
+  a: DesktopTargetIdentity['windowInstance'],
+  b: DesktopTargetIdentity['windowInstance'],
+): boolean {
+  return a.windowId === b.windowId && a.processId === b.processId && a.processStartedAt === b.processStartedAt;
 }
 
 export async function dispatchDesktopOperation(
@@ -33,6 +56,16 @@ export async function dispatchDesktopOperation(
 
   return registry.run(async (driver, epoch) => {
     if (operation.kind === 'desktop.windows') return driver.windows();
+
+    if (operation.kind === 'desktop.targetIdentity') {
+      if (typeof driver.targetIdentity !== 'function') {
+        throw new DesktopDriverError(
+          'DESKTOP_BACKGROUND_UNSUPPORTED',
+          'Driver does not support native target identity',
+        );
+      }
+      return driver.targetIdentity(operation.windowId);
+    }
 
     if (operation.kind === 'desktop.describe') {
       if (operation.mode === 'background') {
@@ -62,12 +95,22 @@ export async function dispatchDesktopOperation(
         const target = await driver.targetIdentity(windowId);
 
         if (operation.policy) {
-          const verdict = evaluateWindowGate(target.window, operation.policy, 'background');
+          const verdict = evaluateDesktopTargetGate(
+            target,
+            operation.policy,
+            'background',
+            owner.sessionId,
+          );
           if (!verdict.allowed) {
             throw new DesktopDriverError(
               'DESKTOP_INPUT_REFUSED',
               `Target refused by policy: ${verdict.reason} (${target.window.processName ?? 'unattributable window'})`,
-              { window: target.window, gateVerdict: 'deny' as const, gateRule: verdict.reason },
+              {
+                window: target.window,
+                hostApplication: target.hostApplication,
+                gateVerdict: 'deny' as const,
+                gateRule: verdict.reason,
+              },
             );
           }
         }
@@ -76,6 +119,7 @@ export async function dispatchDesktopOperation(
           owner,
           target.windowInstance,
           epoch,
+          target.hostApplication,
         );
         const snapshotId = randomUUID();
         const describeResult = await driver.describeBackground({
@@ -84,6 +128,20 @@ export async function dispatchDesktopOperation(
           maxNodes: operation.maxNodes,
           interactiveOnly: operation.interactiveOnly,
         });
+
+        if (
+          !sameWindowInstance(describeResult.windowInstance, target.windowInstance) ||
+          !sameHostApplication(describeResult.hostApplication, target.hostApplication)
+        ) {
+          if (typeof driver.releaseBackgroundSnapshot === 'function') {
+            await driver.releaseBackgroundSnapshot(snapshotId).catch(() => {});
+          }
+          registry.backgroundState.release(owner, windowId, windowLeaseId);
+          throw new DesktopDriverError(
+            'DESKTOP_TARGET_CHANGED',
+            'Target or verified host changed while describing the background window',
+          );
+        }
 
         const nodeBindings = describeResult.nodes.map((n) => ({
           ref: n.ref,
@@ -159,19 +217,32 @@ export async function dispatchDesktopOperation(
       }
       const liveTarget = await driver.targetIdentity(resolved.window.windowId);
       if (
-        liveTarget.windowInstance.processId !== resolved.window.processId ||
-        liveTarget.windowInstance.processStartedAt !== resolved.window.processStartedAt
+        !sameWindowInstance(liveTarget.windowInstance, resolved.window) ||
+        !sameHostApplication(liveTarget.hostApplication, resolved.hostApplication)
       ) {
-        throw new DesktopDriverError('DESKTOP_TARGET_CHANGED', 'Window process instance changed');
+        throw new DesktopDriverError(
+          'DESKTOP_TARGET_CHANGED',
+          'Target or verified host process instance changed',
+        );
       }
 
       // 3. Policy against live target identity
-      const verdict = evaluateWindowGate(liveTarget.window, operation.policy, 'background');
+      const verdict = evaluateDesktopTargetGate(
+        liveTarget,
+        operation.policy,
+        'background',
+        owner.sessionId,
+      );
       if (!verdict.allowed) {
         throw new DesktopDriverError(
           'DESKTOP_INPUT_REFUSED',
           `Background action refused: ${verdict.reason} (${liveTarget.window.processName ?? 'unattributable window'})`,
-          { window: liveTarget.window, gateVerdict: 'deny' as const, gateRule: verdict.reason },
+          {
+            window: liveTarget.window,
+            hostApplication: liveTarget.hostApplication,
+            gateVerdict: 'deny' as const,
+            gateRule: verdict.reason,
+          },
         );
       }
 
@@ -194,7 +265,11 @@ export async function dispatchDesktopOperation(
 
     // Core issued the policy in the signed envelope; only Worker can see which
     // window has focus at this instant, so Worker applies it.
-    const identity = await driver.focusedWindow();
+    const focusedWindow = await driver.focusedWindow();
+    const targetIdentity = typeof driver.targetIdentity === 'function'
+      ? await driver.targetIdentity(focusedWindow.windowId)
+      : undefined;
+    const identity = targetIdentity?.window ?? focusedWindow;
 
     // Reject a foreign or same-owner legacy foreground mutation against a background-owned target
     if (registry.backgroundState.isWindowLeased(identity.windowId)) {
@@ -209,7 +284,9 @@ export async function dispatchDesktopOperation(
       );
     }
 
-    const verdict = evaluateWindowGate(identity, operation.policy, 'input');
+    const verdict = targetIdentity
+      ? evaluateDesktopTargetGate(targetIdentity, operation.policy, 'input', owner?.sessionId)
+      : evaluateWindowGate(identity, operation.policy, 'input');
     // The window identity and the gate's verdict are attached to the result
     // (allowed path) or to the thrown error's `details` (refused path) so the
     // MCP tool layer can audit "which window, and did the gate allow it" for
@@ -219,7 +296,12 @@ export async function dispatchDesktopOperation(
       throw new DesktopDriverError(
         'DESKTOP_INPUT_REFUSED',
         `Input refused: ${verdict.reason} (${identity.processName ?? 'unattributable window'})`,
-        { window: identity, gateVerdict: 'deny' as const, gateRule: verdict.reason },
+        {
+          window: identity,
+          ...(targetIdentity?.hostApplication ? { hostApplication: targetIdentity.hostApplication } : {}),
+          gateVerdict: 'deny' as const,
+          gateRule: verdict.reason,
+        },
       );
     }
     const result = await driver.act(operation);

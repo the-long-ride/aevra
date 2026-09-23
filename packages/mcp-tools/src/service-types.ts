@@ -1,6 +1,7 @@
 import type { CapabilityRoot, SystemCapabilitySnapshot } from '../../protocol/src/index.js';
 import type { ControlPlanResult } from '../../protocol/src/control.js';
 import type { WorkerOperation, WorkerResult } from '../../protocol/src/worker.js';
+import type { DesktopAppCatalogResult } from '../../protocol/src/desktop.js';
 import type { ApprovalService } from '../../../apps/core/src/approvals/approval-service.js';
 import type { AuditService } from '../../../apps/core/src/audit/audit-service.js';
 import type { ChangeSetService } from '../../../apps/core/src/changes/change-service.js';
@@ -143,6 +144,29 @@ export interface McpToolDependencies {
     globsFor?(workspaceId: string): Array<{ glob: string; class: 'SENSITIVE' | 'SECRET' }>;
   };
   upstreams?: UpstreamRegistryService;
+  desktopAccess?: {
+    request(input: {
+      actor: string;
+      sessionId: string;
+      workspaceId: string;
+      windowId: string;
+      duration: 'session' | 'persistent';
+      identity: import('../../protocol/src/desktop.js').DesktopTargetIdentity;
+    }): {
+      requestId: string;
+      status: string;
+      application: string;
+      duration: string;
+      expiresAt: string;
+      deduplicated: boolean;
+      message: string;
+    };
+    policyGrants(sessionId?: string): import('../../protocol/src/desktop.js').DesktopAppGrant[];
+  };
+  /** Read-only Core-owned catalog; desktop_apps filters this to current grants. */
+  desktopAppCatalog?: {
+    list(): Promise<DesktopAppCatalogResult>;
+  };
 }
 
 export type McpDependencies = McpToolDependencies;

@@ -162,11 +162,20 @@ pub struct TargetIdentityRequest {
     pub window_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerifiedWindowHost {
+    #[serde(rename = "executablePath")]
+    pub executable_path: String,
+    pub instance: crate::target_guard::WindowInstance,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TargetIdentityResult {
     pub window: WindowIdentity,
     #[serde(rename = "windowInstance")]
     pub window_instance: crate::target_guard::WindowInstance,
+    #[serde(rename = "hostApplication", skip_serializing_if = "Option::is_none")]
+    pub host_application: Option<VerifiedWindowHost>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -186,6 +195,8 @@ pub struct DescribeBackgroundResult {
     pub window: WindowIdentity,
     #[serde(rename = "windowInstance")]
     pub window_instance: crate::target_guard::WindowInstance,
+    #[serde(rename = "hostApplication", skip_serializing_if = "Option::is_none")]
+    pub host_application: Option<VerifiedWindowHost>,
     pub nodes: Vec<DescribeNode>,
     pub truncated: bool,
 }
@@ -206,6 +217,12 @@ pub struct BackgroundActRequest {
     pub value: Option<String>,
     #[serde(rename = "expectedInstance")]
     pub expected_instance: crate::target_guard::WindowInstance,
+    #[serde(
+        rename = "expectedHost",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub expected_host: Option<VerifiedWindowHost>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -246,16 +263,28 @@ pub trait DesktopBackend {
     /// about a screen it never saw.
     fn capture(&self, request: CaptureRequest) -> Result<CaptureResult, String>;
 
-    fn target_identity(&self, _request: TargetIdentityRequest) -> Result<TargetIdentityResult, String> {
+    fn target_identity(
+        &self,
+        _request: TargetIdentityRequest,
+    ) -> Result<TargetIdentityResult, String> {
         Err("DESKTOP_BACKGROUND_UNSUPPORTED: Background desktop actions not supported".into())
     }
-    fn describe_background(&self, _request: DescribeBackgroundRequest) -> Result<DescribeBackgroundResult, String> {
+    fn describe_background(
+        &self,
+        _request: DescribeBackgroundRequest,
+    ) -> Result<DescribeBackgroundResult, String> {
         Err("DESKTOP_BACKGROUND_UNSUPPORTED: Background desktop actions not supported".into())
     }
-    fn release_background_snapshot(&self, _request: ReleaseBackgroundSnapshotRequest) -> Result<bool, String> {
+    fn release_background_snapshot(
+        &self,
+        _request: ReleaseBackgroundSnapshotRequest,
+    ) -> Result<bool, String> {
         Err("DESKTOP_BACKGROUND_UNSUPPORTED: Background desktop actions not supported".into())
     }
-    fn background_act(&self, _request: BackgroundActRequest) -> Result<BackgroundActResult, String> {
+    fn background_act(
+        &self,
+        _request: BackgroundActRequest,
+    ) -> Result<BackgroundActResult, String> {
         Err("DESKTOP_BACKGROUND_UNSUPPORTED: Background desktop actions not supported".into())
     }
 }
@@ -274,8 +303,14 @@ mod tests {
         };
         let value = serde_json::to_value(&identity).unwrap();
         assert_eq!(value["windowId"], "12345");
-        assert!(value.get("processName").is_none(), "processName must be absent, not a placeholder");
-        assert!(value.get("executablePath").is_none(), "executablePath must be absent, not a placeholder");
+        assert!(
+            value.get("processName").is_none(),
+            "processName must be absent, not a placeholder"
+        );
+        assert!(
+            value.get("executablePath").is_none(),
+            "executablePath must be absent, not a placeholder"
+        );
         assert_eq!(value["title"], "User Account Control");
     }
 
@@ -293,7 +328,13 @@ mod tests {
 
     #[test]
     fn capabilities_report_every_capability_true_once_9d_lands() {
-        let capabilities = Capabilities { capture: true, tree: true, attribution: true, input: true, background_actions: None };
+        let capabilities = Capabilities {
+            capture: true,
+            tree: true,
+            attribution: true,
+            input: true,
+            background_actions: None,
+        };
         let value = serde_json::to_value(capabilities).unwrap();
         assert_eq!(value["capture"], true);
         assert_eq!(value["tree"], true);
@@ -390,5 +431,45 @@ mod tests {
         let scroll: ActRequest =
             serde_json::from_value(serde_json::json!({ "op": "scroll", "deltaY": -240 })).unwrap();
         assert_eq!(scroll.delta_y, Some(-240));
+    }
+
+    #[test]
+    fn background_act_deserialises_verified_host_and_defaults_it_for_older_requests() {
+        let request: BackgroundActRequest = serde_json::from_value(serde_json::json!({
+            "snapshotId": "snapshot_1",
+            "handle": "1:0",
+            "op": "invoke",
+            "expectedInstance": {
+                "windowId": "100",
+                "processId": 10,
+                "processStartedAt": "started"
+            },
+            "expectedHost": {
+                "executablePath": "C:\\Apps\\quota.exe",
+                "instance": {
+                    "windowId": "200",
+                    "processId": 20,
+                    "processStartedAt": "host-started"
+                }
+            }
+        }))
+        .unwrap();
+
+        let host = request.expected_host.unwrap();
+        assert_eq!(host.executable_path, "C:\\Apps\\quota.exe");
+        assert_eq!(host.instance.process_id, 20);
+
+        let older_request: BackgroundActRequest = serde_json::from_value(serde_json::json!({
+            "snapshotId": "snapshot_1",
+            "handle": "1:0",
+            "op": "invoke",
+            "expectedInstance": {
+                "windowId": "100",
+                "processId": 10,
+                "processStartedAt": "started"
+            }
+        }))
+        .unwrap();
+        assert!(older_request.expected_host.is_none());
     }
 }

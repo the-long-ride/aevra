@@ -78,6 +78,8 @@ export const toolDescriptions: Partial<Record<AevraToolName, string>> = {
   desktop_connect: 'Connect to the local Aevra desktop control helper for this session.',
   desktop_disconnect: 'Disconnect the local Aevra desktop control session.',
   desktop_apps: 'List apps in scope for desktop.control, resolved from the current desktop policy.',
+  desktop_request_access:
+    'Ask a human administrator to review access to the app that owns a freshly observed desktop window. The model cannot approve the request.',
   desktop_windows: 'List top-level desktop windows visible to the connected desktop session.',
   desktop_describe:
     'Read the accessibility tree of one desktop window, redacted for secret-shaped text.',

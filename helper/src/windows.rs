@@ -7,11 +7,11 @@
 //! attribute in `main.rs`), but the leading `::` makes every path here
 //! unambiguously the extern crate regardless of how this module is mounted.
 
+use crate::act::{self, ActContext};
 use crate::backend::{
     ActRequest, Capabilities, CaptureRequest, CaptureResult, DescribeNode, DescribeRequest,
     DescribeResult, DesktopBackend, ScreenState, WindowIdentity,
 };
-use crate::act::{self, ActContext};
 use crate::capture;
 use crate::grab;
 use crate::handles::HandleTable;
@@ -20,7 +20,8 @@ use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use ::windows::Win32::Foundation::{BOOL, CloseHandle, HWND, LPARAM};
+use ::windows::core::PWSTR;
+use ::windows::Win32::Foundation::{CloseHandle, BOOL, HWND, LPARAM};
 use ::windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
 };
@@ -32,10 +33,9 @@ use ::windows::Win32::UI::HiDpi::{
     SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
 use ::windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
-    IsWindow, IsWindowVisible,
+    EnumWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+    GetWindowThreadProcessId, IsWindow, IsWindowVisible,
 };
-use ::windows::core::PWSTR;
 
 pub struct WindowsBackend {
     /// Lazily created on the first `describe` call and reused after that --
@@ -78,9 +78,9 @@ impl WindowsBackend {
         // manifest already set awareness for this process.
         // SAFETY: takes an opaque context value and reports failure through
         // its result; it cannot corrupt memory.
-        if let Err(err) = unsafe {
-            SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
-        } {
+        if let Err(err) =
+            unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) }
+        {
             eprintln!("SetProcessDpiAwarenessContext failed (already set by a manifest?): {err:?}");
         }
         let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
@@ -95,7 +95,9 @@ impl WindowsBackend {
             automation: RefCell::new(None),
             handle_table: RefCell::new(HandleTable::new()),
             described_window: RefCell::new(None),
-            background_snapshots: RefCell::new(crate::background_snapshots::BackgroundSnapshotManager::new()),
+            background_snapshots: RefCell::new(
+                crate::background_snapshots::BackgroundSnapshotManager::new(),
+            ),
         }
     }
 
@@ -103,7 +105,12 @@ impl WindowsBackend {
         let window_id = format!("{}", hwnd.0 as isize);
         let title = window_title(hwnd);
         let (process_name, executable_path) = executable_for(hwnd);
-        WindowIdentity { window_id, process_name, executable_path, title }
+        WindowIdentity {
+            window_id,
+            process_name,
+            executable_path,
+            title,
+        }
     }
 
     /// Returns the cached `IUIAutomation` instance, creating it on first use.
@@ -181,7 +188,7 @@ fn window_title(hwnd: HWND) -> Option<String> {
 /// window on the secure desktop (a UAC consent prompt) or any process this
 /// helper is not privileged to query; it is not logged as an error because it
 /// is not one.
-fn executable_for(hwnd: HWND) -> (Option<String>, Option<String>) {
+pub(crate) fn executable_for(hwnd: HWND) -> (Option<String>, Option<String>) {
     // SAFETY: all calls below take either a window handle already known to be
     // valid for this call, or a process handle we just opened and always
     // close before returning.
@@ -240,6 +247,9 @@ fn resolve_target_hwnd(window_id: Option<&str>) -> Result<HWND, String> {
             if !exists {
                 return Err(format!("window {id} no longer exists"));
             }
+            if !unsafe { IsWindowVisible(hwnd) }.as_bool() {
+                return Err("DESKTOP_TARGET_CHANGED: target window is not visible".to_string());
+            }
             Ok(hwnd)
         }
         None => {
@@ -283,16 +293,27 @@ impl DesktopBackend for WindowsBackend {
         // claiming one this binary cannot deliver would defeat the whole
         // point of a capability record, which is that the model can trust
         // what it says and stop guessing.
-        Ok(Capabilities { capture: true, tree: true, attribution: true, input: true, background_actions: Some(true) })
+        Ok(Capabilities {
+            capture: true,
+            tree: true,
+            attribution: true,
+            input: true,
+            background_actions: Some(true),
+        })
     }
 
     fn windows(&self) -> Result<Vec<WindowIdentity>, String> {
-        let mut state = EnumState { handles: Vec::new() };
+        let mut state = EnumState {
+            handles: Vec::new(),
+        };
         // SAFETY: `enum_windows_proc` only touches the `EnumState` behind the
         // pointer we pass as `lparam`, and `EnumWindows` runs it synchronously
         // on this thread before returning, so `state` outlives every call.
         unsafe {
-            let _ = EnumWindows(Some(enum_windows_proc), LPARAM(&mut state as *mut EnumState as isize));
+            let _ = EnumWindows(
+                Some(enum_windows_proc),
+                LPARAM(&mut state as *mut EnumState as isize),
+            );
         }
         Ok(state.handles.into_iter().map(Self::identity_for).collect())
     }
@@ -325,7 +346,11 @@ impl DesktopBackend for WindowsBackend {
         window_ids.hash(&mut hasher);
         self.focused_element_hint().hash(&mut hasher);
         let signature = format!("{:x}", hasher.finish());
-        Ok(ScreenState { window, window_ids, signature })
+        Ok(ScreenState {
+            window,
+            window_ids,
+            signature,
+        })
     }
 
     fn describe(&self, request: DescribeRequest) -> Result<DescribeResult, String> {
@@ -364,7 +389,11 @@ impl DesktopBackend for WindowsBackend {
             None => (grab::grab_primary_screen()?, None),
         };
         let (image_data_uri, device_pixel_ratio) = capture::encode_frame(frame)?;
-        Ok(CaptureResult { image_data_uri, device_pixel_ratio, window })
+        Ok(CaptureResult {
+            image_data_uri,
+            device_pixel_ratio,
+            window,
+        })
     }
 
     fn act(&self, request: ActRequest) -> Result<bool, String> {
@@ -376,23 +405,51 @@ impl DesktopBackend for WindowsBackend {
         act::perform(&context, &request)
     }
 
-    fn target_identity(&self, request: crate::backend::TargetIdentityRequest) -> Result<crate::backend::TargetIdentityResult, String> {
+    fn target_identity(
+        &self,
+        request: crate::backend::TargetIdentityRequest,
+    ) -> Result<crate::backend::TargetIdentityResult, String> {
         let hwnd = resolve_target_hwnd(Some(&request.window_id))?;
         let window = Self::identity_for(hwnd);
         let window_instance = crate::target_guard::native::get_window_instance(hwnd)
             .map_err(|err| format!("DESKTOP_TARGET_CHANGED: {err}"))?;
         crate::target_guard::native::check_security(window_instance.process_id)
             .map_err(|err| format!("DESKTOP_INPUT_REFUSED: {err}"))?;
-        Ok(crate::backend::TargetIdentityResult { window, window_instance })
+        let host_application = crate::window_host::resolve_verified_host(hwnd)?;
+        if let Some(host) = &host_application {
+            crate::target_guard::native::check_security(host.instance.process_id)
+                .map_err(|err| format!("DESKTOP_INPUT_REFUSED: {err}"))?;
+        }
+        let current_instance = crate::target_guard::native::get_window_instance(hwnd)
+            .map_err(|err| format!("DESKTOP_TARGET_CHANGED: {err}"))?;
+        if current_instance != window_instance {
+            return Err(
+                "DESKTOP_TARGET_CHANGED: target process instance changed during attribution"
+                    .to_string(),
+            );
+        }
+        Ok(crate::backend::TargetIdentityResult {
+            window,
+            window_instance,
+            host_application,
+        })
     }
 
-    fn describe_background(&self, request: crate::backend::DescribeBackgroundRequest) -> Result<crate::backend::DescribeBackgroundResult, String> {
+    fn describe_background(
+        &self,
+        request: crate::backend::DescribeBackgroundRequest,
+    ) -> Result<crate::backend::DescribeBackgroundResult, String> {
         let hwnd = resolve_target_hwnd(Some(&request.window_id))?;
         let window = Self::identity_for(hwnd);
         let window_instance = crate::target_guard::native::get_window_instance(hwnd)
             .map_err(|err| format!("DESKTOP_TARGET_CHANGED: {err}"))?;
         crate::target_guard::native::check_security(window_instance.process_id)
             .map_err(|err| format!("DESKTOP_INPUT_REFUSED: {err}"))?;
+        let host_application = crate::window_host::resolve_verified_host(hwnd)?;
+        if let Some(host) = &host_application {
+            crate::target_guard::native::check_security(host.instance.process_id)
+                .map_err(|err| format!("DESKTOP_INPUT_REFUSED: {err}"))?;
+        }
 
         let automation = self.automation()?;
         let mut manager = self.background_snapshots.borrow_mut();
@@ -405,22 +462,46 @@ impl DesktopBackend for WindowsBackend {
         )
         .map_err(|err| format!("failed to read the accessibility tree: {err:?}"))?;
 
+        let current_instance = crate::target_guard::native::get_window_instance(hwnd)
+            .map_err(|err| format!("DESKTOP_TARGET_CHANGED: {err}"))?;
+        let current_host = crate::window_host::resolve_verified_host(hwnd)?;
+        if current_instance != window_instance || current_host != host_application {
+            return Err(
+                "DESKTOP_TARGET_CHANGED: target host identity changed during background describe"
+                    .to_string(),
+            );
+        }
+
         manager.store_snapshot(request.snapshot_id, window_instance.clone(), root, elements);
 
         Ok(crate::backend::DescribeBackgroundResult {
             window,
             window_instance,
+            host_application,
             nodes,
             truncated,
         })
     }
 
-    fn release_background_snapshot(&self, request: crate::backend::ReleaseBackgroundSnapshotRequest) -> Result<bool, String> {
-        Ok(self.background_snapshots.borrow_mut().release_snapshot(&request.snapshot_id))
+    fn release_background_snapshot(
+        &self,
+        request: crate::backend::ReleaseBackgroundSnapshotRequest,
+    ) -> Result<bool, String> {
+        Ok(self
+            .background_snapshots
+            .borrow_mut()
+            .release_snapshot(&request.snapshot_id))
     }
 
-    fn background_act(&self, request: crate::backend::BackgroundActRequest) -> Result<crate::backend::BackgroundActResult, String> {
+    fn background_act(
+        &self,
+        request: crate::backend::BackgroundActRequest,
+    ) -> Result<crate::backend::BackgroundActResult, String> {
         let automation = self.automation()?;
-        crate::background::execute_background_act(&automation, &self.background_snapshots.borrow(), &request)
+        crate::background::execute_background_act(
+            &automation,
+            &self.background_snapshots.borrow(),
+            &request,
+        )
     }
 }

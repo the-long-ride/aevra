@@ -4,6 +4,8 @@ import type {
   DesktopCaptureResult,
   DesktopDescribeResult,
   DesktopNode,
+  DesktopTargetIdentity,
+  DesktopWindowInstance,
   DesktopWindowIdentity,
 } from '../../protocol/src/desktop.js';
 import { computeDelta, type ScreenState } from './delta.js';
@@ -119,11 +121,8 @@ export class WindowsDesktopDriver implements DesktopDriver {
     await this.helper.kill();
   }
 
-  targetIdentity(windowId: string): Promise<{
-    window: DesktopWindowIdentity;
-    windowInstance: { windowId: string; processId: number; processStartedAt: string };
-  }> {
-    return this.helper.call('targetIdentity', { windowId });
+  targetIdentity(windowId: string): Promise<DesktopTargetIdentity> {
+    return this.helper.call<DesktopTargetIdentity>('targetIdentity', { windowId });
   }
 
   async describeBackground(request: {
@@ -133,13 +132,15 @@ export class WindowsDesktopDriver implements DesktopDriver {
     interactiveOnly: boolean;
   }): Promise<{
     window: DesktopWindowIdentity;
-    windowInstance: { windowId: string; processId: number; processStartedAt: string };
+    windowInstance: DesktopWindowInstance;
+    hostApplication?: DesktopTargetIdentity['hostApplication'];
     nodes: DesktopNode[];
     truncated: boolean;
   }> {
     const raw = await this.helper.call<{
       window: DesktopWindowIdentity;
-      windowInstance: { windowId: string; processId: number; processStartedAt: string };
+      windowInstance: DesktopWindowInstance;
+      hostApplication?: DesktopTargetIdentity['hostApplication'];
       nodes: (Omit<DesktopNode, 'ref'> & { handle: string })[];
       truncated: boolean;
     }>('describeBackground', request);
@@ -160,7 +161,8 @@ export class WindowsDesktopDriver implements DesktopDriver {
     handle: string;
     op: string;
     value?: string;
-    expectedInstance: { windowId: string; processId: number; processStartedAt: string };
+    expectedInstance: DesktopWindowInstance;
+    expectedHost?: DesktopTargetIdentity['hostApplication'];
   }): Promise<{
     ok: boolean;
     outcome: string;

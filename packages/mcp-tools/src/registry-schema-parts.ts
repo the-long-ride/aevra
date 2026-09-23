@@ -16,7 +16,7 @@ export const stringArray = (description: string) => ({
   items: { type: 'string' },
   description,
 });
-export const stringMap = (description: string) => ({
+const stringMap = (description: string) => ({
   type: 'object',
   additionalProperties: { type: 'string' },
   description,

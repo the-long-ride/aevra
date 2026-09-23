@@ -22,6 +22,20 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_connect: workspaceEmptySchema,
   desktop_disconnect: workspaceEmptySchema,
   desktop_apps: workspaceEmptySchema,
+  desktop_request_access: {
+    type: 'object',
+    properties: {
+      ...workspaceTargetProperties,
+      windowId: stringProp('Fresh window id from desktop_windows or desktop_describe.'),
+      duration: {
+        type: 'string',
+        enum: ['session', 'persistent'],
+        description: 'Requested duration. A human must approve the request.',
+      },
+    },
+    required: ['windowId', 'duration'],
+    additionalProperties: false,
+  },
   desktop_windows: workspaceEmptySchema,
   desktop_describe: {
     type: 'object',

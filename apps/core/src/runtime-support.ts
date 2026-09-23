@@ -11,7 +11,11 @@ import { WorkerManager } from './worker/worker-manager.js';
 import { BrowserPairingService } from './browser/pairing-service.js';
 import { BrowserOriginPolicyService } from './browser/origin-policy-service.js';
 import { DesktopPolicyService } from './desktop/desktop-policy-service.js';
+import { DesktopAccessService } from './desktop/desktop-access-service.js';
+import { DesktopAppCatalogService } from './desktop/desktop-app-catalog.js';
 import type { AevraDatabase } from '../../../packages/store/src/database.js';
+import { DesktopAccessRepository } from '../../../packages/store/src/desktop-access.js';
+import { DesktopAppCatalogRepository } from '../../../packages/store/src/desktop-app-catalog.js';
 import { EncryptedVault } from '../../../packages/secrets/src/vault.js';
 import { CommandSecretStore } from '../../../packages/secrets/src/platform.js';
 import { EnvironmentService } from './secrets/environment-service.js';
@@ -26,6 +30,9 @@ import type { McpUpstreamCall } from '../../../packages/protocol/src/mcp-upstrea
 import type { McpUpstreamSessionStatus } from '../../../packages/protocol/src/mcp-upstream.js';
 import type { WorkerOperation } from '../../../packages/protocol/src/worker.js';
 import type { SecretStore } from '../../../packages/secrets/src/store.js';
+import type { SessionManager } from './sessions/session-manager.js';
+import type { WorkspaceService } from './workspaces/workspace-service.js';
+import type { AuditService } from './audit/audit-service.js';
 export function createRuntimeWorkerManager(config: CoreConfig, deps: RuntimeDependencies) {
   return (
     deps.worker ??
@@ -39,7 +46,7 @@ export function createRuntimeWorkerManager(config: CoreConfig, deps: RuntimeDepe
  * starts - either way pairing fails loudly rather than minting with a key
  * that does not exist.
  */
-export function browserTokenKeyResolver(
+function browserTokenKeyResolver(
   worker: ReturnType<typeof createRuntimeWorkerManager>,
 ): () => Buffer {
   return () => {
@@ -92,6 +99,34 @@ export function createDesktopPolicyService(
   settings: Pick<SettingsRepository, 'get' | 'set'>,
 ): DesktopPolicyService {
   return new DesktopPolicyService(settings);
+}
+
+export function createDesktopAccessService(
+  database: AevraDatabase,
+  worker: WorkerGateway,
+  sessions: SessionManager,
+  workspaces: WorkspaceService,
+  audit: AuditService,
+): DesktopAccessService {
+  return new DesktopAccessService({
+    repository: new DesktopAccessRepository(database.raw()),
+    worker,
+    sessions,
+    capabilityRoots: (workspaceId) => workspaces.capabilityRoots(workspaceId),
+    audit,
+  });
+}
+
+export function createDesktopAppCatalogService(
+  database: AevraDatabase,
+  access: DesktopAccessService,
+  audit: AuditService,
+): DesktopAppCatalogService {
+  return new DesktopAppCatalogService({
+    repository: new DesktopAppCatalogRepository(database.raw()),
+    access,
+    audit,
+  });
 }
 
 export function createMcpUpstreams(
@@ -178,7 +213,7 @@ export function runtimeWorkerGateway(
   if (safeMode || typeof worker.execute !== 'function') return unavailableWorkerGateway();
   return { execute: (input) => worker.execute!(input) };
 }
-export function unavailableWorkerGateway(): WorkerGateway {
+function unavailableWorkerGateway(): WorkerGateway {
   return {
     async execute() {
       return {

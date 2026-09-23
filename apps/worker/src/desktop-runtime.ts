@@ -24,7 +24,7 @@ function existing(paths: URL[]): string | undefined {
  * Finds either a release-packaged helper or a local Cargo build. The explicit
  * environment override remains authoritative for development and diagnostics.
  */
-export function resolveHelperBinaryPath(): string | undefined {
+function resolveHelperBinaryPath(): string | undefined {
   const override = process.env.AEVRA_DESKTOP_HELPER_PATH;
   if (override !== undefined) return existsSync(override) ? override : undefined;
 

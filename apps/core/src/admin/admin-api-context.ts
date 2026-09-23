@@ -53,6 +53,8 @@ export function buildAdminApiContext(input: {
   browserPairing: any;
   browserPolicy: any;
   desktopPolicy: any;
+  desktopAccess: any;
+  desktopAppCatalog: any;
   mcpUpstreams: any;
   systemCapabilities: () => any;
   getMcpDiagnostics: () => any;
@@ -85,6 +87,8 @@ export function buildAdminApiContext(input: {
     browser: input.browserPairing,
     browserPolicy: input.browserPolicy,
     desktopPolicy: input.desktopPolicy,
+    desktopAccess: input.desktopAccess,
+    desktopAppCatalog: input.desktopAppCatalog,
     mcpUpstreams: input.mcpUpstreams,
     systemCapabilities: input.systemCapabilities,
     mcpDiagnostics: input.getMcpDiagnostics,
@@ -115,6 +119,8 @@ export function createCoreToolService(
     connectorBindings: deps.connectorBindings,
     metrics: deps.metrics,
     settings: deps.settings,
+    desktopAccess: deps.desktopAccess,
+    desktopAppCatalog: deps.desktopAppCatalog,
     systemCapabilities: deps.systemCapabilities,
     browserPolicy: deps.browserPolicy,
     manifests: new ManifestService(workspaces),

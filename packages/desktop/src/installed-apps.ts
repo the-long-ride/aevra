@@ -1,5 +1,14 @@
 import { spawn } from 'node:child_process';
-import type { DetectedApp } from '../../protocol/src/desktop.js';
+import path from 'node:path';
+import type { DetectedApp, DesktopCatalogApp } from '../../protocol/src/desktop.js';
+import {
+  APP_SCAN_ROW_LIMIT,
+  catalogApp,
+  isInstallerOrUpdaterExecutable,
+  type AppSourceScan,
+  expandWindowsEnvironmentVariables,
+  verifiedExecutablePath,
+} from './windows-app-scan.js';
 
 const UNINSTALL_KEYS = [
   'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
@@ -15,6 +24,7 @@ const UNINSTALL_KEYS = [
  * treated as the same "nothing detected here" outcome as a failure.
  */
 const QUERY_TIMEOUT_MS = 10_000;
+const MAX_REGISTRY_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 /**
  * Decodes reg.exe's raw stdout bytes ONCE, over the whole output.
@@ -37,20 +47,29 @@ function decodeRegistryOutput(chunks: Buffer[]): string {
 
 /**
  * Runs `reg.exe query <key> /s` and resolves its stdout, or '' on any
- * failure. A missing hive (e.g. no WOW6432Node on a 32-bit-only Windows), a
- * spawn error, a timeout, or a non-zero exit are all the same "nothing
- * detected here" outcome to the caller, not a reason to fail the whole scan.
+ * failure. Catalog scans retain partial output and add a warning if a hive
+ * times out, exceeds the output cap, or cannot be read.
  */
-function queryUninstallKey(key: string): Promise<string> {
+function registrySourceName(key: string): string {
+  if (key.includes('WOW6432Node')) return '32-bit uninstall registry';
+  if (key.startsWith('HKCU\\')) return 'per-user uninstall registry';
+  return '64-bit uninstall registry';
+}
+
+function queryUninstallKey(key: string): Promise<{ output: string; warning?: string }> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
+    let size = 0;
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const finish = (value: string) => {
+    let timedOut = false;
+    let oversized = false;
+    const source = registrySourceName(key);
+    const finish = (result: { output: string; warning?: string }) => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
-      resolve(value);
+      resolve(result);
     };
     try {
       const child = spawn('reg.exe', ['query', key, '/s'], {
@@ -59,15 +78,34 @@ function queryUninstallKey(key: string): Promise<string> {
         stdio: ['ignore', 'pipe', 'ignore'],
       });
       timer = setTimeout(() => {
+        timedOut = true;
         child.kill();
-        finish('');
       }, QUERY_TIMEOUT_MS);
       timer.unref?.();
-      child.stdout?.on('data', (chunk: Buffer) => void chunks.push(Buffer.from(chunk)));
-      child.once('error', () => finish(''));
-      child.once('close', (code) => finish(code === 0 ? decodeRegistryOutput(chunks) : ''));
+      child.stdout?.on('data', (chunk: Buffer) => {
+        size += chunk.length;
+        if (size > MAX_REGISTRY_OUTPUT_BYTES) {
+          oversized = true;
+          child.kill();
+          return;
+        }
+        chunks.push(Buffer.from(chunk));
+      });
+      child.once('error', () => finish({ output: '', warning: `${source} could not be read` }));
+      child.once('close', (code) => {
+        const output = decodeRegistryOutput(chunks);
+        if (timedOut) {
+          finish({ output, warning: `${source} scan timed out after 10 seconds` });
+        } else if (oversized) {
+          finish({ output, warning: `${source} exceeded the 16 MB output limit` });
+        } else {
+          finish(code === 0
+            ? { output }
+            : { output, warning: `${source} returned incomplete results` });
+        }
+      });
     } catch {
-      finish('');
+      finish({ output: '', warning: `${source} could not be read` });
     }
   });
 }
@@ -138,7 +176,7 @@ function basename(executablePath: string): string {
  * exactly the apps this drops.
  */
 export function isInstallerExe(exeBasename: string): boolean {
-  return /setup|install|update/i.test(exeBasename);
+  return isInstallerOrUpdaterExecutable(exeBasename);
 }
 
 export function toDetectedApp(values: Record<string, string>): DetectedApp | null {
@@ -170,9 +208,9 @@ export function toDetectedApp(values: Record<string, string>): DetectedApp | nul
  */
 export async function detectInstalledApps(): Promise<DetectedApp[]> {
   if (process.platform !== 'win32') return [];
-  const outputs = await Promise.all(UNINSTALL_KEYS.map(queryUninstallKey));
+  const results = await Promise.all(UNINSTALL_KEYS.map(queryUninstallKey));
   const seen = new Map<string, DetectedApp>();
-  for (const output of outputs) {
+  for (const { output } of results) {
     for (const values of parseUninstallBlocks(output)) {
       const app = toDetectedApp(values);
       if (!app) continue;
@@ -189,4 +227,48 @@ export async function detectInstalledApps(): Promise<DetectedApp[]> {
     }
   }
   return [...seen.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+function toRegistryCatalogApp(values: Record<string, string>): Promise<DesktopCatalogApp | undefined> {
+  const displayName = values.DisplayName?.trim();
+  if (!displayName) return Promise.resolve(undefined);
+  if (values.SystemComponent === '0x1' || values.SystemComponent === '1') {
+    return Promise.resolve(undefined);
+  }
+
+  const rawPath = resolveExecutablePath(values);
+  const expandedPath = rawPath ? expandWindowsEnvironmentVariables(rawPath) : undefined;
+  const candidate = expandedPath && !isInstallerExe(path.win32.basename(expandedPath))
+    ? expandedPath
+    : undefined;
+  return verifiedExecutablePath(candidate).then((executablePath) => {
+    const record = { displayName, version: values.DisplayVersion ?? null };
+    if (executablePath && path.win32.basename(executablePath).toLowerCase() === 'msedgewebview2.exe') {
+      return catalogApp(record, 'registry', executablePath, 'shared-runtime');
+    }
+    return catalogApp(record, 'registry', executablePath);
+  });
+}
+
+/** Scans uninstall records while retaining entries whose executable needs operator input. */
+export async function detectRegistryCatalogApps(): Promise<AppSourceScan> {
+  if (process.platform !== 'win32') {
+    return { apps: [], warnings: ['Registry discovery requires a Windows host'] };
+  }
+
+  const results = await Promise.all(UNINSTALL_KEYS.map(queryUninstallKey));
+  const warnings = results.flatMap((result) => result.warning ? [result.warning] : []);
+  const records = results.flatMap(({ output }) => parseUninstallBlocks(output));
+  const filtered = records.filter((values) => values.DisplayName
+    && values.SystemComponent !== '0x1'
+    && values.SystemComponent !== '1');
+  if (filtered.length > APP_SCAN_ROW_LIMIT) {
+    warnings.push('Registry discovery reached the 500 app limit');
+  }
+
+  const rows = await Promise.all(filtered.slice(0, APP_SCAN_ROW_LIMIT).map(toRegistryCatalogApp));
+  return {
+    apps: rows.filter((app): app is DesktopCatalogApp => app !== undefined),
+    warnings: [...new Set(warnings)],
+  };
 }
