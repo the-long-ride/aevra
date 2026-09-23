@@ -33,7 +33,7 @@ import { OperationService } from './operations/operation-service.js';
 import { ChangeSetService } from './changes/change-service.js';
 import { ProcessService } from './processes/process-service.js';
 import {
-  closeRuntimeResource,
+  closeRuntimeResources,
   createBrowserOriginPolicyService,
   createBrowserPairingService,
   createDesktopAccessService,
@@ -42,10 +42,10 @@ import {
   createMcpUpstreams,
   createRuntimeDataServices,
   createRuntimeWorkerManager,
-  resolveRuntimeSystemCapabilities,
-  resolveRuntimeTls,
+  prepareRuntimeStartup,
   runtimeWorkerGateway,
   syncBrowserPairingStatus,
+  configureRuntimeOperations,
 } from './runtime-support.js';
 import { SessionSkillAccessGate } from '../../../packages/mcp-tools/src/skill-access-gate.js';
 import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
@@ -53,7 +53,6 @@ import { RuntimeExposureWiring } from './exposure/runtime-wiring.js';
 import type { KeepAwakeService } from './power/keep-awake-service.js';
 import { createRuntimeKeepAwakeService } from './power/runtime-keep-awake.js';
 export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
-const EFFECTS = ['READ_ONLY', 'BUILD_OUTPUT', 'SOURCE_MUTATION', 'REPOSITORY_STATE', 'UNKNOWN'];
 export async function createCoreRuntime(
   config: CoreConfig,
   deps: RuntimeDependencies = {},
@@ -68,14 +67,12 @@ export async function createCoreRuntime(
     started = false;
   const wm = createRuntimeWorkerManager(config, deps);
   const cleanup = async () => {
-    for (const r of [keepAwake, exposureWiring, mcp, admin]) {
-      if (r) await closeRuntimeResource(() => r.close());
-    }
-    if (worker) await closeRuntimeResource(() => wm.close());
+    await closeRuntimeResources(
+      [keepAwake, exposureWiring, mcp, admin],
+      worker ? wm : undefined,
+      db,
+    );
     keepAwake = exposureWiring = mcp = admin = worker = undefined;
-    try {
-      db?.close();
-    } catch {}
     db = undefined;
     started = false;
   };
@@ -97,9 +94,8 @@ export async function createCoreRuntime(
       try {
         await mkdir(config.stateDir, { recursive: true, mode: 0o700 });
         await mkdir(config.recoveryDir, { recursive: true, mode: 0o700 });
-        const systemCapabilities = await resolveRuntimeSystemCapabilities(deps);
-        const tls = await resolveRuntimeTls(config, deps);
-        const adminCredentialVerifier = await config.createAdminCredentialVerifier();
+        const startup = await prepareRuntimeStartup(config, deps);
+        const { systemCapabilities, tls, adminCredentialVerifier } = startup;
         db = (deps.databaseOpen ?? AevraDatabase.open)(config.databasePath);
         safeMode = !db.integrityCheck().ok;
         const raw = db.raw();
@@ -184,17 +180,7 @@ export async function createCoreRuntime(
           processes,
           deps.sleepInhibitor,
         );
-        operations.attachChangeService(changes);
-        operations.setCommandEffectResolver((family, defaultEffect) => {
-          const val = settings.get<Record<string, string>>('command.family.overrides', {})[family];
-          return EFFECTS.includes(val) ? (val as any) : defaultEffect;
-        });
-        operations.setExecutionSettingsResolver(() =>
-          settings.get('execution.settings', { sandboxBackend: 'auto', cachePolicy: 'workspace' }),
-        );
-        sessions.setSwitchDrainHandler((sId, _o, _n, tMs) =>
-          operations.drainSession(sId, tMs ?? settings.get('workspace.drain.defaultMs', 60_000)),
-        );
+        configureRuntimeOperations(operations, changes, sessions, settings);
         if (!safeMode) await changes.reconcileIncompleteOperations();
         const approvals = adminRuntime.createRuntimeApprovalService(
           approvalRepo,
@@ -212,7 +198,13 @@ export async function createCoreRuntime(
             ...(exposureWiring?.trustedAdminOrigins() ?? []),
           ]),
           desktopPolicy = createDesktopPolicyService(settings),
-          desktopAccess = createDesktopAccessService(db!, workerGateway, sessions, workspaces, audit),
+          desktopAccess = createDesktopAccessService(
+            db!,
+            workerGateway,
+            sessions,
+            workspaces,
+            audit,
+          ),
           desktopAppCatalog = createDesktopAppCatalogService(db!, desktopAccess, audit),
           activity = new McpActivityLog(),
           dataServices = await createRuntimeDataServices(config, db);

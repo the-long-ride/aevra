@@ -84,7 +84,10 @@ test('setup accepts http for the loopback gateway and warns about it', async () 
 test('setup direct exposure forces https, skips the protocol prompt and defaults the host', async () => {
   const h = harness(['direct', ' https://aevra.example.com ', '']);
   assert.equal(await h.run(), 0);
-  assert.equal(h.prompts.some((text) => text.startsWith('Local gateway protocol')), false);
+  assert.equal(
+    h.prompts.some((text) => text.startsWith('Local gateway protocol')),
+    false,
+  );
   assert.deepEqual(h.configs, [
     {
       provider: 'direct',

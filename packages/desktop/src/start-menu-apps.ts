@@ -50,14 +50,16 @@ export async function detectStartMenuApps(): Promise<AppSourceScan> {
       ? path.win32.join(commonData, 'Microsoft', 'Windows', 'Start Menu', 'Programs')
       : undefined,
   ];
-  const rootAvailability = await Promise.all(roots.map(async (root) => {
-    if (!root) return false;
-    try {
-      return (await stat(root)).isDirectory();
-    } catch {
-      return false;
-    }
-  }));
+  const rootAvailability = await Promise.all(
+    roots.map(async (root) => {
+      if (!root) return false;
+      try {
+        return (await stat(root)).isDirectory();
+      } catch {
+        return false;
+      }
+    }),
+  );
   const result = await readPowerShellRows<RawCatalogApp>('Start Menu', START_MENU_SCRIPT, {
     AEVRA_USER_START_MENU: roots[0] ?? '',
     AEVRA_COMMON_START_MENU: roots[1] ?? '',

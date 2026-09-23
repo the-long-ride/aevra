@@ -46,8 +46,7 @@ const createUpstream = (draft: UpstreamDraft) =>
   requestJson<UpstreamSummary>(BASE, { method: 'POST', body: JSON.stringify(draft) });
 const updateUpstream = (id: string, draft: UpstreamDraft) =>
   requestJson<UpstreamSummary>(item(id), { method: 'POST', body: JSON.stringify(draft) });
-const removeUpstream = (id: string) =>
-  requestJson<{ ok: boolean }>(item(id), { method: 'DELETE' });
+const removeUpstream = (id: string) => requestJson<{ ok: boolean }>(item(id), { method: 'DELETE' });
 const testUpstream = (id: string) =>
   requestJson<UpstreamTestResult>(`${item(id)}/test`, { method: 'POST' });
 const acknowledgeUpstream = (id: string) =>

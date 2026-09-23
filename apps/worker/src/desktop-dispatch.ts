@@ -28,17 +28,23 @@ export function isDesktopOperation(op: WorkerOperation): op is DesktopOperation 
 
 function sameHostApplication(a?: VerifiedWindowHost, b?: VerifiedWindowHost): boolean {
   if (!a || !b) return a === b;
-  return a.instance.windowId === b.instance.windowId &&
+  return (
+    a.instance.windowId === b.instance.windowId &&
     a.instance.processId === b.instance.processId &&
     a.instance.processStartedAt === b.instance.processStartedAt &&
-    canonicalExecutablePath(a.executablePath) === canonicalExecutablePath(b.executablePath);
+    canonicalExecutablePath(a.executablePath) === canonicalExecutablePath(b.executablePath)
+  );
 }
 
 function sameWindowInstance(
   a: DesktopTargetIdentity['windowInstance'],
   b: DesktopTargetIdentity['windowInstance'],
 ): boolean {
-  return a.windowId === b.windowId && a.processId === b.processId && a.processStartedAt === b.processStartedAt;
+  return (
+    a.windowId === b.windowId &&
+    a.processId === b.processId &&
+    a.processStartedAt === b.processStartedAt
+  );
 }
 
 export async function dispatchDesktopOperation(
@@ -266,9 +272,10 @@ export async function dispatchDesktopOperation(
     // Core issued the policy in the signed envelope; only Worker can see which
     // window has focus at this instant, so Worker applies it.
     const focusedWindow = await driver.focusedWindow();
-    const targetIdentity = typeof driver.targetIdentity === 'function'
-      ? await driver.targetIdentity(focusedWindow.windowId)
-      : undefined;
+    const targetIdentity =
+      typeof driver.targetIdentity === 'function'
+        ? await driver.targetIdentity(focusedWindow.windowId)
+        : undefined;
     const identity = targetIdentity?.window ?? focusedWindow;
 
     // Reject a foreign or same-owner legacy foreground mutation against a background-owned target
@@ -298,7 +305,9 @@ export async function dispatchDesktopOperation(
         `Input refused: ${verdict.reason} (${identity.processName ?? 'unattributable window'})`,
         {
           window: identity,
-          ...(targetIdentity?.hostApplication ? { hostApplication: targetIdentity.hostApplication } : {}),
+          ...(targetIdentity?.hostApplication
+            ? { hostApplication: targetIdentity.hostApplication }
+            : {}),
           gateVerdict: 'deny' as const,
           gateRule: verdict.reason,
         },

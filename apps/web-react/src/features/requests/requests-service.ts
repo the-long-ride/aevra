@@ -26,7 +26,9 @@ export interface DesktopAccessRequest {
 }
 
 export async function loadDesktopAccessRequests(): Promise<DesktopAccessRequest[]> {
-  const result = await requestJson<{ requests: DesktopAccessRequest[] }>('/api/desktop/access-requests');
+  const result = await requestJson<{ requests: DesktopAccessRequest[] }>(
+    '/api/desktop/access-requests',
+  );
   return result.requests;
 }
 

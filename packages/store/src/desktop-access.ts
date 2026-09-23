@@ -36,8 +36,10 @@ export interface DesktopAppGrantRecord {
   sessionId: string | null;
 }
 
-export interface NewDesktopAccessRequest extends Omit<DesktopAccessRequestRecord,
-  'state' | 'decisionScope' | 'decidedBy'> {}
+export interface NewDesktopAccessRequest extends Omit<
+  DesktopAccessRequestRecord,
+  'state' | 'decisionScope' | 'decidedBy'
+> {}
 
 export interface NewDesktopAppGrant extends Omit<DesktopAppGrantRecord, 'pathKey' | 'scopeKey'> {
   pathKey: string;
@@ -71,72 +73,100 @@ export class DesktopAccessRepository {
     }
   }
 
-  createOrGetPending(input: NewDesktopAccessRequest): { request: DesktopAccessRequestRecord; existing: boolean } {
+  createOrGetPending(input: NewDesktopAccessRequest): {
+    request: DesktopAccessRequestRecord;
+    existing: boolean;
+  } {
     return this.transaction(() => {
-      this.db.prepare(`UPDATE desktop_access_requests SET state='EXPIRED',updated_at=?
-        WHERE state='PENDING' AND expires_at<=?`).run(input.createdAt, input.createdAt);
-      const existing = this.db.prepare(`SELECT ${requestColumns} FROM desktop_access_requests
+      this.db
+        .prepare(
+          `UPDATE desktop_access_requests SET state='EXPIRED',updated_at=?
+        WHERE state='PENDING' AND expires_at<=?`,
+        )
+        .run(input.createdAt, input.createdAt);
+      const existing = this.db
+        .prepare(
+          `SELECT ${requestColumns} FROM desktop_access_requests
         WHERE actor=? AND session_id=? AND window_id=? AND target_executable_path=?
           AND target_process_id=? AND target_process_started_at=?
           AND host_executable_path=? AND host_window_id=? AND host_process_id=?
           AND host_process_started_at=? AND state='PENDING'
-        ORDER BY created_at DESC LIMIT 1`).get(
-        input.actor,
-        input.sessionId,
-        input.windowId,
-        input.targetExecutablePath,
-        input.targetProcessId,
-        input.targetProcessStartedAt,
-        input.hostExecutablePath,
-        input.hostWindowId,
-        input.hostProcessId,
-        input.hostProcessStartedAt,
-      ) as DesktopAccessRequestRecord | undefined;
+        ORDER BY created_at DESC LIMIT 1`,
+        )
+        .get(
+          input.actor,
+          input.sessionId,
+          input.windowId,
+          input.targetExecutablePath,
+          input.targetProcessId,
+          input.targetProcessStartedAt,
+          input.hostExecutablePath,
+          input.hostWindowId,
+          input.hostProcessId,
+          input.hostProcessStartedAt,
+        ) as DesktopAccessRequestRecord | undefined;
       if (existing) return { request: existing, existing: true };
 
-      this.db.prepare(`INSERT INTO desktop_access_requests(
+      this.db
+        .prepare(
+          `INSERT INTO desktop_access_requests(
         id,actor,session_id,workspace_id,window_id,target_executable_path,target_process_id,
         target_process_started_at,host_executable_path,host_window_id,host_process_id,
         host_process_started_at,requested_duration,state,expires_at,created_at,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'PENDING',?,?,?)`).run(
-        input.id,
-        input.actor,
-        input.sessionId,
-        input.workspaceId,
-        input.windowId,
-        input.targetExecutablePath,
-        input.targetProcessId,
-        input.targetProcessStartedAt,
-        input.hostExecutablePath,
-        input.hostWindowId,
-        input.hostProcessId,
-        input.hostProcessStartedAt,
-        input.requestedDuration,
-        input.expiresAt,
-        input.createdAt,
-        input.updatedAt,
-      );
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'PENDING',?,?,?)`,
+        )
+        .run(
+          input.id,
+          input.actor,
+          input.sessionId,
+          input.workspaceId,
+          input.windowId,
+          input.targetExecutablePath,
+          input.targetProcessId,
+          input.targetProcessStartedAt,
+          input.hostExecutablePath,
+          input.hostWindowId,
+          input.hostProcessId,
+          input.hostProcessStartedAt,
+          input.requestedDuration,
+          input.expiresAt,
+          input.createdAt,
+          input.updatedAt,
+        );
       const request = this.getRequest(input.id)!;
       return { request, existing: false };
     });
   }
 
   getRequest(id: string): DesktopAccessRequestRecord | null {
-    const request = this.db.prepare(`SELECT ${requestColumns} FROM desktop_access_requests WHERE id=?`)
+    const request = this.db
+      .prepare(`SELECT ${requestColumns} FROM desktop_access_requests WHERE id=?`)
       .get(id) as DesktopAccessRequestRecord | undefined;
     return request ?? null;
   }
 
   expireRequest(id: string, now: string): void {
-    this.db.prepare(`UPDATE desktop_access_requests SET state='EXPIRED',updated_at=?
-      WHERE id=? AND state='PENDING'`).run(now, id);
+    this.db
+      .prepare(
+        `UPDATE desktop_access_requests SET state='EXPIRED',updated_at=?
+      WHERE id=? AND state='PENDING'`,
+      )
+      .run(now, id);
   }
 
   listPending(now: string): DesktopAccessRequestRecord[] {
-    this.db.prepare(`UPDATE desktop_access_requests SET state='EXPIRED',updated_at=?
-      WHERE state='PENDING' AND expires_at<=?`).run(now, now);
-    return this.db.prepare(`SELECT ${requestColumns} FROM desktop_access_requests
-      WHERE state='PENDING' ORDER BY created_at`).all() as unknown as DesktopAccessRequestRecord[];
+    this.db
+      .prepare(
+        `UPDATE desktop_access_requests SET state='EXPIRED',updated_at=?
+      WHERE state='PENDING' AND expires_at<=?`,
+      )
+      .run(now, now);
+    return this.db
+      .prepare(
+        `SELECT ${requestColumns} FROM desktop_access_requests
+      WHERE state='PENDING' ORDER BY created_at`,
+      )
+      .all() as unknown as DesktopAccessRequestRecord[];
   }
 
   denyRequest(id: string, decidedBy: string, now: string): DesktopAccessRequestRecord | null {
@@ -144,12 +174,19 @@ export class DesktopAccessRepository {
       const request = this.getRequest(id);
       if (!request || request.state !== 'PENDING') return null;
       if (Date.parse(request.expiresAt) <= Date.parse(now)) {
-        this.db.prepare(`UPDATE desktop_access_requests SET state='EXPIRED',updated_at=? WHERE id=? AND state='PENDING'`)
+        this.db
+          .prepare(
+            `UPDATE desktop_access_requests SET state='EXPIRED',updated_at=? WHERE id=? AND state='PENDING'`,
+          )
           .run(now, id);
         return null;
       }
-      this.db.prepare(`UPDATE desktop_access_requests SET state='DENIED',updated_at=?,decided_by=?
-        WHERE id=? AND state='PENDING'`).run(now, decidedBy, id);
+      this.db
+        .prepare(
+          `UPDATE desktop_access_requests SET state='DENIED',updated_at=?,decided_by=?
+        WHERE id=? AND state='PENDING'`,
+        )
+        .run(now, decidedBy, id);
       return this.getRequest(id);
     });
   }
@@ -165,79 +202,111 @@ export class DesktopAccessRepository {
       const request = this.getRequest(id);
       if (!request || request.state !== 'PENDING') return null;
       if (Date.parse(request.expiresAt) <= Date.parse(now)) {
-        this.db.prepare(`UPDATE desktop_access_requests SET state='EXPIRED',updated_at=? WHERE id=? AND state='PENDING'`)
+        this.db
+          .prepare(
+            `UPDATE desktop_access_requests SET state='EXPIRED',updated_at=? WHERE id=? AND state='PENDING'`,
+          )
           .run(now, id);
         return null;
       }
 
       const scopeKey = scope === 'persistent' ? 'persistent' : `session:${grant.sessionId}`;
-      const existing = this.db.prepare(`SELECT ${grantColumns} FROM desktop_app_grants
-        WHERE path_key=? AND scope_key=?`).get(grant.pathKey, scopeKey) as DesktopAppGrantRecord | undefined;
+      const existing = this.db
+        .prepare(
+          `SELECT ${grantColumns} FROM desktop_app_grants
+        WHERE path_key=? AND scope_key=?`,
+        )
+        .get(grant.pathKey, scopeKey) as DesktopAppGrantRecord | undefined;
       let storedGrant: DesktopAppGrantRecord;
       if (existing) {
-        this.db.prepare('UPDATE desktop_app_grants SET display_name=? WHERE id=?')
+        this.db
+          .prepare('UPDATE desktop_app_grants SET display_name=? WHERE id=?')
           .run(grant.displayName, existing.id);
         storedGrant = { ...existing, displayName: grant.displayName };
       } else {
-        this.db.prepare(`INSERT INTO desktop_app_grants(
+        this.db
+          .prepare(
+            `INSERT INTO desktop_app_grants(
           id,executable_path,path_key,scope_key,display_name,created_at,created_by,session_id)
-          VALUES(?,?,?,?,?,?,?,?)`).run(
-          grant.id,
-          grant.executablePath,
-          grant.pathKey,
-          scopeKey,
-          grant.displayName,
-          grant.createdAt,
-          grant.createdBy,
-          grant.sessionId,
-        );
-        storedGrant = this.db.prepare(`SELECT ${grantColumns} FROM desktop_app_grants WHERE id=?`)
+          VALUES(?,?,?,?,?,?,?,?)`,
+          )
+          .run(
+            grant.id,
+            grant.executablePath,
+            grant.pathKey,
+            scopeKey,
+            grant.displayName,
+            grant.createdAt,
+            grant.createdBy,
+            grant.sessionId,
+          );
+        storedGrant = this.db
+          .prepare(`SELECT ${grantColumns} FROM desktop_app_grants WHERE id=?`)
           .get(grant.id) as unknown as DesktopAppGrantRecord;
       }
-      this.db.prepare(`UPDATE desktop_access_requests SET state='APPROVED',updated_at=?,decision_scope=?,decided_by=?
-        WHERE id=? AND state='PENDING'`).run(now, scope, decidedBy, id);
+      this.db
+        .prepare(
+          `UPDATE desktop_access_requests SET state='APPROVED',updated_at=?,decision_scope=?,decided_by=?
+        WHERE id=? AND state='PENDING'`,
+        )
+        .run(now, scope, decidedBy, id);
       return { request: this.getRequest(id)!, grant: storedGrant };
     });
   }
 
   listGrants(): DesktopAppGrantRecord[] {
-    return this.db.prepare(`SELECT ${grantColumns} FROM desktop_app_grants ORDER BY display_name COLLATE NOCASE`)
+    return this.db
+      .prepare(
+        `SELECT ${grantColumns} FROM desktop_app_grants ORDER BY display_name COLLATE NOCASE`,
+      )
       .all() as unknown as DesktopAppGrantRecord[];
   }
 
   saveGrant(grant: NewDesktopAppGrant): DesktopAppGrantRecord {
     const scopeKey = grant.sessionId ? `session:${grant.sessionId}` : 'persistent';
-    const existing = this.db.prepare(`SELECT ${grantColumns} FROM desktop_app_grants
-      WHERE path_key=? AND scope_key=?`).get(grant.pathKey, scopeKey) as DesktopAppGrantRecord | undefined;
+    const existing = this.db
+      .prepare(
+        `SELECT ${grantColumns} FROM desktop_app_grants
+      WHERE path_key=? AND scope_key=?`,
+      )
+      .get(grant.pathKey, scopeKey) as DesktopAppGrantRecord | undefined;
     if (existing) {
-      this.db.prepare('UPDATE desktop_app_grants SET display_name=? WHERE id=?')
+      this.db
+        .prepare('UPDATE desktop_app_grants SET display_name=? WHERE id=?')
         .run(grant.displayName, existing.id);
       return { ...existing, displayName: grant.displayName };
     }
-    this.db.prepare(`INSERT INTO desktop_app_grants(
+    this.db
+      .prepare(
+        `INSERT INTO desktop_app_grants(
       id,executable_path,path_key,scope_key,display_name,created_at,created_by,session_id)
-      VALUES(?,?,?,?,?,?,?,?)`).run(
-      grant.id,
-      grant.executablePath,
-      grant.pathKey,
-      scopeKey,
-      grant.displayName,
-      grant.createdAt,
-      grant.createdBy,
-      grant.sessionId,
-    );
-    return this.db.prepare(`SELECT ${grantColumns} FROM desktop_app_grants WHERE id=?`)
+      VALUES(?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        grant.id,
+        grant.executablePath,
+        grant.pathKey,
+        scopeKey,
+        grant.displayName,
+        grant.createdAt,
+        grant.createdBy,
+        grant.sessionId,
+      );
+    return this.db
+      .prepare(`SELECT ${grantColumns} FROM desktop_app_grants WHERE id=?`)
       .get(grant.id) as unknown as DesktopAppGrantRecord;
   }
 
   renameGrantsForPath(pathKey: string, displayName: string): void {
-    this.db.prepare('UPDATE desktop_app_grants SET display_name=? WHERE path_key=?')
+    this.db
+      .prepare('UPDATE desktop_app_grants SET display_name=? WHERE path_key=?')
       .run(displayName, pathKey);
   }
 
   revokeGrant(id: string): DesktopAppGrantRecord | null {
     return this.transaction(() => {
-      const grant = this.db.prepare(`SELECT ${grantColumns} FROM desktop_app_grants WHERE id=?`)
+      const grant = this.db
+        .prepare(`SELECT ${grantColumns} FROM desktop_app_grants WHERE id=?`)
         .get(id) as DesktopAppGrantRecord | undefined;
       if (!grant) return null;
       this.db.prepare('DELETE FROM desktop_app_grants WHERE id=?').run(id);

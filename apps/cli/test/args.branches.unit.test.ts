@@ -156,7 +156,11 @@ test('mcp list, remove and test parse; bad forms are rejected', () => {
     action: 'remove',
     id: 'u1',
   });
-  assert.deepEqual(parseAevraArgs(['mcp', 'test', 'u1']), { command: 'mcp', action: 'test', id: 'u1' });
+  assert.deepEqual(parseAevraArgs(['mcp', 'test', 'u1']), {
+    command: 'mcp',
+    action: 'test',
+    id: 'u1',
+  });
   assert.throws(() => parseAevraArgs(['mcp', 'list', 'x']), /mcp list takes no arguments/);
   assert.throws(() => parseAevraArgs(['mcp', 'remove']), /mcp remove requires an id/);
   assert.throws(() => parseAevraArgs(['mcp', 'test', '']), /mcp test requires an id/);

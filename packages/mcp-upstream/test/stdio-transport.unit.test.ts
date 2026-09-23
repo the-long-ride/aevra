@@ -10,6 +10,13 @@ function transport(mode: string, deadlineMs = 5000) {
   return new StdioTransport({ command: process.execPath, args: [FAKE, mode], deadlineMs });
 }
 
+async function waitForDiagnostic(stdio: StdioTransport, expected: string): Promise<void> {
+  const deadline = Date.now() + 1000;
+  while (!stdio.diagnostics().includes(expected) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 test('connect performs the handshake and reports the server identity', async () => {
   const stdio = transport('ok');
   try {
@@ -50,6 +57,7 @@ test('stderr is captured for operator diagnostics', async () => {
   const stdio = transport('noisy');
   try {
     await stdio.connect();
+    await waitForDiagnostic(stdio, 'running in fake mode');
     assert.match(stdio.diagnostics(), /running in fake mode/);
   } finally {
     await stdio.close();

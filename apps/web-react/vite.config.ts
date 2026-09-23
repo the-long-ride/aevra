@@ -26,6 +26,7 @@ export default defineConfig({
     testTimeout: 20_000,
     coverage: {
       provider: 'v8',
+      exclude: ['**/*.test-support.{ts,tsx}'],
       thresholds: {
         lines: 85,
         statements: 85,

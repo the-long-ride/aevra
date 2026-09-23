@@ -99,9 +99,9 @@ function queryUninstallKey(key: string): Promise<{ output: string; warning?: str
         } else if (oversized) {
           finish({ output, warning: `${source} exceeded the 16 MB output limit` });
         } else {
-          finish(code === 0
-            ? { output }
-            : { output, warning: `${source} returned incomplete results` });
+          finish(
+            code === 0 ? { output } : { output, warning: `${source} returned incomplete results` },
+          );
         }
       });
     } catch {
@@ -229,7 +229,9 @@ export async function detectInstalledApps(): Promise<DetectedApp[]> {
   return [...seen.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-function toRegistryCatalogApp(values: Record<string, string>): Promise<DesktopCatalogApp | undefined> {
+function toRegistryCatalogApp(
+  values: Record<string, string>,
+): Promise<DesktopCatalogApp | undefined> {
   const displayName = values.DisplayName?.trim();
   if (!displayName) return Promise.resolve(undefined);
   if (values.SystemComponent === '0x1' || values.SystemComponent === '1') {
@@ -238,12 +240,14 @@ function toRegistryCatalogApp(values: Record<string, string>): Promise<DesktopCa
 
   const rawPath = resolveExecutablePath(values);
   const expandedPath = rawPath ? expandWindowsEnvironmentVariables(rawPath) : undefined;
-  const candidate = expandedPath && !isInstallerExe(path.win32.basename(expandedPath))
-    ? expandedPath
-    : undefined;
+  const candidate =
+    expandedPath && !isInstallerExe(path.win32.basename(expandedPath)) ? expandedPath : undefined;
   return verifiedExecutablePath(candidate).then((executablePath) => {
     const record = { displayName, version: values.DisplayVersion ?? null };
-    if (executablePath && path.win32.basename(executablePath).toLowerCase() === 'msedgewebview2.exe') {
+    if (
+      executablePath &&
+      path.win32.basename(executablePath).toLowerCase() === 'msedgewebview2.exe'
+    ) {
       return catalogApp(record, 'registry', executablePath, 'shared-runtime');
     }
     return catalogApp(record, 'registry', executablePath);
@@ -257,11 +261,12 @@ export async function detectRegistryCatalogApps(): Promise<AppSourceScan> {
   }
 
   const results = await Promise.all(UNINSTALL_KEYS.map(queryUninstallKey));
-  const warnings = results.flatMap((result) => result.warning ? [result.warning] : []);
+  const warnings = results.flatMap((result) => (result.warning ? [result.warning] : []));
   const records = results.flatMap(({ output }) => parseUninstallBlocks(output));
-  const filtered = records.filter((values) => values.DisplayName
-    && values.SystemComponent !== '0x1'
-    && values.SystemComponent !== '1');
+  const filtered = records.filter(
+    (values) =>
+      values.DisplayName && values.SystemComponent !== '0x1' && values.SystemComponent !== '1',
+  );
   if (filtered.length > APP_SCAN_ROW_LIMIT) {
     warnings.push('Registry discovery reached the 500 app limit');
   }

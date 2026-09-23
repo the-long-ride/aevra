@@ -45,12 +45,18 @@ function isWebViewRuntime(value: string): boolean {
 
 function formatSource(source: string): string {
   switch (source) {
-    case 'registry': return 'Registry';
-    case 'start-menu': return 'Start Menu';
-    case 'running': return 'Running app';
-    case 'packaged': return 'Packaged app';
-    case 'custom': return 'Custom app';
-    default: return source;
+    case 'registry':
+      return 'Registry';
+    case 'start-menu':
+      return 'Start Menu';
+    case 'running':
+      return 'Running app';
+    case 'packaged':
+      return 'Packaged app';
+    case 'custom':
+      return 'Custom app';
+    default:
+      return source;
   }
 }
 
@@ -75,22 +81,25 @@ function DesktopAppPickerComponent({
 
   const isAllowed = (exeBasename: string) => allowed.has(exeBasename.toLowerCase());
 
-  const confirmBroadWebViewAccess = () => dialog.confirm({
-    title: 'Allow WebView2 across apps?',
-    message: 'WebView2 is shared by multiple applications. Adding msedgewebview2.exe applies broadly and does not identify QuotaShift. For scoped access, approve the host app after Aevra verifies its window relationship.',
-    confirmLabel: 'Allow broad WebView2 access',
-    confirmTone: 'danger',
-  });
+  const confirmBroadWebViewAccess = () =>
+    dialog.confirm({
+      title: 'Allow WebView2 across apps?',
+      message:
+        'WebView2 is shared by multiple applications. Adding msedgewebview2.exe applies broadly and does not identify QuotaShift. For scoped access, approve the host app after Aevra verifies its window relationship.',
+      confirmLabel: 'Allow broad WebView2 access',
+      confirmTone: 'danger',
+    });
 
   const handleToggleApp = async (row: AppRow, checked: boolean) => {
     if (!row.grantable || row.exeBasename === '—') return;
-    if (checked && isWebViewRuntime(row.exeBasename) && !(await confirmBroadWebViewAccess())) return;
+    if (checked && isWebViewRuntime(row.exeBasename) && !(await confirmBroadWebViewAccess()))
+      return;
     onToggleApp(row.exeBasename, checked, row);
   };
 
   const appRows: AppRow[] = useMemo(() => {
     const knownBasenames = new Set(
-      apps.flatMap((app) => app.exeBasename ? [app.exeBasename.toLowerCase()] : []),
+      apps.flatMap((app) => (app.exeBasename ? [app.exeBasename.toLowerCase()] : [])),
     );
     const unlistedAllowed = applications.filter(
       (entry) => !knownBasenames.has(entry.toLowerCase()),
@@ -99,12 +108,15 @@ function DesktopAppPickerComponent({
     return [
       ...apps.map((app, index) => {
         const exeBasename = app.exeBasename ?? '—';
-        const grantable = (app.grantable !== false || isWebViewRuntime(exeBasename)) && Boolean(app.exeBasename);
-        const isAppAllowed = grantable && (Boolean(app.isGranted) || allowed.has(exeBasename.toLowerCase()));
+        const grantable =
+          (app.grantable !== false || isWebViewRuntime(exeBasename)) && Boolean(app.exeBasename);
+        const isAppAllowed =
+          grantable && (Boolean(app.isGranted) || allowed.has(exeBasename.toLowerCase()));
         const sources = app.isCustom ? ['Custom'] : (app.sources ?? []).map(formatSource);
         return {
-          rowId: app.executablePath?.replaceAll('/', '\\').toLowerCase()
-            ?? `unresolved:${sources.join(',')}:${app.displayName}:${index}`,
+          rowId:
+            app.executablePath?.replaceAll('/', '\\').toLowerCase() ??
+            `unresolved:${sources.join(',')}:${app.displayName}:${index}`,
           exeBasename,
           displayName: app.displayName,
           version: app.version ?? '—',
@@ -112,7 +124,11 @@ function DesktopAppPickerComponent({
           executablePath: app.executablePath,
           status: (app.reason === 'shared-runtime' || isWebViewRuntime(exeBasename)
             ? 'Shared runtime'
-            : grantable ? (isAppAllowed ? 'Allowed' : 'Blocked') : 'Needs manual path') as AppRow['status'],
+            : grantable
+              ? isAppAllowed
+                ? 'Allowed'
+                : 'Blocked'
+              : 'Needs manual path') as AppRow['status'],
           allowed: isAppAllowed,
           grantable,
           isCustom: Boolean(app.isCustom),
@@ -185,7 +201,7 @@ function DesktopAppPickerComponent({
           <Switch
             checked={row.allowed}
             disabled={busy || !row.grantable}
-              onChange={(event) => void handleToggleApp(row, event.currentTarget.checked)}
+            onChange={(event) => void handleToggleApp(row, event.currentTarget.checked)}
             containerClassName="desktop-app-table-label"
             label={
               <>
@@ -221,9 +237,11 @@ function DesktopAppPickerComponent({
             className={`desktop-app-status ${
               row.allowed ? 'is-allowed' : row.grantable ? 'is-blocked' : 'is-unavailable'
             }`}
-            title={row.status === 'Shared runtime'
-              ? 'This shared process cannot identify the application that hosts its window.'
-              : undefined}
+            title={
+              row.status === 'Shared runtime'
+                ? 'This shared process cannot identify the application that hosts its window.'
+                : undefined
+            }
           >
             {row.status}
           </span>
@@ -330,7 +348,7 @@ function DesktopAppPickerComponent({
           key={editingApp?.exeBasename ?? 'new'}
           open={modalOpen}
           initialApp={editingApp}
-          existingPaths={apps.flatMap((app) => app.executablePath ? [app.executablePath] : [])}
+          existingPaths={apps.flatMap((app) => (app.executablePath ? [app.executablePath] : []))}
           onClose={handleCloseModal}
           onSave={handleSaveModal}
         />
