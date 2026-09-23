@@ -38,7 +38,7 @@ export const controlInputSchemas: Record<string, JsonSchema> = {
       includeImage: {
         type: 'boolean',
         description:
-          'Request visual evidence when the adapter supports it. Current v1.1.1 control observations keep images explicit through capture/snapshot tools.',
+          'Request visual evidence when the adapter supports it. Current v1.1.2 control observations keep images explicit through capture/snapshot tools.',
       },
       maxOutputTokens: {
         type: 'integer',

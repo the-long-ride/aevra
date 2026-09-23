@@ -1,6 +1,6 @@
 # 03 — MCP Protocol
 
-**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.1.1`
+**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.1.2`
 
 ## Transport
 
@@ -10,7 +10,7 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 
 ## Session lifecycle
 
-1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.1.1"}`.
+1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.1.2"}`.
 2. Every subsequent `POST` carries that header; `DELETE` disconnects. The session's admission identity (actor + subject + durable OAuth connection when present) must match on every call.
 3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
 4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
@@ -78,10 +78,10 @@ activating it.
 
 `desktop_connect` starts the packaged native helper for the current platform.
 Windows uses UI Automation (UIA); macOS uses Accessibility/AX; Linux uses AT-SPI2.
-Capability flags are literal: v1.1.1 provides shared semantic tree/action support on
-all three platforms, while legacy foreground mouse/keyboard injection and pixel
-capture remain Windows-only. Permission/provider failures are errors, not empty
-successful trees.
+Capability flags are literal: v1.1.2 retains shared semantic tree/action support,
+first shipped in v1.1.1, on all three platforms, while legacy foreground
+mouse/keyboard injection and pixel capture remain Windows-only.
+Permission/provider failures are errors, not empty successful trees.
 
 Shared semantic automation uses `desktop_describe(mode:'background')`,
 `desktop_invoke`, `desktop_set_value`, `desktop_select`, and
@@ -124,7 +124,7 @@ same owner/request/digest. `control_plan_status` and `control_plan_cancel` are
 owner checked.
 
 Mode `sharedSemantic` is implemented. Mode `isolated` is deliberately fail-closed
-in v1.1.1: unless a separately provisioned runner has verified containment, the
+in v1.1.2: unless a separately provisioned runner has verified containment, the
 adapter returns `CONTROL_ISOLATION_UNAVAILABLE` with
 `chooseIsolatedRunner`. A same-desktop worker is never relabeled as isolated.
 

@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.1.2] - 2026-09-24
+
+### Fixed - npm Runtime Packaging
+
+- **Global CLI startup**: include the compiled browser, command-analysis, control,
+  desktop, and MCP upstream modules required by the shipped runtime. This fixes
+  `ERR_MODULE_NOT_FOUND` when starting the npm-installed CLI.
+- **Package artifact verification**: add `npm run test:package` to pack and
+  install the built artifact, check its relative JavaScript imports, and run
+  the installed CLI's `--version` command. The full and portability gates run
+  this check after building.
+
+### Changed - Node Test Runner Isolation
+
+- Give each normal and coverage test run a private `TEMP`/`TMP`/`TMPDIR` root
+  and remove only that root after completion. Preserve the runner's original
+  result if a test fails or cleanup itself encounters an error.
+- On macOS, create the root under `/tmp` with a short name so nested Unix
+  socket fixtures stay within the platform's socket path limit.
+
+### Changed - Release CI
+
+- Run the Quality gate for pushes to every branch. Release jobs wait up to two
+  hours for that exact commit's push-triggered gate to succeed, then reuse its
+  build artifacts. Code review approval is not a release gate.
+
 ## [1.1.1] - 2026-09-22
 
 ### Added - Guarded Control Plans & Cross-Platform Shared Desktop Semantics

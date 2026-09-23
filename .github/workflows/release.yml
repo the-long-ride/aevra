@@ -22,36 +22,77 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish to npm
+  wait-for-quality-gate:
+    name: Wait for Quality gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 130
+    outputs:
+      run-id: ${{ steps.wait.outputs.run-id }}
+      release-sha: ${{ steps.wait.outputs.release-sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag != '' && inputs.tag || github.ref }}
 
-      - name: Verify exact commit passed quality gate
+      - name: Wait for exact commit to pass quality gate
+        id: wait
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           RELEASE_SHA="$(git rev-parse HEAD)"
           echo "Release SHA: $RELEASE_SHA"
-          SUCCESSFUL_RUNS="$(
-            gh api \
-              --method GET \
-              -H "Accept: application/vnd.github+json" \
-              "/repos/${GITHUB_REPOSITORY}/actions/workflows/quality-gate.yml/runs" \
-              -f head_sha="$RELEASE_SHA" \
-              -f status=completed \
-              -f per_page=100 \
-              --jq '[.workflow_runs[] | select(.conclusion == "success" and .event == "push")] | length'
-          )"
-          if [ "$SUCCESSFUL_RUNS" -lt 1 ]; then
-            echo "::error::Release commit $RELEASE_SHA has no successful push-triggered Quality gate run."
-            exit 1
-          fi
+          echo "release-sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Waiting for Quality gate CI on this exact commit. Code review approval is not checked."
+
+          WAIT_SECONDS=7200
+          DEADLINE=$((SECONDS + WAIT_SECONDS))
+          while (( SECONDS < DEADLINE )); do
+            RUNS="$(
+              gh api \
+                --method GET \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/${GITHUB_REPOSITORY}/actions/workflows/quality-gate.yml/runs" \
+                -f head_sha="$RELEASE_SHA" \
+                -f per_page=100
+            )"
+            RUN="$(jq -c '[.workflow_runs[] | select(.event == "push")] | sort_by([.run_number, (.run_attempt // 0)]) | last // empty' <<< "$RUNS")"
+
+            if [[ -z "$RUN" ]]; then
+              echo "No Quality gate run exists for $RELEASE_SHA yet; checking again in 30 seconds."
+            else
+              RUN_ID="$(jq -r '.id' <<< "$RUN")"
+              STATUS="$(jq -r '.status' <<< "$RUN")"
+              CONCLUSION="$(jq -r '.conclusion // ""' <<< "$RUN")"
+              echo "Quality gate run $RUN_ID status: $STATUS${CONCLUSION:+ ($CONCLUSION)}"
+
+              if [[ "$STATUS" == "completed" ]]; then
+                if [[ "$CONCLUSION" != "success" ]]; then
+                  echo "::error::Quality gate run $RUN_ID completed with conclusion '$CONCLUSION'."
+                  exit 1
+                fi
+                echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
+                echo "Quality gate passed for $RELEASE_SHA."
+                exit 0
+              fi
+            fi
+
+            sleep 30
+          done
+
+          echo "::error::Timed out after $((WAIT_SECONDS / 60)) minutes waiting for Quality gate CI on $RELEASE_SHA."
+          exit 1
+
+  publish:
+    name: Publish to npm
+    needs: wait-for-quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.wait-for-quality-gate.outputs.release-sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -67,17 +108,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RELEASE_SHA="$(git rev-parse HEAD)"
-          RUN_ID="$(
-            gh api \
-              --method GET \
-              -H "Accept: application/vnd.github+json" \
-              "/repos/${GITHUB_REPOSITORY}/actions/workflows/quality-gate.yml/runs" \
-              -f head_sha="$RELEASE_SHA" \
-              -f status=completed \
-              -f per_page=100 \
-              --jq '[.workflow_runs[] | select(.conclusion == "success" and .event == "push")] | .[0].id'
-          )"
+          RUN_ID="${{ needs.wait-for-quality-gate.outputs.run-id }}"
           echo "Taking native helpers from quality-gate run $RUN_ID"
           gh run download "$RUN_ID" --pattern 'desktop-helper-*' --dir helper-artifacts
           node scripts/stage-desktop-helpers.mjs helper-artifacts dist/helper desktop-helper-release-assets
@@ -120,17 +151,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RELEASE_SHA="$(git rev-parse HEAD)"
-          RUN_ID="$(
-            gh api \
-              --method GET \
-              -H "Accept: application/vnd.github+json" \
-              "/repos/${GITHUB_REPOSITORY}/actions/workflows/quality-gate.yml/runs" \
-              -f head_sha="$RELEASE_SHA" \
-              -f status=completed \
-              -f per_page=100 \
-              --jq '[.workflow_runs[] | select(.conclusion == "success" and .event == "push")] | .[0].id'
-          )"
+          RUN_ID="${{ needs.wait-for-quality-gate.outputs.run-id }}"
           echo "Taking the extension from quality-gate run $RUN_ID"
           gh run download "$RUN_ID" --name aevra-extension --dir extension-artifact
           test -f extension-artifact/aevra-extension.zip

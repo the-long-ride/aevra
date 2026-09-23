@@ -2,11 +2,14 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current release is **1.1.1**. It includes command understanding,
+The current release is **1.1.2**. It includes command understanding,
 workspace containment, typed command rules, efficient browser/control plans,
-cross-platform shared-semantic desktop control, MCP upstream servers, and workspace manifests. The feature-specific
-manuals and canonical specs linked below are the source of truth for detailed
-contracts and security limitations.
+cross-platform shared-semantic desktop control, MCP upstream servers, and
+workspace manifests. This patch also fixes missing compiled modules in npm
+installs, adds a packed-package CLI check to the release gates, and gives Node
+test runners a private temporary directory that they clean after each run. The
+feature-specific manuals and canonical specs linked below are the source of
+truth for detailed contracts and security limitations.
 
 ---
 
@@ -144,7 +147,7 @@ synthesizes host pointer/keyboard input. Use background `desktop_describe` plus
 legacy foreground input and pixel capture; macOS/Linux portable mode reports
 those capabilities unavailable.
 
-Strict `isolated` mode is not a label for the ordinary worker: v1.1.1 refuses
+Strict `isolated` mode is not a label for the ordinary worker: v1.1.2 refuses
 it until a separately provisioned runner has passed containment qualification.
 Read [Desktop control](docs/user-manual/19-desktop-control.md) before enabling it.
 
@@ -247,7 +250,20 @@ npm run test:coverage        # V8 coverage report (enforces >= 85% floor)
 npm run test:extension       # MV3 extension unit and coverage suite
 npm run build:extension      # Package the version-matched extension archive
 npm run test:ui-parity       # Playwright browser UI parity tests
+npm run test:package         # Pack/install the npm artifact and verify runtime imports and CLI version
 ```
+
+The full gate runs `test:package` after the production build. The portability
+gate also runs it on Windows, macOS, and Linux. Quality gate runs for pushes to
+all branches and for pull requests. A release waits up to 120 minutes for a
+successful push-triggered gate on the exact commit, then reuses that run's
+artifacts; review approval is not checked. Pull-request CI validates a
+synthetic merge commit and cannot replace the exact-commit push run.
+
+The script and coverage runners set `TEMP`, `TMP`, and `TMPDIR` to a per-run
+directory and remove only that directory after completion, including failed
+runs. On macOS they create it under /tmp with a short prefix so nested Unix
+socket fixtures stay within the platform path limit.
 
 ---
 

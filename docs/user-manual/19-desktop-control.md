@@ -1,6 +1,6 @@
 # Desktop control
 
-Aevra has two desktop-control paths in v1.1.1:
+Aevra has two desktop-control paths in v1.1.2:
 
 - **Shared semantic control** uses native accessibility providers and does not
   synthesize host mouse/keyboard input. It is available on Windows (UIA), macOS
@@ -17,15 +17,15 @@ Aevra's file change-set machinery.
 | Platform          | Semantic tree/actions                      | Attribution                                | Pixel capture | Foreground input                         |
 | ----------------- | ------------------------------------------ | ------------------------------------------ | ------------- | ---------------------------------------- |
 | Windows 10/11     | UIA: invoke/value/select/toggle            | yes                                        | yes           | yes, subject to integrity/desktop checks |
-| macOS             | AX: supported provider actions/values      | yes                                        | no in v1.1.1  | no                                       |
-| Linux X11/Wayland | AT-SPI2: supported provider actions/values | yes when provider exposes process identity | no in v1.1.1  | no                                       |
+| macOS             | AX: supported provider actions/values      | yes                                        | no in v1.1.2  | no                                       |
+| Linux X11/Wayland | AT-SPI2: supported provider actions/values | yes when provider exposes process identity | no in v1.1.2  | no                                       |
 
 The helper reports actual capability booleans. Missing macOS Accessibility
 permission, a missing Linux accessibility bus/provider, or an application with
 accessibility disabled is an explicit error, not an empty successful tree.
 
 Strict `isolated` execution is **not** advertised by the ordinary worker.
-v1.1.1 refuses that mode with `CONTROL_ISOLATION_UNAVAILABLE` until a separately
+v1.1.2 refuses that mode with `CONTROL_ISOLATION_UNAVAILABLE` until a separately
 provisioned runner has verified input/focus/clipboard containment. There is no
 silent downgrade to the host desktop.
 
@@ -169,7 +169,7 @@ retried from that browser.
 the full installed-app inventory to the model. In denylist mode it does not enumerate
 apps because desktop control is not scoped to a selected app list.
 
-The approval dialog itself is outside the desktop action contract. In v1.1.1 long
+The approval dialog itself is outside the desktop action contract. In v1.1.2 long
 command previews are bounded with ellipsis, the dialog body scrolls within the
 viewport, and its action row remains reachable.
 
@@ -191,10 +191,10 @@ rolled back.
 
 ## Current limits
 
-- Strict isolated runner execution is fail-closed but not provisioned in v1.1.1.
+- Strict isolated runner execution is fail-closed but not provisioned in v1.1.2.
 - Native event/watch streams are not yet used by the public plan adapters; they
   report degraded watch health and perform bounded live refreshes between steps.
-- macOS/Linux shared mode is semantic-only in v1.1.1: no pixel capture and no host
+- macOS/Linux shared mode is semantic-only in v1.1.2: no pixel capture and no host
   input synthesis.
 - Frames, shadow DOM, canvas-only browser controls, and native custom controls may
   require a checkpoint or a different supported interface rather than guessing.

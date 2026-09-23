@@ -17,13 +17,16 @@ test('full repository gate runs each expensive validation path once', () => {
     'test:scripts',
     'test:coverage',
     'npm run build',
+    'test:package',
     'test:ui-parity:only',
   ]) {
     assert.match(gate, new RegExp(command.replace(':', '\\:')));
   }
   assert.doesNotMatch(gate, /npm test(?:\s|$)/);
   assert.equal(pkg.scripts['test:scripts'], 'node scripts/test.mjs scripts');
+  assert.equal(pkg.scripts['test:package'], 'node scripts/verify-package-runtime.mjs');
   assert.equal(pkg.scripts['test:ui-parity:only'], 'playwright test');
+  assert.match(pkg.scripts['test:portability'], /npm run build && npm run test:package/);
   assert.match(pkg.scripts['test:ui-parity'], /npm run build/);
   assert.match(pkg.scripts['test:ui-parity'], /test:ui-parity:only/);
   assert.equal(pkg.scripts.prepack, 'npm run build');
@@ -33,6 +36,7 @@ test('full repository gate runs each expensive validation path once', () => {
 
 test('quality gate parallelizes validation and runs portability across Windows macOS and Linux', () => {
   assert.match(workflow, /pull_request:/);
+  assert.match(workflow, /push:\s*\n\s*branches:\s*\n\s*-\s*['"]\*\*['"]/);
   assert.match(workflow, /ubuntu-latest/);
   assert.match(workflow, /windows-latest/);
   assert.match(workflow, /macos-latest/);
@@ -105,10 +109,17 @@ test('release publishes only an exact SHA already validated by the quality workf
   assert.match(releaseWorkflow, /node-version:\s*24/);
   assert.match(releaseWorkflow, /id-token:\s*write/);
   assert.match(releaseWorkflow, /actions:\s*read/);
+  assert.match(releaseWorkflow, /wait-for-quality-gate:/);
   assert.match(releaseWorkflow, /quality-gate\.yml\/runs/);
   assert.match(releaseWorkflow, /head_sha=.*RELEASE_SHA/);
-  assert.match(releaseWorkflow, /conclusion\s*==\s*['"]success['"]/);
-  assert.match(releaseWorkflow, /event\s*==\s*['"]push['"]/);
+  assert.match(releaseWorkflow, /WAIT_SECONDS=7200/);
+  assert.match(releaseWorkflow, /sleep 30/);
+  assert.match(releaseWorkflow, /\.event == "push"/);
+  assert.match(releaseWorkflow, /STATUS.*==.*"completed"/);
+  assert.match(releaseWorkflow, /CONCLUSION.*!=.*"success"/);
+  assert.match(releaseWorkflow, /needs: wait-for-quality-gate/);
+  assert.match(releaseWorkflow, /needs\.wait-for-quality-gate\.outputs\.run-id/);
+  assert.doesNotMatch(releaseWorkflow, /pull_request_review|reviews\/|review\.state/);
   assert.match(releaseWorkflow, /npm ci --ignore-scripts/);
   assert.match(releaseWorkflow, /npm publish --provenance --access public/);
   assert.match(releaseWorkflow, /contents:\s*write/);

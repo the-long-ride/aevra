@@ -1,6 +1,6 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.1.1`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.1.2`
 
 ## Ports and listeners (fixed hosts)
 

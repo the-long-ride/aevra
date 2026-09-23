@@ -12,12 +12,12 @@ Welcome. Everything here is written in **2-minute files** — pick a path and go
 ## Reading paths
 
 **I maintain or extend Aevra (or I'm an agent working on this repo):**
-`specs/01-system-overview` → `02-security-model` → `03-mcp-protocol` → `04-connectors` → `05-skills-instructions` → `06-workspaces-execution` → `07-state-migration` → `08-audit-recovery` → `09-configuration`
+`specs/01-system-overview` → `02-security-model` → `03-mcp-protocol` → `04-connectors` → `05-skills-instructions` → `06-workspaces-execution` → `07-state-migration` → `08-audit-recovery` → `09-configuration` → `10-package-and-test-runners`
 
 **I just want my AI client working:**
 `user-manual/01-install` → `02-start` → `03-create-connector` → `04-connect-claude` (or `05`/`06`) → `07-register-workspace`
 
-**Verified against:** Aevra `1.1.1` — bump this stamp on every release (see [`RELEASING.md`](RELEASING.md)).
+**Verified against:** Aevra `1.1.2` — bump this stamp on every release (see [`RELEASING.md`](RELEASING.md)).
 
 ## Rules of this documentation
 
@@ -25,4 +25,4 @@ Welcome. Everything here is written in **2-minute files** — pick a path and go
 - Specs describe _what and why_; the manual describes _how_.
 - Every spec ends with **Boundaries** (what it does not cover) and **Related** links.
 - Filenames are stable and numbered — cite them directly (`docs/specs/02-security-model.md`).
-- Facts are verified against Aevra `1.1.1`.
+- Facts are verified against Aevra `1.1.2`.

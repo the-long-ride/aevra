@@ -14,7 +14,7 @@ export function AboutPage() {
     ? String(status.version).startsWith('v')
       ? status.version
       : `v${status.version}`
-    : 'v1.1.1';
+    : 'v1.1.2';
 
   return (
     <section className="about-page" data-surface-id="page:about">
