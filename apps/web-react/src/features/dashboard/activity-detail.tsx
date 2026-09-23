@@ -1,6 +1,6 @@
 import type { McpActivityEntry, WorkspaceSummary } from '@aevra/admin-contracts';
 import type { DialogApi } from '../../components/Dialog';
-import { JsonDetailView } from '../../components/JsonDetailView';
+import { ActivityDetailBody } from './ActivityDetailBody';
 
 export function clientLabel(actor: string): string {
   return actor.replace(/^(oauth:|connector:)/, '') || actor;
@@ -41,27 +41,13 @@ export function showMcpActivityDetails(
   return dialog.message({
     title: 'MCP activity details',
     actionLabel: 'Close',
+    size: 'wide',
     message: (
-      <div className="activity-detail">
-        <div className="activity-detail-meta">
-          <span>{clientLabel(entry.actor)}</span>
-          <span>{workspaceLabel}</span>
-          <code>{entry.action}</code>
-          <span className={`activity-state ${entry.state}`}>{entry.state.toUpperCase()}</span>
-        </div>
-        <section>
-          <b>Input</b>
-          <JsonDetailView label="Input" value={entry.input} emptyText="No input recorded." />
-        </section>
-        <section>
-          <b>Output</b>
-          <JsonDetailView
-            label="Output"
-            value={entry.output}
-            emptyText={entry.state === 'running' ? 'Still running.' : 'No output recorded.'}
-          />
-        </section>
-      </div>
+      <ActivityDetailBody
+        entry={entry}
+        clientName={clientLabel(entry.actor)}
+        workspaceLabel={workspaceLabel}
+      />
     ),
   });
 }

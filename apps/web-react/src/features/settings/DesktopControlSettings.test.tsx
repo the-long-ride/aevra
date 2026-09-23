@@ -2,11 +2,15 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DialogProvider } from '../../components/Dialog';
+import { requestJson } from '../../services/api-client';
 import {
+  type AppCatalogRow,
   DesktopControlSettings,
   type DesktopPolicySnapshot,
   type DetectedApp,
 } from './DesktopControlSettings';
+
+vi.mock('../../services/api-client', () => ({ requestJson: vi.fn() }));
 
 const policy: DesktopPolicySnapshot = {
   mode: 'denylist',
@@ -23,24 +27,124 @@ const apps: DetectedApp[] = [
   },
 ];
 
-function mount(overrides: Partial<DesktopPolicySnapshot> = {}) {
+const requestJsonMock = vi.mocked(requestJson);
+let catalogRows: AppCatalogRow[] = [];
+let grantRows: Array<{
+  id: string;
+  executablePath: string;
+  displayName: string;
+  createdAt: string;
+}> = [];
+let customIdSequence = 0;
+let grantIdSequence = 0;
+
+function customApp(overrides: Partial<AppCatalogRow> = {}): AppCatalogRow {
+  return {
+    displayName: 'Old Tool',
+    version: '1.0.0',
+    executablePath: 'C:\\Tools\\OldTool.exe',
+    exeBasename: 'OldTool.exe',
+    sources: ['custom'],
+    grantable: true,
+    isCustom: true,
+    customAppId: 'custom-old-tool',
+    ...overrides,
+  };
+}
+
+function mount(
+  overrides: Partial<DesktopPolicySnapshot> = {},
+  initialApps: AppCatalogRow[] = apps,
+) {
   const value = { ...policy, ...overrides };
   const save = vi.fn().mockImplementation(async (next) => ({ ...value, ...next }));
+  catalogRows = initialApps.map((app) => ({ ...app }));
+  grantRows = [];
   render(
     <DialogProvider>
       <DesktopControlSettings
         load={() => Promise.resolve(value)}
         save={save}
-        loadApps={() => Promise.resolve(apps)}
+        loadApps={() => Promise.resolve(catalogRows)}
       />
     </DialogProvider>,
   );
   return { save };
 }
 
+function configureDesktopApiMock() {
+  requestJsonMock.mockReset();
+  requestJsonMock.mockImplementation(async <T,>(path: string, init: RequestInit = {}) => {
+    if (path === '/api/desktop/app-grants' && init.method === 'POST') {
+      const input = JSON.parse(String(init.body)) as {
+        executablePath: string;
+        displayName: string;
+      };
+      const grant = {
+        id: `grant-${++grantIdSequence}`,
+        ...input,
+        createdAt: '2026-09-23T00:00:00.000Z',
+      };
+      grantRows = [...grantRows, grant];
+      catalogRows = catalogRows.map((app) =>
+        app.executablePath?.toLowerCase() === input.executablePath.toLowerCase()
+          ? { ...app, isGranted: true, grantId: grant.id }
+          : app,
+      );
+      return { grant } as T;
+    }
+    if (path === '/api/desktop/app-grants') return { grants: grantRows } as T;
+    if (path.startsWith('/api/desktop/app-grants/')) {
+      const id = decodeURIComponent(path.split('/').at(-1) ?? '');
+      grantRows = grantRows.filter((grant) => grant.id !== id);
+      catalogRows = catalogRows.map((app) =>
+        app.grantId === id ? { ...app, isGranted: false, grantId: undefined } : app,
+      );
+      return {} as T;
+    }
+    if (path === '/api/desktop/custom-apps' && init.method === 'PUT') {
+      const input = JSON.parse(String(init.body)) as {
+        id?: string;
+        executablePath: string;
+        displayName: string;
+        version: string | null;
+      };
+      const id = input.id ?? `custom-${++customIdSequence}`;
+      const exeBasename = input.executablePath.split(/[\\/]/).at(-1) ?? input.executablePath;
+      const app: AppCatalogRow = {
+        ...input,
+        displayName: input.displayName || exeBasename.replace(/\.exe$/i, ''),
+        exeBasename,
+        sources: ['custom'],
+        grantable: true,
+        isCustom: true,
+        isGranted: false,
+        customAppId: id,
+      };
+      catalogRows = [
+        ...catalogRows.filter((row) => row.customAppId !== id &&
+          row.executablePath?.toLowerCase() !== input.executablePath.toLowerCase()),
+        app,
+      ];
+      return { app } as T;
+    }
+    if (path.startsWith('/api/desktop/custom-apps/') && init.method === 'DELETE') {
+      const id = decodeURIComponent(path.split('/').at(-1) ?? '');
+      catalogRows = catalogRows.filter((app) => app.customAppId !== id);
+      return { app: { id } } as T;
+    }
+    throw new Error(`Unexpected desktop API request: ${init.method ?? 'GET'} ${path}`);
+  });
+}
+
 describe('DesktopControlSettings', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    catalogRows = [];
+    grantRows = [];
+    customIdSequence = 0;
+    grantIdSequence = 0;
+    configureDesktopApiMock();
   });
 
   it('shows the allow-all mode by default', async () => {
@@ -64,13 +168,23 @@ describe('DesktopControlSettings', () => {
     expect(screen.getByText(/2\.3\.1/)).toBeTruthy();
   });
 
-  it('checking a detected app adds its exe basename to applications', async () => {
+  it('checking a detected app creates a path-specific grant', async () => {
     const { save } = mount({ mode: 'allowlist', applications: [] });
     const checkbox = await screen.findByRole('switch', { name: /notepad replacement/i });
     fireEvent.click(checkbox);
     await waitFor(() =>
-      expect(save).toHaveBeenCalledWith(expect.objectContaining({ applications: ['np.exe'] })),
+      expect(requestJsonMock).toHaveBeenCalledWith(
+        '/api/desktop/app-grants',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            executablePath: apps[0]!.executablePath,
+            displayName: 'Notepad Replacement',
+          }),
+        }),
+      ),
     );
+    expect(save).not.toHaveBeenCalled();
   });
 
   it('matches an allowlist entry that differs only in case', async () => {
@@ -98,7 +212,7 @@ describe('DesktopControlSettings', () => {
     // Detection cannot see apps that register only an installer, so the
     // operator needs a way to name the process the gate will actually match.
     const { save } = mount({ mode: 'allowlist', applications: [] });
-    const field = await screen.findByLabelText(/add an app by program file name/i);
+    const field = await screen.findByLabelText(/add a legacy rule by program file name/i);
     fireEvent.change(field, { target: { value: 'Docker Desktop.exe' } });
     fireEvent.click(screen.getByRole('button', { name: /add app/i }));
     await waitFor(() =>
@@ -110,7 +224,7 @@ describe('DesktopControlSettings', () => {
 
   it('adds an app by pressing Enter in manual input', async () => {
     const { save } = mount({ mode: 'allowlist', applications: [] });
-    const field = await screen.findByLabelText(/add an app by program file name/i);
+    const field = await screen.findByLabelText(/add a legacy rule by program file name/i);
     fireEvent.change(field, { target: { value: 'Code.exe' } });
     fireEvent.keyDown(field, { key: 'Enter' });
     await waitFor(() =>
@@ -120,7 +234,7 @@ describe('DesktopControlSettings', () => {
 
   it('adding an app that is already allowed does not duplicate it', async () => {
     const { save } = mount({ mode: 'allowlist', applications: ['np.exe'] });
-    const field = await screen.findByLabelText(/add an app by program file name/i);
+    const field = await screen.findByLabelText(/add a legacy rule by program file name/i);
     fireEvent.change(field, { target: { value: 'NP.EXE' } });
     fireEvent.click(screen.getByRole('button', { name: /add app/i }));
     await waitFor(() => expect(save).not.toHaveBeenCalled());
@@ -179,10 +293,19 @@ describe('DesktopControlSettings', () => {
     fireEvent.click(screen.getByRole('button', { name: /add application/i }));
 
     await waitFor(() =>
-      expect(save).toHaveBeenCalledWith(
-        expect.objectContaining({ applications: ['CustomTool.exe'] }),
+      expect(requestJsonMock).toHaveBeenCalledWith(
+        '/api/desktop/custom-apps',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            executablePath: 'C:\\Users\\User\\AppData\\Local\\Programs\\CustomTool.exe',
+            displayName: 'Custom Tool',
+            version: '3.1.0',
+          }),
+        }),
       ),
     );
+    expect(save).not.toHaveBeenCalled();
     expect(await screen.findByText('Custom Tool')).toBeInTheDocument();
     expect(screen.getByText(/3\.1\.0/)).toBeInTheDocument();
   });
@@ -196,32 +319,33 @@ describe('DesktopControlSettings', () => {
     );
 
     const pathInput = await screen.findByLabelText(/program file path/i);
-    fireEvent.change(pathInput, { target: { value: '/usr/local/bin/my-cli' } });
+    fireEvent.change(pathInput, { target: { value: 'C:\\Tools\\my-cli.exe' } });
+    fireEvent.change(screen.getByLabelText(/application name/i), { target: { value: 'my-cli' } });
 
     fireEvent.click(screen.getByRole('button', { name: /add application/i }));
 
     await waitFor(() =>
-      expect(save).toHaveBeenCalledWith(expect.objectContaining({ applications: ['my-cli'] })),
+      expect(requestJsonMock).toHaveBeenCalledWith(
+        '/api/desktop/custom-apps',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            executablePath: 'C:\\Tools\\my-cli.exe',
+            displayName: 'my-cli',
+            version: null,
+          }),
+        }),
+      ),
     );
-    const elements = await screen.findAllByText('my-cli');
-    expect(elements.length).toBeGreaterThan(0);
+    expect(save).not.toHaveBeenCalled();
+    expect(await screen.findByText('my-cli')).toBeInTheDocument();
   });
 
   it('allows editing a custom application using the modal', async () => {
-    window.localStorage.setItem(
-      'aevra.custom_desktop_apps',
-      JSON.stringify([
-        {
-          displayName: 'Old Tool',
-          version: '1.0.0',
-          executablePath: 'C:\\Tools\\OldTool.exe',
-          exeBasename: 'OldTool.exe',
-          isCustom: true,
-        },
-      ]),
+    const { save } = mount(
+      { mode: 'allowlist', applications: [] },
+      [customApp()],
     );
-
-    const { save } = mount({ mode: 'allowlist', applications: ['OldTool.exe'] });
 
     expect(await screen.findByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
     const editBtn = await screen.findByRole('button', { name: /edit old tool/i });
@@ -245,27 +369,35 @@ describe('DesktopControlSettings', () => {
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() =>
-      expect(save).toHaveBeenCalledWith(expect.objectContaining({ applications: ['NewTool.exe'] })),
+      expect(requestJsonMock).toHaveBeenCalledWith(
+        '/api/desktop/custom-apps',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            id: 'custom-old-tool',
+            executablePath: 'C:\\Tools\\NewTool.exe',
+            displayName: 'New Tool',
+            version: '2.0.0',
+          }),
+        }),
+      ),
     );
+    expect(save).not.toHaveBeenCalled();
     expect(await screen.findByText('New Tool')).toBeInTheDocument();
   });
 
   it('allows deleting a custom application record', async () => {
     const user = userEvent.setup();
-    window.localStorage.setItem(
-      'aevra.custom_desktop_apps',
-      JSON.stringify([
-        {
-          displayName: 'To Delete',
-          version: null,
-          executablePath: 'C:\\Tools\\ToDelete.exe',
-          exeBasename: 'ToDelete.exe',
-          isCustom: true,
-        },
-      ]),
+    const { save } = mount(
+      { mode: 'allowlist', applications: [] },
+      [customApp({
+        displayName: 'To Delete',
+        version: null,
+        executablePath: 'C:\\Tools\\ToDelete.exe',
+        exeBasename: 'ToDelete.exe',
+        customAppId: 'custom-delete',
+      })],
     );
-
-    const { save } = mount({ mode: 'allowlist', applications: ['ToDelete.exe'] });
 
     const deleteBtn = await screen.findByRole('button', { name: /delete to delete/i });
     expect(deleteBtn).toBeInTheDocument();
@@ -275,37 +407,38 @@ describe('DesktopControlSettings', () => {
     await user.click(within(deleteDialog).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() =>
-      expect(save).toHaveBeenCalledWith(expect.objectContaining({ applications: [] })),
+      expect(requestJsonMock).toHaveBeenCalledWith(
+        '/api/desktop/custom-apps/custom-delete',
+        expect.objectContaining({ method: 'DELETE' }),
+      ),
     );
-
-    const stored = JSON.parse(window.localStorage.getItem('aevra.custom_desktop_apps') || '[]');
-    expect(stored.find((a: any) => a.exeBasename === 'ToDelete.exe')).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.queryByText('To Delete')).toBeNull();
   });
 
   it('cancelling custom app delete retains the app', async () => {
     const user = userEvent.setup();
-    window.localStorage.setItem(
-      'aevra.custom_desktop_apps',
-      JSON.stringify([
-        {
-          displayName: 'To Keep',
-          version: null,
-          executablePath: 'C:\\Tools\\ToKeep.exe',
-          exeBasename: 'ToKeep.exe',
-          isCustom: true,
-        },
-      ]),
+    const { save } = mount(
+      { mode: 'allowlist', applications: [] },
+      [customApp({
+        displayName: 'To Keep',
+        version: null,
+        executablePath: 'C:\\Tools\\ToKeep.exe',
+        exeBasename: 'ToKeep.exe',
+        customAppId: 'custom-keep',
+      })],
     );
-
-    const { save } = mount({ mode: 'allowlist', applications: ['ToKeep.exe'] });
     const deleteBtn = await screen.findByRole('button', { name: /delete to keep/i });
     await user.click(deleteBtn);
     const deleteDialog = screen.getByRole('dialog', { name: 'Delete custom app' });
     await user.click(within(deleteDialog).getByRole('button', { name: 'Cancel' }));
 
     expect(save).not.toHaveBeenCalled();
-    const stored = JSON.parse(window.localStorage.getItem('aevra.custom_desktop_apps') || '[]');
-    expect(stored.find((a: any) => a.exeBasename === 'ToKeep.exe')).toBeDefined();
+    expect(requestJsonMock).not.toHaveBeenCalledWith(
+      '/api/desktop/custom-apps/custom-keep',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    expect(screen.getByText('To Keep')).toBeInTheDocument();
   });
 
   it('displays error when save fails', async () => {

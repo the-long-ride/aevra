@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type Column, type FilterDefinition } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { requestJson } from '../../services/api-client';
+import { DetailIcon } from '../workspaces/WorkspaceIcons';
 import {
   McpUpstreamEditModal,
   type UpstreamDraft,
@@ -39,23 +40,41 @@ export interface UpstreamTestResult {
 }
 const BASE = '/api/mcp/upstreams';
 const item = (id: string) => `${BASE}/${encodeURIComponent(id)}`;
-export const loadUpstreams = () =>
+const loadUpstreams = () =>
   requestJson<{ upstreams: UpstreamSummary[] }>(BASE).then((value) => value.upstreams);
-export const createUpstream = (draft: UpstreamDraft) =>
+const createUpstream = (draft: UpstreamDraft) =>
   requestJson<UpstreamSummary>(BASE, { method: 'POST', body: JSON.stringify(draft) });
-export const updateUpstream = (id: string, draft: UpstreamDraft) =>
+const updateUpstream = (id: string, draft: UpstreamDraft) =>
   requestJson<UpstreamSummary>(item(id), { method: 'POST', body: JSON.stringify(draft) });
-export const removeUpstream = (id: string) =>
+const removeUpstream = (id: string) =>
   requestJson<{ ok: boolean }>(item(id), { method: 'DELETE' });
-export const testUpstream = (id: string) =>
+const testUpstream = (id: string) =>
   requestJson<UpstreamTestResult>(`${item(id)}/test`, { method: 'POST' });
-export const acknowledgeUpstream = (id: string) =>
+const acknowledgeUpstream = (id: string) =>
   requestJson<UpstreamSummary>(`${item(id)}/acknowledge`, { method: 'POST' });
 const labels: Record<UpstreamState, string> = {
   active: 'Active',
   degraded: 'Degraded',
   'needs-review': 'Needs review',
 };
+
+function McpTestIcon() {
+  return (
+    <svg
+      viewBox="0 -0.5 17 17"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      className="workspace-action-icon"
+    >
+      <path
+        d="M12,1 L12,0.023 L6,0.023 C6,0.023 6,0.013 6,1 L7.012,1 L7.012,7 L3,15 C3,15 3,15.962 4,15.962 L14,15.962 C15,15.962 15,15 15,15 L10.958,7 L10.938,1 L12,1 L12,1 Z M14,15.031 L4,15.031 L8,7 L8,1 L10,1 L10,7 L14,15.031 L14,15.031 Z"
+        fill="currentColor"
+        className="si-glyph-fill"
+      />
+    </svg>
+  );
+}
 
 export function McpUpstreamsSettings({
   load = loadUpstreams,
@@ -221,10 +240,12 @@ export function McpUpstreamsSettings({
         sortable: false,
         search: false,
         render: (row) => (
-          <div className="actions compact-settings-actions">
+          <div className="actions workspace-row-actions compact-settings-actions">
             <button
               type="button"
               disabled={busy}
+              aria-label={`Test ${row.name}`}
+              title={`Test ${row.name}`}
               onClick={() =>
                 void run(async () => {
                   const result = await test(row.id);
@@ -237,17 +258,19 @@ export function McpUpstreamsSettings({
                 })
               }
             >
-              Test {row.name}
+              <McpTestIcon />
             </button>
             <button
               type="button"
               disabled={busy}
+              aria-label={`Edit ${row.name}`}
+              title={`Edit ${row.name}`}
               onClick={() => {
                 setAdding(false);
                 setEditing(row);
               }}
             >
-              Edit {row.name}
+              <DetailIcon />
             </button>
             <button
               type="button"

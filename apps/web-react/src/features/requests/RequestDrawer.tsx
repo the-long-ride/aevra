@@ -8,8 +8,11 @@ import {
   approveRequest,
   decideOauth,
   denyRequest,
+  decideDesktopAccessRequest,
   enableYoloRequest,
+  loadDesktopAccessRequests,
   loadRequests,
+  type DesktopAccessRequest,
   type RequestsData,
 } from './requests-service';
 
@@ -126,6 +129,8 @@ export function RequestDrawer({
   refreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 }) {
   const [data, setData] = useState<RequestsData | null>(null);
+  const [desktopAccessRequests, setDesktopAccessRequests] = useState<DesktopAccessRequest[]>([]);
+  const [desktopAccessError, setDesktopAccessError] = useState('');
   const [tab, setTab] = useState<'pending' | 'history'>('pending');
   const [notifications, setNotifications] = useState(
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
@@ -133,25 +138,41 @@ export function RequestDrawer({
   const prevPendingIds = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
-    const next = await loadRequests();
-    setData(next);
+    const [next, desktopRequests] = await Promise.all([
+      loadRequests(),
+      loadDesktopAccessRequests()
+        .then((requests) => ({ requests, error: '' }))
+        .catch((cause: unknown) => ({
+          requests: [],
+          error: cause instanceof Error ? cause.message : String(cause),
+        })),
+    ]);
+    const combined = { ...next, desktopAccess: desktopRequests.requests };
+    setData(combined);
+    setDesktopAccessRequests(desktopRequests.requests);
+    setDesktopAccessError(desktopRequests.error);
     announceNewRequests(next.approvals, next.oauth);
     const pendingItems = next.approvals.filter((item) => item.state === 'PENDING');
-    const pendingCount = pendingItems.length + next.oauth.length;
+    const pendingCount = pendingItems.length + next.oauth.length + desktopRequests.requests.length;
     onPendingCountChange(pendingCount);
 
     if (onNewPending) {
       const currentIds = new Set([
         ...pendingItems.map((item) => String(item.id)),
         ...next.oauth.map((item) => `oauth:${item.id}`),
+        ...desktopRequests.requests.map((item) => `desktop-access:${item.id}`),
       ]);
-      const hasNew = [...currentIds].some((id) => !prevPendingIds.current.has(id));
+      const actionablePromptIds = [
+        ...pendingItems.map((item) => String(item.id)),
+        ...next.oauth.map((item) => `oauth:${item.id}`),
+      ];
+      const hasNew = actionablePromptIds.some((id) => !prevPendingIds.current.has(id));
       if (hasNew && pendingCount > 0) {
-        onNewPending(next);
+        onNewPending(combined);
       }
       prevPendingIds.current = currentIds;
     }
-    onPendingSync?.(next);
+    onPendingSync?.(combined);
   }, [onPendingCountChange, onNewPending, onPendingSync]);
 
   useEffect(() => {
@@ -174,6 +195,16 @@ export function RequestDrawer({
   const pending = data?.approvals.filter((item) => item.state === 'PENDING') ?? [];
   const history = data?.approvals.filter((item) => item.state !== 'PENDING') ?? [];
 
+  const decideDesktopAccess = async (item: DesktopAccessRequest, decision: 'deny' | 'session' | 'persistent') => {
+    setDesktopAccessError('');
+    try {
+      await decideDesktopAccessRequest(item.id, decision);
+      await refresh();
+    } catch (cause) {
+      setDesktopAccessError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
   const requestNotifications = async () => {
     if (typeof Notification === 'undefined') return;
     setNotifications(await Notification.requestPermission());
@@ -186,7 +217,7 @@ export function RequestDrawer({
         <header>
           <div>
             <h2>Requests</h2>
-            <p>Local approvals and connection requests</p>
+            <p>Local approvals, app access and connection requests</p>
           </div>
           <button
             type="button"
@@ -212,7 +243,7 @@ export function RequestDrawer({
             className={tab === 'pending' ? 'active' : ''}
             onClick={() => setTab('pending')}
           >
-            Pending <span>{pending.length + (data?.oauth.length ?? 0)}</span>
+            Pending <span>{pending.length + (data?.oauth.length ?? 0) + desktopAccessRequests.length}</span>
           </button>
           <button
             type="button"
@@ -225,6 +256,35 @@ export function RequestDrawer({
         <div className="request-panel">
           {tab === 'pending' ? (
             <>
+              {desktopAccessError ? <p role="alert" className="inline-result warning-text">{desktopAccessError}</p> : null}
+              {desktopAccessRequests.map((item) => (
+                <article className="request-card" key={item.id} data-request-id={item.id}>
+                  <div className="request-card-head">
+                    <div>
+                      <b>Desktop app access</b>
+                      <span>{item.actor}</span>
+                    </div>
+                    <span className="risk high">HIGH</span>
+                  </div>
+                  <div className="request-detail">
+                    <b>
+                      {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() === 'msedgewebview2.exe'
+                        ? 'Verified host app'
+                        : 'Application'}: {item.hostExecutablePath}
+                    </b>
+                    {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() === 'msedgewebview2.exe' ? (
+                      <span>WebView2 process: {item.targetExecutablePath}</span>
+                    ) : null}
+                    <span>Requested: {item.requestedDuration} · expires {new Date(item.expiresAt).toLocaleTimeString()}</span>
+                    <span>Allowing this app grants desktop input to windows Aevra verifies as belonging to this executable. Desktop capability and action approvals still apply.</span>
+                  </div>
+                  <div className="request-actions">
+                    <button type="button" onClick={() => void decideDesktopAccess(item, 'deny')}>Deny</button>
+                    <button type="button" onClick={() => void decideDesktopAccess(item, 'session')}>Allow this session</button>
+                    <button type="button" className="primary" onClick={() => void decideDesktopAccess(item, 'persistent')}>Persist for this app</button>
+                  </div>
+                </article>
+              ))}
               {data?.oauth.map((item) => (
                 <article className="request-card" key={item.id}>
                   <div className="request-card-head">
@@ -262,7 +322,7 @@ export function RequestDrawer({
                   onChanged={refresh}
                 />
               ))}
-              {pending.length === 0 && (data?.oauth.length ?? 0) === 0 ? (
+              {pending.length === 0 && (data?.oauth.length ?? 0) === 0 && desktopAccessRequests.length === 0 ? (
                 <div className="empty-panel">No pending requests</div>
               ) : null}
             </>

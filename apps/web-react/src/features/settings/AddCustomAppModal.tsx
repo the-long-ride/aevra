@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { SettingsFormModal } from './SettingsFormModal';
+import { canonicalWindowsPath } from './custom-app-migration';
 import type { DetectedApp } from './DesktopControlSettings';
 
-export function extractExeBasename(filePath: string): string {
+function extractExeBasename(filePath: string): string {
   const normalized = filePath.trim().replace(/\\/g, '/');
   const segments = normalized.split('/').filter(Boolean);
   return segments.length > 0 ? segments[segments.length - 1]! : '';
@@ -11,13 +12,13 @@ export function extractExeBasename(filePath: string): string {
 export function AddCustomAppModal({
   open,
   initialApp,
-  existingExes = [],
+  existingPaths = [],
   onClose,
   onSave,
 }: {
   open: boolean;
   initialApp?: DetectedApp | null;
-  existingExes?: string[];
+  existingPaths?: string[];
   onClose(): void;
   onSave(app: DetectedApp, previousExeBasename?: string): void;
 }) {
@@ -46,10 +47,15 @@ export function AddCustomAppModal({
       return;
     }
 
-    const lower = exeBasename.toLowerCase();
-    const prevLower = initialApp?.exeBasename?.toLowerCase();
-    if (lower !== prevLower && existingExes.some((entry) => entry.toLowerCase() === lower)) {
-      setError(`Application "${exeBasename}" is already in the list.`);
+    const pathKey = canonicalWindowsPath(trimmedPath);
+    const previousPathKey = initialApp?.executablePath
+      ? canonicalWindowsPath(initialApp.executablePath)
+      : undefined;
+    if (
+      pathKey !== previousPathKey &&
+      existingPaths.some((entry) => canonicalWindowsPath(entry) === pathKey)
+    ) {
+      setError('This executable path is already in the catalog.');
       return;
     }
 
@@ -76,7 +82,7 @@ export function AddCustomAppModal({
       description={
         isEditing
           ? 'Update custom application details and program file path.'
-          : 'Allow computer use to interact with a specific application by providing its program file path. Version is optional.'
+          : 'Add an application to the shared catalog with its program file path. Use its switch to grant computer-use access. Version is optional.'
       }
       submitting={false}
       submitLabel={isEditing ? 'Save changes' : 'Add application'}
@@ -94,7 +100,7 @@ export function AddCustomAppModal({
             value={executablePath}
             autoFocus
             required
-            placeholder="C:\Program Files\App\app.exe or /usr/bin/app"
+            placeholder="C:\Program Files\App\app.exe"
             onChange={(event) => setExecutablePath(event.target.value)}
           />
         </label>

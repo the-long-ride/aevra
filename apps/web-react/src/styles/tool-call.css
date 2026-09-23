@@ -1,0 +1,348 @@
+/* Readable tool-call details: activity modal columns, command cards, pretty/raw toggle. */
+
+.common-dialog.wide {
+  width: min(1180px, calc(100vw - 24px));
+}
+
+.activity-detail {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  white-space: normal;
+}
+
+.activity-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.activity-detail-action {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.activity-detail-meta .detail-mode-toggle {
+  margin-left: auto;
+}
+
+.activity-detail-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.activity-detail-columns section {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.activity-detail-columns h3,
+.approval-modal-details-label {
+  margin: 0;
+  color: var(--mute);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.activity-detail-columns .json-detail-tree,
+.activity-detail-columns .json-detail-raw,
+.activity-detail-columns .command-calls {
+  max-height: min(62vh, 640px);
+}
+
+.detail-mode-toggle {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 4px;
+}
+
+.detail-mode-toggle button {
+  min-height: 24px;
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.detail-mode-toggle button + button {
+  border-left: 1px solid var(--hairline-strong);
+}
+
+.detail-mode-toggle button.active {
+  background: var(--surface-card);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tool-call-view {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tool-call-note,
+.tool-call-error,
+.command-error {
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  color: var(--warning);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.tool-call-error,
+.command-error {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.command-calls {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.command-call {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+}
+
+.command-call-head,
+.command-stream-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.command-index,
+.command-stream-name {
+  color: var(--body);
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.command-chip {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-call-title {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-line,
+.command-stream pre {
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--hairline);
+  background: var(--canvas);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.command-line {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.command-line::before {
+  content: '$ ';
+  color: var(--mute);
+  user-select: none;
+}
+
+.command-stream {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.command-stream-name {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.command-stream.stderr .command-stream-name {
+  color: var(--danger);
+}
+
+.command-stream-count {
+  font-size: 10px;
+}
+
+.command-stream-head button,
+.json-detail-more {
+  min-height: 24px;
+  margin-left: auto;
+  padding: 0 8px;
+  font-size: 10px;
+}
+
+.command-stream pre {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.command-empty {
+  margin: 0;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.json-detail-row {
+  align-items: flex-start;
+  white-space: normal;
+}
+
+/* Tree toggles are touch targets too: keep them at the 24px minimum. */
+.json-detail-toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.json-detail-key {
+  flex: none;
+}
+
+.json-detail-value {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.json-detail-value.string::before,
+.json-detail-value.string::after {
+  content: '"';
+  color: var(--mute);
+}
+
+.json-detail-tag {
+  padding: 0 5px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  color: var(--mute);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.json-detail-multiline {
+  max-height: 320px;
+  margin: 2px 10px 6px calc(28px + var(--json-depth, 0) * 16px);
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid var(--hairline);
+  background: var(--canvas);
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Approval modal: request details beside the decision. */
+
+.approval-modal.wide {
+  width: min(1040px, calc(100vw - 24px));
+}
+
+.approval-modal-split,
+.approval-modal-main,
+.approval-modal-details {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.approval-modal.wide .approval-modal-split {
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.approval-modal-details {
+  gap: 8px;
+}
+
+.approval-modal-details-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.approval-modal-details .json-detail-tree,
+.approval-modal-details .json-detail-raw {
+  max-height: min(52vh, 480px);
+}
+
+@media (max-width: 900px) {
+  .activity-detail-columns,
+  .approval-modal.wide .approval-modal-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .approval-modal-details .json-detail-tree,
+  .approval-modal-details .json-detail-raw {
+    max-height: 30vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .approval-modal.wide {
+    width: 100vw;
+  }
+
+  .activity-detail-meta .detail-mode-toggle {
+    margin-left: 0;
+  }
+}
