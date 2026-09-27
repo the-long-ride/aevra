@@ -305,7 +305,7 @@ describe('DesktopControlSettings toggles', () => {
     fireEvent.click(await screen.findByRole('switch', { name: /show file paths/i }));
     expect(await screen.findByText('// Desktop policy saved.')).toBeInTheDocument();
     await act(async () => {
-      vi.advanceTimersByTime(3000);
+      await vi.advanceTimersByTimeAsync(3100);
     });
     expect(screen.queryByText('// Desktop policy saved.')).toBeNull();
   });

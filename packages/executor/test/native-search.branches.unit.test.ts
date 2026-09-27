@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { nativeMultiSearch, nodeCandidates } from '../src/native-search.js';
+import { resolveCapabilityPath } from '../../security/src/path-policy.js';
 
 const WIN = process.platform === 'win32';
 
@@ -79,6 +80,7 @@ const match = (file: string, line?: number) =>
 test('rg JSON output: malformed, non-match, duplicate, missing and out-of-range lines', async () => {
   const env = setup();
   try {
+    const canonicalRoot = (await resolveCapabilityPath('/', env.roots, 'read')).canonicalHostPath;
     const lines = [
       '',
       'not json',
@@ -86,7 +88,7 @@ test('rg JSON output: malformed, non-match, duplicate, missing and out-of-range 
       match('alpha.ts'),
       match('./alpha.ts', 1),
       match('./alpha.ts', 1),
-      match(realpathSync(path.join(env.root, 'alpha.ts')), 2),
+      match(path.join(canonicalRoot, 'alpha.ts'), 2),
       match('ghost.ts', 1),
       match('', 1),
       match('alpha.ts', 9),
@@ -164,8 +166,14 @@ test(
   async () => {
     const env = setup();
     try {
+      const canonicalRoot = (await resolveCapabilityPath('/', env.roots, 'read')).canonicalHostPath;
       env.usePath(env.bin);
-      fakeTool(env.bin, 'pwsh', `${path.join(env.root, 'alpha.ts')}\t2\r\nno-line-number\r\n`, 0);
+      fakeTool(
+        env.bin,
+        'pwsh',
+        `${path.join(canonicalRoot, 'alpha.ts')}\t2\r\nno-line-number\r\n`,
+        0,
+      );
       let { results } = await nativeMultiSearch(
         [
           { value: 'beta', mode: 'text', path: '/' },
@@ -181,7 +189,7 @@ test(
       fakeTool(
         env.bin,
         'pwsh',
-        `${path.join(env.root, 'notes.md')}\r\n${path.join(env.root, 'alpha.ts')}\r\n`,
+        `${path.join(canonicalRoot, 'notes.md')}\r\n${path.join(canonicalRoot, 'alpha.ts')}\r\n`,
         0,
       );
       ({ results } = await nativeMultiSearch(
