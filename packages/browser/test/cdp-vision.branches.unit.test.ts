@@ -9,11 +9,29 @@ import { FakeCdp } from './fake-cdp.js';
 function jpeg(width: number, height: number): string {
   const sof = [0xff, 0xc0, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff];
   return Buffer.from([
-    0xff, 0xd8,
-    0xff, 0xe0, 0x00, 0x04, 0x00, 0x00,
-    0xff, 0xc4, 0x00, 0x04, 0x00, 0x00,
+    0xff,
+    0xd8,
+    0xff,
+    0xe0,
+    0x00,
+    0x04,
+    0x00,
+    0x00,
+    0xff,
+    0xc4,
+    0x00,
+    0x04,
+    0x00,
+    0x00,
     ...sof,
-    0, 0, 0, 0, 0, 0, 0, 0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
   ]).toString('base64');
 }
 
@@ -44,7 +62,10 @@ test('without layout metrics the unclipped JPEG reports its own size', async () 
 });
 
 test('a zero-sized viewport falls back to the unclipped capture', async () => {
-  const { client } = stubClient({ cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 0, clientHeight: 10 } }, jpeg(10, 10));
+  const { client } = stubClient(
+    { cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 0, clientHeight: 10 } },
+    jpeg(10, 10),
+  );
   assert.equal((await captureViewport(client)).imageWidth, 10);
   const { client: none } = stubClient({}, jpeg(12, 9));
   assert.equal((await captureViewport(none)).imageHeight, 9);
@@ -52,22 +73,37 @@ test('a zero-sized viewport falls back to the unclipped capture', async () => {
 
 for (const [label, data] of [
   ['not a JPEG at all', Buffer.from('plain words').toString('base64')],
-  ['a JPEG with a broken segment marker', Buffer.from([0xff, 0xd8, 0x00, 0, 0, 0, 0, 0, 0, 0, 0]).toString('base64')],
-  ['a JPEG without a frame header', Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0, 0]).toString('base64')],
+  [
+    'a JPEG with a broken segment marker',
+    Buffer.from([0xff, 0xd8, 0x00, 0, 0, 0, 0, 0, 0, 0, 0]).toString('base64'),
+  ],
+  [
+    'a JPEG without a frame header',
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0, 0]).toString('base64'),
+  ],
 ] as const) {
   test(`an unclipped capture that is ${label} fails as BROWSER_CAPTURE_FAILED`, async () => {
     const { client } = stubClient(new Error('no metrics'), data);
-    await assert.rejects(captureViewport(client), (error: any) => error.code === 'BROWSER_CAPTURE_FAILED');
+    await assert.rejects(
+      captureViewport(client),
+      (error: any) => error.code === 'BROWSER_CAPTURE_FAILED',
+    );
   });
 }
 
 test('an unclipped capture over the transport budget is refused', async () => {
   const { client } = stubClient(new Error('no metrics'), 'A'.repeat(MAX_VISION_IMAGE_CHARS));
-  await assert.rejects(captureViewport(client), (error: any) => error.code === 'BROWSER_CAPTURE_TOO_LARGE');
+  await assert.rejects(
+    captureViewport(client),
+    (error: any) => error.code === 'BROWSER_CAPTURE_TOO_LARGE',
+  );
 });
 
 test('the layout viewport is used when the visual one is absent, clipped at the origin', async () => {
-  const { client, calls } = stubClient({ cssLayoutViewport: { clientWidth: 800, clientHeight: 600 } }, 'AAAA');
+  const { client, calls } = stubClient(
+    { cssLayoutViewport: { clientWidth: 800, clientHeight: 600 } },
+    'AAAA',
+  );
   const capture = await captureViewport(client);
   assert.deepEqual(capture.viewport, { width: 800, height: 600 });
   assert.deepEqual(calls.at(-1)!.params.clip, { x: 0, y: 0, width: 800, height: 600, scale: 1 });
@@ -80,7 +116,13 @@ test('the visual viewport offset is carried into the clip', async () => {
   );
   const capture = await captureViewport(client);
   assert.equal(capture.devicePixelRatio, 0.5);
-  assert.deepEqual(calls.at(-1)!.params.clip, { x: 5, y: 40, width: 2560, height: 1280, scale: 0.5 });
+  assert.deepEqual(calls.at(-1)!.params.clip, {
+    x: 5,
+    y: 40,
+    width: 2560,
+    height: 1280,
+    scale: 0.5,
+  });
 });
 
 test('a small viewport stops shrinking at the minimum edge instead of going smaller', async () => {
@@ -109,7 +151,9 @@ test('nodes whose box cannot be resolved are left unlabelled', async () => {
     },
     2,
   );
-  assert.deepEqual(boxes, [{ ref: 'ref_1_0', label: 'A', box: { x: 2, y: 4, width: 6, height: 8 } }]);
+  assert.deepEqual(boxes, [
+    { ref: 'ref_1_0', label: 'A', box: { x: 2, y: 4, width: 6, height: 8 } },
+  ]);
 });
 
 test('a CDP vision snapshot scales boxes and later coordinate clicks by the capture ratio', async () => {
@@ -129,12 +173,16 @@ test('a CDP vision snapshot scales boxes and later coordinate clicks by the capt
     fake.handlers['Page.captureScreenshot'] = () => ({ data: 'AAAA' });
     fake.handlers['DOM.getBoxModel'] = ({ backendNodeId }) => {
       if (backendNodeId === 12) throw new Error('no box');
-      return { model: { content: [100, 100, 300, 100, 300, 200, 100, 200], width: 200, height: 100 } };
+      return {
+        model: { content: [100, 100, 300, 100, 300, 200, 100, 200], width: 200, height: 100 },
+      };
     };
     await driver.connect({ transport: 'cdp', cdpPort: fake.port });
     const snapshot: any = await driver.snapshot({ mode: 'vision', maxNodes: 10 });
     assert.equal(snapshot.devicePixelRatio, 0.5);
-    assert.deepEqual(snapshot.boxes, [{ ref: 'ref_1_0', label: 'Go', box: { x: 50, y: 50, width: 100, height: 50 } }]);
+    assert.deepEqual(snapshot.boxes, [
+      { ref: 'ref_1_0', label: 'Go', box: { x: 50, y: 50, width: 100, height: 50 } },
+    ]);
     await driver.act([{ op: 'click', x: 100, y: 60 }], { stopOnError: true });
     const pressed = fake.calls.find((call) => call.params?.type === 'mousePressed');
     assert.deepEqual([pressed!.params.x, pressed!.params.y], [200, 120]);

@@ -90,7 +90,11 @@ describe('BrowserControlSettings health text', () => {
 
   it('describes authenticated sockets with and without a profile name', () => {
     const attached = healthText({
-      worker: worker({ extensionSocketAuthenticated: true, connected: true, activeProfileName: 'Work' }),
+      worker: worker({
+        extensionSocketAuthenticated: true,
+        connected: true,
+        activeProfileName: 'Work',
+      }),
     });
     expect(attached).toContain('Extension socket authenticated for Work');
     expect(attached).toContain(' - Browser attached');
@@ -126,7 +130,9 @@ describe('BrowserControlSettings default actions', () => {
         ? { code: 'pair-words', expiresAt: '2026-09-05T10:05:00.000Z' }
         : state()) as never);
     const onChanged = vi.fn();
-    render(<BrowserControlSettings status={state()} onChanged={onChanged} loadPolicy={loadPolicy} />);
+    render(
+      <BrowserControlSettings status={state()} onChanged={onChanged} loadPolicy={loadPolicy} />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Pair extension' }));
     expect(await screen.findByText('pair-words')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect all browsers' }));
@@ -161,7 +167,9 @@ describe('BrowserControlSettings default actions', () => {
 
     mockedRequest.mockRejectedValueOnce('sync pending');
     fireEvent.click(screen.getByRole('button', { name: /^Unpair/ }));
-    expect(await screen.findByText('Unpair request needs attention: sync pending')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Unpair request needs attention: sync pending'),
+    ).toBeInTheDocument();
     expect(screen.getByText('sync pending')).toBeInTheDocument();
     expect(onChanged).toHaveBeenCalledTimes(2);
   });

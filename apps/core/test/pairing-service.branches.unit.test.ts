@@ -13,7 +13,10 @@ function harness(initial?: unknown, now: () => number = () => Date.now()) {
   const store = new Map<string, unknown>();
   if (initial !== undefined) store.set('browser.pairing', initial);
   const writes: unknown[] = [];
-  let respond: (input: any) => any = (input) => ({ ok: true, value: { activePairingId: null, epoch: input.operation.epoch } });
+  let respond: (input: any) => any = (input) => ({
+    ok: true,
+    value: { activePairingId: null, epoch: input.operation.epoch },
+  });
   const executed: any[] = [];
   const secret = randomBytes(32);
   const subject = new BrowserPairingService(
@@ -52,7 +55,11 @@ test('state reports pending codes until expiry and marks the active pairing', as
   const { code, expiresAt } = subject.createCode();
   assert.match(code, /^[0-9A-HJKMNP-TV-Z]{8}$/);
   assert.equal(subject.state().pendingExpiresAt, expiresAt);
-  await subject.redeem({ code: code.toLowerCase(), extensionId: ext, profileId: profile.toUpperCase() });
+  await subject.redeem({
+    code: code.toLowerCase(),
+    extensionId: ext,
+    profileId: profile.toUpperCase(),
+  });
   const state = subject.state({ worker: { activePairingId: profile } } as any);
   assert.equal(state.pairings[0]!.connected, true);
   assert.equal(state.pairings[0]!.profileName, 'Browser profile 11111111');
@@ -64,13 +71,27 @@ test('state reports pending codes until expiry and marks the active pairing', as
 
 test('redeem rejects missing codes and invalid profile ids, and replaces same-profile pairings', async () => {
   const { subject } = harness();
-  await assert.rejects(() => subject.redeem({ code: 'X', extensionId: ext, profileId: profile }), hasCode('PAIRING_CODE_INVALID'));
+  await assert.rejects(
+    () => subject.redeem({ code: 'X', extensionId: ext, profileId: profile }),
+    hasCode('PAIRING_CODE_INVALID'),
+  );
   let code = subject.createCode().code;
-  await assert.rejects(() => subject.redeem({ code, extensionId: ext, profileId: 'nope' }), hasCode('PROFILE_ID_INVALID'));
+  await assert.rejects(
+    () => subject.redeem({ code, extensionId: ext, profileId: 'nope' }),
+    hasCode('PROFILE_ID_INVALID'),
+  );
   code = subject.createCode().code;
-  await assert.rejects(() => subject.redeem({ code, extensionId: ext, profileId: undefined as any }), hasCode('PROFILE_ID_INVALID'));
+  await assert.rejects(
+    () => subject.redeem({ code, extensionId: ext, profileId: undefined as any }),
+    hasCode('PROFILE_ID_INVALID'),
+  );
   code = subject.createCode().code;
-  const first = await subject.redeem({ code, extensionId: ext, profileId: profile, profileName: '  Work  ' });
+  const first = await subject.redeem({
+    code,
+    extensionId: ext,
+    profileId: profile,
+    profileName: '  Work  ',
+  });
   assert.equal(first.wsUrl, `ws://127.0.0.1:${Number(process.env.AEVRA_BROWSER_PORT ?? 47833)}`);
   code = subject.createCode().code;
   await subject.redeem({ code, extensionId: ext, profileId: other });
@@ -87,11 +108,17 @@ test('pairingHealth renames the active profile from worker reports', async () =>
   const code = subject.createCode().code;
   await subject.redeem({ code, extensionId: ext, profileId: profile, profileName: 'Old' });
   const before = writes.length;
-  setWorker(() => ({ ok: true, value: { activePairingId: profile, activeProfileName: `  ${'r'.repeat(130)} ` } }));
+  setWorker(() => ({
+    ok: true,
+    value: { activePairingId: profile, activeProfileName: `  ${'r'.repeat(130)} ` },
+  }));
   await subject.pairingHealth();
   assert.equal(subject.workerPairings()[0]!.profileName, 'r'.repeat(120));
   assert.equal(writes.length, before + 1);
-  setWorker(() => ({ ok: true, value: { activePairingId: profile, activeProfileName: ' Renamed ' } }));
+  setWorker(() => ({
+    ok: true,
+    value: { activePairingId: profile, activeProfileName: ' Renamed ' },
+  }));
   await subject.pairingHealth();
   assert.equal(subject.workerPairings()[0]!.profileName, 'Renamed');
   await subject.pairingHealth();
@@ -129,12 +156,24 @@ test('unpair removes one pairing, reports missing ids, and flags pending sync', 
     const code = subject.createCode().code;
     await subject.redeem({ code, extensionId: ext, profileId: id });
   }
-  await assert.rejects(() => subject.unpair('missing'), (error: any) => error.code === 'BROWSER_PAIRING_NOT_FOUND' && error.status === 404);
+  await assert.rejects(
+    () => subject.unpair('missing'),
+    (error: any) => error.code === 'BROWSER_PAIRING_NOT_FOUND' && error.status === 404,
+  );
   const state = await subject.unpair(other);
-  assert.deepEqual(state.pairings.map((p) => p.pairingId), [profile]);
-  assert.deepEqual(executed.at(-1).operation.pairings.map((p: any) => p.pairingId), [profile]);
+  assert.deepEqual(
+    state.pairings.map((p) => p.pairingId),
+    [profile],
+  );
+  assert.deepEqual(
+    executed.at(-1).operation.pairings.map((p: any) => p.pairingId),
+    [profile],
+  );
   setWorker(() => ({ ok: false, error: { code: 'WORKER_TIMEOUT' } }));
-  await assert.rejects(() => subject.unpair(profile), (error: any) => error.code === 'BROWSER_PAIRING_SYNC_PENDING' && error.status === 503);
+  await assert.rejects(
+    () => subject.unpair(profile),
+    (error: any) => error.code === 'BROWSER_PAIRING_SYNC_PENDING' && error.status === 503,
+  );
   assert.deepEqual(subject.workerPairings(), []);
   assert.equal(executed.at(-1).operation.extensionId, '');
 });

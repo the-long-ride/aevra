@@ -12,7 +12,8 @@ function fixture(o: any = {}) {
       get: () => ({ id: 's1', actor: 'oauth:ChatGPT', subject: 'subject' }),
       activeLease: () => (leases.length === 1 ? leases[0] : null),
       leases: () => leases,
-      leaseForWorkspace: (_s: string, id: string) => leases.find((l: any) => l.workspaceId === id) ?? null,
+      leaseForWorkspace: (_s: string, id: string) =>
+        leases.find((l: any) => l.workspaceId === id) ?? null,
       isYolo: () => false,
     },
     workspaces: {
@@ -91,14 +92,20 @@ test('approval status and cancel hide tickets from other sessions and missing ca
     status: 'not_found',
   });
   const missing = fixture();
-  assert.deepEqual(await handleBasicTool(missing.context, 's1', 'approval_cancel', { requestId: 'r' }), {
-    status: 'not_found',
-  });
+  assert.deepEqual(
+    await handleBasicTool(missing.context, 's1', 'approval_cancel', { requestId: 'r' }),
+    {
+      status: 'not_found',
+    },
+  );
   const own = { id: 'r', actor: 'oauth:ChatGPT', sessionId: 's1', state: 'PENDING' };
   const gone = fixture({ status: () => own, cancel: () => undefined });
-  assert.deepEqual(await handleBasicTool(gone.context, 's1', 'approval_cancel', { requestId: 'r' }), {
-    status: 'not_found',
-  });
+  assert.deepEqual(
+    await handleBasicTool(gone.context, 's1', 'approval_cancel', { requestId: 'r' }),
+    {
+      status: 'not_found',
+    },
+  );
 });
 
 test('approval_wait hides authorization drift but rethrows other failures', async () => {

@@ -15,14 +15,27 @@ const tls = {
 };
 
 function fakeCloudflare(reachability: any = { reachable: true, message: 'ok' }): any {
-  return { checkReachability: async () => reachability, start: async () => ({}), stop: async () => {} };
+  return {
+    checkReachability: async () => reachability,
+    start: async () => ({}),
+    stop: async () => {},
+  };
 }
 
-function build(exposure?: unknown, overrides: { managedTls?: boolean; config?: any; cloudflare?: any } = {}) {
+function build(
+  exposure?: unknown,
+  overrides: { managedTls?: boolean; config?: any; cloudflare?: any } = {},
+) {
   const db = AevraDatabase.open(':memory:');
   const settings = new SettingsRepository(db.raw());
   if (exposure) settings.set('exposure.config', exposure);
-  const config = { publicPort: 0, adminPort: 4101, mcpPort: 4102, publicHost: '127.0.0.1', ...overrides.config };
+  const config = {
+    publicPort: 0,
+    adminPort: 4101,
+    mcpPort: 4102,
+    publicHost: '127.0.0.1',
+    ...overrides.config,
+  };
   const wiring = new RuntimeExposureWiring(
     config,
     settings,
@@ -33,7 +46,10 @@ function build(exposure?: unknown, overrides: { managedTls?: boolean; config?: a
   return { db, settings, wiring };
 }
 
-async function withFetch(responder: (url: string) => Response | Promise<Response>, run: (urls: string[]) => Promise<void>) {
+async function withFetch(
+  responder: (url: string) => Response | Promise<Response>,
+  run: (urls: string[]) => Promise<void>,
+) {
   const original = globalThis.fetch;
   const urls: string[] = [];
   globalThis.fetch = (async (url: any) => {
@@ -47,7 +63,10 @@ async function withFetch(responder: (url: string) => Response | Promise<Response
   }
 }
 
-async function withEnv(values: Record<string, string | undefined>, run: () => void | Promise<void>) {
+async function withEnv(
+  values: Record<string, string | undefined>,
+  run: () => void | Promise<void>,
+) {
   const saved = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
   for (const [key, value] of Object.entries(values)) {
     if (value === undefined) delete process.env[key];
@@ -66,8 +85,15 @@ async function withEnv(values: Record<string, string | undefined>, run: () => vo
 const noCfEnv = { AEVRA_CF_ISSUER: undefined, AEVRA_CF_AUDIENCE: undefined };
 
 test('direct exposure is refused when only the managed localhost certificate exists', () => {
-  const exposure = { provider: 'direct', publicUrl: 'https://mcp.example.com', direct: { host: '0.0.0.0' } };
-  assert.throws(() => build(exposure, { managedTls: true }), /Direct exposure requires trusted TLS/);
+  const exposure = {
+    provider: 'direct',
+    publicUrl: 'https://mcp.example.com',
+    direct: { host: '0.0.0.0' },
+  };
+  assert.throws(
+    () => build(exposure, { managedTls: true }),
+    /Direct exposure requires trusted TLS/,
+  );
 });
 
 test('remote identity verifier follows Cloudflare Access config and environment overrides', async () => {
@@ -75,25 +101,42 @@ test('remote identity verifier follows Cloudflare Access config and environment 
     const access = build({
       provider: 'cloudflare',
       publicUrl: 'https://mcp.example.com',
-      cloudflare: { ownership: 'external', authMode: 'access', issuer: 'https://team.example.com', audience: 'aud' },
+      cloudflare: {
+        ownership: 'external',
+        authMode: 'access',
+        issuer: 'https://team.example.com',
+        audience: 'aud',
+      },
     });
     assert.ok(access.wiring.verifier instanceof CloudflareAccessVerifier);
     access.db.close();
-    const oauth = build({ provider: 'cloudflare', cloudflare: { ownership: 'external', authMode: 'oauth' } });
+    const oauth = build({
+      provider: 'cloudflare',
+      cloudflare: { ownership: 'external', authMode: 'oauth' },
+    });
     assert.ok(oauth.wiring.verifier instanceof RejectingIdentityVerifier);
     oauth.db.close();
     const local = build();
     assert.ok(local.wiring.verifier instanceof RejectingIdentityVerifier);
     local.db.close();
   });
-  await withEnv({ AEVRA_CF_ISSUER: 'https://env.example.com', AEVRA_CF_AUDIENCE: 'env-aud' }, () => {
-    const oauth = build({ provider: 'cloudflare', cloudflare: { ownership: 'external', authMode: 'oauth' } });
-    assert.ok(oauth.wiring.verifier instanceof CloudflareAccessVerifier);
-    oauth.db.close();
-    const local = build();
-    assert.ok(local.wiring.verifier instanceof RejectingIdentityVerifier, 'env alone never enables Access');
-    local.db.close();
-  });
+  await withEnv(
+    { AEVRA_CF_ISSUER: 'https://env.example.com', AEVRA_CF_AUDIENCE: 'env-aud' },
+    () => {
+      const oauth = build({
+        provider: 'cloudflare',
+        cloudflare: { ownership: 'external', authMode: 'oauth' },
+      });
+      assert.ok(oauth.wiring.verifier instanceof CloudflareAccessVerifier);
+      oauth.db.close();
+      const local = build();
+      assert.ok(
+        local.wiring.verifier instanceof RejectingIdentityVerifier,
+        'env alone never enables Access',
+      );
+      local.db.close();
+    },
+  );
 });
 
 test('local http gateway lifecycle serves status, validation, and local test results', async () => {
@@ -123,7 +166,11 @@ test('local http gateway lifecycle serves status, validation, and local test res
 });
 
 test('external provider starts a watchdog that probes the public health endpoint', async () => {
-  const h = build({ provider: 'external', localProtocol: 'http', publicUrl: 'https://mcp.example.com/' });
+  const h = build({
+    provider: 'external',
+    localProtocol: 'http',
+    publicUrl: 'https://mcp.example.com/',
+  });
   let health: Response | Error = new Response('{}', { status: 200 });
   await withFetch(
     () => {
@@ -166,12 +213,22 @@ function bare(controller: any, extra: Record<string, unknown> = {}) {
 
 test('test without a watchdog probes directly and omits empty messages and URLs', async () => {
   const cloudflare = bare(
-    { status: () => ({ provider: 'cloudflare' }), currentConfig: () => ({ provider: 'cloudflare' }) },
+    {
+      status: () => ({ provider: 'cloudflare' }),
+      currentConfig: () => ({ provider: 'cloudflare' }),
+    },
     { cloudflare: fakeCloudflare({ reachable: true }) },
   );
-  assert.deepEqual(await cloudflare.test(), { provider: 'cloudflare', reachable: true, state: 'ready' });
+  assert.deepEqual(await cloudflare.test(), {
+    provider: 'cloudflare',
+    reachable: true,
+    state: 'ready',
+  });
 
-  const ngrok = bare({ status: () => ({ provider: 'ngrok' }), currentConfig: () => ({ provider: 'ngrok' }) });
+  const ngrok = bare({
+    status: () => ({ provider: 'ngrok' }),
+    currentConfig: () => ({ provider: 'ngrok' }),
+  });
   assert.deepEqual(await ngrok.test(), {
     provider: 'ngrok',
     reachable: false,
@@ -194,7 +251,10 @@ test('test without a watchdog probes directly and omits empty messages and URLs'
 });
 
 test('admin URL and trusted origins fall back to bootstrap config when nothing is saved', () => {
-  const controller = { currentConfig: () => ({ provider: 'local' }), status: () => ({ provider: 'local' }) };
+  const controller = {
+    currentConfig: () => ({ provider: 'local' }),
+    status: () => ({ provider: 'local' }),
+  };
   const withBootstrap = bare(controller);
   withBootstrap.config = { adminPublicUrl: 'https://boot.example.com' };
   assert.equal(withBootstrap.adminPublicUrl(), 'https://boot.example.com');
@@ -236,9 +296,15 @@ test('testAdmin reports HTTP failures, foreign health bodies, and thrown errors'
       });
       assert.equal(urls[0], 'https://admin.example.com/panel/api/health');
       reply = () => new Response(JSON.stringify({ core: 'stopped' }), { status: 200 });
-      assert.equal((await wiring.testAdmin()).message, 'Endpoint did not return Aevra Admin health');
+      assert.equal(
+        (await wiring.testAdmin()).message,
+        'Endpoint did not return Aevra Admin health',
+      );
       reply = () => new Response('null', { status: 200 });
-      assert.equal((await wiring.testAdmin()).message, 'Endpoint did not return Aevra Admin health');
+      assert.equal(
+        (await wiring.testAdmin()).message,
+        'Endpoint did not return Aevra Admin health',
+      );
       reply = () => {
         throw new Error('redirect refused');
       };

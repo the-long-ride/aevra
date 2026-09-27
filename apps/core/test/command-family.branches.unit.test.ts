@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { classifyCommand } from '../src/policy/command-family.js';
-import { commandPermissionMatcher, needsCommandPermissionApproval } from '../src/policy/command-matcher.js';
+import {
+  commandPermissionMatcher,
+  needsCommandPermissionApproval,
+} from '../src/policy/command-matcher.js';
 
 const shape = (command: string | string[]) => {
   const { family, effect, outputKeys } = classifyCommand(command);
@@ -20,7 +23,10 @@ test('classifyCommand maps git, package managers, cargo, dotnet, and readers', (
   assert.equal(shape(['git', 'reset']), 'git:reset|REPOSITORY_STATE|');
   assert.equal(shape(['git', 'commit']), 'git:commit|SOURCE_MUTATION|');
   assert.equal(shape(['pnpm', 'lint']), 'pnpm:lint|BUILD_OUTPUT|node_modules/.cache,coverage');
-  assert.equal(shape(['yarn', 'add']), 'package:install|BUILD_OUTPUT|node_modules,package-lock.json,pnpm-lock.yaml,yarn.lock');
+  assert.equal(
+    shape(['yarn', 'add']),
+    'package:install|BUILD_OUTPUT|node_modules,package-lock.json,pnpm-lock.yaml,yarn.lock',
+  );
   assert.equal(shape(['npm', 'run']), 'npm:run|UNKNOWN|');
   assert.equal(shape(['cargo', 'check']), 'cargo:check|BUILD_OUTPUT|target');
   assert.equal(shape(['cargo', 'fmt']), 'cargo:fmt|SOURCE_MUTATION|');
@@ -33,7 +39,12 @@ test('classifyCommand maps git, package managers, cargo, dotnet, and readers', (
 });
 
 test('shell wrappers are HIGH unless the script is critical', () => {
-  assert.deepEqual(classifyCommand(['bash', '-c', 'echo hi']), { family: 'shell:bash', effect: 'UNKNOWN', risk: 'HIGH', outputKeys: [] });
+  assert.deepEqual(classifyCommand(['bash', '-c', 'echo hi']), {
+    family: 'shell:bash',
+    effect: 'UNKNOWN',
+    risk: 'HIGH',
+    outputKeys: [],
+  });
   assert.equal(classifyCommand(['pwsh.exe', '-Command', 'Get-Date']).family, 'shell:powershell');
   assert.equal(classifyCommand(['powershell', '-NoLogo']).family, 'shell:powershell');
   assert.equal(classifyCommand(['sh', '-lc', 'dd if=/dev/zero of=/dev/sda']).risk, 'CRITICAL');
@@ -42,12 +53,24 @@ test('shell wrappers are HIGH unless the script is critical', () => {
 
 test('commandPermissionMatcher normalizes shells, subcommands, options, and separators', () => {
   assert.equal(commandPermissionMatcher(['bash', '-c', 'x']), 'shell:bash:*');
-  assert.equal(commandPermissionMatcher(['C:\\bin\\pwsh.exe', '-c', 'x'], { executionMode: 'host' }), 'shell:powershell:*:host-fallback');
+  assert.equal(
+    commandPermissionMatcher(['C:\\bin\\pwsh.exe', '-c', 'x'], { executionMode: 'host' }),
+    'shell:powershell:*:host-fallback',
+  );
   assert.equal(commandPermissionMatcher(['node', 'x'], { shell: 'CMD' }), 'shell:cmd:*');
-  assert.equal(commandPermissionMatcher({ executable: 'Git.EXE', args: ['Commit', '-m', 'msg', 'more'] }), 'git:commit:-m:*');
-  assert.equal(commandPermissionMatcher({ executable: 'npm', args: ['--version'] }), 'npm:--version');
+  assert.equal(
+    commandPermissionMatcher({ executable: 'Git.EXE', args: ['Commit', '-m', 'msg', 'more'] }),
+    'git:commit:-m:*',
+  );
+  assert.equal(
+    commandPermissionMatcher({ executable: 'npm', args: ['--version'] }),
+    'npm:--version',
+  );
   assert.equal(commandPermissionMatcher({ executable: 'node', args: undefined as any }), 'node');
-  assert.equal(commandPermissionMatcher(['npx', 'tsc', '--out=dist', '--', 'a', 'b']), 'npx:tsc:--out:*:--:*');
+  assert.equal(
+    commandPermissionMatcher(['npx', 'tsc', '--out=dist', '--', 'a', 'b']),
+    'npx:tsc:--out:*:--:*',
+  );
   assert.equal(commandPermissionMatcher(['tool', '-=x', 'a']), 'tool:-:*');
   assert.equal(commandPermissionMatcher(['']), 'unknown');
   assert.equal(commandPermissionMatcher([]), 'unknown');

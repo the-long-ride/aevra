@@ -48,7 +48,10 @@ test('each invalid field yields its specific validation message', () => {
     [{ allowedOptions: ['--x'] }, 'allowedOptions entries must be objects'],
     [{ allowedOptions: [{ name: '' }] }, 'allowedOptions entries require a name'],
     [{ allowedOptions: [{ values: [] }] }, 'allowedOptions entries require a name'],
-    [{ allowedOptions: [{ name: '--x', values: 'a' }] }, 'allowedOptions values must be string arrays'],
+    [
+      { allowedOptions: [{ name: '--x', values: 'a' }] },
+      'allowedOptions values must be string arrays',
+    ],
     [{ positionalConstraint: 'any' }, 'positionalConstraint must be exact or workspace-paths'],
     [{ exactArgv: [1] }, 'exactArgv must be a string array'],
     [{ positionalConstraint: 'exact' }, 'exact positionalConstraint requires exactArgv'],
@@ -66,6 +69,10 @@ test('each invalid field yields its specific validation message', () => {
     [{ scriptFingerprint: {} }, 'scriptFingerprint must be a string'],
   ];
   for (const [patch, message] of cases) {
-    assert.deepEqual(validateCommandRuleV2({ ...valid(), ...patch }), { ok: false, message }, message);
+    assert.deepEqual(
+      validateCommandRuleV2({ ...valid(), ...patch }),
+      { ok: false, message },
+      message,
+    );
   }
 });

@@ -29,9 +29,16 @@ test('registry exposes epoch and status and survives a failing disconnect', asyn
   const startEpoch = registry.epoch();
   await registry.connect();
   assert.ok(registry.epoch() > startEpoch);
-  assert.deepEqual(registry.status(), { connected: true, capabilities: { backgroundActions: true } });
+  assert.deepEqual(registry.status(), {
+    connected: true,
+    capabilities: { backgroundActions: true },
+  });
 
-  registry.backgroundState.acquire(owner, { windowId: 'w1', processId: 1, processStartedAt: 's' }, 1);
+  registry.backgroundState.acquire(
+    owner,
+    { windowId: 'w1', processId: 1, processStartedAt: 's' },
+    1,
+  );
   assert.equal(registry.invalidateOwner(owner), 1);
 
   // Queued work enqueued before a disconnect is refused once the epoch moves.
@@ -49,14 +56,23 @@ test('background capability is true only for a literal true flag', () => {
 });
 
 test('mapBackgroundFailure keeps structured codes and wraps everything else', () => {
-  const deadline = mapBackgroundFailure(new DesktopDriverError('DESKTOP_DRIVER_DEADLINE', 'late'), true) as any;
+  const deadline = mapBackgroundFailure(
+    new DesktopDriverError('DESKTOP_DRIVER_DEADLINE', 'late'),
+    true,
+  ) as any;
   assert.equal(deadline.code, 'DESKTOP_OUTCOME_UNKNOWN');
   const refused = new DesktopDriverError('DESKTOP_INPUT_REFUSED', 'no');
   assert.equal(mapBackgroundFailure(refused, true), refused);
   const afterPlain = mapBackgroundFailure(new Error('pipe closed'), true) as any;
-  assert.deepEqual([afterPlain.code, afterPlain.message], ['DESKTOP_OUTCOME_UNKNOWN', 'DESKTOP_OUTCOME_UNKNOWN: pipe closed']);
+  assert.deepEqual(
+    [afterPlain.code, afterPlain.message],
+    ['DESKTOP_OUTCOME_UNKNOWN', 'DESKTOP_OUTCOME_UNKNOWN: pipe closed'],
+  );
   const afterOther = mapBackgroundFailure('odd', true) as any;
-  assert.equal(afterOther.message, 'DESKTOP_OUTCOME_UNKNOWN: Desktop action outcome is unknown after dispatch');
+  assert.equal(
+    afterOther.message,
+    'DESKTOP_OUTCOME_UNKNOWN: Desktop action outcome is unknown after dispatch',
+  );
   assert.equal(mapBackgroundFailure(refused, false), refused);
   const before = mapBackgroundFailure(42, false) as any;
   assert.deepEqual([before.code, before.message], ['DESKTOP_HELPER', 'DESKTOP_HELPER: 42']);
@@ -95,7 +111,14 @@ test('background action forwards the verified host and marks unknown state on su
     driver,
     owner,
     epoch: 4,
-    target: { windowLeaseId, windowId: 'w1', snapshotId: 'snap', ref: 'r1', op: 'setValue', value: 'text' } as any,
+    target: {
+      windowLeaseId,
+      windowId: 'w1',
+      snapshotId: 'snap',
+      ref: 'r1',
+      op: 'setValue',
+      value: 'text',
+    } as any,
   });
   assert.equal(seen[0].expectedHost, hostApplication);
   assert.equal(seen[0].value, 'text');

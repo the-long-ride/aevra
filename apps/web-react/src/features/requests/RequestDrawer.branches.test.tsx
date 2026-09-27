@@ -91,7 +91,9 @@ describe('RequestDrawer branches', () => {
   });
 
   it('approves with a scope and denies without one, refreshing each time', async () => {
-    setData({ approvals: [approval({ operation: { family: 'files:write', capability: 'files.write' } })] });
+    setData({
+      approvals: [approval({ operation: { family: 'files:write', capability: 'files.write' } })],
+    });
     renderDrawer();
     fireEvent.click(await screen.findByRole('button', { name: 'Allow' }));
     await waitFor(() => expect(svc.approveRequest).toHaveBeenCalledWith('app-1', 'once'));
@@ -191,7 +193,11 @@ describe('RequestDrawer branches', () => {
   it('lists resolved approvals by operation family in history', async () => {
     setData({
       approvals: [
-        approval({ id: 'old-1', state: 'APPROVED', operation: { family: 'files:read', capability: 'files.read' } }),
+        approval({
+          id: 'old-1',
+          state: 'APPROVED',
+          operation: { family: 'files:read', capability: 'files.read' },
+        }),
       ],
     });
     renderDrawer();

@@ -174,7 +174,12 @@ test('custom app catalog: id handling, upsert by path, find and delete', () => {
   };
   const blank = repo.saveCustom({ ...base, id: '   ' });
   assert.match(blank.id, /^[0-9a-f-]{36}$/);
-  const updated = repo.saveCustom({ ...base, id: blank.id, displayName: 'Tool 2', updatedAt: LATER });
+  const updated = repo.saveCustom({
+    ...base,
+    id: blank.id,
+    displayName: 'Tool 2',
+    updatedAt: LATER,
+  });
   assert.equal(updated.id, blank.id);
   assert.equal(updated.displayName, 'Tool 2');
   assert.equal(updated.updatedAt, LATER);

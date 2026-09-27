@@ -12,7 +12,9 @@ function fakeRepo(overrides: Record<string, any> = {}) {
   const repo: any = {
     calls,
     getClient: (id: string) =>
-      id === 'c1' ? { clientId: 'c1', clientName: 'Client One', redirectUris: ['https://app/cb'] } : null,
+      id === 'c1'
+        ? { clientId: 'c1', clientName: 'Client One', redirectUris: ['https://app/cb'] }
+        : null,
     createAuthorizationRequest: (input: any) => ({ id: 'req1', ...input }),
     getAuthorizationRequest: () => null,
     listPendingAuthorizationRequests: () => [],
@@ -21,7 +23,10 @@ function fakeRepo(overrides: Record<string, any> = {}) {
     issueAuthorizationCode: () => ({ code: 'code-1' }),
     consumeAuthorizationCode: () => null,
     findRefreshToken: () => null,
-    rotateRefreshTokenSecurely: () => (calls.push('rotate'), { status: 'ROTATED', nextToken: 'next' }),
+    rotateRefreshTokenSecurely: () => (
+      calls.push('rotate'),
+      { status: 'ROTATED', nextToken: 'next' }
+    ),
     issueAccessToken: () => ({ token: 'access' }),
     issueRefreshToken: () => ({ token: 'refresh' }),
     ensureConnection: () => calls.push('ensure'),
@@ -56,12 +61,30 @@ const goodAuthorize = {
 
 test('beginAuthorization validates each request field in order', () => {
   const oauth = service(fakeRepo());
-  assert.throws(() => oauth.beginAuthorization({ ...goodAuthorize, client_id: undefined } as any), /unknown OAuth client_id/);
-  assert.throws(() => oauth.beginAuthorization({ ...goodAuthorize, response_type: 'token' } as any), /response_type must be code/);
-  assert.throws(() => oauth.beginAuthorization({ ...goodAuthorize, redirect_uri: 'https://evil/cb' } as any), /redirect_uri does not exactly match/);
-  assert.throws(() => oauth.beginAuthorization({ ...goodAuthorize, code_challenge_method: 'plain' } as any), /S256/);
-  assert.throws(() => oauth.beginAuthorization({ ...goodAuthorize, code_challenge: '' } as any), /code_challenge is required/);
-  assert.throws(() => oauth.beginAuthorization({ ...goodAuthorize, code_challenge: 'short' } as any), /code_challenge is required/);
+  assert.throws(
+    () => oauth.beginAuthorization({ ...goodAuthorize, client_id: undefined } as any),
+    /unknown OAuth client_id/,
+  );
+  assert.throws(
+    () => oauth.beginAuthorization({ ...goodAuthorize, response_type: 'token' } as any),
+    /response_type must be code/,
+  );
+  assert.throws(
+    () => oauth.beginAuthorization({ ...goodAuthorize, redirect_uri: 'https://evil/cb' } as any),
+    /redirect_uri does not exactly match/,
+  );
+  assert.throws(
+    () => oauth.beginAuthorization({ ...goodAuthorize, code_challenge_method: 'plain' } as any),
+    /S256/,
+  );
+  assert.throws(
+    () => oauth.beginAuthorization({ ...goodAuthorize, code_challenge: '' } as any),
+    /code_challenge is required/,
+  );
+  assert.throws(
+    () => oauth.beginAuthorization({ ...goodAuthorize, code_challenge: 'short' } as any),
+    /code_challenge is required/,
+  );
   const pending = oauth.beginAuthorization(goodAuthorize as any);
   assert.equal(pending.scope, 'mcp');
   assert.equal(pending.resource, RESOURCE);
@@ -141,14 +164,27 @@ const exchange = {
 
 test('authorization code exchange rejects every binding failure', () => {
   const none = service(fakeRepo());
-  assert.throws(() => none.exchangeAuthorizationCode({ ...exchange, grant_type: 'x' } as any), /unsupported grant_type/);
-  assert.throws(() => none.exchangeAuthorizationCode(exchange as any), /invalid authorization code/);
-  for (const mismatch of [{ clientId: 'c2' }, { redirectUri: 'https://app/other' }, { resource: 'https://other/mcp' }]) {
+  assert.throws(
+    () => none.exchangeAuthorizationCode({ ...exchange, grant_type: 'x' } as any),
+    /unsupported grant_type/,
+  );
+  assert.throws(
+    () => none.exchangeAuthorizationCode(exchange as any),
+    /invalid authorization code/,
+  );
+  for (const mismatch of [
+    { clientId: 'c2' },
+    { redirectUri: 'https://app/other' },
+    { resource: 'https://other/mcp' },
+  ]) {
     const oauth = service(fakeRepo({ consumeAuthorizationCode: () => codeRecord(mismatch) }));
     assert.throws(() => oauth.exchangeAuthorizationCode(exchange as any), /binding mismatch/);
   }
   const bound = service(fakeRepo({ consumeAuthorizationCode: () => codeRecord() }));
-  assert.throws(() => bound.exchangeAuthorizationCode({ ...exchange, code_verifier: '' } as any), /code_verifier is invalid/);
+  assert.throws(
+    () => bound.exchangeAuthorizationCode({ ...exchange, code_verifier: '' } as any),
+    /code_verifier is invalid/,
+  );
   assert.throws(
     () => bound.exchangeAuthorizationCode({ ...exchange, code_verifier: 'x'.repeat(50) } as any),
     /PKCE verification failed/,
@@ -157,43 +193,75 @@ test('authorization code exchange rejects every binding failure', () => {
 
 test('code exchange honours renewable flags when issuing refresh tokens', () => {
   const audit: any[] = [];
-  const renewable = service(fakeRepo({ consumeAuthorizationCode: () => codeRecord({ renewable: true, scope: 'mcp' }) }), audit);
+  const renewable = service(
+    fakeRepo({ consumeAuthorizationCode: () => codeRecord({ renewable: true, scope: 'mcp' }) }),
+    audit,
+  );
   const withRefresh = renewable.exchangeAuthorizationCode(exchange as any);
   assert.equal(withRefresh.refresh_token, 'refresh');
   assert.equal(audit[0].metadata.refreshIssued, true);
-  const fixed = service(fakeRepo({ consumeAuthorizationCode: () => codeRecord({ renewable: false }) }));
+  const fixed = service(
+    fakeRepo({ consumeAuthorizationCode: () => codeRecord({ renewable: false }) }),
+  );
   const noRefresh = fixed.exchangeAuthorizationCode(exchange as any);
   assert.equal(noRefresh.scope, 'mcp');
   assert.equal(noRefresh.refresh_token, undefined);
-  const implicit = service(fakeRepo({ consumeAuthorizationCode: () => codeRecord({ scope: 'mcp' }) }));
+  const implicit = service(
+    fakeRepo({ consumeAuthorizationCode: () => codeRecord({ scope: 'mcp' }) }),
+  );
   assert.equal(implicit.exchangeAuthorizationCode(exchange as any).refresh_token, undefined);
 });
 
 const refresh = { grant_type: 'refresh_token', client_id: 'c1', refresh_token: 'r1' } as const;
-const activeRefresh = { clientId: 'c1', resource: RESOURCE, status: 'ACTIVE', scope: 'mcp offline_access', actor: 'oauth:C', subject: 'conn-1' };
+const activeRefresh = {
+  clientId: 'c1',
+  resource: RESOURCE,
+  status: 'ACTIVE',
+  scope: 'mcp offline_access',
+  actor: 'oauth:C',
+  subject: 'conn-1',
+};
 
 test('refresh exchange audits binding failures with an unknown actor when client id is blank', () => {
   const audit: any[] = [];
   const oauth = service(fakeRepo(), audit);
-  assert.throws(() => oauth.exchangeRefreshToken({ ...refresh, grant_type: 'nope' } as any), /unsupported grant_type/);
-  assert.throws(() => oauth.exchangeRefreshToken({ ...refresh, client_id: '' } as any), /invalid refresh token/);
+  assert.throws(
+    () => oauth.exchangeRefreshToken({ ...refresh, grant_type: 'nope' } as any),
+    /unsupported grant_type/,
+  );
+  assert.throws(
+    () => oauth.exchangeRefreshToken({ ...refresh, client_id: '' } as any),
+    /invalid refresh token/,
+  );
   assert.equal(audit[0].actor, 'unknown');
-  const wrongClient = service(fakeRepo({ findRefreshToken: () => ({ ...activeRefresh, clientId: 'c9' }) }), audit);
+  const wrongClient = service(
+    fakeRepo({ findRefreshToken: () => ({ ...activeRefresh, clientId: 'c9' }) }),
+    audit,
+  );
   assert.throws(() => wrongClient.exchangeRefreshToken(refresh as any), /invalid refresh token/);
   assert.equal(audit[1].actor, 'client:c1');
-  const wrongResource = service(fakeRepo({ findRefreshToken: () => ({ ...activeRefresh, resource: 'x' }) }));
+  const wrongResource = service(
+    fakeRepo({ findRefreshToken: () => ({ ...activeRefresh, resource: 'x' }) }),
+  );
   assert.throws(() => wrongResource.exchangeRefreshToken(refresh as any), /invalid refresh token/);
 });
 
 test('refresh exchange rejects spent tokens, excess scope and lost rotation races', () => {
   const audit: any[] = [];
   const spentRepo = fakeRepo({ findRefreshToken: () => ({ ...activeRefresh, status: 'ROTATED' }) });
-  assert.throws(() => service(spentRepo, audit).exchangeRefreshToken(refresh as any), /invalid refresh token/);
+  assert.throws(
+    () => service(spentRepo, audit).exchangeRefreshToken(refresh as any),
+    /invalid refresh token/,
+  );
   assert.deepEqual(spentRepo.calls, ['rotate']);
   assert.equal(audit[0].metadata.reason, 'refresh_token_spent_or_inactive');
   const narrow = fakeRepo({ findRefreshToken: () => ({ ...activeRefresh, scope: 'mcp' }) });
   assert.throws(
-    () => service(narrow, audit).exchangeRefreshToken({ ...refresh, scope: 'mcp offline_access' } as any),
+    () =>
+      service(narrow, audit).exchangeRefreshToken({
+        ...refresh,
+        scope: 'mcp offline_access',
+      } as any),
     /exceeds original grant/,
   );
   assert.equal(audit[1].metadata.reason, 'scope_exceeds_grant');
@@ -216,7 +284,10 @@ test('access token verification checks resource and connection state and records
   const record = { resource: RESOURCE, subject: 'conn-1', actor: 'oauth:C', expiresAt: 'later' };
   assert.throws(() => service(fakeRepo()).verifyAccessToken('t'), /invalid OAuth access token/);
   assert.throws(
-    () => service(fakeRepo({ findAccessToken: () => ({ ...record, resource: 'other' }) })).verifyAccessToken('t'),
+    () =>
+      service(
+        fakeRepo({ findAccessToken: () => ({ ...record, resource: 'other' }) }),
+      ).verifyAccessToken('t'),
     /invalid OAuth access token/,
   );
   assert.throws(
@@ -230,7 +301,10 @@ test('access token verification checks resource and connection state and records
       ).verifyAccessToken('t'),
     /invalid OAuth access token/,
   );
-  const repo = fakeRepo({ findAccessToken: () => record, getConnection: () => ({ status: 'ACTIVE' }) });
+  const repo = fakeRepo({
+    findAccessToken: () => record,
+    getConnection: () => ({ status: 'ACTIVE' }),
+  });
   const oauth = service(repo);
   const withIp = oauth.verifyAccessToken('t', '10.0.0.1');
   assert.equal(withIp.connectionId, 'conn-1');
@@ -258,7 +332,12 @@ test('connection management helpers delegate to the repository', () => {
 
 test('public base URL must be a bare HTTPS origin', () => {
   const oauth = service(fakeRepo());
-  for (const bad of ['http://x.example', 'https://x.example/path', 'https://x.example/?q=1', 'https://x.example/#h']) {
+  for (const bad of [
+    'http://x.example',
+    'https://x.example/path',
+    'https://x.example/?q=1',
+    'https://x.example/#h',
+  ]) {
     assert.throws(() => oauth.setPublicBaseUrl(bad), /HTTPS origin/);
   }
   oauth.setPublicBaseUrl('https://pub.example/');

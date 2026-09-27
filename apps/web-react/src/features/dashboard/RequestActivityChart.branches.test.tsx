@@ -87,7 +87,11 @@ describe('RequestActivityChart without activity', () => {
 describe('RequestActivityChart tooltip interactions', () => {
   test('an idle point reports that no tools were active', () => {
     vi.mocked(activityHook.useMcpActivityEntries).mockReturnValue([
-      { ...entries[1]!, startedAt: '2026-08-28T12:00:00.000Z', updatedAt: '2026-08-28T12:01:00.000Z' },
+      {
+        ...entries[1]!,
+        startedAt: '2026-08-28T12:00:00.000Z',
+        updatedAt: '2026-08-28T12:01:00.000Z',
+      },
     ]);
     const { container } = render(<RequestActivityChart data={data('2026-08-28T12:02:00.000Z')} />);
     const first = points(container)[0]!;

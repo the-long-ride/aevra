@@ -138,7 +138,11 @@ describe('ExtensionRpc lifecycle edges', () => {
 
 describe('ExtensionRpc command gating', () => {
   it('ignores commands before authentication and while on standby', async () => {
-    const rpc = await newRpc({ async listTabs() { return []; } });
+    const rpc = await newRpc({
+      async listTabs() {
+        return [];
+      },
+    });
     await rpc.connect();
     const socket = FakeSocket.last!;
     socket.emit('open');

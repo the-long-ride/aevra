@@ -60,7 +60,12 @@ function context(overrides: Record<string, any> = {}) {
 
 async function call(ctx: any, path: string, method: string, raw = '') {
   const res = response();
-  const handled = await handleAuthRoutes(request(method, raw), res, new URL(`https://localhost${path}`), ctx);
+  const handled = await handleAuthRoutes(
+    request(method, raw),
+    res,
+    new URL(`https://localhost${path}`),
+    ctx,
+  );
   return { handled, res, value: res.body ? JSON.parse(res.body) : undefined };
 }
 
@@ -98,9 +103,17 @@ test('rate-limited logins only send retry-after for a positive finite wait', asy
 
 test('successful login over plain local HTTP sets a non-Secure cookie and refunds', async () => {
   const ctx = context({ secure: false, allowLocalHttpPassword: true });
-  const result = await call(ctx, '/api/auth/login', 'POST', JSON.stringify({ username: 'admin', password: 'sample value' }));
+  const result = await call(
+    ctx,
+    '/api/auth/login',
+    'POST',
+    JSON.stringify({ username: 'admin', password: 'sample value' }),
+  );
   assert.equal(result.res.statusCode, 200);
-  assert.equal(result.res.headers['set-cookie'], 'aevra_admin=new%20session; HttpOnly; SameSite=Strict; Path=/');
+  assert.equal(
+    result.res.headers['set-cookie'],
+    'aevra_admin=new%20session; HttpOnly; SameSite=Strict; Path=/',
+  );
   assert.deepEqual(ctx.loginLimiter.events, ['allow:127.0.0.1', 'refund:127.0.0.1']);
 });
 
@@ -108,13 +121,22 @@ test('insecure login without a warning hook is still rejected', async () => {
   const result = await call(context({ secure: false }), '/api/auth/login', 'POST', '{}');
   assert.deepEqual([result.res.statusCode, result.value.error.code], [400, 'HTTPS_REQUIRED']);
   let warned = 0;
-  const hooked = await call(context({ secure: false, onInsecureLoginBlocked: () => warned++ }), '/api/auth/login', 'POST', '{}');
+  const hooked = await call(
+    context({ secure: false, onInsecureLoginBlocked: () => warned++ }),
+    '/api/auth/login',
+    'POST',
+    '{}',
+  );
   assert.equal(hooked.res.statusCode, 400);
   assert.equal(warned, 1);
 });
 
 test('logout enforces same-origin and a live session, then clears the cookie', async () => {
-  const csrf = await call(context({ sameOrigin: false, sessionId: 'live' }), '/api/auth/logout', 'POST');
+  const csrf = await call(
+    context({ sameOrigin: false, sessionId: 'live' }),
+    '/api/auth/logout',
+    'POST',
+  );
   assert.deepEqual([csrf.res.statusCode, csrf.value.error.code], [403, 'CSRF_REJECTED']);
   const stale = await call(context({ sessionId: 'old' }), '/api/auth/logout', 'POST');
   assert.deepEqual([stale.res.statusCode, stale.value], [401, { error: 'admin session required' }]);
@@ -122,7 +144,10 @@ test('logout enforces same-origin and a live session, then clears the cookie', a
   const ok = await call(ctx, '/api/auth/logout', 'POST');
   assert.deepEqual(ok.value, { authenticated: false });
   assert.deepEqual(ctx.revoked, ['live']);
-  assert.equal(ok.res.headers['set-cookie'], 'aevra_admin=; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+  assert.equal(
+    ok.res.headers['set-cookie'],
+    'aevra_admin=; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=0',
+  );
 });
 
 test('session probe reports validity and unknown auth routes fall through', async () => {

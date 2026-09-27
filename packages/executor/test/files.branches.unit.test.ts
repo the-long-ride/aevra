@@ -3,13 +3,7 @@ import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } 
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import {
-  fileCreate,
-  fileList,
-  fileRead,
-  fileSearch,
-  fileWrite,
-} from '../src/files.js';
+import { fileCreate, fileList, fileRead, fileSearch, fileWrite } from '../src/files.js';
 
 const CAPS = ['files.read', 'files.search', 'files.write', 'files.delete'] as const;
 
@@ -72,7 +66,10 @@ test('protected globs are applied to hard-link aliases and to direct reads', asy
     await assert.rejects(() => fileRead('/ws/twin.txt', roots, undefined, globs), /secret/i);
     // A glob that matches nothing leaves the alias readable.
     const other = [{ glob: 'nothing/**', class: 'SECRET' as const }];
-    assert.equal((await fileRead('/ws/twin.txt', roots, undefined, other)).content, 'guarded words\n');
+    assert.equal(
+      (await fileRead('/ws/twin.txt', roots, undefined, other)).content,
+      'guarded words\n',
+    );
   } finally {
     cleanup();
   }

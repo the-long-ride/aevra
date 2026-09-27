@@ -61,11 +61,14 @@ test('a non-Error fetch failure reports an unknown cause', async () => {
       throw 'sample value';
     },
     async () => {
-      await assert.rejects(new HttpTransport({ url: URL_BASE }).request('x'), (error: UpstreamError) => {
-        assert.equal(error.code, 'UPSTREAM_CONNECT_FAILED');
-        assert.deepEqual(error.details, { cause: 'unknown' });
-        return true;
-      });
+      await assert.rejects(
+        new HttpTransport({ url: URL_BASE }).request('x'),
+        (error: UpstreamError) => {
+          assert.equal(error.code, 'UPSTREAM_CONNECT_FAILED');
+          assert.deepEqual(error.details, { cause: 'unknown' });
+          return true;
+        },
+      );
     },
   );
 });
@@ -139,7 +142,9 @@ test('a notification post answered by an event stream accepts any response id', 
     },
     async () => {
       const http = new HttpTransport({ url: URL_BASE });
-      const post = (http as unknown as { post(message: unknown): Promise<unknown> }).post.bind(http);
+      const post = (http as unknown as { post(message: unknown): Promise<unknown> }).post.bind(
+        http,
+      );
       assert.deepEqual(await post({ jsonrpc: '2.0', method: 'notifications/initialized' }), {
         jsonrpc: '2.0',
         id: 7,
@@ -192,7 +197,10 @@ test('a stream read error that is not an abort is rethrown unchanged', async () 
       return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
     },
     async () => {
-      await assert.rejects(new HttpTransport({ url: URL_BASE }).request('x'), /sample value failure/);
+      await assert.rejects(
+        new HttpTransport({ url: URL_BASE }).request('x'),
+        /sample value failure/,
+      );
     },
   );
 });

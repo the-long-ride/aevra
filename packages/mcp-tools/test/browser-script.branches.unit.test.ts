@@ -53,7 +53,10 @@ test('bounded fields and wait timeouts are enforced', () => {
   assert.deepEqual(parseBrowserScript("page.locator('#x').waitFor()"), [
     { op: 'wait_for', selector: '#x', timeoutMs: 5000 },
   ]);
-  rejects(() => parseBrowserScript("page.locator('#x').waitFor({ timeout: 0 })"), /timeout must be/);
+  rejects(
+    () => parseBrowserScript("page.locator('#x').waitFor({ timeout: 0 })"),
+    /timeout must be/,
+  );
   rejects(() => parseBrowserScript('page.evaluate(1)'), /unsupported statement/);
 });
 

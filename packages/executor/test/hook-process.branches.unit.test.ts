@@ -19,7 +19,8 @@ function op(args: string[], extra: Record<string, unknown> = {}) {
 }
 
 test('hook output is capped at 128 KiB per stream', async () => {
-  const script = "process.stdout.write('o'.repeat(200000)); process.stderr.write('e'.repeat(200000));";
+  const script =
+    "process.stdout.write('o'.repeat(200000)); process.stderr.write('e'.repeat(200000));";
   const result = (await runHookProcess(op(['-e', script]))) as any;
   assert.equal(result.exitCode, 0);
   assert.equal(result.stdout.length, 128 * 1024);

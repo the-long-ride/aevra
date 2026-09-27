@@ -4,7 +4,11 @@ import { DesktopSessionRegistry } from '../../../packages/desktop/src/registry.j
 import { FakeDesktopDriver } from '../../../packages/desktop/test/fake-driver.js';
 import { dispatchDesktopOperation } from '../src/desktop-dispatch.js';
 
-const allowAll = { mode: 'denylist' as const, applications: [], unattributedInput: 'deny' as const };
+const allowAll = {
+  mode: 'denylist' as const,
+  applications: [],
+  unattributedInput: 'deny' as const,
+};
 const owner = {
   identity: { kind: 'oauth' as const, key: 'connection-A' },
   surface: 'desktop.control' as const,
@@ -66,7 +70,10 @@ test('windows and target identity route to the driver; identity needs driver sup
   const { registry, driver } = await connected();
   const windows: any = await dispatch({ kind: 'desktop.windows' }, registry);
   assert.equal(windows[0].windowId, 'w1');
-  const identity: any = await dispatch({ kind: 'desktop.targetIdentity', windowId: 'w7' }, registry);
+  const identity: any = await dispatch(
+    { kind: 'desktop.targetIdentity', windowId: 'w7' },
+    registry,
+  );
   assert.deepEqual(identity.windowInstance.windowId, 'w7');
   driver.targetIdentity = undefined;
   await assert.rejects(

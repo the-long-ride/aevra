@@ -53,7 +53,8 @@ function renderSettings() {
 
 function calls(method: string, url: string) {
   return mockedRequest.mock.calls.filter(
-    ([path, init]) => path === url && ((init as RequestInit | undefined)?.method ?? 'GET') === method,
+    ([path, init]) =>
+      path === url && ((init as RequestInit | undefined)?.method ?? 'GET') === method,
   );
 }
 
@@ -79,7 +80,9 @@ describe('McpUpstreamsSettings default services', () => {
     renderSettings();
     fireEvent.click(await screen.findByRole('button', { name: 'Test alpha' }));
     await waitFor(() =>
-      expect(document.querySelector('.inline-result')?.textContent).toMatch(/^unknown\s+\S 3 tools$/),
+      expect(document.querySelector('.inline-result')?.textContent).toMatch(
+        /^unknown\s+\S 3 tools$/,
+      ),
     );
   });
 
@@ -179,9 +182,9 @@ describe('McpUpstreamsSettings table values', () => {
 
     fireEvent.change(search, { target: { value: '' } });
     for (const label of ['Status', 'Risk', 'Tools', 'Transport']) {
-      const header = screen.getAllByRole('columnheader').find((cell) =>
-        cell.textContent?.includes(label),
-      ) as HTMLElement;
+      const header = screen
+        .getAllByRole('columnheader')
+        .find((cell) => cell.textContent?.includes(label)) as HTMLElement;
       fireEvent.click(within(header).queryByRole('button') ?? header);
     }
     expect(screen.getAllByRole('row').length).toBeGreaterThanOrEqual(4);

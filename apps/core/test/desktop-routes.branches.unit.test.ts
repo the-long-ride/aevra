@@ -41,17 +41,22 @@ function fakes() {
     saveCustom: async (input: unknown) => (calls.push(['saveCustom', input]), { id: 'custom' }),
     deleteCustom: (id: string, actor: string) => (calls.push(['deleteCustom', id, actor]), { id }),
     grant: async (input: unknown, actor: string) => (
-      calls.push(['grant', input, actor]), { grantId: 'g1' }
+      calls.push(['grant', input, actor]),
+      { grantId: 'g1' }
     ),
   };
   const desktopAccess = {
     listPending: () => [{ id: 'r1' }],
     approve: async (id: string, scope: unknown, actor: string) => (
-      calls.push(['approve', id, scope, actor]), { approved: id }
+      calls.push(['approve', id, scope, actor]),
+      { approved: id }
     ),
     deny: (id: string, actor: string) => (calls.push(['deny', id, actor]), { denied: id }),
     listGrants: () => [{ id: 'g1' }],
-    revokeGrant: (id: string, actor: string) => (calls.push(['revoke', id, actor]), { revoked: id }),
+    revokeGrant: (id: string, actor: string) => (
+      calls.push(['revoke', id, actor]),
+      { revoked: id }
+    ),
   };
   return { calls, context: { desktopAppCatalog, desktopAccess } };
 }
@@ -149,7 +154,10 @@ test('policy update passes an empty object for a null body and maps error fields
 test('unrelated desktop paths and methods fall through', async () => {
   const fx = fakes();
   assert.equal((await call(fx.context, '/api/desktop/other')).handled, false);
-  assert.equal((await call(fx.context, '/api/desktop/access-requests/r1/maybe', 'POST')).handled, false);
+  assert.equal(
+    (await call(fx.context, '/api/desktop/access-requests/r1/maybe', 'POST')).handled,
+    false,
+  );
   const noPolicy = await call(fx.context, '/api/desktop/custom-apps', 'GET');
   assert.equal(noPolicy.status, 503);
   const wrongMethod = await call(

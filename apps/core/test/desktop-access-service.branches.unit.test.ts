@@ -47,7 +47,8 @@ function harness(opts: { host?: boolean } = {}) {
     },
     sessions: {
       get: (id: string) => (state.sessions.has(id) ? { actor: state.sessions.get(id)! } : null),
-      leaseForWorkspace: (_id: string, ws: string) => (ws === 'ws-1' ? { capabilities: state.capabilities } : null),
+      leaseForWorkspace: (_id: string, ws: string) =>
+        ws === 'ws-1' ? { capabilities: state.capabilities } : null,
     },
     capabilityRoots: (ws: string) => [{ workspaceId: ws }],
     ...(opts.host === false
@@ -105,29 +106,71 @@ test('workspace request is recorded, audited, and deduplicated', () => {
 test('executable identity must be an absolute exe with a process name and stable HWND', () => {
   const h = harness();
   const req = (id: any) => () => h.access.request({ ...base, identity: id });
-  assert.throws(req(identity({ window: { executablePath: undefined } })), code('DESKTOP_IDENTITY_UNAVAILABLE'));
-  assert.throws(req(identity({ window: { executablePath: 'Apps\\Example.exe' } })), code('DESKTOP_IDENTITY_UNAVAILABLE'));
-  assert.throws(req(identity({ window: { executablePath: 'C:\\Apps\\example.txt' } })), code('DESKTOP_IDENTITY_UNAVAILABLE'));
-  assert.throws(req(identity({ window: { processName: '' } })), code('DESKTOP_IDENTITY_UNAVAILABLE'));
-  assert.throws(req(identity({ windowInstance: { windowId: 'window-two' } })), code('DESKTOP_TARGET_CHANGED'));
-  const unc = h.access.request({ ...base, identity: identity({ window: { executablePath: '//server/share/Tool.exe' } }) });
+  assert.throws(
+    req(identity({ window: { executablePath: undefined } })),
+    code('DESKTOP_IDENTITY_UNAVAILABLE'),
+  );
+  assert.throws(
+    req(identity({ window: { executablePath: 'Apps\\Example.exe' } })),
+    code('DESKTOP_IDENTITY_UNAVAILABLE'),
+  );
+  assert.throws(
+    req(identity({ window: { executablePath: 'C:\\Apps\\example.txt' } })),
+    code('DESKTOP_IDENTITY_UNAVAILABLE'),
+  );
+  assert.throws(
+    req(identity({ window: { processName: '' } })),
+    code('DESKTOP_IDENTITY_UNAVAILABLE'),
+  );
+  assert.throws(
+    req(identity({ windowInstance: { windowId: 'window-two' } })),
+    code('DESKTOP_TARGET_CHANGED'),
+  );
+  const unc = h.access.request({
+    ...base,
+    identity: identity({ window: { executablePath: '//server/share/Tool.exe' } }),
+  });
   assert.equal(unc.application, 'Tool');
   h.db.close();
 });
 
 test('WebView2 windows require a distinct verified host application', () => {
   const h = harness();
-  const webview = { processName: 'msedgewebview2.exe', executablePath: 'C:\\Runtime\\msedgewebview2.exe' };
+  const webview = {
+    processName: 'msedgewebview2.exe',
+    executablePath: 'C:\\Runtime\\msedgewebview2.exe',
+  };
   const req = (id: any) => () => h.access.request({ ...base, identity: id });
   assert.throws(req(identity({ window: webview })), code('DESKTOP_HOST_UNVERIFIED'));
-  const samePid = { executablePath: 'C:\\Apps\\Host.exe', instance: { windowId: 'host-w', processId: 42, processStartedAt: 't' } };
-  assert.throws(req(identity({ window: webview, hostApplication: samePid })), code('DESKTOP_HOST_UNVERIFIED'));
-  const badPath = { executablePath: 'relative.exe', instance: { windowId: 'host-w', processId: 7, processStartedAt: 't' } };
-  assert.throws(req(identity({ window: webview, hostApplication: badPath })), code('DESKTOP_HOST_UNVERIFIED'));
-  const byPathOnly = { processName: 'Shell.exe', executablePath: 'C:\\Runtime\\MSEdgeWebView2.exe' };
+  const samePid = {
+    executablePath: 'C:\\Apps\\Host.exe',
+    instance: { windowId: 'host-w', processId: 42, processStartedAt: 't' },
+  };
+  assert.throws(
+    req(identity({ window: webview, hostApplication: samePid })),
+    code('DESKTOP_HOST_UNVERIFIED'),
+  );
+  const badPath = {
+    executablePath: 'relative.exe',
+    instance: { windowId: 'host-w', processId: 7, processStartedAt: 't' },
+  };
+  assert.throws(
+    req(identity({ window: webview, hostApplication: badPath })),
+    code('DESKTOP_HOST_UNVERIFIED'),
+  );
+  const byPathOnly = {
+    processName: 'Shell.exe',
+    executablePath: 'C:\\Runtime\\MSEdgeWebView2.exe',
+  };
   assert.throws(req(identity({ window: byPathOnly })), code('DESKTOP_HOST_UNVERIFIED'));
-  const host = { executablePath: 'C:/Apps/Host.exe', instance: { windowId: 'host-w', processId: 7, processStartedAt: 't' } };
-  const ok = h.access.request({ ...base, identity: identity({ window: webview, hostApplication: host }) });
+  const host = {
+    executablePath: 'C:/Apps/Host.exe',
+    instance: { windowId: 'host-w', processId: 7, processStartedAt: 't' },
+  };
+  const ok = h.access.request({
+    ...base,
+    identity: identity({ window: webview, hostApplication: host }),
+  });
   assert.equal(ok.application, 'Host');
   const stored = h.repository.getRequest(ok.requestId)!;
   assert.equal(stored.hostExecutablePath, 'C:\\Apps\\Host.exe');
@@ -137,7 +180,8 @@ test('WebView2 windows require a distinct verified host application', () => {
 
 test('host-scoped requests require matching host identity and desktop control grant', () => {
   const h = harness();
-  const req = () => h.access.request({ ...base, workspaceId: null, scope: 'host', identity: identity() });
+  const req = () =>
+    h.access.request({ ...base, workspaceId: null, scope: 'host', identity: identity() });
   h.state.hostIdentity = null;
   assert.throws(req, code('DESKTOP_ACCESS_SESSION_ENDED'));
   h.state.hostIdentity = { kind: 'session', key: 'ses-one' };
@@ -155,7 +199,8 @@ test('host-scoped requests require matching host identity and desktop control gr
 
   const noHost = harness({ host: false });
   assert.throws(
-    () => noHost.access.request({ ...base, workspaceId: null, scope: 'host', identity: identity() }),
+    () =>
+      noHost.access.request({ ...base, workspaceId: null, scope: 'host', identity: identity() }),
     code('DESKTOP_ACCESS_SESSION_ENDED'),
   );
   noHost.db.close();

@@ -33,14 +33,23 @@ function deps(worker: (op: any) => any) {
   return { value: value as any, states, puts, mutations, reads, released: () => released };
 }
 
-const okWorker = (extra: Record<string, unknown> = {}) => () => ({ ok: true, value: { hash: 'h-after', ...extra } });
+const okWorker =
+  (extra: Record<string, unknown> = {}) =>
+  () => ({ ok: true, value: { hash: 'h-after', ...extra } });
 const failWorker = () => ({ ok: false, error: { code: 'WORKER_FAIL', message: 'worker words' } });
 
 test('create records the mutation and walks operation states to success', async () => {
   const d = deps(okWorker());
-  const result = await createFileMutation(d.value, 's', lease, { path: 'a.txt', content: 'text', encoding: 'utf8' });
+  const result = await createFileMutation(d.value, 's', lease, {
+    path: 'a.txt',
+    content: 'text',
+    encoding: 'utf8',
+  });
   assert.deepEqual(result, { hash: 'h-after' });
-  assert.deepEqual(d.states.map(([s]) => s), ['AUTHORIZED', 'EXECUTING', 'SUCCEEDED']);
+  assert.deepEqual(
+    d.states.map(([s]) => s),
+    ['AUTHORIZED', 'EXECUTING', 'SUCCEEDED'],
+  );
   assert.equal(d.puts[0].kind, 'file.create');
   assert.deepEqual(d.mutations[0], {
     changeSetId: 'cs-active',
@@ -59,7 +68,10 @@ test('create, delete, and move mark failures, keep codes, and release locks', as
     (d: any) => moveFileMutation(d, 's', lease, { from: 'a', to: 'b' }),
   ]) {
     const d = deps(failWorker);
-    await assert.rejects(() => run(d.value), (error: any) => error.code === 'WORKER_FAIL' && error.message === 'worker words');
+    await assert.rejects(
+      () => run(d.value),
+      (error: any) => error.code === 'WORKER_FAIL' && error.message === 'worker words',
+    );
     assert.deepEqual(d.states.at(-1), ['FAILED', { message: 'worker words' }]);
     assert.equal(d.released(), 1);
     const thrower = deps(() => {
@@ -83,27 +95,52 @@ test('delete and move snapshot first and record recovery metadata', async () => 
 });
 
 function patcher(content: string, hash = 'h1') {
-  const d = deps((op) => (op.kind === 'file.read' ? { ok: true, value: { content, hash, path: 'f.txt' } } : failWorker()));
+  const d = deps((op) =>
+    op.kind === 'file.read' ? { ok: true, value: { content, hash, path: 'f.txt' } } : failWorker(),
+  );
   const writes: Array<[string, string]> = [];
   const run = (patch: string, expectedHash?: string) =>
-    patchFileMutation(d.value, 's', lease, { path: 'f.txt', patch, expectedHash }, async (text, h) => {
-      writes.push([text, h]);
-      return 'written';
-    });
+    patchFileMutation(
+      d.value,
+      's',
+      lease,
+      { path: 'f.txt', patch, expectedHash },
+      async (text, h) => {
+        writes.push([text, h]);
+        return 'written';
+      },
+    );
   return { d, writes, run };
 }
 
 test('patch applies multiple hunks with offsets and keeps CRLF endings', async () => {
   const { writes, run } = patcher('one\r\ntwo\r\nthree\r\nfour\r\nfive');
-  const patch = ['--- a', '+++ b', '@@ -1,2 +1,3 @@', ' one', '+inserted', ' two', '@@ -4 +5 @@', '-four', '+FOUR', 'noise'].join('\n');
+  const patch = [
+    '--- a',
+    '+++ b',
+    '@@ -1,2 +1,3 @@',
+    ' one',
+    '+inserted',
+    ' two',
+    '@@ -4 +5 @@',
+    '-four',
+    '+FOUR',
+    'noise',
+  ].join('\n');
   assert.equal(await run(patch), 'written');
   assert.deepEqual(writes[0], ['one\r\ninserted\r\ntwo\r\nthree\r\nFOUR\r\nfive', 'h1']);
 });
 
 test('patch rejects mismatched context, missing hunks, and failed reads', async () => {
   const { run } = patcher('alpha\nbeta');
-  await assert.rejects(() => run('@@ -1 +1 @@\n-gamma\n+delta'), (e: any) => e.code === 'WRITE_CONFLICT');
-  await assert.rejects(() => run('-alpha\n+delta'), (e: any) => e.code === 'INVALID_REQUEST');
+  await assert.rejects(
+    () => run('@@ -1 +1 @@\n-gamma\n+delta'),
+    (e: any) => e.code === 'WRITE_CONFLICT',
+  );
+  await assert.rejects(
+    () => run('-alpha\n+delta'),
+    (e: any) => e.code === 'INVALID_REQUEST',
+  );
   const failing = deps(failWorker);
   await assert.rejects(
     () => patchFileMutation(failing.value, 's', lease, { path: 'f', patch: '' }, async () => null),
@@ -113,7 +150,10 @@ test('patch rejects mismatched context, missing hunks, and failed reads', async 
 
 test('patch against a stale hash uses the cached read or reports a conflict', async () => {
   const { d, writes, run } = patcher('current\ntext', 'h-new');
-  await assert.rejects(() => run('@@ -1 +1 @@\n-old\n+next', 'h-old'), /Stale patch base unavailable/);
+  await assert.rejects(
+    () => run('@@ -1 +1 @@\n-old\n+next', 'h-old'),
+    /Stale patch base unavailable/,
+  );
   d.reads.set('f.txt@h-old', { content: 'old\ntext' });
   await run('@@ -1 +1 @@\n-old\n+next', 'h-old');
   assert.deepEqual(writes[0], ['next\ntext', 'h-old']);

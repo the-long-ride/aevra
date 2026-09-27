@@ -29,12 +29,23 @@ const BACKEND_ATTRIBUTES: Record<number, string[] | undefined> = {
 function installPage(fake: FakeCdp): void {
   fake.handlers['Accessibility.getFullAXTree'] = () => ({
     nodes: [
-      { nodeId: '1', role: { value: 'button' }, name: { value: ' Save ' }, backendDOMNodeId: 11, properties: [{ name: 'disabled' }] },
+      {
+        nodeId: '1',
+        role: { value: 'button' },
+        name: { value: ' Save ' },
+        backendDOMNodeId: 11,
+        properties: [{ name: 'disabled' }],
+      },
       { nodeId: '2', ignored: true, role: { value: 'button' }, backendDOMNodeId: 12 },
       { nodeId: '3' },
       { nodeId: '4', role: { value: 'textbox' } },
       { nodeId: '5', role: { value: 'textbox' }, value: { value: 42 }, backendDOMNodeId: 15 },
-      { nodeId: '6', role: { value: 'textbox' }, name: { value: 'Password' }, backendDOMNodeId: 16 },
+      {
+        nodeId: '6',
+        role: { value: 'textbox' },
+        name: { value: 'Password' },
+        backendDOMNodeId: 16,
+      },
       { nodeId: '7', role: { value: 'link' }, name: { value: 'More' }, backendDOMNodeId: 17 },
     ],
   });
@@ -55,7 +66,9 @@ function installPage(fake: FakeCdp): void {
   });
   fake.handlers['DOM.getOuterHTML'] = ({ backendNodeId }) => ({
     outerHTML:
-      backendNodeId === 11 ? '<b>Ready</b>' : '<body><p>Whole   page</p><script>x()</script></body>',
+      backendNodeId === 11
+        ? '<b>Ready</b>'
+        : '<body><p>Whole   page</p><script>x()</script></body>',
   });
   fake.handlers['Input.dispatchKeyEvent'] = ({ key }) => {
     if (key === 'F13') throw new Error('Input failed');
@@ -64,7 +77,9 @@ function installPage(fake: FakeCdp): void {
 }
 
 const mouse = (fake: FakeCdp) =>
-  fake.calls.filter((call) => call.method === 'Input.dispatchMouseEvent').map((call) => call.params);
+  fake.calls
+    .filter((call) => call.method === 'Input.dispatchMouseEvent')
+    .map((call) => call.params);
 
 test('calls before connect are refused as not connected', async () => {
   await assert.rejects(
@@ -87,9 +102,8 @@ test('a failing target list, a missing tab and a socketless target all refuse to
       driver.connect({ transport: 'cdp', cdpPort: fake.port, tabId: 'absent' }),
       (error: any) => /No debuggable page target/.test(error.message),
     );
-    await assert.rejects(
-      driver.connect({ transport: 'cdp', cdpPort: fake.port }),
-      (error: any) => /bare has no debugger websocket/.test(error.message),
+    await assert.rejects(driver.connect({ transport: 'cdp', cdpPort: fake.port }), (error: any) =>
+      /bare has no debugger websocket/.test(error.message),
     );
   } finally {
     await driver.disconnect();
@@ -98,29 +112,49 @@ test('a failing target list, a missing tab and a socketless target all refuse to
 });
 
 test('tab open, focus and close issue the matching endpoint requests only when complete', async () => {
-  await withCdp([{ id: 'page-1' }, { id: 'page-2' }, { id: 'worker', type: 'service_worker' }], async (fake, driver) => {
-    await driver.tabs({ action: 'open' });
-    await driver.tabs({ action: 'focus' });
-    await driver.tabs({ action: 'close' });
-    assert.deepEqual(fake.requests.filter((line) => !line.endsWith('/json/list')), []);
+  await withCdp(
+    [{ id: 'page-1' }, { id: 'page-2' }, { id: 'worker', type: 'service_worker' }],
+    async (fake, driver) => {
+      await driver.tabs({ action: 'open' });
+      await driver.tabs({ action: 'focus' });
+      await driver.tabs({ action: 'close' });
+      assert.deepEqual(
+        fake.requests.filter((line) => !line.endsWith('/json/list')),
+        [],
+      );
 
-    await driver.tabs({ action: 'open', url: 'https://new.example/?q=1' });
-    assert.ok(fake.requests.includes(`PUT /json/new?${encodeURIComponent('https://new.example/?q=1')}`));
+      await driver.tabs({ action: 'open', url: 'https://new.example/?q=1' });
+      assert.ok(
+        fake.requests.includes(`PUT /json/new?${encodeURIComponent('https://new.example/?q=1')}`),
+      );
 
-    const focused = await driver.tabs({ action: 'focus', tabId: 'page-2' });
-    assert.ok(fake.requests.includes('GET /json/activate/page-2'));
-    assert.deepEqual(focused.map((tab) => [tab.tabId, tab.active]), [['page-1', false], ['page-2', true]]);
+      const focused = await driver.tabs({ action: 'focus', tabId: 'page-2' });
+      assert.ok(fake.requests.includes('GET /json/activate/page-2'));
+      assert.deepEqual(
+        focused.map((tab) => [tab.tabId, tab.active]),
+        [
+          ['page-1', false],
+          ['page-2', true],
+        ],
+      );
 
-    // Closing a background tab keeps the active one.
-    const afterBackground = await driver.tabs({ action: 'close', tabId: 'page-1' });
-    assert.deepEqual(afterBackground.map((tab) => [tab.tabId, tab.active]), [['page-2', true]]);
-  });
+      // Closing a background tab keeps the active one.
+      const afterBackground = await driver.tabs({ action: 'close', tabId: 'page-1' });
+      assert.deepEqual(
+        afterBackground.map((tab) => [tab.tabId, tab.active]),
+        [['page-2', true]],
+      );
+    },
+  );
 });
 
 test('closing the active tab promotes the next page, and closing the last leaves none selected', async () => {
   await withCdp([{ id: 'page-1' }, { id: 'page-2' }], async (_fake, driver) => {
     const remaining = await driver.tabs({ action: 'close', tabId: 'page-1' });
-    assert.deepEqual(remaining.map((tab) => [tab.tabId, tab.active]), [['page-2', true]]);
+    assert.deepEqual(
+      remaining.map((tab) => [tab.tabId, tab.active]),
+      [['page-2', true]],
+    );
     assert.deepEqual(await driver.tabs({ action: 'close', tabId: 'page-2' }), []);
     await assert.rejects(
       driver.snapshot({ mode: 'a11y', maxNodes: 10 }),
@@ -135,10 +169,14 @@ test('closing the active tab promotes the next page, and closing the last leaves
 
 test('a navigation error other than an abort is surfaced at once', async () => {
   await withCdp([{ id: 'page-1' }], async (fake, driver) => {
-    fake.handlers['Page.navigate'] = () => ({ frameId: 'f', errorText: 'net::ERR_NAME_NOT_RESOLVED' });
+    fake.handlers['Page.navigate'] = () => ({
+      frameId: 'f',
+      errorText: 'net::ERR_NAME_NOT_RESOLVED',
+    });
     await assert.rejects(
       driver.navigate({ url: 'https://nowhere.example/', waitUntil: 'load' }),
-      (error: any) => error.code === 'BROWSER_UNAVAILABLE' && /NAME_NOT_RESOLVED/.test(error.message),
+      (error: any) =>
+        error.code === 'BROWSER_UNAVAILABLE' && /NAME_NOT_RESOLVED/.test(error.message),
     );
     assert.equal(fake.methods().filter((method) => method === 'Page.navigate').length, 1);
   });
@@ -149,7 +187,12 @@ test('an idle navigation with no history entry reports about:blank as a redirect
     fake.handlers['Page.navigate'] = () => ({ frameId: 'f' });
     fake.handlers['Page.getNavigationHistory'] = () => ({ currentIndex: 3, entries: [] });
     const result = await driver.navigate({ url: 'https://idle.example/', waitUntil: 'idle' });
-    assert.deepEqual(result, { tabId: 'page-1', url: 'about:blank', status: null, redirected: true });
+    assert.deepEqual(result, {
+      tabId: 'page-1',
+      url: 'about:blank',
+      status: null,
+      redirected: true,
+    });
   });
 });
 
@@ -201,13 +244,43 @@ test('each action kind reaches CDP, and failures are reported per action', async
     );
     assert.deepEqual(
       results.map((result) => (result.ok ? 'ok' : result.error!.code)),
-      ['ok', 'NOT_FOUND', 'INVALID_REQUEST', 'ok', 'BROWSER_CREDENTIAL_FIELD_REFUSED', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'INVALID_REQUEST', 'BROWSER_TIMEOUT'],
+      [
+        'ok',
+        'NOT_FOUND',
+        'INVALID_REQUEST',
+        'ok',
+        'BROWSER_CREDENTIAL_FIELD_REFUSED',
+        'ok',
+        'ok',
+        'ok',
+        'ok',
+        'ok',
+        'ok',
+        'ok',
+        'INVALID_REQUEST',
+        'BROWSER_TIMEOUT',
+      ],
     );
-    assert.deepEqual(mouse(fake)[0], { type: 'mousePressed', x: 20, y: 30, button: 'left', clickCount: 1 });
+    assert.deepEqual(mouse(fake)[0], {
+      type: 'mousePressed',
+      x: 20,
+      y: 30,
+      button: 'left',
+      clickCount: 1,
+    });
     const wheel = mouse(fake).filter((params) => params.type === 'mouseWheel');
-    assert.deepEqual(wheel.map((params) => [params.x, params.y, params.deltaY]), [[5, 6, 100], [20, 30, 10]]);
+    assert.deepEqual(
+      wheel.map((params) => [params.x, params.y, params.deltaY]),
+      [
+        [5, 6, 100],
+        [20, 30, 10],
+      ],
+    );
     const inserted = fake.calls.filter((call) => call.method === 'Input.insertText');
-    assert.deepEqual(inserted.map((call) => call.params.text), ['hello', 'B']);
+    assert.deepEqual(
+      inserted.map((call) => call.params.text),
+      ['hello', 'B'],
+    );
     assert.ok(fake.calls.some((call) => call.params?.commands?.includes('SelectAll')));
   });
 });
@@ -244,14 +317,29 @@ test('reads scope to a ref as html, fail on an unmatched selector, and refuse st
 
 test('logs drain the console and network events the page pushed', async () => {
   await withCdp([{ id: 'page-1' }], async (fake, driver) => {
-    fake.push('page-1', { method: 'Log.entryAdded', params: { entry: { level: 'warning', text: 'careful' } } });
-    fake.push('page-1', { method: 'Network.responseReceived', params: { response: { url: 'https://a.example/x', status: 204 } } });
-    fake.handlers['Page.getNavigationHistory'] = () => ({ currentIndex: 0, entries: [{ url: 'x' }] });
+    fake.push('page-1', {
+      method: 'Log.entryAdded',
+      params: { entry: { level: 'warning', text: 'careful' } },
+    });
+    fake.push('page-1', {
+      method: 'Network.responseReceived',
+      params: { response: { url: 'https://a.example/x', status: 204 } },
+    });
+    fake.handlers['Page.getNavigationHistory'] = () => ({
+      currentIndex: 0,
+      entries: [{ url: 'x' }],
+    });
     // A request/response round trip orders the pushed events before the drain.
     await driver.read({ format: 'text' });
     const consoleLogs = await driver.logs({ logKind: 'console', limit: 10 });
-    assert.deepEqual(consoleLogs.map((entry) => [entry.level, entry.text]), [['warning', 'careful']]);
+    assert.deepEqual(
+      consoleLogs.map((entry) => [entry.level, entry.text]),
+      [['warning', 'careful']],
+    );
     const network = await driver.logs({ logKind: 'network', limit: 10 });
-    assert.deepEqual(network.map((entry) => [entry.url, entry.status]), [['https://a.example/x', 204]]);
+    assert.deepEqual(
+      network.map((entry) => [entry.url, entry.status]),
+      [['https://a.example/x', 204]],
+    );
   });
 });

@@ -10,7 +10,10 @@ import {
 
 type Seen = { url?: string; headers: IncomingHttpHeaders };
 
-async function upstream(t: any, reply: (res: http.ServerResponse, req: http.IncomingMessage) => void) {
+async function upstream(
+  t: any,
+  reply: (res: http.ServerResponse, req: http.IncomingMessage) => void,
+) {
   const seen: Seen[] = [];
   const server = http.createServer((req, res) => {
     seen.push({ url: req.url, headers: req.headers });
@@ -36,25 +39,36 @@ async function gateway(t: any, options: Partial<ConstructorParameters<typeof Pub
 }
 
 function send(url: string, headers: Record<string, string> = {}, method = 'GET') {
-  return new Promise<{ status: number; headers: IncomingHttpHeaders; body: string }>((resolve, reject) => {
-    const req = http.request(url, { method, headers, agent: false }, (res) => {
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (chunk) => (body += chunk));
-      res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body }));
-    });
-    req.on('error', reject);
-    req.end();
-  });
+  return new Promise<{ status: number; headers: IncomingHttpHeaders; body: string }>(
+    (resolve, reject) => {
+      const req = http.request(url, { method, headers, agent: false }, (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body }));
+      });
+      req.on('error', reject);
+      req.end();
+    },
+  );
 }
 
 test('https gateway without TLS options refuses to start; lifecycle calls are idempotent', async () => {
-  const bare = new PublicGateway({ host: '127.0.0.1', port: 0, targets: { adminUrl: 'x', mcpUrl: 'x' } });
+  const bare = new PublicGateway({
+    host: '127.0.0.1',
+    port: 0,
+    targets: { adminUrl: 'x', mcpUrl: 'x' },
+  });
   await assert.rejects(() => bare.start(), /requires TLS options/);
   assert.equal(bare.address(), undefined);
   assert.equal(bare.url(), 'https://127.0.0.1:0');
   await bare.close();
-  const live = new PublicGateway({ host: '127.0.0.1', port: 0, protocol: 'http', targets: { adminUrl: 'x', mcpUrl: 'x' } });
+  const live = new PublicGateway({
+    host: '127.0.0.1',
+    port: 0,
+    protocol: 'http',
+    targets: { adminUrl: 'x', mcpUrl: 'x' },
+  });
   await live.start();
   const port = (live.address() as AddressInfo).port;
   await live.start();
@@ -108,8 +122,19 @@ test('mcp paths skip trust headers and keep client-ip hints when trusted', async
     gatewayTrustSecret: 'sample words',
     trustForwardedClientIp: () => true,
   });
-  for (const pathname of ['/mcp', '/mcp/x', '/health', '/oauth', '/oauth/token', '/.well-known', '/.well-known/x']) {
-    const response = await send(`${subject.url()}${pathname}`, { 'x-real-ip': '198.51.100.4', 'x-forwarded-host': 'evil' });
+  for (const pathname of [
+    '/mcp',
+    '/mcp/x',
+    '/health',
+    '/oauth',
+    '/oauth/token',
+    '/.well-known',
+    '/.well-known/x',
+  ]) {
+    const response = await send(`${subject.url()}${pathname}`, {
+      'x-real-ip': '198.51.100.4',
+      'x-forwarded-host': 'evil',
+    });
     assert.equal(response.status, 201, pathname);
   }
   assert.equal(mcp.seen.length, 7);
@@ -122,7 +147,9 @@ test('admin paths are refused when the admin proxy is disabled', async (t) => {
   const subject = await gateway(t, { adminProxyEnabled: () => false });
   const response = await send(`${subject.url()}/login`);
   assert.equal(response.status, 404);
-  assert.deepEqual(JSON.parse(response.body), { error: { code: 'NOT_FOUND', message: 'Not Found' } });
+  assert.deepEqual(JSON.parse(response.body), {
+    error: { code: 'NOT_FOUND', message: 'Not Found' },
+  });
 });
 
 test('unreachable upstreams produce a 502 JSON error', async (t) => {
@@ -135,4 +162,3 @@ test('unreachable upstreams produce a 502 JSON error', async (t) => {
   assert.equal(response.status, 502);
   assert.equal(JSON.parse(response.body).error.code, 'UPSTREAM_UNAVAILABLE');
 });
-

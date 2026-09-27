@@ -109,7 +109,10 @@ test('origin policy GET and POST handle missing and failing policy services', as
   assert.deepEqual([none.status, none.value], [200, null]);
   const unwired = await call(fx, '/api/browser/policy', 'POST', {});
   assert.deepEqual([unwired.status, unwired.value.error.code], [503, 'BROWSER_UNAVAILABLE']);
-  const empty = await call({ ...fx, browserPolicy: { snapshot: () => undefined } }, '/api/browser/policy');
+  const empty = await call(
+    { ...fx, browserPolicy: { snapshot: () => undefined } },
+    '/api/browser/policy',
+  );
   assert.deepEqual([empty.status, empty.value], [200, null]);
 
   const updates: unknown[] = [];

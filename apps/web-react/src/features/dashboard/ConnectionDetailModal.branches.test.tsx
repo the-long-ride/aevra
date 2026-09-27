@@ -109,7 +109,9 @@ test('revoking a durable connection without a client name uses its id', async ()
   const confirm = screen.getByRole('dialog', { name: 'Revoke connection' });
   expect(confirm).toHaveTextContent('Revoke conn-9 OAuth credentials and prevent silent resume?');
   await user.click(within(confirm).getByRole('button', { name: 'Revoke connection' }));
-  await waitFor(() => expect(called(fetchMock, '/api/connections/conn-9/revoke', 'POST')).toBe(true));
+  await waitFor(() =>
+    expect(called(fetchMock, '/api/connections/conn-9/revoke', 'POST')).toBe(true),
+  );
   expect(onClose).toHaveBeenCalled();
 });
 

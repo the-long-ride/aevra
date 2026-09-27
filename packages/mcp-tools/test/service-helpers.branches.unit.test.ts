@@ -62,7 +62,10 @@ test('isTicketAuthorizedForSession checks actor session and connection ownership
   assert.equal(isTicketAuthorizedForSession(c, 'gone', { sessionId: 's1' }), false);
   assert.equal(isTicketAuthorizedForSession(c, 's1', { actor: 'oauth:Other' }), false);
   assert.equal(isTicketAuthorizedForSession(c, 's1', { sessionId: 's1' }), true);
-  assert.equal(isTicketAuthorizedForSession(c, 's1', { actor: 'oauth:ChatGPT', sessionId: 's2' }), false);
+  assert.equal(
+    isTicketAuthorizedForSession(c, 's1', { actor: 'oauth:ChatGPT', sessionId: 's2' }),
+    false,
+  );
 
   const byConnection = ctx({ identity: { connectionId: 'c1' } });
   assert.equal(
@@ -112,7 +115,10 @@ test('resolveWorkspaceLease rejects unknown, conflicting and ambiguous targets',
     () => resolveWorkspaceLease(c, 's1', { workspace: 'One', workspaceId: 'w2' }),
     (e: any) => e.code === 'INVALID_WORKSPACE_TARGET',
   );
-  assert.equal(resolveWorkspaceLease(c, 's1', { workspace: 'One', workspaceId: 'w1' }).workspaceId, 'w1');
+  assert.equal(
+    resolveWorkspaceLease(c, 's1', { workspace: 'One', workspaceId: 'w1' }).workspaceId,
+    'w1',
+  );
 
   const multi = ctx({
     sessions: { leases: () => [{ workspaceId: 'w1' }, { workspaceId: 'w2' }] },

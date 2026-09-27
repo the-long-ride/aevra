@@ -35,12 +35,16 @@ test('registration rejects missing, unsupported and excessive metadata', () => {
     [{}, /at least one URI/],
     [{ redirect_uris: 'https://app/cb' }, /at least one URI/],
     [{ redirect_uris: [] }, /at least one URI/],
-    [{ redirect_uris: uris, token_endpoint_auth_method: 'client_secret_basic' }, /public OAuth clients/],
+    [
+      { redirect_uris: uris, token_endpoint_auth_method: 'client_secret_basic' },
+      /public OAuth clients/,
+    ],
     [{ redirect_uris: uris, application_type: 'desktop' }, /native or web/],
     [{ redirect_uris: uris, grant_types: ['authorization_code', 'implicit'] }, /grant type/],
     [{ redirect_uris: uris, response_types: ['token'] }, /response type/],
   ];
-  for (const [input, pattern] of cases) assert.throws(() => registerOAuthClient(repo(), input), pattern);
+  for (const [input, pattern] of cases)
+    assert.throws(() => registerOAuthClient(repo(), input), pattern);
   assert.throws(() => registerOAuthClient(repo(50), { redirect_uris: uris }), /too_many_clients/);
 });
 
@@ -59,7 +63,10 @@ test('registration normalizes name, dedupes URIs and echoes the application type
   assert.equal(client.client_id_issued_at, Date.parse('2026-01-01T00:00:10.000Z') / 1000);
   assert.deepEqual(store.registered[0].redirectUris, ['https://app/cb', 'http://localhost:9/cb']);
 
-  const unnamed = registerOAuthClient(store, { redirect_uris: uris, application_type: null as any });
+  const unnamed = registerOAuthClient(store, {
+    redirect_uris: uris,
+    application_type: null as any,
+  });
   assert.equal(unnamed.client_name, 'MCP client');
   assert.equal('application_type' in unnamed, false);
   const long = registerOAuthClient(store, { redirect_uris: uris, client_name: 'n'.repeat(120) });

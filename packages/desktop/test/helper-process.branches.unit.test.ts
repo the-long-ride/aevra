@@ -21,9 +21,18 @@ function helper() {
 }
 
 test('parseHelperError normalises strings, objects and unknown shapes', () => {
-  assert.deepEqual(parseHelperError('plain words'), { code: 'DESKTOP_HELPER', message: 'plain words' });
-  assert.deepEqual(parseHelperError({ code: 42 }), { code: 'DESKTOP_HELPER', message: 'Unknown helper error' });
-  assert.deepEqual(parseHelperError({ code: 'NOT_ALLOWED', message: 'm' }), { code: 'DESKTOP_HELPER', message: 'm' });
+  assert.deepEqual(parseHelperError('plain words'), {
+    code: 'DESKTOP_HELPER',
+    message: 'plain words',
+  });
+  assert.deepEqual(parseHelperError({ code: 42 }), {
+    code: 'DESKTOP_HELPER',
+    message: 'Unknown helper error',
+  });
+  assert.deepEqual(parseHelperError({ code: 'NOT_ALLOWED', message: 'm' }), {
+    code: 'DESKTOP_HELPER',
+    message: 'm',
+  });
   assert.deepEqual(parseHelperError({ code: 'DESKTOP_TIMEOUT', message: 'm', details: ['x'] }), {
     code: 'DESKTOP_TIMEOUT',
     message: 'm',
@@ -38,10 +47,17 @@ test('parseHelperError normalises strings, objects and unknown shapes', () => {
       message: 'busy',
       details: { retryAfterMs: 5, reason: 'r', pattern: true },
     }),
-    { code: 'DESKTOP_WINDOW_BUSY', message: 'busy', details: { retryAfterMs: 5, reason: 'r', pattern: true } },
+    {
+      code: 'DESKTOP_WINDOW_BUSY',
+      message: 'busy',
+      details: { retryAfterMs: 5, reason: 'r', pattern: true },
+    },
   );
   for (const raw of [null, 5, ['a']]) {
-    assert.deepEqual(parseHelperError(raw), { code: 'DESKTOP_HELPER', message: 'Unknown helper error' });
+    assert.deepEqual(parseHelperError(raw), {
+      code: 'DESKTOP_HELPER',
+      message: 'Unknown helper error',
+    });
   }
 });
 
@@ -63,7 +79,11 @@ test('replies for unknown ids are ignored and a null error resolves', async () =
 });
 
 test('a helper that cannot start fails its call with DESKTOP_DRIVER_DIED', async () => {
-  const process_ = new HelperProcess({ command: 'aevra-no-such-helper', args: [], deadlineMs: 5000 });
+  const process_ = new HelperProcess({
+    command: 'aevra-no-such-helper',
+    args: [],
+    deadlineMs: 5000,
+  });
   const before = process_.generation();
   await assert.rejects(() => process_.call('connect', {}), /DESKTOP_DRIVER_DIED|could not start/);
   assert.ok(process_.generation() > before);
@@ -88,7 +108,10 @@ test('WindowsDesktopDriver forwards window, identity and background calls to the
       op: 'invoke',
       expectedInstance: { windowId: 'w1', processId: 1, processStartedAt: 'start' },
     };
-    assert.deepEqual(await driver.backgroundAct(request), { method: 'backgroundAct', params: request });
+    assert.deepEqual(await driver.backgroundAct(request), {
+      method: 'backgroundAct',
+      params: request,
+    });
   } finally {
     await driver.disconnect();
   }

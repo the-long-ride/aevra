@@ -38,8 +38,7 @@ function fixture(o: any = {}) {
   };
   const context: any = {
     deps: {
-      hostControlApproval:
-        o.noApproval ? undefined : { canResume: () => o.canResume ?? true },
+      hostControlApproval: o.noApproval ? undefined : { canResume: () => o.canResume ?? true },
       hostControlAccess: {
         has: () => granted,
         identity: () => (o.identity === undefined ? { pairing: 'p' } : o.identity),
@@ -48,7 +47,9 @@ function fixture(o: any = {}) {
     worker: {
       execute: async (input: any) => {
         calls.push(['worker', input]);
-        return o.statusFails ? { ok: false, error: { code: 'X', message: 'y' } } : { ok: true, value: live };
+        return o.statusFails
+          ? { ok: false, error: { code: 'X', message: 'y' } }
+          : { ok: true, value: live };
       },
     },
     approvals: {
@@ -126,7 +127,12 @@ test('browser validation reports each drifted precondition', async () => {
     ok: false,
     reason: 'browser attachment or approved tab changed',
   });
-  const otherTab = { connected: true, attachmentId: 'att1', transport: 'extension', tabs: [{ tabId: 8, url: 'x' }] };
+  const otherTab = {
+    connected: true,
+    attachmentId: 'att1',
+    transport: 'extension',
+    tabs: [{ tabId: 8, url: 'x' }],
+  };
   assert.deepEqual(await run(t, { live: otherTab }).result, {
     ok: false,
     reason: 'browser attachment or approved tab changed',
@@ -145,7 +151,12 @@ test('grant revocation between checks stops the replay', async () => {
     reason: 'host control grant revoked',
   });
   const desktop = hostTicket({
-    operation: { family: 'desktop:act', capability: 'desktop.control', risk: 'HIGH', argsHash: 'd' },
+    operation: {
+      family: 'desktop:act',
+      capability: 'desktop.control',
+      risk: 'HIGH',
+      argsHash: 'd',
+    },
     payload: { tool: 'desktop_act_many' },
   });
   assert.deepEqual(await run(desktop, { revokeBeforeClaim: true }).result, {
@@ -167,7 +178,13 @@ test('desktop replay skips browser binding and validates the frozen payload', as
     (e: any) => e.code === 'INVALID_REQUEST',
   );
   await assert.rejects(
-    async () => await run(hostTicket({ operation: op, payload: { tool: 'desktop_type', requiresVolatileArgs: true } })).result,
+    async () =>
+      await run(
+        hostTicket({
+          operation: op,
+          payload: { tool: 'desktop_type', requiresVolatileArgs: true },
+        }),
+      ).result,
     (e: any) => e.code === 'APPROVAL_CONTEXT_CHANGED',
   );
 });

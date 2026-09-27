@@ -91,7 +91,9 @@ test('an auth frame without a token is rejected and closed', async () => {
 
 test('a presented profile name is trimmed and bounded; a blank one falls back', async () => {
   await withServer(async (server, port, clients) => {
-    const named = await authed(server, port, clients, { profileName: `  Work ${'x'.repeat(200)} ` });
+    const named = await authed(server, port, clients, {
+      profileName: `  Work ${'x'.repeat(200)} `,
+    });
     assert.deepEqual(named.messages, [{ type: 'auth_ok' }]);
     const profile = server.activeProfile();
     assert.equal(profile?.profileName.length, 120);

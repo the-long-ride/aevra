@@ -19,14 +19,26 @@ async function coexists(a: any, b: any) {
 }
 
 test('lock conflicts follow workspace, read-only, and build-output rules', async () => {
-  assert.equal(await coexists(req('a', 'SOURCE_MUTATION'), req('b', 'SOURCE_MUTATION', [], 'other')), true);
+  assert.equal(
+    await coexists(req('a', 'SOURCE_MUTATION'), req('b', 'SOURCE_MUTATION', [], 'other')),
+    true,
+  );
   assert.equal(await coexists(req('a', 'READ_ONLY'), req('b', 'READ_ONLY')), true);
   assert.equal(await coexists(req('a', 'BUILD_OUTPUT', ['dist']), req('b', 'READ_ONLY')), true);
   assert.equal(await coexists(req('a', 'READ_ONLY'), req('b', 'BUILD_OUTPUT', ['dist'])), true);
-  assert.equal(await coexists(req('a', 'BUILD_OUTPUT', ['dist']), req('b', 'BUILD_OUTPUT', ['out'])), true);
-  assert.equal(await coexists(req('a', 'BUILD_OUTPUT', ['dist']), req('b', 'BUILD_OUTPUT', ['dist'])), false);
+  assert.equal(
+    await coexists(req('a', 'BUILD_OUTPUT', ['dist']), req('b', 'BUILD_OUTPUT', ['out'])),
+    true,
+  );
+  assert.equal(
+    await coexists(req('a', 'BUILD_OUTPUT', ['dist']), req('b', 'BUILD_OUTPUT', ['dist'])),
+    false,
+  );
   assert.equal(await coexists(req('a', 'READ_ONLY'), req('b', 'SOURCE_MUTATION')), false);
-  assert.equal(await coexists(req('a', 'SOURCE_MUTATION'), req('b', 'BUILD_OUTPUT', ['dist'])), false);
+  assert.equal(
+    await coexists(req('a', 'SOURCE_MUTATION'), req('b', 'BUILD_OUTPUT', ['dist'])),
+    false,
+  );
 });
 
 test('a waiting lock without an onWait callback proceeds after release', async () => {

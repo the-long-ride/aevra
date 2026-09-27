@@ -35,7 +35,10 @@ function fixture(options: any = {}) {
     request: async (input: any) => {
       requests.push(input);
       const r = options.requestResult ?? { status: 'approval_pending', requestId: 'new' };
-      tickets.set(r.requestId, skillTicket(r.requestId, r.status === 'approved' ? 'APPROVED' : 'PENDING'));
+      tickets.set(
+        r.requestId,
+        skillTicket(r.requestId, r.status === 'approved' ? 'APPROVED' : 'PENDING'),
+      );
       return r;
     },
     resume: async (id: string, validate: any, execute: any) => {
@@ -112,7 +115,10 @@ test('upstream definitions and proxied resources and prompts delegate to the inn
     () => bare.gate.resourceRead('s1', 'mcp+docs://page/1'),
     /Upstream resources are unavailable/,
   );
-  await assert.rejects(() => bare.gate.promptGet('s1', 'docs__intro'), /Upstream prompts are unavailable/);
+  await assert.rejects(
+    () => bare.gate.promptGet('s1', 'docs__intro'),
+    /Upstream prompts are unavailable/,
+  );
 });
 
 test('promptGet without a lease raises APPROVAL_PENDING with the new request id', async () => {
@@ -135,7 +141,9 @@ test('inner capability approvals surface as APPROVAL_PENDING on resource and pro
   await assert.rejects(
     () => f.gate.resourceRead('s1', 'aevra://skill/user/demo'),
     (e: any) =>
-      e.code === 'APPROVAL_PENDING' && e.details.requestId === 'cap1' && e.details.scope === 'session',
+      e.code === 'APPROVAL_PENDING' &&
+      e.details.requestId === 'cap1' &&
+      e.details.scope === 'session',
   );
   const scoped = fixture({
     leases: [lease],

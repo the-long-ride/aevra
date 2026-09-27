@@ -204,7 +204,10 @@ test('refresh families: reuse, revoked, foreign and expired families are rejecte
   );
   // Expired refresh lookup revokes the whole family.
   assert.equal(repo.findRefreshToken(fresh.token), null);
-  const row = db.raw().prepare('SELECT revoke_reason r FROM oauth_refresh_families WHERE family_id=?').get(fresh.record.familyId) as any;
+  const row = db
+    .raw()
+    .prepare('SELECT revoke_reason r FROM oauth_refresh_families WHERE family_id=?')
+    .get(fresh.record.familyId) as any;
   assert.equal(row.r, 'EXPIRED');
   db.close();
 });
@@ -248,7 +251,9 @@ test('connection origins: empty inputs are ignored and repeated origins are dedu
   clock.now += 1_000;
   repo.recordConnectionOrigin(grant.subject, '203.0.113.1');
   const list = repo.listConnectionOrigins(grant.subject);
-  assert.deepEqual(list, [{ remoteIp: '203.0.113.1', lastSeenAt: new Date(clock.now).toISOString() }]);
+  assert.deepEqual(list, [
+    { remoteIp: '203.0.113.1', lastSeenAt: new Date(clock.now).toISOString() },
+  ]);
   // Entries older than 24h drop out of the list.
   assert.deepEqual(repo.listConnectionOrigins(grant.subject, '2026-09-03T00:00:00.000Z'), []);
   repo.clearRememberedWorkspaceGrants(grant.subject);

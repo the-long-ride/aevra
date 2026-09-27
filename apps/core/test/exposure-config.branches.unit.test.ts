@@ -23,7 +23,10 @@ const v = (input: unknown) => validateExposureConfig(input as any);
 
 test('public URLs must parse and use HTTPS; search and hash are dropped', () => {
   assert.throws(() => v({ provider: 'external', publicUrl: 'not a url' }), /valid HTTPS URL/);
-  assert.throws(() => v({ provider: 'external', publicUrl: 'http://mcp.example.com' }), /must use HTTPS/);
+  assert.throws(
+    () => v({ provider: 'external', publicUrl: 'http://mcp.example.com' }),
+    /must use HTTPS/,
+  );
   assert.deepEqual(v({ provider: 'external', publicUrl: 'https://mcp.example.com/base/?q=1#x' }), {
     provider: 'external',
     publicUrl: 'https://mcp.example.com/base',
@@ -38,7 +41,10 @@ test('local protocol accepts http/https and rejects anything else', () => {
 });
 
 test('unsupported providers are rejected', () => {
-  assert.throws(() => v({ provider: 'carrier-pigeon' }), /Unsupported exposure provider: carrier-pigeon/);
+  assert.throws(
+    () => v({ provider: 'carrier-pigeon' }),
+    /Unsupported exposure provider: carrier-pigeon/,
+  );
 });
 
 test('local config keeps only local fields including trusted proxy and admin values', () => {
@@ -67,13 +73,23 @@ test('direct exposure requires https transport, public URL, and a host', () => {
     () => v({ provider: 'direct', localProtocol: 'http', publicUrl: 'https://a.example.com' }),
     /requires HTTPS local transport/,
   );
-  assert.throws(() => v({ provider: 'direct', direct: { host: '0.0.0.0' } }), /requires a public URL/);
+  assert.throws(
+    () => v({ provider: 'direct', direct: { host: '0.0.0.0' } }),
+    /requires a public URL/,
+  );
   assert.throws(
     () => v({ provider: 'direct', publicUrl: 'https://a.example.com', direct: { host: '  ' } }),
     /host is required/,
   );
-  assert.throws(() => v({ provider: 'direct', publicUrl: 'https://a.example.com' }), /host is required/);
-  const ok = v({ provider: 'direct', publicUrl: 'https://a.example.com', direct: { host: ' 0.0.0.0 ' } });
+  assert.throws(
+    () => v({ provider: 'direct', publicUrl: 'https://a.example.com' }),
+    /host is required/,
+  );
+  const ok = v({
+    provider: 'direct',
+    publicUrl: 'https://a.example.com',
+    direct: { host: ' 0.0.0.0 ' },
+  });
   assert.deepEqual(ok.direct, { host: '0.0.0.0' });
   assert.equal('trustedProxyClientIp' in ok, false);
 });
@@ -81,8 +97,18 @@ test('direct exposure requires https transport, public URL, and a host', () => {
 test('external exposure requires a public URL and keeps the local protocol', () => {
   assert.throws(() => v({ provider: 'external' }), /External exposure requires a public URL/);
   assert.deepEqual(
-    v({ provider: 'external', localProtocol: 'http', publicUrl: 'https://e.example.com', trustedProxyClientIp: true }),
-    { provider: 'external', localProtocol: 'http', publicUrl: 'https://e.example.com', trustedProxyClientIp: true },
+    v({
+      provider: 'external',
+      localProtocol: 'http',
+      publicUrl: 'https://e.example.com',
+      trustedProxyClientIp: true,
+    }),
+    {
+      provider: 'external',
+      localProtocol: 'http',
+      publicUrl: 'https://e.example.com',
+      trustedProxyClientIp: true,
+    },
   );
 });
 
@@ -97,11 +123,19 @@ test('cloudflare exposure validates presence, ownership, auth mode, and Access v
     /auth mode must be oauth or access/,
   );
   assert.throws(
-    () => v({ provider: 'cloudflare', cloudflare: { ownership: 'managed', authMode: 'access', issuer: 'x', audience: ' ' } }),
+    () =>
+      v({
+        provider: 'cloudflare',
+        cloudflare: { ownership: 'managed', authMode: 'access', issuer: 'x', audience: ' ' },
+      }),
     /issuer and audience are required/,
   );
   assert.throws(
-    () => v({ provider: 'cloudflare', cloudflare: { ownership: 'managed', authMode: 'access', audience: 'a' } }),
+    () =>
+      v({
+        provider: 'cloudflare',
+        cloudflare: { ownership: 'managed', authMode: 'access', audience: 'a' },
+      }),
     /issuer and audience are required/,
   );
   const ok = v({
@@ -119,7 +153,10 @@ test('ngrok exposure validates ownership, domain mode, and URL requirements', ()
     () => v({ provider: 'ngrok', ngrok: { ownership: 'managed', domainMode: 'vanity' } }),
     /domain mode must be automatic or stable/,
   );
-  assert.throws(() => v({ provider: 'ngrok', ngrok: { ownership: 'external' } }), /External ngrok exposure requires/);
+  assert.throws(
+    () => v({ provider: 'ngrok', ngrok: { ownership: 'external' } }),
+    /External ngrok exposure requires/,
+  );
   assert.throws(
     () => v({ provider: 'ngrok', ngrok: { ownership: 'managed', domainMode: 'stable' } }),
     /stable domain requires a public URL/,
@@ -128,15 +165,24 @@ test('ngrok exposure validates ownership, domain mode, and URL requirements', ()
     ownership: 'managed',
   });
   assert.deepEqual(
-    v({ provider: 'ngrok', publicUrl: 'https://n.example.com', ngrok: { ownership: 'managed', domainMode: 'stable' } }).ngrok,
+    v({
+      provider: 'ngrok',
+      publicUrl: 'https://n.example.com',
+      ngrok: { ownership: 'managed', domainMode: 'stable' },
+    }).ngrok,
     { ownership: 'managed', domainMode: 'stable' },
   );
 });
 
 test('loadExposureConfig prefers stored config, then migrates legacy Cloudflare, else local', () => {
   assert.deepEqual(loadExposureConfig(memorySettings()), { provider: 'local' });
-  const stored = memorySettings({ 'exposure.config': { provider: 'external', publicUrl: 'https://s.example.com/' } });
-  assert.deepEqual(loadExposureConfig(stored), { provider: 'external', publicUrl: 'https://s.example.com' });
+  const stored = memorySettings({
+    'exposure.config': { provider: 'external', publicUrl: 'https://s.example.com/' },
+  });
+  assert.deepEqual(loadExposureConfig(stored), {
+    provider: 'external',
+    publicUrl: 'https://s.example.com',
+  });
 
   const legacyAccess = memorySettings({
     'cloudflare.config': {
@@ -164,7 +210,12 @@ test('loadExposureConfig prefers stored config, then migrates legacy Cloudflare,
   assert.deepEqual(legacyAccess.values.get('exposure.config'), migrated);
 
   const legacyBare = memorySettings({
-    'cloudflare.config': { hostname: 7, authMode: 'connector', issuer: 'ignored', audience: 'ignored' },
+    'cloudflare.config': {
+      hostname: 7,
+      authMode: 'connector',
+      issuer: 'ignored',
+      audience: 'ignored',
+    },
   });
   assert.deepEqual(loadExposureConfig(legacyBare), {
     provider: 'cloudflare',

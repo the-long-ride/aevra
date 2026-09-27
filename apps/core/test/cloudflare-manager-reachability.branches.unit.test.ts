@@ -92,7 +92,10 @@ test('checkReachability reports failed health and failed discovery status codes'
         status: 404,
         message: 'OAuth discovery failed: HTTP 404',
       });
-      assert.deepEqual(urls, [`${BASE}/health`, `${BASE}/.well-known/oauth-protected-resource/mcp`]);
+      assert.deepEqual(urls, [
+        `${BASE}/health`,
+        `${BASE}/.well-known/oauth-protected-resource/mcp`,
+      ]);
     },
   );
   h.db.close();
@@ -120,7 +123,11 @@ test('checkReachability validates discovery JSON, resource, and authorization se
     await withFetch(
       (url) => (url.endsWith('/health') ? json({ ok: true }) : metadata()),
       async () => {
-        assert.deepEqual(await h.manager.checkReachability(), { reachable: false, status: 200, message });
+        assert.deepEqual(await h.manager.checkReachability(), {
+          reachable: false,
+          status: 200,
+          message,
+        });
       },
     );
   }

@@ -18,16 +18,30 @@ test('bearer authorization is accepted and other schemes are rejected', async ()
   const id = await v.verifyRequest(req({ authorization: `Bearer ${i.sign()}` }));
   assert.equal(id.subject, 'sub-1');
   assert.equal(id.issuer, i.issuer);
-  await assert.rejects(() => v.verifyRequest(req({ authorization: 'Basic abc' })), /missing Cloudflare Access JWT/);
-  await assert.rejects(() => v.verifyRequest(req({ 'cf-access-jwt-assertion': 'a.b' })), /invalid JWT/);
+  await assert.rejects(
+    () => v.verifyRequest(req({ authorization: 'Basic abc' })),
+    /missing Cloudflare Access JWT/,
+  );
+  await assert.rejects(
+    () => v.verifyRequest(req({ 'cf-access-jwt-assertion': 'a.b' })),
+    /invalid JWT/,
+  );
 });
 
 test('header and claim validation reject each malformed token', async () => {
   const i = createTestIssuer();
   const v = new CloudflareAccessVerifier(i.issuer, i.audience, i.provider);
   const verify = (token: string) => v.verifyRequest(req({ 'cf-access-jwt-assertion': token }));
-  const claims = { iss: i.issuer, aud: i.audience, sub: 's', exp: Math.floor(Date.now() / 1000) + 60 };
-  await assert.rejects(() => verify(`${part({ alg: 'HS256' })}.${part(claims)}.x`), /unsupported JWT algorithm/);
+  const claims = {
+    iss: i.issuer,
+    aud: i.audience,
+    sub: 's',
+    exp: Math.floor(Date.now() / 1000) + 60,
+  };
+  await assert.rejects(
+    () => verify(`${part({ alg: 'HS256' })}.${part(claims)}.x`),
+    /unsupported JWT algorithm/,
+  );
   await assert.rejects(() => verify(i.sign({ exp: 'soon' })), /expired JWT/);
   await assert.rejects(() => verify(i.sign({ sub: '' })), /missing subject/);
   await assert.rejects(() => verify(i.sign({ sub: 7 })), /missing subject/);
@@ -43,7 +57,9 @@ test('actor falls back to preferred_username then subject, and audience may be a
   const i = createTestIssuer();
   const v = new CloudflareAccessVerifier(i.issuer, i.audience, i.provider);
   const verify = (token: string) => v.verifyRequest(req({ 'cf-access-jwt-assertion': token }));
-  const username = await verify(i.sign({ email: undefined, preferred_username: 'bob', aud: ['x', i.audience] }));
+  const username = await verify(
+    i.sign({ email: undefined, preferred_username: 'bob', aud: ['x', i.audience] }),
+  );
   assert.equal(username.actor, 'bob');
   const subject = await verify(i.sign({ email: undefined }));
   assert.equal(subject.actor, 'sub-1');
@@ -62,7 +78,10 @@ test('a signature from another token is rejected', async () => {
 });
 
 test('rejecting verifier always refuses', async () => {
-  await assert.rejects(() => new RejectingIdentityVerifier().verifyRequest(req({})), /not configured/);
+  await assert.rejects(
+    () => new RejectingIdentityVerifier().verifyRequest(req({})),
+    /not configured/,
+  );
 });
 
 async function jwksServer(status: number, body: unknown) {

@@ -69,7 +69,13 @@ test('bulk body parsing rejects empty, malformed and oversized payloads', async 
   assert.equal(malformed.value.error.code, 'ADMIN_BULK_FAILED');
   assert.equal(malformed.value.error.message, 'invalid JSON');
 
-  const big = await call('POST', '/api/permissions/bulk', {}, undefined, 'x'.repeat(1024 * 1024 + 1));
+  const big = await call(
+    'POST',
+    '/api/permissions/bulk',
+    {},
+    undefined,
+    'x'.repeat(1024 * 1024 + 1),
+  );
   assert.equal(big.status, 413);
   assert.equal(big.value.error.message, 'request body too large');
 });
@@ -155,7 +161,12 @@ test('workspace validation falls back to listLocal and then to no workspaces', a
 
 test('session scope requires owned, known sessions', async () => {
   const fx = recorder();
-  const sessions = { list: () => [{ id: 's1', actor: 'connector:A' }, { id: 's2', actor: 'oauth:Z' }] };
+  const sessions = {
+    list: () => [
+      { id: 's1', actor: 'connector:A' },
+      { id: 's2', actor: 'oauth:Z' },
+    ],
+  };
   const context = { ...fx, sessions };
   const body = { scope: 'session', actors: ['connector:A'], capabilities: ['files.search'] };
   assert.equal(
@@ -204,19 +215,29 @@ test('command matcher mode expands commands and uses wildcard for other capabili
 });
 
 test('deny effect may target critical matchers and missing permission store is tolerated', async () => {
-  const denied = await call('POST', '/api/permissions/bulk', {}, {
-    ...base,
-    effect: 'deny',
-    capabilities: ['commands.run'],
-    matcher: 'git:reset',
-  });
+  const denied = await call(
+    'POST',
+    '/api/permissions/bulk',
+    {},
+    {
+      ...base,
+      effect: 'deny',
+      capabilities: ['commands.run'],
+      matcher: 'git:reset',
+    },
+  );
   assert.equal(denied.status, 201);
   assert.equal(denied.value.rules[0].matcher, 'git:reset');
-  const critical = await call('POST', '/api/permissions/bulk', {}, {
-    ...base,
-    capabilities: ['commands.run'],
-    commandMatchers: ['security:disable'],
-  });
+  const critical = await call(
+    'POST',
+    '/api/permissions/bulk',
+    {},
+    {
+      ...base,
+      capabilities: ['commands.run'],
+      commandMatchers: ['security:disable'],
+    },
+  );
   assert.equal(critical.value.error.code, 'CRITICAL_RULE_FORBIDDEN');
 });
 
@@ -233,11 +254,10 @@ test('thrown store errors keep their status and code, strings are stringified', 
     },
     { ...base, capabilities: ['files.read'] },
   );
-  assert.deepEqual([coded.status, coded.value.error.code, coded.value.error.message], [
-    423,
-    'LOCKED',
-    'store locked',
-  ]);
+  assert.deepEqual(
+    [coded.status, coded.value.error.code, coded.value.error.message],
+    [423, 'LOCKED', 'store locked'],
+  );
   const plain = await call(
     'POST',
     '/api/permissions/bulk',
@@ -250,11 +270,10 @@ test('thrown store errors keep their status and code, strings are stringified', 
     },
     { ...base, capabilities: ['files.read'] },
   );
-  assert.deepEqual([plain.status, plain.value.error.code, plain.value.error.message], [
-    400,
-    'ADMIN_BULK_FAILED',
-    'plain failure',
-  ]);
+  assert.deepEqual(
+    [plain.status, plain.value.error.code, plain.value.error.message],
+    [400, 'ADMIN_BULK_FAILED', 'plain failure'],
+  );
 });
 
 test('safe mode blocks audit clearing and session revocation too', async () => {
@@ -298,9 +317,16 @@ test('optional services default to empty results', async () => {
 
 test('revoke-others treats sessions with missing actors as revocable', async () => {
   const revoked: string[] = [];
-  const result = await call('POST', '/api/sessions/revoke-others', {
-    sessions: { list: () => [{ id: 'anon' }, { id: 'c', actor: 'connector:X' }] },
-  }, undefined, undefined, 'admin-1');
+  const result = await call(
+    'POST',
+    '/api/sessions/revoke-others',
+    {
+      sessions: { list: () => [{ id: 'anon' }, { id: 'c', actor: 'connector:X' }] },
+    },
+    undefined,
+    undefined,
+    'admin-1',
+  );
   assert.equal(result.value.revokedRemote, 1);
   assert.equal(result.value.preservedConnectors, 1);
   const withRevoke = await call('POST', '/api/sessions/revoke-others', {

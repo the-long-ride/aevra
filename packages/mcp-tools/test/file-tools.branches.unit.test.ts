@@ -7,7 +7,9 @@ function fixture(o: any = {}) {
   const requests: any[] = [];
   const reads: any[] = [];
   const lease = { workspaceId: 'w1', capabilities: o.capabilities ?? [] };
-  const op = (kind: string) => async (...args: any[]) => (calls.push([kind, ...args]), { kind });
+  const op =
+    (kind: string) =>
+    async (...args: any[]) => (calls.push([kind, ...args]), { kind });
   const context: any = {
     sessions: {
       get: () => ({ id: 's1', actor: 'oauth:ChatGPT', subject: 'subject' }),

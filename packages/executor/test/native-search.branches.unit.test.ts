@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -86,7 +86,7 @@ test('rg JSON output: malformed, non-match, duplicate, missing and out-of-range 
       match('alpha.ts'),
       match('./alpha.ts', 1),
       match('./alpha.ts', 1),
-      match(path.join(env.root, 'alpha.ts'), 2),
+      match(realpathSync(path.join(env.root, 'alpha.ts')), 2),
       match('ghost.ts', 1),
       match('', 1),
       match('alpha.ts', 9),
@@ -147,7 +147,10 @@ test('rg files mode filters listed paths by the query value', async () => {
   try {
     env.usePath(`${env.bin}${path.delimiter}${process.env.PATH}`);
     fakeTool(env.bin, 'rg', 'alpha.ts\n\nnotes.md\nmissing.md\n', 0);
-    const { results } = await nativeMultiSearch([{ value: '.md', mode: 'files', path: '/' }], env.roots);
+    const { results } = await nativeMultiSearch(
+      [{ value: '.md', mode: 'files', path: '/' }],
+      env.roots,
+    );
     assert.equal(results[0]!.backend, 'rg');
     assert.deepEqual(results[0]!.hits, [{ path: '/notes.md' }]);
   } finally {
@@ -155,37 +158,52 @@ test('rg files mode filters listed paths by the query value', async () => {
   }
 });
 
-test('PowerShell backend parses tab-separated matches when rg is absent', { skip: !WIN }, async () => {
-  const env = setup();
-  try {
-    env.usePath(env.bin);
-    fakeTool(env.bin, 'pwsh', `${path.join(env.root, 'alpha.ts')}\t2\r\nno-line-number\r\n`, 0);
-    let { results } = await nativeMultiSearch(
-      [
-        { value: 'beta', mode: 'text', path: '/' },
-        { value: 'b.ta', mode: 'regex', path: '/' },
-      ],
-      env.roots,
-    );
-    for (const result of results) {
-      assert.equal(result.backend, 'powershell');
-      assert.deepEqual(result.hits, [{ path: '/alpha.ts', line: 2, text: 'const beta = 2;' }]);
-    }
+test(
+  'PowerShell backend parses tab-separated matches when rg is absent',
+  { skip: !WIN },
+  async () => {
+    const env = setup();
+    try {
+      env.usePath(env.bin);
+      fakeTool(env.bin, 'pwsh', `${path.join(env.root, 'alpha.ts')}\t2\r\nno-line-number\r\n`, 0);
+      let { results } = await nativeMultiSearch(
+        [
+          { value: 'beta', mode: 'text', path: '/' },
+          { value: 'b.ta', mode: 'regex', path: '/' },
+        ],
+        env.roots,
+      );
+      for (const result of results) {
+        assert.equal(result.backend, 'powershell');
+        assert.deepEqual(result.hits, [{ path: '/alpha.ts', line: 2, text: 'const beta = 2;' }]);
+      }
 
-    fakeTool(env.bin, 'pwsh', `${path.join(env.root, 'notes.md')}\r\n${path.join(env.root, 'alpha.ts')}\r\n`, 0);
-    ({ results } = await nativeMultiSearch([{ value: 'notes', mode: 'files', path: '/' }], env.roots));
-    assert.deepEqual(results[0]!.hits, [{ path: '/notes.md' }]);
-  } finally {
-    env.cleanup();
-  }
-});
+      fakeTool(
+        env.bin,
+        'pwsh',
+        `${path.join(env.root, 'notes.md')}\r\n${path.join(env.root, 'alpha.ts')}\r\n`,
+        0,
+      );
+      ({ results } = await nativeMultiSearch(
+        [{ value: 'notes', mode: 'files', path: '/' }],
+        env.roots,
+      ));
+      assert.deepEqual(results[0]!.hits, [{ path: '/notes.md' }]);
+    } finally {
+      env.cleanup();
+    }
+  },
+);
 
 test('failing or missing PowerShell falls back to the node scan', { skip: !WIN }, async () => {
   const env = setup();
   try {
     env.usePath(env.bin);
     fakeTool(env.bin, 'pwsh', '', 1, 'pwsh failed words');
-    let { results } = await nativeMultiSearch([{ value: 'beta', mode: 'text', path: '/' }], env.roots);
+    let { results } = await nativeMultiSearch(
+      [{ value: 'beta', mode: 'text', path: '/' }],
+      env.roots,
+    );
     assert.equal(results[0]!.backend, 'node');
     assert.deepEqual(
       results[0]!.hits.map((hit) => hit.path),
@@ -193,7 +211,10 @@ test('failing or missing PowerShell falls back to the node scan', { skip: !WIN }
     );
 
     rmSync(path.join(env.bin, 'pwsh.cmd'));
-    ({ results } = await nativeMultiSearch([{ value: 'alpha', mode: 'files', path: '/' }], env.roots));
+    ({ results } = await nativeMultiSearch(
+      [{ value: 'alpha', mode: 'files', path: '/' }],
+      env.roots,
+    ));
     assert.equal(results[0]!.backend, 'node');
     assert.deepEqual(results[0]!.hits, [{ path: '/alpha.ts' }]);
   } finally {

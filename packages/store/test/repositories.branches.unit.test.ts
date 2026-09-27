@@ -75,7 +75,14 @@ test('audit: default class, checkpoints and clearing', () => {
   assert.equal(repo.checkpoint(), undefined);
   assert.equal(repo.clearWithCheckpoint(), 0);
   repo.insert({ id: 'e1', createdAt: 't', eventJson: '{}', previousHash: 'p0', contentHash: 'h1' });
-  repo.insert({ id: 'e2', createdAt: 't', eventJson: '{}', previousHash: 'h1', contentHash: 'h2', class: 'security' });
+  repo.insert({
+    id: 'e2',
+    createdAt: 't',
+    eventJson: '{}',
+    previousHash: 'h1',
+    contentHash: 'h2',
+    class: 'security',
+  });
   assert.deepEqual(
     repo.list().map((r) => r.class),
     ['normal', 'security'],
@@ -96,7 +103,10 @@ test('connectors: bindings, activity and TTL checks', () => {
   const bound = repo.create({ name: 'bound', workspaceId: 'ws-1', profileCap: 'reader' });
   const expired = repo.create({ name: 'old', expiresAt: '2000-01-01T00:00:00.000Z' });
   assert.deepEqual(repo.getBindings(plain.connector.id), { workspaceId: null, profileCap: null });
-  assert.deepEqual(repo.getBindings(bound.connector.id), { workspaceId: 'ws-1', profileCap: 'reader' });
+  assert.deepEqual(repo.getBindings(bound.connector.id), {
+    workspaceId: 'ws-1',
+    profileCap: 'reader',
+  });
   assert.equal(repo.getBindings('con_missing'), null);
   assert.equal(repo.isActive(plain.connector.id), true);
   assert.equal(repo.isActive(expired.connector.id), false);
@@ -123,8 +133,13 @@ test('control plans: mode projection, status updates, finish and digest key vali
   assert.equal(done.cancelled, true);
   assert.deepEqual(done.result, { ok: false });
   // Duplicate plan id with a new request id violates the key and rolls back.
-  assert.throws(() => repo.claim({ ...base, planId: 'p1', requestId: 'r2', mode: 'sharedSemantic' }));
-  assert.equal(repo.claim({ ...base, planId: 'p2', requestId: 'r3', mode: 'sharedSemantic' }).existing, false);
+  assert.throws(() =>
+    repo.claim({ ...base, planId: 'p1', requestId: 'r2', mode: 'sharedSemantic' }),
+  );
+  assert.equal(
+    repo.claim({ ...base, planId: 'p2', requestId: 'r3', mode: 'sharedSemantic' }).existing,
+    false,
+  );
 
   db.raw()
     .prepare('INSERT INTO settings(key,value_json,revision) VALUES(?,?,1)')
@@ -195,7 +210,13 @@ test('permissions: snake_case input, predicate versioning and batch rollback', (
   const db = open();
   const repo = new PermissionRepository(db.raw());
   const base = { effect: 'allow', capability: 'files.read', scope: 'workspace', matcher: '*' };
-  repo.upsert({ ...base, id: 'p1', predicate: { path: 'src' }, workspace_id: 'ws', session_id: 's' });
+  repo.upsert({
+    ...base,
+    id: 'p1',
+    predicate: { path: 'src' },
+    workspace_id: 'ws',
+    session_id: 's',
+  });
   const p1 = repo.get('p1');
   assert.equal(p1.version, 2);
   assert.equal(p1.predicate_json, '{"path":"src"}');
@@ -207,7 +228,12 @@ test('permissions: snake_case input, predicate versioning and batch rollback', (
   assert.equal(p2.predicate_json, null);
   assert.deepEqual([p2.created_at, p2.last_used_at, p2.expires_at], ['c', 'l', 'e']);
   assert.equal(repo.get('missing'), null);
-  assert.throws(() => repo.upsertMany([{ ...base, id: 'p3' }, { ...base, id: 'p4', effect: undefined }]));
+  assert.throws(() =>
+    repo.upsertMany([
+      { ...base, id: 'p3' },
+      { ...base, id: 'p4', effect: undefined },
+    ]),
+  );
   assert.equal(repo.get('p3'), null);
   db.close();
 });
@@ -216,12 +242,16 @@ test('sessions: leases and remembered grants lifecycle', () => {
   const db = open();
   const repo = new SessionRepository(db.raw());
   const raw = db.raw();
-  const valid = (id: string) => (raw.prepare('SELECT valid FROM sessions WHERE id=?').get(id) as any).valid;
+  const valid = (id: string) =>
+    (raw.prepare('SELECT valid FROM sessions WHERE id=?').get(id) as any).valid;
   const lease = (id: string) =>
     (raw.prepare('SELECT valid FROM workspace_leases WHERE id=?').get(id) as any).valid;
   const workspaces = new WorkspaceRepository(raw);
-  const [w1, w2, w3] = ['w1', 'w2', 'w3'].map((name) => workspaces.create({ name, hostRoot: '/tmp/' + name }).id) as [string, string, string];
-  for (const id of ['s1', 's2']) repo.create({ id, actor: 'a', subject: 'sub', createdAt: 't', lastActivityAt: 't' });
+  const [w1, w2, w3] = ['w1', 'w2', 'w3'].map(
+    (name) => workspaces.create({ name, hostRoot: '/tmp/' + name }).id,
+  ) as [string, string, string];
+  for (const id of ['s1', 's2'])
+    repo.create({ id, actor: 'a', subject: 'sub', createdAt: 't', lastActivityAt: 't' });
   const mk = (id: string, sessionId: string, workspaceId: string) =>
     repo.saveLease({ id, sessionId, workspaceId, actor: 'a', capabilities: [], expiresAt: 't' });
   mk('l1', 's1', w1);

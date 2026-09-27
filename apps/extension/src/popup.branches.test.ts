@@ -175,8 +175,7 @@ describe('popup rendering with partial markup', () => {
 describe('pair modal with partial markup', () => {
   it('ignores open and close controls when the modal itself is missing', async () => {
     document.body.innerHTML =
-      CORE +
-      '<button id="open-pair-modal"></button><button id="pair-modal-close"></button>';
+      CORE + '<button id="open-pair-modal"></button><button id="pair-modal-close"></button>';
     const { initPopup } = await import('./popup.js');
     initPopup();
     document.getElementById('open-pair-modal')!.click();

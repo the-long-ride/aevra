@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
-import { AdminBootstrapService, ensureLocalControlSecret, secretEquals } from '../src/admin/bootstrap.js';
+import {
+  AdminBootstrapService,
+  ensureLocalControlSecret,
+  secretEquals,
+} from '../src/admin/bootstrap.js';
 
 function open(ttlMs?: number, sessionTtlMs?: number) {
   const db = AevraDatabase.open(':memory:');

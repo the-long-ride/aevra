@@ -32,7 +32,13 @@ test('background risk tiers', () => {
 
 test('release window defaults ids and audits success and sanitized failure', async () => {
   const f = fixture();
-  const ok: any = await handleBackgroundAction(f.context, 's1', 'desktop_release_window', {}, 'LOW');
+  const ok: any = await handleBackgroundAction(
+    f.context,
+    's1',
+    'desktop_release_window',
+    {},
+    'LOW',
+  );
   assert.equal(ok.done, true);
   assert.equal(ok.untrusted, true);
   assert.deepEqual(f.ops[0], { kind: 'desktop.releaseWindow', windowId: '', windowLeaseId: '' });
@@ -48,7 +54,13 @@ test('release window defaults ids and audits success and sanitized failure', asy
   });
   await assert.rejects(
     () =>
-      handleBackgroundAction(failing.context, 's1', 'desktop_release_window', { windowId: 'w1' }, 'LOW'),
+      handleBackgroundAction(
+        failing.context,
+        's1',
+        'desktop_release_window',
+        { windowId: 'w1' },
+        'LOW',
+      ),
     (e: any) => e.code === 'DESKTOP_UNAVAILABLE' && e.details.window.executablePath === 'x.exe',
   );
   assert.equal(failing.audits[0].result, 'FAILED');
@@ -82,10 +94,20 @@ test('actions with missing arguments send empty identifiers and a plain result',
 
 test('setValue without a value sends empty text and counts zero characters', async () => {
   const f = fixture({
-    value: { window: { windowId: 'w1', processName: 'app.exe', title: 'App' }, gateVerdict: 'allow', gateRule: 'r' },
+    value: {
+      window: { windowId: 'w1', processName: 'app.exe', title: 'App' },
+      gateVerdict: 'allow',
+      gateRule: 'r',
+    },
   });
   const args: any = { windowId: 'w1', ref: 'e1' };
-  const result: any = await handleBackgroundAction(f.context, 's1', 'desktop_set_value', args, 'HIGH');
+  const result: any = await handleBackgroundAction(
+    f.context,
+    's1',
+    'desktop_set_value',
+    args,
+    'HIGH',
+  );
   assert.equal(result.window.processName, 'app.exe');
   assert.equal(f.ops[0].action.value, '');
   assert.equal(f.audits[0].target, 'w1:e1 (0 chars)');
@@ -99,7 +121,11 @@ test('setValue mints a nonce once and failures audit the refused window', async 
     fail: {
       code: 'DESKTOP_INPUT_REFUSED',
       message: 'refused',
-      details: { window: { windowId: 'w1', processName: 'app.exe' }, gateVerdict: 'deny', gateRule: 'rule' },
+      details: {
+        window: { windowId: 'w1', processName: 'app.exe' },
+        gateVerdict: 'deny',
+        gateRule: 'rule',
+      },
     },
   });
   const args: any = { windowId: 'w1', ref: 'e1', value: 'hello' };

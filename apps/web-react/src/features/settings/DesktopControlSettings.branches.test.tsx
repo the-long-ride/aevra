@@ -151,7 +151,12 @@ describe('DesktopControlSettings exact grants', () => {
         createdAt: 'now',
         sessionId: 'sess',
       },
-      { id: 'g-persist', displayName: 'Kept App', executablePath: 'C:\\A\\k.exe', createdAt: 'now' },
+      {
+        id: 'g-persist',
+        displayName: 'Kept App',
+        executablePath: 'C:\\A\\k.exe',
+        createdAt: 'now',
+      },
     ];
   });
 

@@ -15,8 +15,10 @@ export function resolveExecutable(executable: string, env: NodeJS.ProcessEnv = p
   if (executable.includes('/') || executable.includes('\\')) return executable;
   if (process.platform !== 'win32') return executable;
   if (path.extname(executable)) return executable;
-  const extensions = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
-  for (const directory of (env.PATH ?? '').split(delimiter).filter(Boolean)) {
+  const windowsValue = (name: string) =>
+    Object.entries(env).find(([key]) => key.toUpperCase() === name)?.[1];
+  const extensions = (windowsValue('PATHEXT') ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
+  for (const directory of (windowsValue('PATH') ?? '').split(delimiter).filter(Boolean)) {
     for (const extension of extensions) {
       const candidate = path.join(directory, `${executable}${extension}`);
       if (existsSync(candidate)) return candidate;

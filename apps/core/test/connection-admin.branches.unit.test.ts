@@ -23,37 +23,80 @@ function controlAccess(grants: any[] = []) {
     calls,
     list: () => grants,
     grant: (identity: unknown, capability: string, actor: string) => (
-      calls.push(['grant', identity, capability, actor]), { ok: true }
+      calls.push(['grant', identity, capability, actor]),
+      { ok: true }
     ),
-    revoke: async (identity: unknown, capability: string) => (calls.push(['revoke', identity, capability]), true),
+    revoke: async (identity: unknown, capability: string) => (
+      calls.push(['revoke', identity, capability]),
+      true
+    ),
   } as any;
 }
 
-function service(repo: any, sessions: any[] = [], grantHandler?: any, onRevoke?: (id: string) => void) {
-  return new ConnectionAdminService(repo, { list: () => sessions }, 3600, () => NOW, grantHandler, onRevoke);
+function service(
+  repo: any,
+  sessions: any[] = [],
+  grantHandler?: any,
+  onRevoke?: (id: string) => void,
+) {
+  return new ConnectionAdminService(
+    repo,
+    { list: () => sessions },
+    3600,
+    () => NOW,
+    grantHandler,
+    onRevoke,
+  );
 }
 
-const active = { subject: 'conn-1', actor: 'oauth:Claude', status: 'ACTIVE', lastUsedAt: '2026-05-01T00:00:00.000Z' };
+const active = {
+  subject: 'conn-1',
+  actor: 'oauth:Claude',
+  status: 'ACTIVE',
+  lastUsedAt: '2026-05-01T00:00:00.000Z',
+};
 
 test('control listing requires a known connection and ignores revoked grants', () => {
   const admin = service(oauthRepo({ 'conn-1': active }));
-  assert.throws(() => admin.listControl('missing'), (error: any) => error.code === 'NOT_FOUND');
-  assert.deepEqual(admin.listControl('conn-1'), { connectionId: 'conn-1', browser: false, desktop: false });
+  assert.throws(
+    () => admin.listControl('missing'),
+    (error: any) => error.code === 'NOT_FOUND',
+  );
+  assert.deepEqual(admin.listControl('conn-1'), {
+    connectionId: 'conn-1',
+    browser: false,
+    desktop: false,
+  });
   admin.setControlAccess(
     controlAccess([
       { capability: 'browser.control' },
       { capability: 'desktop.control', revokedAt: '2026-05-02T00:00:00.000Z' },
     ]),
   );
-  assert.deepEqual(admin.listControl('conn-1'), { connectionId: 'conn-1', browser: true, desktop: false });
+  assert.deepEqual(admin.listControl('conn-1'), {
+    connectionId: 'conn-1',
+    browser: true,
+    desktop: false,
+  });
 });
 
 test('control grants require an active connection and configured access', async () => {
-  const admin = service(oauthRepo({ 'conn-1': active, 'conn-2': { ...active, subject: 'conn-2', status: 'REVOKED' } }));
-  assert.throws(() => admin.grantControl('missing', 'browser.control'), /Active connection not found/);
-  assert.throws(() => admin.grantControl('conn-2', 'browser.control'), /Active connection not found/);
+  const admin = service(
+    oauthRepo({ 'conn-1': active, 'conn-2': { ...active, subject: 'conn-2', status: 'REVOKED' } }),
+  );
+  assert.throws(
+    () => admin.grantControl('missing', 'browser.control'),
+    /Active connection not found/,
+  );
+  assert.throws(
+    () => admin.grantControl('conn-2', 'browser.control'),
+    /Active connection not found/,
+  );
   assert.throws(() => admin.grantControl('conn-1', 'browser.control'), /not configured/);
-  await assert.rejects(() => admin.revokeControl('missing', 'desktop.control'), /Connection not found/);
+  await assert.rejects(
+    () => admin.revokeControl('missing', 'desktop.control'),
+    /Connection not found/,
+  );
   assert.equal(await admin.revokeControl('conn-1', 'desktop.control'), false);
   const access = controlAccess();
   admin.setControlAccess(access);
@@ -71,7 +114,11 @@ test('workspace grants need a handler and accept boolean or object removal resul
   assert.equal(admin.revokeWorkspace('c', 'w'), false);
   const granted: any[] = [];
   let removal: any = true;
-  admin.setGrantHandler({ grant: (input) => granted.push(input), remove: () => removal, list: () => [] });
+  admin.setGrantHandler({
+    grant: (input) => granted.push(input),
+    remove: () => removal,
+    list: () => [],
+  });
   admin.grantWorkspace('c', 'w');
   assert.deepEqual(granted, [{ connectionId: 'c', workspaceId: 'w', profileId: 'read-only' }]);
   assert.equal(admin.revokeWorkspace('c', 'w'), true);
@@ -89,12 +136,15 @@ test('list projects offline, grace and revoked states without sessions', () => {
     d: { ...active, subject: 'd', status: 'REVOKED', yoloEnabled: 1 },
   });
   const rows = service(repo).list();
-  assert.deepEqual(rows.map((row) => [row.id, row.status]), [
-    ['a', 'OFFLINE'],
-    ['b', 'GRACE'],
-    ['c', 'OFFLINE'],
-    ['d', 'REVOKED'],
-  ]);
+  assert.deepEqual(
+    rows.map((row) => [row.id, row.status]),
+    [
+      ['a', 'OFFLINE'],
+      ['b', 'GRACE'],
+      ['c', 'OFFLINE'],
+      ['d', 'REVOKED'],
+    ],
+  );
   const offline = rows[0]!;
   assert.equal(offline.lastActivityAt, active.lastUsedAt);
   assert.equal(offline.remoteIp, null);
@@ -114,12 +164,30 @@ test('list merges matching sessions, leases, origins, grants and refresh family'
     },
   );
   const sessions = [
-    { id: 's1', connectionId: 'conn-1', createdAt: '2026-05-10T00:00:00.000Z', leases: [{ workspaceId: 'w1', capabilities: ['files.read'] }, null] },
-    { id: 's2', actor: 'oauth:Claude', subject: 'conn-1', lastActivityAt: '2026-05-20T00:00:00.000Z', lease: { workspaceId: 'w2', capabilities: ['files.read', 'git.read'] } },
+    {
+      id: 's1',
+      connectionId: 'conn-1',
+      createdAt: '2026-05-10T00:00:00.000Z',
+      leases: [{ workspaceId: 'w1', capabilities: ['files.read'] }, null],
+    },
+    {
+      id: 's2',
+      actor: 'oauth:Claude',
+      subject: 'conn-1',
+      lastActivityAt: '2026-05-20T00:00:00.000Z',
+      lease: { workspaceId: 'w2', capabilities: ['files.read', 'git.read'] },
+    },
     { id: 's3', actor: 'oauth:Claude', subject: 'other' },
     { id: 's4', connectionId: 'conn-1' },
   ];
-  const grants = { grant: () => undefined, remove: () => true, list: () => [{ workspaceId: 'w3', profileId: 'developer' }, { workspaceId: 'w1', profileId: 'x' }] };
+  const grants = {
+    grant: () => undefined,
+    remove: () => true,
+    list: () => [
+      { workspaceId: 'w3', profileId: 'developer' },
+      { workspaceId: 'w1', profileId: 'x' },
+    ],
+  };
   const [row] = service(repo, sessions, grants).list();
   assert.equal(row!.status, 'CONNECTED');
   assert.equal(row!.sessionCount, 3);
@@ -143,7 +211,10 @@ test('list falls back to the primary session address and flags expired families'
   assert.equal(row!.remoteIp, '10.0.0.5');
   assert.equal(row!.sessionId, '7');
   assert.equal(row!.renewable, false);
-  const spent = oauthRepo({ 'conn-1': active }, { getLatestRefreshFamily: () => ({ status: 'SPENT', expiresAt: '2027-01-01T00:00:00.000Z' }) });
+  const spent = oauthRepo(
+    { 'conn-1': active },
+    { getLatestRefreshFamily: () => ({ status: 'SPENT', expiresAt: '2027-01-01T00:00:00.000Z' }) },
+  );
   assert.equal(service(spent).list()[0]!.renewable, false);
 });
 

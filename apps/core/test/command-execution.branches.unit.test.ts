@@ -12,7 +12,12 @@ function harness(worker?: (input: any) => Promise<unknown>) {
   const subject = new CommandExecution(
     sessions as any,
     { capabilityRoots: (ws: string) => [{ id: `root-${ws}` }] } as any,
-    { execute: (input: any) => (calls.push(input), worker ? worker(input) : Promise.resolve({ ok: true, value: 'done' })) } as any,
+    {
+      execute: (input: any) => (
+        calls.push(input),
+        worker ? worker(input) : Promise.resolve({ ok: true, value: 'done' })
+      ),
+    } as any,
     new WorkspaceLockCoordinator(),
     () => ({ effect: 'READ_ONLY', outputKeys: [] }),
   );
@@ -23,9 +28,18 @@ const cmd = { executable: 'git', args: ['status'] };
 
 test('run reports missing leases for explicit and implicit workspaces', async () => {
   const { subject } = harness();
-  await assert.rejects(() => subject.run('s', 'ws-unknown', cmd), (e: any) => e.code === 'WORKSPACE_ACCESS_REQUIRED');
-  await assert.rejects(() => subject.run('no-lease', cmd), (e: any) => e.code === 'SESSION_WORKSPACE_REQUIRED');
-  await assert.rejects(() => subject.run('s', { ...cmd, workspaceId: 'ws-unknown' } as any), (e: any) => e.code === 'WORKSPACE_ACCESS_REQUIRED');
+  await assert.rejects(
+    () => subject.run('s', 'ws-unknown', cmd),
+    (e: any) => e.code === 'WORKSPACE_ACCESS_REQUIRED',
+  );
+  await assert.rejects(
+    () => subject.run('no-lease', cmd),
+    (e: any) => e.code === 'SESSION_WORKSPACE_REQUIRED',
+  );
+  await assert.rejects(
+    () => subject.run('s', { ...cmd, workspaceId: 'ws-unknown' } as any),
+    (e: any) => e.code === 'WORKSPACE_ACCESS_REQUIRED',
+  );
 });
 
 test('run fills defaults and resolves execution mode from settings', async () => {
@@ -63,7 +77,10 @@ test('drain waits for in-flight runs, returns fast when idle, and times out', as
   const first = subject.run('s', cmd);
   const second = subject.run('s', cmd);
   while (resolvers.length < 2) await new Promise((r) => setTimeout(r, 5));
-  await assert.rejects(() => subject.drain('s', 5), (e: any) => e.code === 'WORKSPACE_SWITCH_TIMEOUT');
+  await assert.rejects(
+    () => subject.drain('s', 5),
+    (e: any) => e.code === 'WORKSPACE_SWITCH_TIMEOUT',
+  );
   const drained = subject.drain('s', 5_000);
   for (const resolve of resolvers) resolve('late');
   await drained;

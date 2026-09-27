@@ -167,6 +167,8 @@ describe('RemoteAccessSettings branches', () => {
     fireEvent.change(input, { target: { value: 'https://ui.example.com' } });
     fireEvent.click(add);
     expect(input.value).toBe('');
-    expect(screen.getByRole('button', { name: /View all trusted origins \(1\)/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /View all trusted origins \(1\)/ }),
+    ).toBeInTheDocument();
   });
 });

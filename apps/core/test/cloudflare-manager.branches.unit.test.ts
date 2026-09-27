@@ -61,7 +61,8 @@ test('normalizePublicHostname rejects malformed URLs, fragments, bad labels, and
     ['https://127.0.0.1', /public DNS hostname/],
     ['::1', /hostname-only https URL/],
   ];
-  for (const [input, pattern] of cases) assert.throws(() => normalizePublicHostname(input), pattern, input);
+  for (const [input, pattern] of cases)
+    assert.throws(() => normalizePublicHostname(input), pattern, input);
   assert.throws(() => normalizePublicHostname(undefined as any), /required/);
   assert.equal(normalizePublicHostname('MCP.Example.com.'), 'mcp.example.com');
 });
@@ -118,7 +119,10 @@ test('authenticationStatus handles missing binary, thrown errors, and empty fail
 
 test('setup refuses when cloudflared is missing', async () => {
   const h = harness({ version: async () => ({ found: false }) });
-  await assert.rejects(() => h.manager.setup({ hostname: 'mcp.example.com' }), /cloudflared not found/);
+  await assert.rejects(
+    () => h.manager.setup({ hostname: 'mcp.example.com' }),
+    /cloudflared not found/,
+  );
   assert.deepEqual(h.calls, []);
   h.db.close();
 });
@@ -140,7 +144,10 @@ test('setup creates a tunnel when none is given and reuses stored Access verifie
     issuer: 'https://team.example.com',
     audience: 'stored-aud',
   });
-  assert.deepEqual(h.calls, [['create', 'aevra'], ['route', TUNNEL, 'mcp.example.com']]);
+  assert.deepEqual(h.calls, [
+    ['create', 'aevra'],
+    ['route', TUNNEL, 'mcp.example.com'],
+  ]);
   assert.equal(h.settings.get('cloudflare.ownership', ''), 'external');
   assert.equal(h.settings.get('cloudflare.audience', ''), 'stored-aud');
   h.db.close();
@@ -165,7 +172,9 @@ test('setup infers auth mode from existing config and input verifier values', as
 });
 
 test('setup surfaces tunnel creation and DNS route failures but tolerates existing routes', async () => {
-  const failCreate = harness({ createTunnel: async () => ({ code: 1, stdout: '', stderr: 'quota' }) });
+  const failCreate = harness({
+    createTunnel: async () => ({ code: 1, stdout: '', stderr: 'quota' }),
+  });
   await assert.rejects(
     () => failCreate.manager.setup({ hostname: 'mcp.example.com', authMode: 'connector' }),
     /tunnel create failed: quota/,
@@ -180,11 +189,16 @@ test('setup surfaces tunnel creation and DNS route failures but tolerates existi
 
   const route = harness({ routeDns: async () => ({ code: 1, stdout: '', stderr: 'denied' }) });
   await assert.rejects(
-    () => route.manager.setup({ hostname: 'mcp.example.com', tunnelId: 'tid', authMode: 'connector' }),
+    () =>
+      route.manager.setup({ hostname: 'mcp.example.com', tunnelId: 'tid', authMode: 'connector' }),
     /DNS route failed: denied/,
   );
   route.cli.routeDns = async () => ({ code: 1, stdout: '', stderr: 'record Already Exists' });
-  const ok = await route.manager.setup({ hostname: 'mcp.example.com', tunnelId: 'tid', authMode: 'connector' });
+  const ok = await route.manager.setup({
+    hostname: 'mcp.example.com',
+    tunnelId: 'tid',
+    authMode: 'connector',
+  });
   assert.equal(ok.tunnelId, 'tid');
   route.db.close();
 });
@@ -204,7 +218,9 @@ test('start validates the gateway origin and returns the public URL when configu
   assert.deepEqual(await h.manager.start('http://127.0.0.1:9000/'), {});
   await h.manager.stop();
   h.settings.set('cloudflare.config', { tunnelId: TUNNEL, hostname: 'mcp.example.com' });
-  assert.deepEqual(await h.manager.start('https://[::1]:9443'), { publicUrl: 'https://mcp.example.com' });
+  assert.deepEqual(await h.manager.start('https://[::1]:9443'), {
+    publicUrl: 'https://mcp.example.com',
+  });
   assert.deepEqual(origins, ['http://127.0.0.1:9000', 'https://[::1]:9443']);
   await h.manager.stop();
   h.db.close();

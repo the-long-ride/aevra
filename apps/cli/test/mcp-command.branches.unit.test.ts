@@ -42,10 +42,38 @@ const mcp = (fields: Record<string, unknown>) => ({ command: 'mcp', ...fields })
 
 test('mcp add builds stdio bodies with and without env and http bodies without auth', async () => {
   const h = harness(() => reply({ id: 'u1', name: 'local', toolCount: 2 }));
-  await runMcpCommand({}, mcp({ action: 'add', name: 'local', transport: 'stdio', executable: 'node', env: { SAMPLE: 'words' } }), h.deps);
-  await runMcpCommand({}, mcp({ action: 'add', name: 'bare', transport: 'stdio', executable: 'node', args: ['x'] }), h.deps);
-  await runMcpCommand({}, mcp({ action: 'add', name: 'web', transport: 'http', url: 'https://mcp.example.test/mcp', secretRef: 'ref-1' }), h.deps);
-  await runMcpCommand({}, mcp({ action: 'add', name: 'open', transport: 'http', url: 'https://open.example.test/mcp' }), h.deps);
+  await runMcpCommand(
+    {},
+    mcp({
+      action: 'add',
+      name: 'local',
+      transport: 'stdio',
+      executable: 'node',
+      env: { SAMPLE: 'words' },
+    }),
+    h.deps,
+  );
+  await runMcpCommand(
+    {},
+    mcp({ action: 'add', name: 'bare', transport: 'stdio', executable: 'node', args: ['x'] }),
+    h.deps,
+  );
+  await runMcpCommand(
+    {},
+    mcp({
+      action: 'add',
+      name: 'web',
+      transport: 'http',
+      url: 'https://mcp.example.test/mcp',
+      secretRef: 'ref-1',
+    }),
+    h.deps,
+  );
+  await runMcpCommand(
+    {},
+    mcp({ action: 'add', name: 'open', transport: 'http', url: 'https://open.example.test/mcp' }),
+    h.deps,
+  );
   const bodies = h.calls.map((call) => JSON.parse(call.init.body));
   assert.deepEqual(bodies[0], {
     name: 'local',
@@ -58,12 +86,18 @@ test('mcp add builds stdio bodies with and without env and http bodies without a
   assert.equal('auth' in bodies[1], false);
   assert.deepEqual(bodies[2].auth, { header: 'Authorization', secretRefId: 'ref-1' });
   assert.equal('auth' in bodies[3], false);
-  assert.deepEqual(h.logs.slice(0, 2), ['[aevra] Registered local (u1)', '[aevra] 2 tools published as local__<tool>']);
+  assert.deepEqual(h.logs.slice(0, 2), [
+    '[aevra] Registered local (u1)',
+    '[aevra] 2 tools published as local__<tool>',
+  ]);
 });
 
 test('mcp failures use the error message, the status, or a connectivity hint', async () => {
   let h = harness(() => reply({ error: { message: 'duplicate name' } }, false, 409));
-  assert.equal(await runMcpCommand({}, mcp({ action: 'add', name: 'x', transport: 'http', url: 'u' }), h.deps), 1);
+  assert.equal(
+    await runMcpCommand({}, mcp({ action: 'add', name: 'x', transport: 'http', url: 'u' }), h.deps),
+    1,
+  );
   assert.equal(h.errors[0], '[aevra] mcp failed: duplicate name');
 
   h = harness(() => reply({}, false, 404));
@@ -116,7 +150,10 @@ test('sessions list formats client, actor and default labels', async () => {
       { id: 's3' },
     ]),
   );
-  assert.equal(await runMaintenanceCommand({}, maint({ command: 'sessions', action: 'list' }), h.deps), 0);
+  assert.equal(
+    await runMaintenanceCommand({}, maint({ command: 'sessions', action: 'list' }), h.deps),
+    0,
+  );
   assert.deepEqual(h.logs, ['s1  Claude  last active today', 's2  admin', 's3  session']);
 
   h = harness(() => reply([]));
@@ -126,7 +163,14 @@ test('sessions list formats client, actor and default labels', async () => {
 
 test('sessions revoke and maintenance failures name the failed action', async () => {
   let h = harness(() => reply());
-  assert.equal(await runMaintenanceCommand({}, maint({ command: 'sessions', action: 'revoke', id: 'a/b' }), h.deps), 0);
+  assert.equal(
+    await runMaintenanceCommand(
+      {},
+      maint({ command: 'sessions', action: 'revoke', id: 'a/b' }),
+      h.deps,
+    ),
+    0,
+  );
   assert.equal(h.calls[0]!.path, '/api/sessions/a%2Fb/revoke');
   assert.deepEqual(h.logs, ['[aevra] Revoked session a/b']);
 
@@ -139,11 +183,21 @@ test('sessions revoke and maintenance failures name the failed action', async ()
   for (const [command, label] of cases) {
     h = harness(() => reply({}, false, 500));
     assert.equal(await runMaintenanceCommand({}, maint(command), h.deps), 1);
-    assert.equal(h.errors[0], `[aevra] ${label} failed: Core returned 500. Is aevra start/service running?`);
+    assert.equal(
+      h.errors[0],
+      `[aevra] ${label} failed: Core returned 500. Is aevra start/service running?`,
+    );
   }
 
   h = harness(() => reply());
-  assert.equal(await runMaintenanceCommand({}, maint({ command: 'sessions', action: 'revoke-others', yes: false }), h.deps), 1);
+  assert.equal(
+    await runMaintenanceCommand(
+      {},
+      maint({ command: 'sessions', action: 'revoke-others', yes: false }),
+      h.deps,
+    ),
+    1,
+  );
   assert.match(h.errors[0]!, /revoke-others removes/);
 });
 
@@ -152,8 +206,15 @@ test('maintenance success paths default missing counters to zero', async () => {
   await runMaintenanceCommand({}, maint({ command: 'audit', action: 'clear', yes: true }), h.deps);
   assert.deepEqual(h.logs, ['[aevra] Cleared 0 audit event(s).']);
   h = harness(() => reply({}));
-  await runMaintenanceCommand({}, maint({ command: 'sessions', action: 'revoke-others', yes: true }), h.deps);
-  assert.match(h.logs[0]!, /Revoked 0 remote and 0 admin session\(s\); preserved 0 connector and 0 current/);
+  await runMaintenanceCommand(
+    {},
+    maint({ command: 'sessions', action: 'revoke-others', yes: true }),
+    h.deps,
+  );
+  assert.match(
+    h.logs[0]!,
+    /Revoked 0 remote and 0 admin session\(s\); preserved 0 connector and 0 current/,
+  );
 });
 
 const conn = (fields: Record<string, unknown>) => ({ command: 'connectors', ...fields }) as any;
@@ -170,14 +231,31 @@ test('connectors list, create and revoke cover endpoint discovery outcomes', asy
 
   const created = { id: 'c9', name: 'new', token: 'sample-words' };
   const endpoints: Array<[() => Reply, string]> = [
-    [() => reply({ publicUrl: 'https://edge.example.test//' }), '[aevra] URL: https://edge.example.test/mcp'],
-    [() => reply({ publicUrl: 5 }), '[aevra] URL: configure Remote Access to get a reachable endpoint (aevra setup)'],
-    [() => reply({}, false, 503), '[aevra] URL: configure Remote Access to get a reachable endpoint (aevra setup)'],
-    [() => { throw new Error('offline'); }, '[aevra] URL: configure Remote Access to get a reachable endpoint (aevra setup)'],
+    [
+      () => reply({ publicUrl: 'https://edge.example.test//' }),
+      '[aevra] URL: https://edge.example.test/mcp',
+    ],
+    [
+      () => reply({ publicUrl: 5 }),
+      '[aevra] URL: configure Remote Access to get a reachable endpoint (aevra setup)',
+    ],
+    [
+      () => reply({}, false, 503),
+      '[aevra] URL: configure Remote Access to get a reachable endpoint (aevra setup)',
+    ],
+    [
+      () => {
+        throw new Error('offline');
+      },
+      '[aevra] URL: configure Remote Access to get a reachable endpoint (aevra setup)',
+    ],
   ];
   for (const [exposure, expected] of endpoints) {
     h = harness((path) => (path === '/api/exposure/status' ? exposure() : reply(created)));
-    assert.equal(await runConnectorsCommand({}, conn({ action: 'create', name: 'new' }), h.deps), 0);
+    assert.equal(
+      await runConnectorsCommand({}, conn({ action: 'create', name: 'new' }), h.deps),
+      0,
+    );
     assert.equal(h.logs[1], expected);
   }
 

@@ -3,7 +3,12 @@ import { Readable } from 'node:stream';
 import test from 'node:test';
 import { handleOAuthRoute } from '../src/mcp/oauth-routes.js';
 
-function request(method: string | undefined, raw = '', headers: Record<string, string> = {}, ip = '10.1.1.1') {
+function request(
+  method: string | undefined,
+  raw = '',
+  headers: Record<string, string> = {},
+  ip = '10.1.1.1',
+) {
   const stream = Readable.from(raw ? [Buffer.from(raw)] : []) as any;
   stream.method = method;
   stream.headers = headers;
@@ -78,13 +83,27 @@ test('metadata routes default to GET when the method is missing', async () => {
 });
 
 test('registration failures report invalid_client_metadata for errors and plain values', async () => {
-  const errorResult = await call({ registerClient: thrower(new Error('bad uri')) }, '/oauth/register', 'POST', '{}', {}, '10.2.0.1');
+  const errorResult = await call(
+    { registerClient: thrower(new Error('bad uri')) },
+    '/oauth/register',
+    'POST',
+    '{}',
+    {},
+    '10.2.0.1',
+  );
   assert.equal(errorResult.res.statusCode, 400);
   assert.deepEqual(JSON.parse(errorResult.res.body), {
     error: 'invalid_client_metadata',
     error_description: 'bad uri',
   });
-  const plain = await call({ registerClient: thrower('nope') }, '/oauth/register', 'POST', '', {}, '10.2.0.2');
+  const plain = await call(
+    { registerClient: thrower('nope') },
+    '/oauth/register',
+    'POST',
+    '',
+    {},
+    '10.2.0.2',
+  );
   assert.equal(JSON.parse(plain.res.body).error_description, 'nope');
 });
 
@@ -168,13 +187,32 @@ test('token endpoint fills missing form fields with defaults for both grants', a
   };
   const code = await call(oauth, '/oauth/token', 'POST', 'grant_type=authorization_code');
   assert.equal(code.res.statusCode, 200);
-  const refresh = await call(oauth, '/oauth/token', 'POST', JSON.stringify({ grant_type: 'refresh_token', scope: null }), {
-    'content-type': 'application/json',
-  });
+  const refresh = await call(
+    oauth,
+    '/oauth/token',
+    'POST',
+    JSON.stringify({ grant_type: 'refresh_token', scope: null }),
+    {
+      'content-type': 'application/json',
+    },
+  );
   assert.deepEqual(JSON.parse(refresh.res.body), { access_token: 'b' });
   assert.deepEqual(seen, [
-    { grant_type: 'authorization_code', client_id: '', code: '', redirect_uri: '', code_verifier: '', resource: undefined },
-    { grant_type: 'refresh_token', client_id: '', refresh_token: '', resource: undefined, scope: undefined },
+    {
+      grant_type: 'authorization_code',
+      client_id: '',
+      code: '',
+      redirect_uri: '',
+      code_verifier: '',
+      resource: undefined,
+    },
+    {
+      grant_type: 'refresh_token',
+      client_id: '',
+      refresh_token: '',
+      resource: undefined,
+      scope: undefined,
+    },
   ]);
 });
 
@@ -184,7 +222,12 @@ test('token endpoint reports invalid_grant for unsupported grants and thrown val
     error: 'invalid_grant',
     error_description: 'unsupported grant_type',
   });
-  const plain = await call({ exchangeRefreshToken: thrower('spent') }, '/oauth/token', 'POST', 'grant_type=refresh_token');
+  const plain = await call(
+    { exchangeRefreshToken: thrower('spent') },
+    '/oauth/token',
+    'POST',
+    'grant_type=refresh_token',
+  );
   assert.equal(plain.res.statusCode, 400);
   assert.equal(JSON.parse(plain.res.body).error_description, 'spent');
 });

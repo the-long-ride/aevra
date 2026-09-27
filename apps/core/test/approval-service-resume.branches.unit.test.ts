@@ -43,8 +43,14 @@ const never = async () => {
 
 test('resume rejects expired, denied, and pending tickets with typed codes', async () => {
   const { db, repo, svc } = make();
-  await assert.rejects(() => svc.resume(seed(repo, 'EXPIRED'), ok, never), (e: any) => e.code === 'APPROVAL_TIMEOUT');
-  await assert.rejects(() => svc.resume(seed(repo, 'DENIED'), ok, never), (e: any) => e.code === 'APPROVAL_DENIED');
+  await assert.rejects(
+    () => svc.resume(seed(repo, 'EXPIRED'), ok, never),
+    (e: any) => e.code === 'APPROVAL_TIMEOUT',
+  );
+  await assert.rejects(
+    () => svc.resume(seed(repo, 'DENIED'), ok, never),
+    (e: any) => e.code === 'APPROVAL_DENIED',
+  );
   await assert.rejects(
     () => svc.resume(seed(repo, 'PENDING'), ok, never),
     (e: any) => e.code === 'APPROVAL_PENDING' && /Approval is PENDING/.test(e.message),
@@ -86,7 +92,10 @@ test('context change without repository transition support leaves the state unto
     transitionExecution: (id: string, s: any, now: string) => r.transitionExecution(id, s, now),
   }));
   const id = seed(repo, 'APPROVED');
-  await assert.rejects(() => svc.resume(id, fail('head moved'), never), (e: any) => e.code === 'APPROVAL_CONTEXT_CHANGED');
+  await assert.rejects(
+    () => svc.resume(id, fail('head moved'), never),
+    (e: any) => e.code === 'APPROVAL_CONTEXT_CHANGED',
+  );
   assert.equal(svc.status(id)?.state, 'APPROVED');
   db.close();
 });
@@ -126,7 +135,15 @@ test('a failing post-claim check marks the execution failed with its reason or a
     (e: any) => e.message === 'authority changed',
   );
   const passes = seed(repo, 'APPROVED');
-  assert.equal(await svc.resume(passes, ok, async () => 'done', () => ({ ok: true })), 'done');
+  assert.equal(
+    await svc.resume(
+      passes,
+      ok,
+      async () => 'done',
+      () => ({ ok: true }),
+    ),
+    'done',
+  );
   assert.equal(svc.status(passes)?.state, 'SUCCEEDED');
   db.close();
 });

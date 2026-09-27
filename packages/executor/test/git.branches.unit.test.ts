@@ -9,7 +9,15 @@ import { gitAdd, gitCommit, gitStatus } from '../src/git.js';
 function git(cwd: string, ...args: string[]) {
   return execFileSync(
     'git',
-    ['-c', 'user.name=Sample', '-c', 'user.email=sample@example.test', '-c', 'commit.gpgsign=false', ...args],
+    [
+      '-c',
+      'user.name=Sample',
+      '-c',
+      'user.email=sample@example.test',
+      '-c',
+      'commit.gpgsign=false',
+      ...args,
+    ],
     { cwd, stdio: ['ignore', 'pipe', 'pipe'] },
   ).toString();
 }

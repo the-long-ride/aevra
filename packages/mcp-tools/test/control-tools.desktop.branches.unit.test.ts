@@ -11,12 +11,18 @@ test('desktop_act_many validates actions and window before any provider call', a
   const run = (args: any) => handleControlTool(ctx.value, 's1', 'desktop_act_many', args);
   await assert.rejects(run({ windowId: 'w1' }), code('INVALID_REQUEST', /at least one action/));
   await assert.rejects(run({ windowId: 'w1', actions: [] }), code('INVALID_REQUEST'));
-  await assert.rejects(run({ actions: [{ op: 'click', ref: 'd1' }] }), code('INVALID_REQUEST', /windowId/));
+  await assert.rejects(
+    run({ actions: [{ op: 'click', ref: 'd1' }] }),
+    code('INVALID_REQUEST', /windowId/),
+  );
   await assert.rejects(
     run({ windowId: 'w1', actions: [{ op: 'hover', ref: 'd1' }] }),
     code('INVALID_REQUEST', /Unsupported desktop batch action: hover/),
   );
-  await assert.rejects(run({ windowId: 'w1', actions: [null] }), code('INVALID_REQUEST', /undefined/));
+  await assert.rejects(
+    run({ windowId: 'w1', actions: [null] }),
+    code('INVALID_REQUEST', /undefined/),
+  );
   assert.equal(ctx.calls.length, 0);
 });
 

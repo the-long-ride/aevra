@@ -1,25 +1,21 @@
-import { createServer, type Server } from 'node:http';
+import type { Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { Duplex } from 'node:stream';
 import type { BrowserExtensionPairing } from '../../protocol/src/browser.js';
 import {
   activeExtensionProfile,
   pairingStillAllowed,
-  rejectExtensionAuthentication,
-  verifyExtensionPairing,
   type ActiveExtensionProfile,
   type ExtensionPairingAuthOptions,
   type ExtensionPeerIdentity,
 } from './extension-pairing-auth.js';
 import {
-  acceptKey,
-  encodeFrame,
-  MAX_FRAME_BYTES,
-  readFrames,
-  WS_CONTINUATION,
-  WS_CLOSE,
-  WS_TEXT,
-} from './ws-server.js';
+  attachExtensionConnection,
+  isValidCaptureProgress,
+  type ExtensionCloseCause,
+} from './extension-server-connection.js';
+import { startExtensionListener } from './extension-server-listener.js';
+import { encodeFrame, MAX_FRAME_BYTES } from './ws-server.js';
 
 export interface ExtensionServerOptions extends ExtensionPairingAuthOptions {
   /** Compatibility input for older single-profile worker callers. */
@@ -50,22 +46,6 @@ interface Peer extends ExtensionPeerIdentity {
   socket: Duplex;
 }
 
-const DEFAULT_AUTH_TIMEOUT_MS = 3000;
-const LOOPBACK = '127.0.0.1';
-const CAPTURE_STAGES = [
-  'capture_started',
-  'capture_api_done',
-  'encode_done',
-  'reply_send_attempt',
-] as const;
-type CloseCause =
-  | 'remote_close'
-  | 'remote_error'
-  | 'protocol_error'
-  | 'oversized_frame'
-  | 'pairing_revoked'
-  | 'server_stop';
-
 /**
  * Worker-side listener for the Aevra browser extension.
  *
@@ -90,7 +70,7 @@ export class ExtensionServer {
   private current: Peer | null = null;
   private readonly standby = new Map<Duplex, Peer>();
   private readonly pending = new Map<string, Pending>();
-  private readonly closeCauses = new WeakMap<Duplex, CloseCause>();
+  private readonly closeCauses = new WeakMap<Duplex, ExtensionCloseCause>();
   private readonly listeners = new Set<ExtensionEventListener>();
   private nextId = 1;
 
@@ -98,170 +78,34 @@ export class ExtensionServer {
 
   async start(input: { port: number }): Promise<ExtensionAddress> {
     if (this.server) throw new Error('Extension server is already listening');
-    // A plain request is the extension asking whether anything listens before
-    // it dials: Chrome logs a refused WebSocket as an uncatchable extension
-    // error. 426 with no body says only that this is a WebSocket endpoint.
-    const server = createServer((_request, response) => {
-      response.writeHead(426, { Upgrade: 'websocket', Connection: 'close' });
-      response.end();
-    });
-    server.on('upgrade', (request, socket: Duplex) => {
-      const origin = String(request.headers.origin ?? '');
-      const originExtensionId = /^chrome-extension:\/\/([a-p]{32})$/.exec(origin)?.[1];
-      if (!originExtensionId) {
-        socket.destroy();
-        return;
-      }
-      const key = String(request.headers['sec-websocket-key'] ?? '');
-      socket.write(
-        [
-          'HTTP/1.1 101 Switching Protocols',
-          'Upgrade: websocket',
-          'Connection: Upgrade',
-          `Sec-WebSocket-Accept: ${acceptKey(key)}`,
-          '\r\n',
-        ].join('\r\n'),
-      );
-      this.attach(socket, originExtensionId);
-    });
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(input.port, LOOPBACK, resolve);
-    });
+    const { server, ...address } = await startExtensionListener(input.port, (socket, extensionId) =>
+      this.attach(socket, extensionId),
+    );
     this.server = server;
-    const address = server.address();
-    const port = typeof address === 'object' && address ? address.port : input.port;
-    return { host: LOOPBACK, port, url: `ws://${LOOPBACK}:${port}` };
+    return address;
   }
 
   private attach(socket: Duplex, originExtensionId: string): void {
-    let authenticated = false;
-    // Annotated: `Buffer.alloc` infers Buffer<ArrayBuffer>, but a decoded
-    // remainder is Buffer<ArrayBufferLike> and would not assign back.
-    let buffer: Buffer = Buffer.alloc(0);
-    let fragments: Buffer[] | null = null;
-    let fragmentedBytes = 0;
-    const timer = setTimeout(() => {
-      if (!authenticated) socket.destroy();
-    }, this.options.authTimeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS);
-    timer.unref?.();
-
-    socket.on('error', () => {
-      this.markClose(socket, 'remote_error');
-      socket.destroy();
-    });
-    // Node's HTTP server keeps upgraded sockets half-open, so a peer's FIN
-    // arrives as `end` and `close` never follows on its own.
-    socket.on('end', () => {
-      this.markClose(socket, 'remote_close');
-      socket.destroy();
-    });
-    socket.on('close', () => {
-      clearTimeout(timer);
-      this.standby.delete(socket);
-      if (this.current?.socket === socket) {
-        this.current = null;
-        this.promoteStandby();
-      }
-      // A reply can no longer arrive on a dead socket. Waiting out the RPC
-      // budget anyway is how a dropped socket used to surface as a timeout.
-      this.failPending(
-        socket,
-        'BROWSER_UNAVAILABLE',
-        'The Aevra extension disconnected before replying',
-        this.closeCauses.get(socket) ?? 'remote_close',
-      );
-    });
-    socket.on('data', (chunk: Buffer) => {
-      buffer = Buffer.concat([buffer, chunk]);
-      let read;
-      try {
-        read = readFrames(buffer);
-      } catch {
-        this.dropOversized(socket);
-        return;
-      }
-      buffer = read.rest;
-      // Cap only the unfinished frame. A single TCP chunk may contain several
-      // complete legal frames, including progress followed by a large reply.
-      if (buffer.length > MAX_FRAME_BYTES + 16) {
-        this.dropOversized(socket);
-        return;
-      }
-      for (const frame of read.frames) {
-        if (frame.opcode === WS_CLOSE) {
-          this.markClose(socket, 'remote_close');
-          socket.destroy();
-          return;
+    attachExtensionConnection(socket, originExtensionId, this.options, {
+      markClose: (cause) => this.markClose(socket, cause),
+      disconnected: () => {
+        this.standby.delete(socket);
+        if (this.current?.socket === socket) {
+          this.current = null;
+          this.promoteStandby();
         }
-        let payload: Buffer;
-        if (frame.opcode === WS_TEXT) {
-          if (fragments) {
-            this.markClose(socket, 'protocol_error');
-            socket.destroy();
-            return;
-          }
-          if (!frame.fin) {
-            fragments = [frame.payload];
-            fragmentedBytes = frame.payload.length;
-            continue;
-          }
-          payload = frame.payload;
-        } else if (frame.opcode === WS_CONTINUATION) {
-          if (!fragments) {
-            this.markClose(socket, 'protocol_error');
-            socket.destroy();
-            return;
-          }
-          fragmentedBytes += frame.payload.length;
-          if (fragmentedBytes > MAX_FRAME_BYTES) {
-            this.dropOversized(socket);
-            return;
-          }
-          fragments.push(frame.payload);
-          if (!frame.fin) continue;
-          payload = Buffer.concat(fragments, fragmentedBytes);
-          fragments = null;
-          fragmentedBytes = 0;
-        } else {
-          // Control frames may appear between fragments.
-          continue;
-        }
-        let message: any;
-        try {
-          message = JSON.parse(payload.toString('utf8'));
-        } catch {
-          this.markClose(socket, 'protocol_error');
-          socket.destroy();
-          return;
-        }
-        if (!authenticated) {
-          // One shot: the first frame either authenticates or the socket dies.
-          // The peer is never told which check failed.
-          const pairing =
-            message?.type === 'auth'
-              ? verifyExtensionPairing(
-                  this.options,
-                  String(message.token ?? ''),
-                  originExtensionId,
-                  typeof message.profileId === 'string' ? message.profileId : undefined,
-                )
-              : null;
-          if (!pairing) {
-            rejectExtensionAuthentication(socket);
-            return;
-          }
-          authenticated = true;
-          clearTimeout(timer);
-          const profileName =
-            typeof message.profileName === 'string' && message.profileName.trim()
-              ? message.profileName.trim().slice(0, 120)
-              : pairing.profileName;
-          this.adopt(socket, pairing, profileName);
-          continue;
-        }
-        this.handle(message, socket);
-      }
+        // A reply can no longer arrive on a dead socket. Waiting out the RPC
+        // budget anyway is how a dropped socket used to surface as a timeout.
+        this.failPending(
+          socket,
+          'BROWSER_UNAVAILABLE',
+          'The Aevra extension disconnected before replying',
+          this.closeCauses.get(socket) ?? 'remote_close',
+        );
+      },
+      oversized: () => this.dropOversized(socket),
+      authenticated: (pairing, profileName) => this.adopt(socket, pairing, profileName),
+      message: (message) => this.handle(message, socket),
     });
   }
 
@@ -282,11 +126,16 @@ export class ExtensionServer {
     socket.destroy();
   }
 
-  private markClose(socket: Duplex, cause: CloseCause): void {
+  private markClose(socket: Duplex, cause: ExtensionCloseCause): void {
     if (!this.closeCauses.has(socket)) this.closeCauses.set(socket, cause);
   }
 
-  private failPending(socket: Duplex, code: string, message: string, cause?: CloseCause): void {
+  private failPending(
+    socket: Duplex,
+    code: string,
+    message: string,
+    cause?: ExtensionCloseCause,
+  ): void {
     for (const [id, pending] of this.pending) {
       if (pending.socket !== socket) continue;
       this.pending.delete(id);
@@ -387,18 +236,7 @@ export class ExtensionServer {
     if (!pending || pending.socket !== socket) return;
     if (message.type === 'capture_progress') {
       if (!pending.vision) return;
-      const stage = CAPTURE_STAGES.indexOf(message.stage);
-      const previous = CAPTURE_STAGES.indexOf(pending.lastStage as (typeof CAPTURE_STAGES)[number]);
-      if (
-        stage < 0 ||
-        stage <= previous ||
-        !Number.isInteger(message.elapsedMs) ||
-        message.elapsedMs < 0 ||
-        message.elapsedMs > 120_000 ||
-        (message.bytes !== undefined &&
-          (!Number.isInteger(message.bytes) || message.bytes < 0 || message.bytes > 1_000_000_000))
-      )
-        return;
+      if (!isValidCaptureProgress(message, pending.lastStage)) return;
       pending.lastStage = message.stage;
       return;
     }

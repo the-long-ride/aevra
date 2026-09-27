@@ -21,7 +21,10 @@ test('browser token key rejects keys of the wrong length', (t) => {
   mkdirSync(path.dirname(keyPath), { recursive: true });
   writeFileSync(keyPath, Buffer.alloc(8).toString('base64url'));
   assert.throws(() => loadOrCreateBrowserTokenKey(keyPath), /Invalid browser token key/);
-  assert.throws(() => loadOrCreateBrowserTokenKey(dir), (e: any) => e.code === 'EISDIR' || e.code === 'EPERM');
+  assert.throws(
+    () => loadOrCreateBrowserTokenKey(dir),
+    (e: any) => e.code === 'EISDIR' || e.code === 'EPERM',
+  );
 });
 
 test('start refuses a missing worker build without spawning, then reports no key', async (t) => {
@@ -42,7 +45,13 @@ test('start refuses a missing worker build without spawning, then reports no key
 test('execute without a started worker is unavailable', async () => {
   const manager = new WorkerManager('unused-endpoint');
   await assert.rejects(
-    () => manager.execute({ sessionId: 's', workspaceId: 'w', roots: [], operation: { kind: 'process.list' } as any }),
+    () =>
+      manager.execute({
+        sessionId: 's',
+        workspaceId: 'w',
+        roots: [],
+        operation: { kind: 'process.list' } as any,
+      }),
     unavailable,
   );
   assert.throws(() => manager.browserTokenKey(), unavailable);
@@ -51,16 +60,36 @@ test('execute without a started worker is unavailable', async () => {
 test('execute signs scope, expected state, and default host execution mode', async () => {
   const manager = new WorkerManager('unused-endpoint') as any;
   const envelopes: any[] = [];
-  const client = { execute: async (envelope: any) => (envelopes.push(envelope), { ok: true, value: 'done' }), close: async () => {} };
+  const client = {
+    execute: async (envelope: any) => (envelopes.push(envelope), { ok: true, value: 'done' }),
+    close: async () => {},
+  };
   manager.client = client;
   manager.signer = new HmacEnvelopeSigner(Buffer.alloc(32, 1), manager.daemonInstanceId);
   assert.equal(await manager.start(), client, 'an existing client is reused');
-  const scope = { kind: 'host-control', capability: 'desktop.control', identity: { kind: 'session', key: 'k' } };
+  const scope = {
+    kind: 'host-control',
+    capability: 'desktop.control',
+    identity: { kind: 'session', key: 'k' },
+  };
   assert.deepEqual(
-    await manager.execute({ sessionId: 's', workspaceId: 'w', scope, roots: [], operation: { kind: 'process.list' }, expectedState: { head: '1' } }),
+    await manager.execute({
+      sessionId: 's',
+      workspaceId: 'w',
+      scope,
+      roots: [],
+      operation: { kind: 'process.list' },
+      expectedState: { head: '1' },
+    }),
     { ok: true, value: 'done' },
   );
-  await manager.execute({ sessionId: 's', workspaceId: 'w', roots: [], operation: { kind: 'process.list' }, executionMode: 'sandbox' });
+  await manager.execute({
+    sessionId: 's',
+    workspaceId: 'w',
+    roots: [],
+    operation: { kind: 'process.list' },
+    executionMode: 'sandbox',
+  });
   const text = JSON.stringify(envelopes);
   assert.match(text, /desktop\.control/);
   assert.match(text, /"head":"1"/);
@@ -89,7 +118,10 @@ test('startup with a zero timeout reports a startup timeout and stops the child'
 test('bootstrap diagnostics keep only the tail of very long stderr output', async (t) => {
   const dir = tempDir(t);
   const entry = path.join(dir, 'noisy-worker.mjs');
-  writeFileSync(entry, "process.stderr.write('x'.repeat(20000) + 'TAIL-MARKER', () => process.exit(3));\n");
+  writeFileSync(
+    entry,
+    "process.stderr.write('x'.repeat(20000) + 'TAIL-MARKER', () => process.exit(3));\n",
+  );
   const manager = new WorkerManager(workerSocketPathForPlatform(dir), path.join(dir, 'logs'), {
     entryPath: entry,
     startupPollMs: 10,

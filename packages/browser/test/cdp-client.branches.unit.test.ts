@@ -15,7 +15,12 @@ async function withClient(body: (client: CdpClient) => Promise<void>): Promise<v
       return reply(JSON.stringify({ id, result: { right: true } }));
     }
     if (method === 'events') {
-      push(JSON.stringify({ method: 'Runtime.consoleAPICalled', params: { type: 'error', args: [{ value: 'a' }, { description: 'b' }, {}] } }));
+      push(
+        JSON.stringify({
+          method: 'Runtime.consoleAPICalled',
+          params: { type: 'error', args: [{ value: 'a' }, { description: 'b' }, {}] },
+        }),
+      );
       push(JSON.stringify({ method: 'Runtime.consoleAPICalled' }));
       push(JSON.stringify({ method: 'Log.entryAdded' }));
       push(JSON.stringify({ method: 'Network.responseReceived' }));
@@ -23,7 +28,12 @@ async function withClient(body: (client: CdpClient) => Promise<void>): Promise<v
     }
     if (method === 'flood') {
       for (let index = 0; index < 505; index += 1) {
-        push(JSON.stringify({ method: 'Log.entryAdded', params: { entry: { text: `line ${index}` } } }));
+        push(
+          JSON.stringify({
+            method: 'Log.entryAdded',
+            params: { entry: { text: `line ${index}` } },
+          }),
+        );
       }
     }
     if (method === 'silent') return;

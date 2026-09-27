@@ -7,7 +7,12 @@ import {
 } from '../src/system/capability-detector.js';
 
 type Reply = Partial<CapabilityProbeResult> | Error;
-const ok = (stdout: string, stderr = ''): Reply => ({ exitCode: 0, stdout, stderr, timedOut: false });
+const ok = (stdout: string, stderr = ''): Reply => ({
+  exitCode: 0,
+  stdout,
+  stderr,
+  timedOut: false,
+});
 const now = () => new Date('2026-01-02T03:04:05.000Z');
 
 function runner(replies: Record<string, Reply>) {
@@ -19,14 +24,32 @@ function runner(replies: Record<string, Reply>) {
       calls.push(key);
       const reply = replies[key] ?? replies[executable];
       if (reply instanceof Error) throw reply;
-      return { exitCode: 1, stdout: '', stderr: '', timedOut: false, ...(reply ?? {}) } as CapabilityProbeResult;
+      return {
+        exitCode: 1,
+        stdout: '',
+        stderr: '',
+        timedOut: false,
+        ...(reply ?? {}),
+      } as CapabilityProbeResult;
     },
   };
 }
 
-async function detect(platform: NodeJS.Platform, replies: Record<string, Reply>, env: NodeJS.ProcessEnv = {}, release = '6.1') {
+async function detect(
+  platform: NodeJS.Platform,
+  replies: Record<string, Reply>,
+  env: NodeJS.ProcessEnv = {},
+  release = '6.1',
+) {
   const r = runner(replies);
-  const snapshot = await detectSystemCapabilities({ platform, env, release, arch: 'x64', runner: r, now });
+  const snapshot = await detectSystemCapabilities({
+    platform,
+    env,
+    release,
+    arch: 'x64',
+    runner: r,
+    now,
+  });
   const tool = (id: string) => snapshot.toolchains.find((item) => item.id === id);
   return { snapshot, tool, calls: r.calls };
 }
@@ -55,7 +78,12 @@ test('tool probes parse versions from stdout, stderr, or neither', async () => {
   assert.equal(tool('uv')!.available, true);
   assert.equal('version' in tool('uv')!, false);
   assert.equal('version' in tool('cargo')!, false);
-  assert.deepEqual(tool('rustc'), { id: 'rustc', label: 'Rust', category: 'rust', available: false });
+  assert.deepEqual(tool('rustc'), {
+    id: 'rustc',
+    label: 'Rust',
+    category: 'rust',
+    available: false,
+  });
   assert.equal(tool('cmake')!.available, false);
   assert.equal(tool('gcc')!.available, false);
 });
@@ -71,17 +99,29 @@ test('windows package managers fall back to cmd.exe shims and report the .cmd na
   assert.equal(tool('pnpm')!.available, false);
   assert.ok(calls.includes('cmd.exe /d /s /c yarn --version'));
   const linux = await detect('linux', {});
-  assert.equal(linux.calls.some((call) => call.startsWith('cmd.exe')), false);
+  assert.equal(
+    linux.calls.some((call) => call.startsWith('cmd.exe')),
+    false,
+  );
 });
 
 test('windows shell recommendation prefers pwsh, then powershell, then cmd', async () => {
-  const pick = async (replies: Record<string, Reply>) => (await detect('win32', replies)).snapshot.os.recommendedShell;
-  assert.equal(await pick({ pwsh: ok('PowerShell 7.6.5'), cmd: ok('Microsoft Windows [Version 10.0.26200]') }), 'pwsh');
+  const pick = async (replies: Record<string, Reply>) =>
+    (await detect('win32', replies)).snapshot.os.recommendedShell;
+  assert.equal(
+    await pick({ pwsh: ok('PowerShell 7.6.5'), cmd: ok('Microsoft Windows [Version 10.0.26200]') }),
+    'pwsh',
+  );
   assert.equal(await pick({ powershell: ok('5.1.26100'), cmd: ok('ver') }), 'powershell');
   assert.equal(await pick({ cmd: ok('Microsoft Windows') }), 'cmd');
   assert.equal(await pick({}), null);
-  const { snapshot } = await detect('win32', { cmd: ok('Microsoft Windows [Version 10.0.26200]'), bash: new Error('none') });
-  assert.deepEqual(snapshot.os.availableShells, [{ id: 'cmd', label: 'Command Prompt', version: '10.0.26200' }]);
+  const { snapshot } = await detect('win32', {
+    cmd: ok('Microsoft Windows [Version 10.0.26200]'),
+    bash: new Error('none'),
+  });
+  assert.deepEqual(snapshot.os.availableShells, [
+    { id: 'cmd', label: 'Command Prompt', version: '10.0.26200' },
+  ]);
   assert.equal(snapshot.os.platform, 'windows');
   assert.equal(snapshot.os.platformDetail, 'Windows kernel 6.1');
 });
@@ -92,8 +132,14 @@ test('unix shell recommendation honours $SHELL, then platform priority', async (
   assert.equal(mac.snapshot.os.recommendedShell, 'bash');
   assert.equal(mac.snapshot.os.platform, 'macos');
   assert.equal(mac.snapshot.os.platformDetail, 'macOS kernel 6.1');
-  assert.equal((await detect('darwin', shells, { SHELL: '/usr/bin/fish' })).snapshot.os.recommendedShell, 'zsh');
-  assert.equal((await detect('darwin', { sh: ok('') }, { SHELL: '/bin/zsh' })).snapshot.os.recommendedShell, 'sh');
+  assert.equal(
+    (await detect('darwin', shells, { SHELL: '/usr/bin/fish' })).snapshot.os.recommendedShell,
+    'zsh',
+  );
+  assert.equal(
+    (await detect('darwin', { sh: ok('') }, { SHELL: '/bin/zsh' })).snapshot.os.recommendedShell,
+    'sh',
+  );
   const linux = await detect('linux', shells);
   assert.equal(linux.snapshot.os.recommendedShell, 'bash');
   assert.equal(linux.snapshot.os.platformDetail, 'Linux kernel 6.1');
@@ -105,7 +151,12 @@ test('unix shell recommendation honours $SHELL, then platform priority', async (
 });
 
 test('fallback snapshot omits detail for blank releases and uses defaults', () => {
-  const blank = fallbackSystemCapabilitySnapshot({ platform: 'linux', release: '\u0000  ', arch: 'arm64', now });
+  const blank = fallbackSystemCapabilitySnapshot({
+    platform: 'linux',
+    release: '\u0000  ',
+    arch: 'arm64',
+    now,
+  });
   assert.deepEqual(blank, {
     scope: 'host',
     detectedAt: '2026-01-02T03:04:05.000Z',

@@ -2,19 +2,21 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ConnectionWorkspaceGrantService } from '../src/sessions/connection-workspace-grants.js';
 
-function harness(options: {
-  connection?: { status: string; actor: string } | null;
-  workspace?: unknown;
-  profile?: { capabilities: string[] } | null;
-  sessions?: any[];
-  leases?: Record<string, any>;
-  matchingLeases?: any[] | null;
-  forget?: boolean;
-  failRepo?: boolean;
-  now?: () => Date;
-  idleMs?: number;
-  withAcross?: boolean;
-} = {}) {
+function harness(
+  options: {
+    connection?: { status: string; actor: string } | null;
+    workspace?: unknown;
+    profile?: { capabilities: string[] } | null;
+    sessions?: any[];
+    leases?: Record<string, any>;
+    matchingLeases?: any[] | null;
+    forget?: boolean;
+    failRepo?: boolean;
+    now?: () => Date;
+    idleMs?: number;
+    withAcross?: boolean;
+  } = {},
+) {
   const log: string[] = [];
   const applied: any[] = [];
   const sessions: any = {
@@ -33,9 +35,13 @@ function harness(options: {
     db: { exec: (sql: string) => log.push(sql) } as any,
     oauthRepo: {
       getConnection: () =>
-        options.connection === undefined ? { status: 'ACTIVE', actor: 'oauth:x' } : options.connection,
+        options.connection === undefined
+          ? { status: 'ACTIVE', actor: 'oauth:x' }
+          : options.connection,
     },
-    workspaceRepo: { get: () => (options.workspace === undefined ? { id: 'w1' } : options.workspace) },
+    workspaceRepo: {
+      get: () => (options.workspace === undefined ? { id: 'w1' } : options.workspace),
+    },
     sessionRepo: {
       rememberWorkspaceGrant: (...args: string[]) => {
         if (options.failRepo) throw new Error('disk full');
@@ -52,7 +58,8 @@ function harness(options: {
       ],
     } as any,
     profiles: {
-      get: () => (options.profile === undefined ? { capabilities: ['files.read'] } : options.profile),
+      get: () =>
+        options.profile === undefined ? { capabilities: ['files.read'] } : options.profile,
     } as any,
     sessions,
     ...(options.now ? { now: options.now } : {}),
@@ -78,35 +85,50 @@ test('grant rejects blank or missing identifiers', () => {
     [{ connectionId: 'c', workspaceId: 'w' }, 'profileId is required'],
   ];
   for (const [input, message] of cases) {
-    assert.deepEqual(errorOf(() => service.grant(input)), {
-      message,
-      code: 'INVALID_REQUEST',
-      status: 400,
-    });
+    assert.deepEqual(
+      errorOf(() => service.grant(input)),
+      {
+        message,
+        code: 'INVALID_REQUEST',
+        status: 400,
+      },
+    );
   }
 });
 
 test('grant maps missing connection, inactive connection, workspace and profile', () => {
   const input = { connectionId: 'c', workspaceId: 'w1', profileId: 'p' };
-  assert.deepEqual(errorOf(() => harness({ connection: null }).service.grant(input)), {
-    message: 'OAuth connection not found',
-    code: 'NOT_FOUND',
-    status: 404,
-  });
+  assert.deepEqual(
+    errorOf(() => harness({ connection: null }).service.grant(input)),
+    {
+      message: 'OAuth connection not found',
+      code: 'NOT_FOUND',
+      status: 404,
+    },
+  );
   assert.equal(
     errorOf(() => harness({ connection: { status: 'REVOKED', actor: 'a' } }).service.grant(input))
       .status,
     409,
   );
-  assert.equal(errorOf(() => harness({ workspace: null }).service.grant(input)).message, 'workspace not found');
-  assert.equal(errorOf(() => harness({ profile: null }).service.grant(input)).message, 'profile not found');
+  assert.equal(
+    errorOf(() => harness({ workspace: null }).service.grant(input)).message,
+    'workspace not found',
+  );
+  assert.equal(
+    errorOf(() => harness({ profile: null }).service.grant(input)).message,
+    'profile not found',
+  );
 });
 
 test('grant uses injected clock and idle window, replacing existing leases', () => {
   const fx = harness({
     now: () => new Date('2026-01-01T00:00:00.000Z'),
     idleMs: 1000,
-    sessions: [{ id: 's1', actor: 'oauth:x' }, { id: 's2', actor: 'oauth:x' }],
+    sessions: [
+      { id: 's1', actor: 'oauth:x' },
+      { id: 's2', actor: 'oauth:x' },
+    ],
     leases: { s1: { id: 'old-s1' } },
     matchingLeases: [
       { id: 'old-s1', sessionId: 's1', actor: 'oauth:x', expiresAt: 'x' },
@@ -150,8 +172,9 @@ test('remove returns false for blank ids and validates the connection', () => {
   assert.deepEqual(service.remove('c', null as any), { removed: false });
   assert.equal(errorOf(() => harness({ connection: null }).service.remove('c', 'w')).status, 404);
   assert.equal(
-    errorOf(() => harness({ connection: { status: 'PENDING', actor: 'a' } }).service.remove('c', 'w'))
-      .code,
+    errorOf(() =>
+      harness({ connection: { status: 'PENDING', actor: 'a' } }).service.remove('c', 'w'),
+    ).code,
     'CONFLICT',
   );
 });

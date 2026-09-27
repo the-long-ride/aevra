@@ -52,7 +52,13 @@ test('registry entries default pairing id, date, and profile name', () => {
   const { pairings } = normalizeStoredPairing({
     epoch: 3,
     pairings: [
-      { extensionId: ext, profileId: profile, credentialId: 'cred-a', pairedAt: 'not a date', profileName: '   ' },
+      {
+        extensionId: ext,
+        profileId: profile,
+        credentialId: 'cred-a',
+        pairedAt: 'not a date',
+        profileName: '   ',
+      },
       { extensionId: ext, legacy: true, pairedAt: 42 },
       {
         extensionId: ext,
@@ -82,7 +88,11 @@ test('registry entries default pairing id, date, and profile name', () => {
 });
 
 test('single legacy record migrates, keeping a valid pairedAt only', () => {
-  const migrated = normalizeStoredPairing({ extensionId: ext, pairedAt: '2025-05-05T00:00:00.000Z', epoch: 4 });
+  const migrated = normalizeStoredPairing({
+    extensionId: ext,
+    pairedAt: '2025-05-05T00:00:00.000Z',
+    epoch: 4,
+  });
   assert.deepEqual(migrated, {
     epoch: 4,
     pairings: [
@@ -97,7 +107,10 @@ test('single legacy record migrates, keeping a valid pairedAt only', () => {
       },
     ],
   });
-  assert.equal(normalizeStoredPairing({ extensionId: ext, pairedAt: 'soon' }).pairings[0]!.pairedAt, epochZero);
+  assert.equal(
+    normalizeStoredPairing({ extensionId: ext, pairedAt: 'soon' }).pairings[0]!.pairedAt,
+    epochZero,
+  );
   assert.equal(normalizeStoredPairing({ extensionId: ext }).pairings[0]!.pairedAt, epochZero);
   assert.deepEqual(normalizeStoredPairing({ extensionId: 'bad' }).pairings, []);
 });

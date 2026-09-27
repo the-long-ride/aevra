@@ -13,7 +13,11 @@ const node = (script: string, env: Record<string, string> = {}) => ({
 
 test('a function option is used as the redactor', async () => {
   const runtime = new ManagedProcessRuntime((value) => value.replaceAll('plain', 'masked'));
-  const started = runtime.start(node('console.log("plain words")'), process.cwd(), 'stop-with-aevra');
+  const started = runtime.start(
+    node('console.log("plain words")'),
+    process.cwd(),
+    'stop-with-aevra',
+  );
   await runtime.wait(started.processId, 5000);
   assert.deepEqual(runtime.logs(started.processId).lines, ['masked words']);
   assert.equal(runtime.logs(started.processId, 1).lines.length, 0);
@@ -77,7 +81,10 @@ test('keep-running reads the detached log and result sidecar', async () => {
         '  finishedAt: new Date().toISOString() }));',
       ].join('\n'),
     );
-    const runtime = new ManagedProcessRuntime({ processHostEntry: host, logDir: path.join(dir, 'logs') });
+    const runtime = new ManagedProcessRuntime({
+      processHostEntry: host,
+      logDir: path.join(dir, 'logs'),
+    });
     const started = runtime.start(node('0'), dir, 'keep-running');
     assert.equal(started.lifecycle, 'keep-running');
     assert.ok(started.marker?.startsWith('aevra-proc-'));
@@ -101,7 +108,10 @@ test('keep-running without a written log or finished result stays running', asyn
       host,
       "require('node:fs').writeFileSync(process.env.AEVRA_PROCESS_RESULT, JSON.stringify({ state: 'completed' }));",
     );
-    const runtime = new ManagedProcessRuntime({ processHostEntry: host, logDir: path.join(dir, 'logs') });
+    const runtime = new ManagedProcessRuntime({
+      processHostEntry: host,
+      logDir: path.join(dir, 'logs'),
+    });
     const started = runtime.start(node('0'), dir, 'keep-running');
     const deadline = Date.now() + 10_000;
     while (!existsSync(started.resultPath!) && Date.now() < deadline) {
@@ -116,17 +126,25 @@ test('keep-running without a written log or finished result stays running', asyn
   }
 });
 
-test('a Windows .cmd shim runs through cmd.exe', { skip: process.platform !== 'win32' }, async () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'aevra-proc-shim-'));
-  try {
-    const shim = path.join(dir, 'tool.cmd');
-    writeFileSync(shim, '@echo off\r\necho shim says %1\r\n');
-    const runtime = new ManagedProcessRuntime();
-    const started = runtime.start({ executable: shim, args: ['hello'], env: {} }, dir, 'stop-with-aevra');
-    const status = await runtime.wait(started.processId, 10_000);
-    assert.equal(status.state, 'completed');
-    assert.ok(runtime.logs(started.processId).lines.some((line) => line.includes('shim says')));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+test(
+  'a Windows .cmd shim runs through cmd.exe',
+  { skip: process.platform !== 'win32' },
+  async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'aevra-proc-shim-'));
+    try {
+      const shim = path.join(dir, 'tool.cmd');
+      writeFileSync(shim, '@echo off\r\necho shim says %1\r\n');
+      const runtime = new ManagedProcessRuntime();
+      const started = runtime.start(
+        { executable: shim, args: ['hello'], env: {} },
+        dir,
+        'stop-with-aevra',
+      );
+      const status = await runtime.wait(started.processId, 10_000);
+      assert.equal(status.state, 'completed');
+      assert.ok(runtime.logs(started.processId).lines.some((line) => line.includes('shim says')));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);

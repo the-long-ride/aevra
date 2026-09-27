@@ -22,21 +22,31 @@ test('readPowerShellRows reports a non-Windows host', { skip: WIN }, async () =>
   });
 });
 
-test('readPowerShellRows parses arrays, envelopes, single values and empty output', { skip: !WIN }, async () => {
-  const list = await readPowerShellRows('S', `Write-Output '[{"displayName":"A"},{"displayName":"B"}]'`);
-  assert.deepEqual(list, { rows: [{ displayName: 'A' }, { displayName: 'B' }], warnings: [] });
-  const envelope = await readPowerShellRows(
-    'S',
-    `Write-Output '{"rows":{"displayName":"one"},"warnings":["w1","w1",5]}'`,
-  );
-  assert.deepEqual(envelope, { rows: [{ displayName: 'one' }], warnings: ['w1'] });
-  assert.deepEqual(await readPowerShellRows('S', '$null'), { rows: [], warnings: [] });
-  assert.deepEqual(await readPowerShellRows('S', `Write-Output 'null'`), { rows: [], warnings: [] });
-  const fromEnv = await readPowerShellRows('S', 'Write-Output $env:AEVRA_SAMPLE_ROW', {
-    AEVRA_SAMPLE_ROW: '{"displayName":"env row"}',
-  });
-  assert.deepEqual(fromEnv.rows, [{ displayName: 'env row' }]);
-});
+test(
+  'readPowerShellRows parses arrays, envelopes, single values and empty output',
+  { skip: !WIN },
+  async () => {
+    const list = await readPowerShellRows(
+      'S',
+      `Write-Output '[{"displayName":"A"},{"displayName":"B"}]'`,
+    );
+    assert.deepEqual(list, { rows: [{ displayName: 'A' }, { displayName: 'B' }], warnings: [] });
+    const envelope = await readPowerShellRows(
+      'S',
+      `Write-Output '{"rows":{"displayName":"one"},"warnings":["w1","w1",5]}'`,
+    );
+    assert.deepEqual(envelope, { rows: [{ displayName: 'one' }], warnings: ['w1'] });
+    assert.deepEqual(await readPowerShellRows('S', '$null'), { rows: [], warnings: [] });
+    assert.deepEqual(await readPowerShellRows('S', `Write-Output 'null'`), {
+      rows: [],
+      warnings: [],
+    });
+    const fromEnv = await readPowerShellRows('S', 'Write-Output $env:AEVRA_SAMPLE_ROW', {
+      AEVRA_SAMPLE_ROW: '{"displayName":"env row"}',
+    });
+    assert.deepEqual(fromEnv.rows, [{ displayName: 'env row' }]);
+  },
+);
 
 test('readPowerShellRows turns failures into warnings', { skip: !WIN }, async () => {
   assert.deepEqual(await readPowerShellRows('S', `Write-Output 'not json'`), {
@@ -57,26 +67,35 @@ test('readPowerShellRows turns failures into warnings', { skip: !WIN }, async ()
   assert.deepEqual(oversized.warnings, ['S discovery exceeded the output limit']);
 });
 
-test('readPowerShellRows needs a Windows directory that holds PowerShell', { skip: !WIN }, async () => {
-  const saved = { root: process.env.SystemRoot, dir: process.env.WINDIR };
-  try {
-    delete process.env.SystemRoot;
-    delete process.env.WINDIR;
-    assert.deepEqual((await readPowerShellRows('S', 'x')).warnings, [
-      'S discovery could not locate Windows PowerShell',
-    ]);
-    process.env.SystemRoot = path.join(os.tmpdir(), 'aevra-no-windows-dir');
-    assert.deepEqual((await readPowerShellRows('S', 'x')).warnings, ['S discovery could not start']);
-  } finally {
-    process.env.SystemRoot = saved.root;
-    process.env.WINDIR = saved.dir;
-  }
-});
+test(
+  'readPowerShellRows needs a Windows directory that holds PowerShell',
+  { skip: !WIN },
+  async () => {
+    const saved = { root: process.env.SystemRoot, dir: process.env.WINDIR };
+    try {
+      delete process.env.SystemRoot;
+      delete process.env.WINDIR;
+      assert.deepEqual((await readPowerShellRows('S', 'x')).warnings, [
+        'S discovery could not locate Windows PowerShell',
+      ]);
+      process.env.SystemRoot = path.join(os.tmpdir(), 'aevra-no-windows-dir');
+      assert.deepEqual((await readPowerShellRows('S', 'x')).warnings, [
+        'S discovery could not start',
+      ]);
+    } finally {
+      process.env.SystemRoot = saved.root;
+      process.env.WINDIR = saved.dir;
+    }
+  },
+);
 
 test('environment expansion resolves known names and rejects unknown ones', () => {
   process.env.AEVRA_SAMPLE_DIR = 'C:\\Sample';
   try {
-    assert.equal(expandWindowsEnvironmentVariables('%AEVRA_SAMPLE_DIR%\\a.exe'), 'C:\\Sample\\a.exe');
+    assert.equal(
+      expandWindowsEnvironmentVariables('%AEVRA_SAMPLE_DIR%\\a.exe'),
+      'C:\\Sample\\a.exe',
+    );
     assert.equal(expandWindowsEnvironmentVariables('%AEVRA_UNSET_NAME_1%\\a.exe'), undefined);
     assert.equal(expandWindowsEnvironmentVariables('plain'), 'plain');
   } finally {
@@ -114,7 +133,12 @@ test('verified paths and catalog rows classify real, installer, runtime and inva
       'registry' as any,
     );
     assert.deepEqual(
-      apps.map((entry) => [entry.displayName, entry.version, entry.grantable, entry.reason ?? null]),
+      apps.map((entry) => [
+        entry.displayName,
+        entry.version,
+        entry.grantable,
+        entry.reason ?? null,
+      ]),
       [
         ['App', '1.0', true, null],
         ['Installer', null, false, 'needs-manual-path'],

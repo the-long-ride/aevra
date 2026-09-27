@@ -95,7 +95,9 @@ test('control revoke rejects unknown capabilities and maps failures', async () =
   const audits: any[] = [];
   const ok = await call(
     {
-      connections: { revokeControl: async (id: string, cap: string) => revoked.push(`${id}|${cap}`) },
+      connections: {
+        revokeControl: async (id: string, cap: string) => revoked.push(`${id}|${cap}`),
+      },
       audit: { append: (entry: any) => audits.push(entry) },
     },
     '/api/connections/c%2F1/control/browser.control',
@@ -104,7 +106,10 @@ test('control revoke rejects unknown capabilities and maps failures', async () =
   assert.equal(ok.status, 200);
   assert.deepEqual(revoked, ['c/1|browser.control']);
   assert.equal(audits[0].operation, 'connection.control_revoke');
-  assert.equal((await call({}, '/api/connections/c1/control/desktop.control', 'DELETE')).status, 200);
+  assert.equal(
+    (await call({}, '/api/connections/c1/control/desktop.control', 'DELETE')).status,
+    200,
+  );
   const missing = await call(
     { connections: { revokeControl: async () => Promise.reject({ code: 'NOT_FOUND' }) } },
     '/api/connections/c1/control/desktop.control',
@@ -130,7 +135,11 @@ test('connection revoke reports 404 when nothing was revoked', async () => {
   );
   assert.equal(ok.status, 200);
   assert.deepEqual([audits[0].operation, audits[0].target], ['connection.revoke', 'c1']);
-  assert.equal((await call({ connections: { revoke: () => true } }, '/api/connections/c1/revoke', 'POST')).status, 200);
+  assert.equal(
+    (await call({ connections: { revoke: () => true } }, '/api/connections/c1/revoke', 'POST'))
+      .status,
+    200,
+  );
 });
 
 test('workspace grant uses read-only by default and maps error statuses', async () => {
@@ -166,7 +175,10 @@ test('workspace grant uses read-only by default and maps error statuses', async 
 
 test('workspace revoke accepts DELETE or POST and maps error statuses', async () => {
   const missing = await call({}, '/api/connections/c1/workspaces/w1', 'DELETE');
-  assert.deepEqual([missing.status, missing.value.error.message], [404, 'Workspace grant not found']);
+  assert.deepEqual(
+    [missing.status, missing.value.error.message],
+    [404, 'Workspace grant not found'],
+  );
   const audits: any[] = [];
   const ok = await call(
     {

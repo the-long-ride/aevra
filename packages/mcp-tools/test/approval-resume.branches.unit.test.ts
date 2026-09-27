@@ -52,7 +52,8 @@ function fixture(t: any, o: any = {}) {
     worker: {
       execute: async (input: any) => {
         calls.push(['worker', input]);
-        if (input.operation.kind === 'git.log') return { ok: true, value: { stdout: o.head ?? '' } };
+        if (input.operation.kind === 'git.log')
+          return { ok: true, value: { stdout: o.head ?? '' } };
         return { ok: true, value: { kind: input.operation.kind } };
       },
     },
@@ -183,18 +184,29 @@ test('frozen workspace select uses local profile defaults, manifests and drain t
 });
 
 function capTicket(overrides: any = {}, payload: any = {}) {
-  return ticket('capability_request', {}, {
-    operation: CAP_OP,
-    payload: { tool: 'capability_request', original: { tool: 'command_run', args: { a: 1 } }, ...payload },
-    ...overrides,
-  });
+  return ticket(
+    'capability_request',
+    {},
+    {
+      operation: CAP_OP,
+      payload: {
+        tool: 'capability_request',
+        original: { tool: 'command_run', args: { a: 1 } },
+        ...payload,
+      },
+      ...overrides,
+    },
+  );
 }
 
 test('capability replay validates session, workspace and lease on validate and claim', async () => {
-  assert.deepEqual(await resumeApproval(fixture(capTicket(), { session: null }).context, 's1', 'req1'), {
-    ok: false,
-    reason: 'session changed',
-  });
+  assert.deepEqual(
+    await resumeApproval(fixture(capTicket(), { session: null }).context, 's1', 'req1'),
+    {
+      ok: false,
+      reason: 'session changed',
+    },
+  );
   const local = capTicket({ actor: 'connector:CLI' });
   const drift = fixture(local, { session: { id: 's2', actor: 'connector:CLI' } });
   assert.deepEqual(await resumeApproval(drift.context, 's1', 'req1'), {
@@ -215,7 +227,9 @@ test('capability replay validates session, workspace and lease on validate and c
     reason: 'workspace changed',
   });
   const activeOnly = fixture(local, { noLeaseForWorkspace: true });
-  assert.deepEqual(await resumeApproval(activeOnly.context, 's1', 'req1'), { replayed: 'command_run' });
+  assert.deepEqual(await resumeApproval(activeOnly.context, 's1', 'req1'), {
+    replayed: 'command_run',
+  });
 
   const lost = fixture(local, {
     beforeClaim: () => {
@@ -250,14 +264,19 @@ test('capability replay grants a wildcard one-time key and prefers proxied opera
   assert.deepEqual(seen, ['s1\u0000commands.run\u0000*']);
   assert.equal(f.context.oneTimeCapabilities.size, 0);
 
-  const proxied = capTicket({ actor: 'connector:CLI' }, {
-    original: { tool: 'docs__search', proxy: { server: 'docs', tool: 'search' } },
-  });
+  const proxied = capTicket(
+    { actor: 'connector:CLI' },
+    {
+      original: { tool: 'docs__search', proxy: { server: 'docs', tool: 'search' } },
+    },
+  );
   const p = fixture(proxied);
   p.context.proxyOperation = async (_s: string, proxy: any) => ({ proxied: proxy.server });
   assert.deepEqual(await resumeApproval(p.context, 's1', 'req1'), { proxied: 'docs' });
   const noProxy = fixture(proxied);
-  assert.deepEqual(await resumeApproval(noProxy.context, 's1', 'req1'), { replayed: 'docs__search' });
+  assert.deepEqual(await resumeApproval(noProxy.context, 's1', 'req1'), {
+    replayed: 'docs__search',
+  });
 });
 
 test('frozen git replay falls back to requiredLease and honours one-time grants', async () => {
@@ -288,11 +307,20 @@ test('frozen process_start maps flat and nested command shapes onto the process 
     lifecycle: 'keep-running',
     name: 'dev',
   });
-  assert.deepEqual(await resumeApproval(fixture(flat, { processes }).context, 's1', 'req1'), { id: 'p1' });
+  assert.deepEqual(await resumeApproval(fixture(flat, { processes }).context, 's1', 'req1'), {
+    id: 'p1',
+  });
   assert.deepEqual(started[0], [
     's1',
     'w1',
-    { executable: 'node', args: ['a.js'], env: { A: 'b' }, cwdLogical: '/src', timeoutMs: 5, workspaceId: 'w1' },
+    {
+      executable: 'node',
+      args: ['a.js'],
+      env: { A: 'b' },
+      cwdLogical: '/src',
+      timeoutMs: 5,
+      workspaceId: 'w1',
+    },
     'keep-running',
     'dev',
   ]);

@@ -156,7 +156,12 @@ test('a ref whose element has no isolated-world identity is refused as stale', a
 
   const halted: any = await handleExtensionCommand(registry, harness.value, {
     op: 'act',
-    params: { actions: [{ op: 'click', ref }, { op: 'press_key', key: 'Enter' }] },
+    params: {
+      actions: [
+        { op: 'click', ref },
+        { op: 'press_key', key: 'Enter' },
+      ],
+    },
   });
   assert.equal(halted.length, 1);
 });
@@ -226,7 +231,11 @@ test('a vision capture that carries its own annotation tree scales its boxes', a
     new RefRegistry(),
     bridge({
       async captureVisible() {
-        return { imageDataUri: 'data:image/png;base64,AA', devicePixelRatio: 1, annotationRoot: null };
+        return {
+          imageDataUri: 'data:image/png;base64,AA',
+          devicePixelRatio: 1,
+          annotationRoot: null,
+        };
       },
     }).value,
     { op: 'snapshot', params: { mode: 'vision' } },

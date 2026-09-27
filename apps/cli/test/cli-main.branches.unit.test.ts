@@ -5,7 +5,14 @@ import path from 'node:path';
 import test from 'node:test';
 import { main } from '../src/cli.js';
 
-const ENV_KEYS = ['AEVRA_STATE_DIR', 'AEVRA_USERNAME', 'AEVRA_PASSWORD', 'AEVRA_TLS_CERT', 'AEVRA_TLS_KEY', 'AEVRA_ADMIN_PORT'];
+const ENV_KEYS = [
+  'AEVRA_STATE_DIR',
+  'AEVRA_USERNAME',
+  'AEVRA_PASSWORD',
+  'AEVRA_TLS_CERT',
+  'AEVRA_TLS_KEY',
+  'AEVRA_ADMIN_PORT',
+];
 
 // Runs main() in-process against an empty state directory with the admin port
 // pointed at loopback port 1, where nothing listens, so every admin command
@@ -48,7 +55,9 @@ test('main reports parse errors with usage text', async () => {
 test('main reports configuration errors before dispatching', async () => {
   const result = await runMain(['status'], { AEVRA_TLS_CERT: 'cert.pem' });
   assert.equal(result.code, 1);
-  assert.deepEqual(result.errors, ['[aevra] AEVRA_TLS_CERT and AEVRA_TLS_KEY must be set together']);
+  assert.deepEqual(result.errors, [
+    '[aevra] AEVRA_TLS_CERT and AEVRA_TLS_KEY must be set together',
+  ]);
 });
 
 const adminCommands: string[][] = [
@@ -71,7 +80,11 @@ for (const argv of adminCommands) {
 }
 
 test('main routes backup verify through the sqlite inspector', async () => {
-  const result = await runMain(['backup', 'verify', path.join(os.tmpdir(), `aevra-absent-${process.pid}`, 'backup.db')]);
+  const result = await runMain([
+    'backup',
+    'verify',
+    path.join(os.tmpdir(), `aevra-absent-${process.pid}`, 'backup.db'),
+  ]);
   assert.equal(result.code, 1);
   assert.match(result.errors.join('\n'), /^\[aevra\] backup failed: /);
 });

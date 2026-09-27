@@ -97,7 +97,11 @@ test('settings store without revision tracking falls back to revision 1', async 
 
 test('hook normalization fills name, kind and timeout defaults', async () => {
   const fx = plainSettings();
-  const created = await call(fx, '/api/hooks', 'POST', { executable: ' node ', name: '', kind: '' });
+  const created = await call(fx, '/api/hooks', 'POST', {
+    executable: ' node ',
+    name: '',
+    kind: '',
+  });
   assert.equal(created.status, 201);
   const hook = created.value.hook;
   assert.equal(hook.name, 'Hook');

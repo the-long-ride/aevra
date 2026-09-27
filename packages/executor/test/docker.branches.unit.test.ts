@@ -32,7 +32,10 @@ test('prepare, inspect, network policy and terminate track sandbox state', async
     image: 'node:22-alpine',
     networkPolicyApplied: true,
   });
-  await backend.applyNetworkPolicy(handle, { mode: 'allow-list', destinations: ['example.test'] } as any);
+  await backend.applyNetworkPolicy(handle, {
+    mode: 'allow-list',
+    destinations: ['example.test'],
+  } as any);
   assert.equal((await backend.inspect(handle)).networkPolicyApplied, false);
   await backend.applyNetworkPolicy(handle, { mode: 'deny-all', destinations: [] } as any);
   assert.equal((await backend.inspect(handle)).networkPolicyApplied, true);

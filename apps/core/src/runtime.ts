@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { CoreConfig } from './config.js';
 import { createRuntimeRepositories } from './runtime-repositories.js';
+import { createRuntimeConnectionServices } from './runtime-connection-services.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { HostControlGrantRepository } from '../../../packages/store/src/host-control-grants.js';
 import { HostControlAccess } from './control/host-control-access.js';
@@ -11,24 +12,17 @@ import { installHostControlRevocation } from './control/host-control-revocation.
 import { SecurityGuard } from './security/security-guard.js';
 import { ManifestService } from './workspaces/manifest-service.js';
 import { IpRateLimiter } from './mcp/rate-limit.js';
-import { ConnectionRateLimiter } from './mcp/connection-rate-limit.js';
 import { createConnectorAdmission } from './mcp/connector-admission.js';
 import { McpActivityLog } from './mcp/activity-log.js';
 import { AEVRA_VERSION } from './version.js';
 import { MetricsService } from './metrics.js';
 import { AdminServer } from './admin/server.js';
-import { ConnectionAdminService } from './admin/connection-admin.js';
 import { buildRuntimeHealth } from './admin/runtime-health.js';
 import { McpIngressServer } from './mcp/server.js';
 import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
 import * as adminRuntime from './admin/admin-api-context.js';
 import { LocalFilesystemService } from './admin/local-filesystem.js';
 import type { WorkerClient } from '../../../packages/ipc/src/client.js';
-import { CapabilityProfileService } from './policy/capabilities.js';
-import { SessionManager } from './sessions/session-manager.js';
-import { ConnectionStateStore } from './sessions/connection-state.js';
-import { ConnectionWorkspaceGrantService } from './sessions/connection-workspace-grants.js';
-import { WorkspaceService } from './workspaces/workspace-service.js';
 import { ReadVersionCache } from './operations/read-version-cache.js';
 import { ResumableOperationService } from './operations/resumable-operation-service.js';
 import { AuditService } from './audit/audit-service.js';
@@ -118,38 +112,20 @@ export async function createCoreRuntime(
           oauthRepo,
         } = createRuntimeRepositories(raw);
         const connectorBindings = (subject: string) => connectorRepo.getBindings(subject);
-        const connectionState = new ConnectionStateStore(oauthRepo);
-        processRepo.markKeepRunningUncertain();
-        const workspaces = new WorkspaceService(workspaceRepo),
-          profiles = new CapabilityProfileService(raw),
-          connectionLimiter = new ConnectionRateLimiter(),
-          invalidBearerLimiter = new IpRateLimiter(30, 1),
-          sessions = new SessionManager(
-            sessionRepo,
-            profiles,
-            config.leaseIdleMs,
-            undefined,
-            connectionState,
-            config.connectionReconnectGraceMs,
-          ),
-          grantHandler = new ConnectionWorkspaceGrantService({
-            db: raw,
-            oauthRepo,
-            workspaceRepo,
-            sessionRepo,
-            profiles,
-            idleMs: config.leaseIdleMs,
-            sessions,
-          }),
-          connections = new ConnectionAdminService(
-            oauthRepo,
-            sessions,
-            Math.floor(config.oauthAccessTokenTtlMs / 1000),
-            undefined,
-            grantHandler,
-            (connId) => connectionLimiter.clear(connId),
-          ),
-          audit = new AuditService(auditRepo),
+        const {
+          workspaces,
+          profiles,
+          connectionLimiter,
+          invalidBearerLimiter,
+          sessions,
+          connections,
+        } = createRuntimeConnectionServices(config, raw, {
+          oauthRepo,
+          processRepo,
+          workspaceRepo,
+          sessionRepo,
+        });
+        const audit = new AuditService(auditRepo),
           permissions = new PermissionEngine(permissionRepo),
           reads = new ReadVersionCache(),
           security = new SecurityGuard(sessions, workspaces, new ManifestService(workspaces));
