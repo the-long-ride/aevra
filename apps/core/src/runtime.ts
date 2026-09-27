@@ -3,28 +3,26 @@ import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { CoreConfig } from './config.js';
 import { createRuntimeRepositories } from './runtime-repositories.js';
+import { createRuntimeConnectionServices } from './runtime-connection-services.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
+import { HostControlGrantRepository } from '../../../packages/store/src/host-control-grants.js';
+import { HostControlAccess } from './control/host-control-access.js';
+import { HostControlApproval } from './control/host-control-approval.js';
+import { installHostControlRevocation } from './control/host-control-revocation.js';
 import { SecurityGuard } from './security/security-guard.js';
 import { ManifestService } from './workspaces/manifest-service.js';
 import { IpRateLimiter } from './mcp/rate-limit.js';
-import { ConnectionRateLimiter } from './mcp/connection-rate-limit.js';
 import { createConnectorAdmission } from './mcp/connector-admission.js';
 import { McpActivityLog } from './mcp/activity-log.js';
 import { AEVRA_VERSION } from './version.js';
 import { MetricsService } from './metrics.js';
 import { AdminServer } from './admin/server.js';
-import { ConnectionAdminService } from './admin/connection-admin.js';
 import { buildRuntimeHealth } from './admin/runtime-health.js';
 import { McpIngressServer } from './mcp/server.js';
 import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
 import * as adminRuntime from './admin/admin-api-context.js';
 import { LocalFilesystemService } from './admin/local-filesystem.js';
 import type { WorkerClient } from '../../../packages/ipc/src/client.js';
-import { CapabilityProfileService } from './policy/capabilities.js';
-import { SessionManager } from './sessions/session-manager.js';
-import { ConnectionStateStore } from './sessions/connection-state.js';
-import { ConnectionWorkspaceGrantService } from './sessions/connection-workspace-grants.js';
-import { WorkspaceService } from './workspaces/workspace-service.js';
 import { ReadVersionCache } from './operations/read-version-cache.js';
 import { ResumableOperationService } from './operations/resumable-operation-service.js';
 import { AuditService } from './audit/audit-service.js';
@@ -114,41 +112,29 @@ export async function createCoreRuntime(
           oauthRepo,
         } = createRuntimeRepositories(raw);
         const connectorBindings = (subject: string) => connectorRepo.getBindings(subject);
-        const connectionState = new ConnectionStateStore(oauthRepo);
-        processRepo.markKeepRunningUncertain();
-        const workspaces = new WorkspaceService(workspaceRepo),
-          profiles = new CapabilityProfileService(raw),
-          connectionLimiter = new ConnectionRateLimiter(),
-          invalidBearerLimiter = new IpRateLimiter(30, 1),
-          sessions = new SessionManager(
-            sessionRepo,
-            profiles,
-            config.leaseIdleMs,
-            undefined,
-            connectionState,
-            config.connectionReconnectGraceMs,
-          ),
-          grantHandler = new ConnectionWorkspaceGrantService({
-            db: raw,
-            oauthRepo,
-            workspaceRepo,
-            sessionRepo,
-            profiles,
-            idleMs: config.leaseIdleMs,
-            sessions,
-          }),
-          connections = new ConnectionAdminService(
-            oauthRepo,
-            sessions,
-            Math.floor(config.oauthAccessTokenTtlMs / 1000),
-            undefined,
-            grantHandler,
-            (connId) => connectionLimiter.clear(connId),
-          ),
-          audit = new AuditService(auditRepo),
+        const {
+          workspaces,
+          profiles,
+          connectionLimiter,
+          invalidBearerLimiter,
+          sessions,
+          connections,
+        } = createRuntimeConnectionServices(config, raw, {
+          oauthRepo,
+          processRepo,
+          workspaceRepo,
+          sessionRepo,
+        });
+        const audit = new AuditService(auditRepo),
           permissions = new PermissionEngine(permissionRepo),
           reads = new ReadVersionCache(),
           security = new SecurityGuard(sessions, workspaces, new ManifestService(workspaces));
+        const hostControlAccess = new HostControlAccess(
+          sessions,
+          new HostControlGrantRepository(raw),
+          (id) => connectorRepo.isActive(id),
+        );
+        connections.setControlAccess(hostControlAccess);
         operationRepo.setConnectionResolver(
           (sessionId) => sessions.connectionIdentity(sessionId)?.connectionId,
         );
@@ -158,6 +144,7 @@ export async function createCoreRuntime(
         oauthRepo.invalidateEphemeralForRestart();
         if (!safeMode) worker = await wm.start();
         const workerGateway = runtimeWorkerGateway(wm, safeMode);
+        installHostControlRevocation(hostControlAccess, workerGateway);
         const changes = new ChangeSetService(
             changeRepo,
             operationRepo,
@@ -189,6 +176,7 @@ export async function createCoreRuntime(
           safeMode,
           sessions,
         );
+        const hostControlApproval = new HostControlApproval(sessions, hostControlAccess, approvals);
         const metrics = new MetricsService(),
           browserPairing = createBrowserPairingService(settings, wm, workerGateway),
           browserPolicy = createBrowserOriginPolicyService(settings, config, () => [
@@ -204,6 +192,7 @@ export async function createCoreRuntime(
             sessions,
             workspaces,
             audit,
+            hostControlAccess,
           ),
           desktopAppCatalog = createDesktopAppCatalogService(db!, desktopAccess, audit),
           activity = new McpActivityLog(),
@@ -218,6 +207,8 @@ export async function createCoreRuntime(
           approvals,
           {
             operations,
+            hostControlAccess,
+            hostControlApproval,
             resumableOperations,
             controlPlans: controlPlanRepo,
             processes,
@@ -231,6 +222,7 @@ export async function createCoreRuntime(
             desktopAccess,
             desktopAppCatalog,
             systemCapabilities,
+            browserPairing,
             browserPolicy,
             upstreams: mcpUpstreams,
           },
@@ -279,6 +271,7 @@ export async function createCoreRuntime(
               localFilesystem,
               oauth,
               connections,
+              hostControlAccess,
               environment,
               vault,
               database: databaseAdmin,

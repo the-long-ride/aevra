@@ -142,6 +142,46 @@ test('shell_run publishes a concrete high-control script schema', () => {
   assert.equal(shell.annotations.readOnlyHint, false);
 });
 
+test('browser_act_many advertises both canonical and nested click actions', () => {
+  const schema = inputSchemas.browser_act_many as any;
+  const variants = schema.properties.actions.items.oneOf as any[];
+  assert.ok(Array.isArray(variants), 'actions must publish concrete variants');
+  assert.ok(variants.some((variant) => variant.properties?.op?.const === 'click'));
+  assert.ok(variants.some((variant) => variant.required?.includes('click')));
+  assert.ok(variants.every((variant) => variant.additionalProperties === false));
+});
+
+test('browser tool metadata guides models from semantic targets to coordinate fallback', () => {
+  const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
+  const snapshot = definitions.get('browser_snapshot') as any;
+  const actions = definitions.get('browser_act_many') as any;
+  const script = definitions.get('browser_execute_script') as any;
+
+  assert.match(snapshot.description, /accessibility.*first/i);
+  assert.match(snapshot.description, /vision.*canvas/i);
+  assert.match(snapshot.inputSchema.properties.mode.description, /accessibility.*first/i);
+  assert.match(actions.description, /ref.*selector.*coordinate/i);
+  assert.match(actions.description, /canvas|semantic.*fail/i);
+  assert.match(actions.inputSchema.properties.actions.description, /ref.*selector.*coordinate/i);
+  assert.match(actions.inputSchema.properties.actions.description, /last resort/i);
+  assert.match(script.description, /stable.*selector/i);
+});
+
+test('browser_act_many exposes flat and nested drag actions with both endpoints required', () => {
+  const schema = inputSchemas.browser_act_many as any;
+  const variants = schema.properties.actions.items.oneOf as any[];
+  const flat = variants.find((variant) => variant.properties?.op?.const === 'drag');
+  const nested = variants.find((variant) => variant.properties?.drag);
+  for (const payload of [flat, nested?.properties?.drag]) {
+    assert.ok(payload, 'drag variant missing');
+    for (const field of ['x', 'y', 'toX', 'toY']) {
+      assert.ok(payload.required.includes(field), `${field} must be required`);
+      assert.equal(payload.properties[field].type, 'number');
+    }
+    assert.equal(payload.additionalProperties, false);
+  }
+});
+
 test('command, shell, and process inputs publish cwdLogical', () => {
   const definitions = new Map(toolDefinitions().map((tool) => [tool.name, tool]));
   const command = inputSchemas.command_run as any;
@@ -178,5 +218,20 @@ test('workspace-scoped public tools accept explicit workspace name or ID', () =>
     const schema = definitions.get(name)?.inputSchema as any;
     assert.ok(schema?.properties?.workspace, `${name} workspace schema missing`);
     assert.ok(schema?.properties?.workspaceId, `${name} workspaceId schema missing`);
+  }
+});
+
+test('device control tools publish host scope and ignored legacy workspace fields', () => {
+  const definitions = new Map<string, ReturnType<typeof toolDefinitions>[number]>(
+    toolDefinitions().map((tool) => [tool.name, tool]),
+  );
+  const access = definitions.get('control_access_status') as any;
+  assert.ok(access);
+  assert.deepEqual(access.inputSchema.required ?? [], []);
+  for (const name of ['browser_status', 'desktop_status', 'control_observe', 'control_execute']) {
+    const tool = definitions.get(name) as any;
+    assert.ok(tool);
+    assert.match(tool.inputSchema.properties.workspaceId.description, /ignored for host/i);
+    assert.equal(tool.inputSchema.required?.includes('workspaceId') ?? false, false);
   }
 });

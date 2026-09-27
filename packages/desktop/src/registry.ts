@@ -1,4 +1,4 @@
-import type { DesktopCapabilities } from '../../protocol/src/desktop.js';
+import type { DesktopCapabilities, DesktopOwner } from '../../protocol/src/desktop.js';
 import { BackgroundDesktopState } from './background-state.js';
 import { DesktopDriverError, type DesktopDriver } from './driver.js';
 
@@ -78,6 +78,10 @@ export class DesktopSessionRegistry {
 
   status(): DesktopRegistryStatus {
     return { connected: Boolean(this.driver), capabilities: this.capabilities };
+  }
+
+  invalidateOwner(owner: DesktopOwner): number {
+    return this.backgroundState.invalidateOwner(owner);
   }
 
   async disconnect(): Promise<void> {

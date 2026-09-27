@@ -1,4 +1,8 @@
-import { stringProp, workspaceTargetProperties, type JsonSchema } from './registry-schema-parts.js';
+import {
+  stringProp,
+  hostLegacyWorkspaceProperties,
+  type JsonSchema,
+} from './registry-schema-parts.js';
 
 const controlMode = {
   type: 'string',
@@ -10,7 +14,7 @@ const controlMode = {
 const planIdSchema: JsonSchema = {
   type: 'object',
   properties: {
-    ...workspaceTargetProperties,
+    ...hostLegacyWorkspaceProperties,
     planId: stringProp('Owned control plan id.'),
   },
   required: ['planId'],
@@ -21,7 +25,7 @@ export const controlInputSchemas: Record<string, JsonSchema> = {
   control_observe: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       kind: {
         type: 'string',
         enum: ['browser', 'desktop'],
@@ -38,7 +42,7 @@ export const controlInputSchemas: Record<string, JsonSchema> = {
       includeImage: {
         type: 'boolean',
         description:
-          'Request visual evidence when the adapter supports it. Current v1.1.2 control observations keep images explicit through capture/snapshot tools.',
+          'Request visual evidence when the adapter supports it. Control observations keep images explicit through capture/snapshot tools.',
       },
       maxOutputTokens: {
         type: 'integer',
@@ -53,7 +57,7 @@ export const controlInputSchemas: Record<string, JsonSchema> = {
   control_execute: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       plan: {
         type: 'object',
         description:
@@ -68,7 +72,7 @@ export const controlInputSchemas: Record<string, JsonSchema> = {
   desktop_act_many: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       windowId: stringProp('Target desktop window id.'),
       requestId: stringProp('Optional idempotency key for the batch.'),
       actions: {

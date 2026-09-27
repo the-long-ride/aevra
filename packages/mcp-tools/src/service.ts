@@ -34,6 +34,7 @@ import type {
   McpProxyOperation,
   McpRuntimeContext,
   McpToolDependencies,
+  HostApprovalProof,
   WorkerGateway,
 } from './service-types.js';
 import {
@@ -54,14 +55,13 @@ const TARGETED_WORKSPACE_TOOLS = new Set([
   'process_start',
   'process_list',
   'change_begin',
-  ...BROWSER_TOOL_NAMES,
-  ...CONTROL_TOOL_NAMES,
-  ...DESKTOP_TOOL_NAMES,
 ]);
 
 function needsWorkspaceTarget(name: string, args: any) {
   if (name === 'workspace_select') return false;
   if (TARGETED_WORKSPACE_TOOLS.has(name)) return true;
+  if (BROWSER_TOOL_NAMES.has(name) || DESKTOP_TOOL_NAMES.has(name) || CONTROL_TOOL_NAMES.has(name))
+    return false;
   const explicitTarget = Boolean(
     String(args?.workspace ?? '').trim() || String(args?.workspaceId ?? '').trim(),
   );
@@ -154,7 +154,7 @@ export class McpToolService {
     }
   }
 
-  private context(workspaceId?: string): McpRuntimeContext {
+  private context(workspaceId?: string, proof?: HostApprovalProof): McpRuntimeContext {
     return {
       sessions: this.sessions,
       workspaces: this.workspaces,
@@ -164,7 +164,9 @@ export class McpToolService {
       approvals: this.approvals,
       deps: this.deps,
       oneTimeCapabilities: this.oneTimeCapabilities,
-      callInner: (sessionId, name, args) => this.callInner(sessionId, name, args),
+      ...(proof ? { hostApprovalProof: proof } : {}),
+      callInner: (sessionId, name, args, approvedProof) =>
+        this.callInner(sessionId, name, args, approvedProof),
       proxyOperation: (sessionId, operation: McpProxyOperation) => {
         if (operation.kind === 'tool')
           return callUpstreamTool(this.context(), sessionId, operation.name, operation.args);
@@ -176,7 +178,12 @@ export class McpToolService {
     };
   }
 
-  private async callInner(sessionId: string, name: string, args: any = {}) {
+  private async callInner(
+    sessionId: string,
+    name: string,
+    args: any = {},
+    proof?: HostApprovalProof,
+  ) {
     const session = this.sessions.get(sessionId);
     if (!session) throw new AevraToolError('UNAUTHORIZED', 'Unknown Aevra session');
     const baseContext = this.context();
@@ -184,8 +191,17 @@ export class McpToolService {
       ? resolveWorkspaceLease(baseContext, sessionId, args)
       : null;
     this.sessions.touch(sessionId, workspaceLease?.workspaceId);
-    const context = this.context(workspaceLease?.workspaceId);
+    const context = this.context(workspaceLease?.workspaceId, proof);
 
+    if (name === 'control_access_status') {
+      const access = this.deps.hostControlAccess;
+      if (!access) throw new AevraToolError('CAPABILITY_REQUIRED', 'Host control is unavailable');
+      return {
+        identity: access.identity(sessionId),
+        browser: access.has(sessionId, 'browser.control'),
+        desktop: access.has(sessionId, 'desktop.control'),
+      };
+    }
     if (BASIC_TOOL_NAMES.has(name)) return handleBasicTool(context, sessionId, name, args);
     if (isFastLaneTool(name)) return handleFastLaneTool(context, sessionId, name, args);
     if (FILE_TOOL_NAMES.has(name)) return handleFileTool(context, sessionId, name, args);

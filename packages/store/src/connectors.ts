@@ -85,6 +85,13 @@ export class ConnectorRepository {
       expiresAt: row.expiresAt ?? null,
     };
   }
+  isActive(id: string, now = Date.now()): boolean {
+    return Boolean(
+      this.db
+        .prepare('SELECT 1 FROM connectors WHERE id=? AND (expires_at IS NULL OR expires_at>?)')
+        .get(id, new Date(now).toISOString()),
+    );
+  }
   revoke(id: string) {
     this.db.prepare('DELETE FROM connectors WHERE id=?').run(id);
   }

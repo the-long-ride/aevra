@@ -173,6 +173,7 @@ test('the script fast lane exists without exposing arbitrary page evaluation', a
 function withoutCapability(deny = false) {
   const ctx = context();
   ctx.value.sessions.activeLease = () => ({ workspaceId: 'w1', capabilities: [] });
+  if (!deny) ctx.value.deps.hostControlAccess.has = () => false;
   if (deny) {
     ctx.value.deps.permissions = {
       decide: () => ({ outcome: 'deny', reason: 'browser control is not granted here' }),

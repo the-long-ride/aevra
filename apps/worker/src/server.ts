@@ -9,10 +9,11 @@ import { browserRuntime } from './browser-runtime.js';
 export async function startWorkerServer(input: {
   endpoint: string;
   secret: Buffer;
+  browserTokenKey: Buffer;
   daemonInstanceId: string;
 }) {
   const signer = new HmacEnvelopeSigner(input.secret, input.daemonInstanceId);
-  browserRuntime.configure({ secret: input.secret });
+  browserRuntime.configure({ browserTokenKey: input.browserTokenKey });
   const server = createIpcServer(input.endpoint, input.secret, input.daemonInstanceId, {
     async health() {
       return { ready: true, pid: process.pid };

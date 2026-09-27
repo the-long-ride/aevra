@@ -1,6 +1,6 @@
 # 02 — Security Model
 
-**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.1.2`
+**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.1.3`
 
 Security is two questions: **who gets in** (admission) and **what may they do** (authority). They never mix.
 
@@ -42,15 +42,15 @@ Dynamic client registration is open by design but bounded: `client_name` is stri
 
 ## Authority — capabilities
 
-A lease carries a profile: **Minimal**, **Read Only**, **Safe Dev**, **Power Dev**, **Full Workspace**, or **Custom**. Capability vocabulary: `files.read` `files.search` `git.read` `files.write` `files.delete` `commands.run` `git.commit` `git.push` `network` `skills.read` `skills.write` `instructions.read` `instructions.write` `browser.control` `desktop.control`.
+A workspace lease carries a profile: **Minimal**, **Read Only**, **Safe Dev**, **Power Dev**, **Full Workspace**, or **Custom**. Workspace capability vocabulary includes `files.read` `files.search` `git.read` `files.write` `files.delete` `commands.run` `git.commit` `git.push` `network` `skills.read` `skills.write` `instructions.read` `instructions.write`.
 
-`browser.control` and `desktop.control` are off by default, are in no built-in profile, and are **not** implied by `network`: driving a browser reaches the user's logged-in web sessions, and driving the desktop reaches host applications and OS windows, which network access alone does not.
+`browser.control` and `desktop.control` are independent host grants for the exact AI connection. They are off by default, are in no built-in workspace profile, and are **not** implied by `network` or a workspace grant: driving a browser reaches the user's logged-in web sessions, and driving the desktop reaches host applications and OS windows. Host control does not require selecting a workspace.
 
-Tool visibility ≠ authorization: every operation is re-checked against the active lease.
+Tool visibility ≠ authorization: workspace operations re-check the active lease, while host browser and desktop operations re-check the connection grant and their own policy.
 
 ## Approvals — step-up for risk
 
-Risky operations pause for a local decision (fast-wait 20 s, then an `APPROVAL_PENDING` ticket). **Approving arms the frozen request — it executes nothing.** The AI client must resume via `approval_wait`, which revalidates actor, session, workspace, lease, expiry, capability, permission rules, and repository head. Ticket lifetimes: 5 min default, 2 min HIGH, 60 s CRITICAL.
+Risky operations pause for a local decision (fast-wait 20 s, then an `APPROVAL_PENDING` ticket). **Approving arms the frozen request — it executes nothing.** The AI client must resume via `approval_wait`, which revalidates actor, session, expiry, capability, and permission rules. Workspace actions also revalidate the workspace lease and repository head; host browser and desktop actions revalidate the exact connection grant. Ticket lifetimes: 5 min default, 2 min HIGH, 60 s CRITICAL.
 
 Remembered scopes: run once · this session · always this workspace · always all workspaces. More-specific ALLOW/DENY rules win; DENY wins ties; critical operations never gain persistent always-allow (`policy.critical.alwaysConfirm`), and **YOLO does not override that** — the policy is evaluated before any YOLO short-circuit.
 
@@ -91,8 +91,10 @@ Page text, snapshots, and logs return under the same untrusted-content marker as
 file reads: a page instructing the agent is data, not a command.
 
 Pairing mints a MAC'd token the Worker verifies offline; the Worker pins the
-extension's origin. **Disconnect all browsers** bumps a revocation epoch that
-invalidates every issued token and drops live sockets immediately.
+extension's origin. Each paired browser profile has its own token; **Unpair**
+revokes one profile. **Disconnect all browsers** bumps a revocation epoch that
+invalidates every issued token and drops live sockets immediately. A paired
+extension socket still needs `browser_connect` to attach the AI browser session.
 
 ## Desktop control and background automation
 
@@ -104,10 +106,10 @@ Behind `desktop.control`, `desktop_*` tools drive local OS windows and controls 
 Safety boundaries for desktop control are strictly enforced:
 
 - **Window gate direction:** `evaluateWindowGate` enforces directional boundaries (`'input' | 'capture' | 'background'`). Read-only capture/describe are permitted across visible windows. For foreground input, windows without resolvable executable metadata are refused unless `unattributedInput: 'allow'` is explicitly configured. For background automation, unattributable windows are **strictly refused** regardless of `unattributedInput: 'allow'`.
-- **Exact-path app grants and access requests:** `desktop_request_access` creates a pending, ten-minute request bound to the caller, workspace, target window/process instance, and verified WebView2 host identity when applicable. Only an administrator decision can create a session grant or persistent canonical-executable-path grant. Session grants expire with their session; persistent grants are explicitly revocable. A grant never bypasses `desktop.control`, current window identity, protected-title rules, denylist policy, or per-action approval.
+- **Exact-path app grants and access requests:** `desktop_request_access` creates a pending, ten-minute request bound to the exact AI connection, target window/process instance, and verified WebView2 host identity when applicable. Only an administrator decision can create a session grant or persistent canonical-executable-path grant. Session grants expire with their session; persistent grants are explicitly revocable. A grant never bypasses `desktop.control`, current window identity, protected-title rules, denylist policy, or per-action approval.
 - **Protected surfaces & self-targeting:** The desktop helper refuses any window owned by Aevra itself (Core daemon, Admin UI, Worker, CLI) or elevated system processes, preventing an agent from re-permissioning itself or bypassing gateway boundaries.
 - **Native OS security boundaries (UIPI & window stations):** Operating System User Interface Privilege Isolation (UIPI) prevents lower-integrity workers from injecting input or sending window messages to higher-integrity processes; violations fail closed with `DESKTOP_INPUT_REFUSED`. Operations across non-interactive window stations or lock screens are refused.
-- **Background window leases:** Background semantic operations require an exclusive window lease (`sessionId`, `workspaceId`, 60-second sliding TTL). The lease prevents concurrent sessions or foreign workspaces from interleaving mutating actions on the same window (`DESKTOP_WINDOW_BUSY`). Leases are refreshed on activity and released explicitly via `desktop_release_window` or upon expiration.
+- **Background window leases:** Background semantic operations require an exclusive window lease owned by the host-control connection identity (60-second sliding TTL). The lease prevents other owners from interleaving mutating actions on the same window (`DESKTOP_WINDOW_BUSY`). Leases are refreshed on activity and released explicitly via `desktop_release_window` or upon expiration.
 - **Generational ref invalidation:** Element references (`ref_<generation>_<index>`) are tied to a single accessibility snapshot. Any change in window structure or helper restart marks earlier references stale (`DESKTOP_REF_STALE`). In background mode, target elements undergo runtime verification (matching handle, control type, and runtime ID) immediately prior to invoking patterns (`DESKTOP_TARGET_CHANGED`).
 - **Focus change detection:** Foreground input operations verify that the target window has not lost focus between perception and actuation; unexpected focus shifts abort with `DESKTOP_FOCUS_CHANGED`.
 - **Credential masking & audit sanitization:** Password, PIN, and credential input fields are masked in accessibility trees. String values passed to `desktop_set_value` and `desktop_type` are redacted from audit logs and approval records, recording only character length and cryptographic nonce. Screenshots and pixel captures are audited solely by SHA-256 hash, never storing image binary data.

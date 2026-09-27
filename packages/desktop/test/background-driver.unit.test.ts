@@ -9,7 +9,10 @@ import { BackgroundDesktopState } from '../src/background-state.js';
 import { DesktopDriverError, type DesktopDriver } from '../src/driver.js';
 import type { DesktopOwner } from '../../protocol/src/desktop.js';
 
-const TEST_OWNER: DesktopOwner = { sessionId: 's1', workspaceId: 'w1' };
+const TEST_OWNER: DesktopOwner = {
+  identity: { kind: 'oauth', key: 'connection-1' },
+  surface: 'desktop.control',
+};
 const TEST_WINDOW = { windowId: 'win1', processId: 100, processStartedAt: '2026-09-18T00:00:00Z' };
 
 function setupTestState() {

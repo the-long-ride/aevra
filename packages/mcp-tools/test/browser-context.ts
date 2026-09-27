@@ -15,6 +15,17 @@ export function browserContext(tabUrl = 'https://example.com/', options: { yolo?
           value: [{ tabId: 't1', url: tabUrl, title: 'Example', active: true }],
         };
       }
+      if (kind === 'browser.status') {
+        return {
+          ok: true,
+          value: {
+            connected: true,
+            transport: 'extension',
+            attachmentId: 'peer-1',
+            tabs: [{ tabId: 't1', url: tabUrl, title: 'Example', active: true }],
+          },
+        };
+      }
       if (kind === 'browser.read') {
         return { ok: true, value: { tabId: 't1', url: tabUrl, content: 'page text' } };
       }
@@ -40,7 +51,10 @@ export function browserContext(tabUrl = 'https://example.com/', options: { yolo?
       workspaces: { capabilityRoots: () => [] } as any,
       worker,
       reads: {} as any,
-      deps: { audit } as any,
+      deps: {
+        audit,
+        hostControlAccess: { has: () => true, identity: () => ({ kind: 'session', key: 's1' }) },
+      } as any,
       oneTimeCapabilities: new Set<string>(),
       processStart: async () => ({}),
       callInner: async () => ({}),

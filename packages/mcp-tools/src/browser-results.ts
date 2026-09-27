@@ -5,6 +5,13 @@ import { redactText } from '../../security/src/dlp.js';
 /** Values that are pixels rather than text, so DLP has nothing to read. */
 const NOT_TEXT = new Set(['imageDataUri']);
 
+export const UNTRUSTED_RESULTS = new Set([
+  'browser_snapshot',
+  'browser_read',
+  'browser_logs',
+  'browser_tabs',
+]);
+
 export interface RedactedBrowserResult {
   value: unknown;
   redactionCount: number;

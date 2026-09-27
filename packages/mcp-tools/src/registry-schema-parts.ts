@@ -25,6 +25,19 @@ export const workspaceTargetProperties = {
   workspace: stringProp('Workspace name for this operation.'),
   workspaceId: stringProp('Workspace ID for this operation.'),
 };
+export const hostLegacyWorkspaceProperties = {
+  workspace: stringProp(
+    'Deprecated compatibility field; ignored for host browser and desktop authorization.',
+  ),
+  workspaceId: stringProp(
+    'Deprecated compatibility field; ignored for host browser and desktop authorization.',
+  ),
+};
+export const hostControlEmptySchema: JsonSchema = {
+  type: 'object',
+  properties: { ...hostLegacyWorkspaceProperties },
+  additionalProperties: false,
+};
 export const workspaceEmptySchema: JsonSchema = {
   type: 'object',
   properties: { ...workspaceTargetProperties },

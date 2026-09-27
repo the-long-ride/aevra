@@ -2,13 +2,15 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current release is **1.1.2**. It includes command understanding,
+The current source version is **1.1.3**. It includes command understanding,
 workspace containment, typed command rules, efficient browser/control plans,
 cross-platform shared-semantic desktop control, MCP upstream servers, and
-workspace manifests. This patch also fixes missing compiled modules in npm
+workspace manifests. Version 1.1.2 fixed missing compiled modules in npm
 installs, adds a packed-package CLI check to the release gates, and gives Node
-test runners a private temporary directory that they clean after each run. The
-feature-specific manuals and canonical specs linked below are the source of
+test runners a private temporary directory that they clean after each run.
+Version 1.1.3 also adds host-scoped browser and desktop grants, independent
+browser-profile pairing, reliable canvas vision capture, and native coordinate
+click and drag. The feature-specific manuals and canonical specs linked below are the source of
 truth for detailed contracts and security limitations.
 
 ---
@@ -116,10 +118,11 @@ Aevra exposes a standard MCP endpoint (`/mcp`) that can be accessed either **dir
 
 ### Browser control (1.1.1)
 
-Grant the `browser.control` capability explicitly; it is off by default and
-is not implied by `network`. Install the version-matched MV3 archive with
+Grant `browser.control` to the exact AI connection; it is off by default,
+independent of workspace selection, and is not implied by `network`. Install the version-matched MV3 archive with
 `aevra extension install`, load its unpacked folder in Chrome or Edge, then
-pair it from **Settings → Browser control** using the single-use code. Keep the
+pair it from **Settings → Browser control** using the single-use code. After
+the extension socket authenticates, call `browser_connect` to attach it. Keep the
 folder at a stable path because Chromium derives the unpacked extension id from
 that path. CDP is available as an alternative with a separate browser profile
 and `--remote-debugging-port`.
@@ -136,7 +139,7 @@ drops both transports immediately. Full procedure: [Browser control](docs/user-m
 Official packages include a native helper for Windows, macOS, and Linux. Source
 development can build it with `cargo build --release --manifest-path helper/Cargo.toml`;
 `AEVRA_DESKTOP_HELPER_PATH` is an explicit override. Grant
-`desktop.control` and run inside an interactive user session with the platform
+`desktop.control` to the exact AI connection and run inside an interactive user session with the platform
 accessibility provider available.
 
 Shared semantic control uses Windows UIA, macOS AX, or Linux AT-SPI and never
@@ -147,7 +150,7 @@ synthesizes host pointer/keyboard input. Use background `desktop_describe` plus
 legacy foreground input and pixel capture; macOS/Linux portable mode reports
 those capabilities unavailable.
 
-Strict `isolated` mode is not a label for the ordinary worker: v1.1.2 refuses
+Strict `isolated` mode is not a label for the ordinary worker: v1.1.3 refuses
 it until a separately provisioned runner has passed containment qualification.
 Read [Desktop control](docs/user-manual/19-desktop-control.md) before enabling it.
 

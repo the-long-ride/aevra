@@ -27,9 +27,16 @@ export const ADMIN_SURFACE = {
     ],
     completedPosition: 'bottom',
   },
-  approvalScopes: ['once', 'session', 'workspace', 'global'],
+  approvalScopes: ['once', 'session', 'workspace', 'global', 'connection'],
   actions: {
-    requests: ['deny', 'approve-once', 'approve-session', 'approve-workspace', 'approve-global'],
+    requests: [
+      'deny',
+      'approve-once',
+      'approve-session',
+      'approve-workspace',
+      'approve-global',
+      'approve-connection',
+    ],
     permissions: [
       'add',
       'revoke',
@@ -41,7 +48,7 @@ export const ADMIN_SURFACE = {
     workspaces: ['add', 'details', 'remove', 'add-mount', 'remove-mount', 'save-admission'],
     sessions: ['switch-workspace', 'revoke', 'revoke-all-others'],
     processes: ['stop', 'restart', 'forget'],
-    browser: ['pair', 'disconnect-all'],
+    browser: ['pair', 'unpair', 'disconnect-all'],
     changes: ['rename', 'commit', 'rollback'],
     audit: ['export-json', 'export-jsonl', 'clear'],
     settings: [

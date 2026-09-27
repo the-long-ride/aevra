@@ -1,16 +1,15 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.1.2`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.1.3`
 
 ## Ports and listeners (fixed hosts)
 
-| Listener             | Address                                                                | Env override                |
-| -------------------- | ---------------------------------------------------------------------- | --------------------------- |
-| Public Gateway       | `https://localhost:47830` or `http://...` (binds `127.0.0.1`)          | `AEVRA_PUBLIC_PORT`         |
-| Admin UI/API         | `https://localhost:47831` (binds `127.0.0.1`)                          | `AEVRA_ADMIN_PORT`          |
-| Browser bridge       | `ws://127.0.0.1:47833` (extension transport, started on first connect) | `AEVRA_DESKTOP_HELPER_PATH` | packaged helper | Explicit native desktop-helper binary override; authoritative when set |
-| `AEVRA_BROWSER_PORT` |
-| Remote MCP           | `https://localhost:47832` (binds `127.0.0.1`)                          | `AEVRA_MCP_PORT`            |
+| Listener       | Address                                                                | Env override         |
+| -------------- | ---------------------------------------------------------------------- | -------------------- |
+| Public Gateway | `https://localhost:47830` or `http://...` (binds `127.0.0.1`)          | `AEVRA_PUBLIC_PORT`  |
+| Admin UI/API   | `https://localhost:47831` (binds `127.0.0.1`)                          | `AEVRA_ADMIN_PORT`   |
+| Browser bridge | `ws://127.0.0.1:47833` (extension transport, started on first connect) | `AEVRA_BROWSER_PORT` |
+| Remote MCP     | `https://localhost:47832` (binds `127.0.0.1`)                          | `AEVRA_MCP_PORT`     |
 
 ## Environment variables
 
@@ -32,6 +31,7 @@
 | `AEVRA_CONNECTION_RECONNECT_GRACE_MS`                                                         | 15 minutes                    | Grace after OAuth transport detach; `0` disables grace                          |
 | `AEVRA_ADMIN_PUBLIC_URL`                                                                      | unset                         | Bootstrap/canonical remote Admin HTTPS URL when no saved Admin URL overrides it |
 | `AEVRA_BROWSER_PORT`                                                                          | `47833`                       | Loopback WebSocket port the paired browser extension connects to                |
+| `AEVRA_DESKTOP_HELPER_PATH`                                                                   | packaged helper               | Explicit native desktop-helper binary override; authoritative when set          |
 | `AEVRA_TRUSTED_ADMIN_ORIGINS`                                                                 | empty                         | Comma-separated additional exact HTTPS Admin origins; additive to saved trust   |
 | `AEVRA_WORKER_ENDPOINT`, `AEVRA_WORKER_SECRET`, `AEVRA_DAEMON_INSTANCE_ID`, `AEVRA_PROCESS_*` | internal                      | Core/Worker and detached-process handshake; never user-set                      |
 

@@ -35,6 +35,7 @@ async function call(pathname: string, method: string, context: any = {}, value?:
 function fixture() {
   const calls: any[] = [];
   const connectorRows: any[] = [{ id: 'c1', name: 'Existing' }];
+  const controlGrants = new Set<string>();
   const sessions: any = {
     list: () => [{ id: 's1' }],
     get: (id: string) => (id === 's1' ? { id, actor: 'oauth:ChatGPT' } : null),
@@ -76,6 +77,11 @@ function fixture() {
         revokeSessionHash: (id: string) => calls.push(['revokeAdmin', id]),
       },
       connectors,
+      hostControlAccess: {
+        list: () => [...controlGrants].map((capability) => ({ capability, revokedAt: null })),
+        grant: (_identity: any, capability: string) => controlGrants.add(capability),
+        revoke: (_identity: any, capability: string) => controlGrants.delete(capability),
+      },
       audit: { append: (row: any) => calls.push(['audit', row]) },
     },
     calls,
@@ -187,4 +193,31 @@ test('connector rotate and revoke cover found missing and name fallback branches
   );
   assert.ok(audits.some((row) => row.operation === 'connector.revoke' && row.target === 'missing'));
   assert.equal((await call('/api/not-session', 'GET', fx.context)).handled, false);
+});
+
+test('connector device grants are exact, independent, and audited without a workspace', async () => {
+  const fx = fixture();
+  assert.equal(
+    (
+      await call('/api/connectors/c1/control', 'POST', fx.context, {
+        capability: 'browser.control',
+      })
+    ).status,
+    200,
+  );
+  const grants = await call('/api/connectors/c1/control', 'GET', fx.context);
+  assert.equal(grants.value.browser, true);
+  assert.equal(grants.value.desktop, false);
+  assert.equal(
+    (await call('/api/connectors/c1/control/files.read', 'DELETE', fx.context)).status,
+    400,
+  );
+  assert.equal((await call('/api/connectors/missing/control', 'GET', fx.context)).status, 404);
+  await call('/api/connectors/c1/control/browser.control', 'DELETE', fx.context);
+  assert.equal((await call('/api/connectors/c1/control', 'GET', fx.context)).value.browser, false);
+  const audit = fx.calls.find(
+    (row) => row[0] === 'audit' && row[1].operation === 'connection.control_grant',
+  )[1];
+  assert.equal(audit.connectionId, 'c1');
+  assert.equal('workspaceId' in audit, false);
 });

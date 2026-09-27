@@ -13,7 +13,8 @@ import {
 import { redactText } from '../../security/src/dlp.js';
 import { markUntrusted } from '../../security/src/untrusted.js';
 import { AevraToolError } from './errors.js';
-import { requiredLease } from './service-helpers.js';
+import { authorizeHostControl } from './host-control-gate.js';
+import type { HostControlCapability } from '../../store/src/host-control-grants.js';
 import type { McpRuntimeContext } from './service-types.js';
 import { McpBrowserControlAdapter, McpDesktopControlAdapter } from './control-adapters.js';
 
@@ -40,13 +41,15 @@ function executorFor(context: McpRuntimeContext): PlanExecutor {
 }
 
 function owner(context: McpRuntimeContext, sessionId: string): string {
-  const lease = requiredLease(context, sessionId);
-  const identity =
-    typeof (context.sessions as any).connectionIdentity === 'function'
-      ? (context.sessions as any).connectionIdentity(sessionId)
-      : undefined;
-  const connectionId = identity?.connectionId ?? sessionId;
-  return `${connectionId}:${lease.workspaceId}`;
+  const identity = context.deps.hostControlAccess?.identity(sessionId);
+  if (!identity) throw new AevraToolError('UNAUTHORIZED', 'Unknown Aevra connection');
+  return `host-control:${identity.kind}:${identity.key}`;
+}
+
+function surfaceCapability(surfaceId: string): HostControlCapability {
+  if (surfaceId.startsWith('browser:')) return 'browser.control';
+  if (surfaceId.startsWith('desktop:')) return 'desktop.control';
+  throw new AevraToolError('INVALID_REQUEST', `Unknown control surface ${surfaceId}`);
 }
 
 function ownerSurfaces(ownerKey: string): Map<string, ControlAdapter> {
@@ -75,6 +78,16 @@ async function observe(context: McpRuntimeContext, sessionId: string, args: any)
   const ownerKey = owner(context, sessionId);
   const mode: ControlMode = args.mode === 'isolated' ? 'isolated' : 'sharedSemantic';
   const kind = args.kind === 'browser' ? 'browser' : 'desktop';
+  const access = await authorizeHostControl(
+    context,
+    sessionId,
+    kind === 'browser' ? 'browser.control' : 'desktop.control',
+    'control_observe',
+    args,
+    'control:observe',
+    'LOW',
+  );
+  if ('response' in access) return access.response;
   const windowId = String(args.windowId ?? '');
   if (kind === 'desktop' && !windowId) {
     throw new AevraToolError('INVALID_REQUEST', 'control_observe desktop mode requires windowId');
@@ -122,6 +135,18 @@ async function execute(context: McpRuntimeContext, sessionId: string, rawPlan: u
   const ownerKey = owner(context, sessionId);
   const plan = parseControlPlan(rawPlan);
   refuseSecretPlanData(plan);
+  for (const capability of new Set(plan.surfaceIds.map(surfaceCapability))) {
+    const access = await authorizeHostControl(
+      context,
+      sessionId,
+      capability,
+      'control_execute',
+      { plan },
+      'control:execute',
+      'MEDIUM',
+    );
+    if ('response' in access) return access.response;
+  }
   const known = ownerSurfaces(ownerKey);
   const adapters = new Map<string, ControlAdapter>();
   for (const surfaceId of plan.surfaceIds) {
@@ -135,7 +160,6 @@ async function execute(context: McpRuntimeContext, sessionId: string, rawPlan: u
   const result = await executorFor(context).execute(ownerKey, plan, adapters);
   context.deps.audit?.append({
     sessionId,
-    workspaceId: requiredLease(context, sessionId).workspaceId,
     tool: 'control_execute',
     operation: 'control:execute',
     target: plan.surfaceIds.join(','),
@@ -216,6 +240,30 @@ async function desktopActMany(context: McpRuntimeContext, sessionId: string, arg
   }
   const windowId = String(args.windowId ?? '');
   if (!windowId) throw new AevraToolError('INVALID_REQUEST', 'desktop_act_many requires windowId');
+  for (const input of args.actions) {
+    const action = controlAction(input);
+    const value =
+      action.op === 'type'
+        ? action.text
+        : action.op === 'setValue' || action.op === 'select'
+          ? action.value
+          : undefined;
+    if (typeof value === 'string' && value && redactText(value).redactionCount > 0)
+      throw new AevraToolError(
+        'INVALID_REQUEST',
+        `Aevra will not send secret-shaped data through a control plan (${action.op})`,
+      );
+  }
+  const access = await authorizeHostControl(
+    context,
+    sessionId,
+    'desktop.control',
+    'desktop_act_many',
+    args,
+    'control:desktop_act_many',
+    'MEDIUM',
+  );
+  if ('response' in access) return access.response;
   const ownerKey = owner(context, sessionId);
   const adapter = new McpDesktopControlAdapter(context, sessionId, windowId, 'sharedSemantic');
   const baseline = await adapter.observe();

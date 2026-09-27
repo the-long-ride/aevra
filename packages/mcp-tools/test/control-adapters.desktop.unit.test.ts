@@ -9,6 +9,7 @@ function context(reply: Reply, workspaceId: string | null = 'ws-1') {
   const calls: Array<{ tool: string; args: any }> = [];
   const value = {
     ...(workspaceId ? { workspaceId } : {}),
+    deps: { hostControlAccess: { has: () => true } },
     async callInner(_sessionId: string, tool: string, args: any) {
       calls.push({ tool, args });
       return reply(tool, args);
@@ -115,7 +116,6 @@ test('desktop dispatch maps each action to its semantic provider tool', async ()
     assert.deepEqual(calls.at(-1), {
       tool,
       args: {
-        workspaceId: 'ws-1',
         windowId: 'w1',
         windowLeaseId: 'lease-1',
         snapshotId: 'snap-1',

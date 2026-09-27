@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export interface ExtensionTokenClaims {
   extensionId: string;
+  profileId?: string;
+  credentialId?: string;
   epoch: number;
   issuedAt: string;
   expiresAt: string;
@@ -15,12 +17,28 @@ class ExtensionTokenError extends Error {
 }
 
 function canonical(claims: ExtensionTokenClaims): string {
-  return JSON.stringify({
+  const hasProfileId = claims.profileId !== undefined;
+  const hasCredentialId = claims.credentialId !== undefined;
+  if (hasProfileId !== hasCredentialId) {
+    throw new Error('profileId and credentialId must be provided together');
+  }
+  if (hasProfileId && (!claims.profileId || !claims.credentialId)) {
+    throw new Error('profileId and credentialId must be non-empty');
+  }
+  const canonicalClaims: Record<string, string | number> = {
     epoch: claims.epoch,
     expiresAt: claims.expiresAt,
     extensionId: claims.extensionId,
     issuedAt: claims.issuedAt,
-  });
+  };
+  // Keep the payload byte-for-byte compatible with tokens issued before
+  // profile pairing. New credentials bind both profile identity and a fresh
+  // credential generation so re-pairing cannot revive an old token.
+  if (hasProfileId && hasCredentialId) {
+    canonicalClaims.profileId = claims.profileId!;
+    canonicalClaims.credentialId = claims.credentialId!;
+  }
+  return JSON.stringify(canonicalClaims);
 }
 
 function sign(secret: Buffer, claims: ExtensionTokenClaims): string {
@@ -55,6 +73,16 @@ export function verifyExtensionToken(
     typeof claims?.epoch !== 'number' ||
     typeof claims?.issuedAt !== 'string' ||
     typeof claims?.expiresAt !== 'string'
+  ) {
+    throw new ExtensionTokenError('malformed token');
+  }
+  if (
+    (claims.profileId === undefined) !== (claims.credentialId === undefined) ||
+    (claims.profileId !== undefined &&
+      (typeof claims.profileId !== 'string' ||
+        !claims.profileId.length ||
+        typeof claims.credentialId !== 'string' ||
+        !claims.credentialId.length))
   ) {
     throw new ExtensionTokenError('malformed token');
   }

@@ -14,7 +14,7 @@ import {
   mapDesktopNode,
   pendingApproval,
   throwPending,
-  workspaceArgs,
+  assertAdapterGrant,
 } from './control-adapter-base.js';
 import type { McpRuntimeContext } from './service-types.js';
 
@@ -56,6 +56,15 @@ export class McpDesktopControlAdapter extends BaseAdapter {
     return rebound;
   }
 
+  private assertGrant(): void {
+    try {
+      assertAdapterGrant(this.context, this.sessionId, 'desktop.control');
+    } catch (error) {
+      this.invalidateObservation();
+      throw error;
+    }
+  }
+
   capabilities(): ControlCapabilities {
     return {
       semantic: true,
@@ -72,8 +81,8 @@ export class McpDesktopControlAdapter extends BaseAdapter {
   }
 
   async observe(): Promise<ControlObservation> {
+    this.assertGrant();
     const value: any = await this.context.callInner(this.sessionId, 'desktop_describe', {
-      ...workspaceArgs(this.context),
       windowId: this.windowId,
       mode: 'background',
       maxNodes: this.maxNodes,
@@ -119,6 +128,7 @@ export class McpDesktopControlAdapter extends BaseAdapter {
     action: ControlAction,
     _timeoutMs: number,
   ): Promise<ControlDispatchReceipt> {
+    this.assertGrant();
     if (!('ref' in target)) {
       throw new ControlAdapterError(
         'CONTROL_TARGET_INVALID',
@@ -149,7 +159,6 @@ export class McpDesktopControlAdapter extends BaseAdapter {
     }
 
     const common = {
-      ...workspaceArgs(this.context),
       windowId: this.windowId,
       windowLeaseId: snapshot.windowLeaseId,
       snapshotId: snapshot.snapshotId,

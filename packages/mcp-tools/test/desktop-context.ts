@@ -182,6 +182,20 @@ export function desktopContext(
       approvals,
       deps: {
         audit,
+        hostControlAccess: {
+          has: () => (options.leaseCapabilities ?? ['desktop.control']).includes('desktop.control'),
+          identity: () => ({ kind: 'session', key: 's1' }),
+        },
+        hostControlApproval: {
+          requestHostControl: async (
+            _sessionId: string,
+            _capability: string,
+            originalCall: unknown,
+          ) => {
+            approvals.requests.push({ originalCall });
+            return { status: 'approval_pending', requestId: 'r1' };
+          },
+        },
         ...(options.settingsPolicy !== undefined
           ? { settings: { get: () => options.settingsPolicy } }
           : {}),

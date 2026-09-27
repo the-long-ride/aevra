@@ -9,6 +9,7 @@ import {
   type DesktopAppGrantRecord,
   type NewDesktopAppGrant,
 } from '../../../../packages/store/src/desktop-access.js';
+import type { HostControlIdentity } from '../../../../packages/store/src/host-control-grants.js';
 import {
   basename,
   canonicalExecutablePath,
@@ -26,6 +27,33 @@ import {
 export class DesktopAccessService {
   constructor(private readonly deps: DesktopAccessServiceDeps) {}
 
+  private liveRequest(input: {
+    actor: string;
+    sessionId: string;
+    workspaceId: string | null;
+    scope?: 'workspace' | 'host';
+    requesterIdentity?: { kind: string; key: string } | null;
+  }) {
+    const session = this.deps.sessions.get(input.sessionId);
+    if (!session || session.actor !== input.actor) return false;
+    if (input.scope === 'host') {
+      const identity = this.deps.hostControlAccess?.identity(input.sessionId);
+      return Boolean(
+        identity &&
+        input.requesterIdentity &&
+        identity.kind === input.requesterIdentity.kind &&
+        identity.key === input.requesterIdentity.key &&
+        this.deps.hostControlAccess?.has(input.sessionId, 'desktop.control'),
+      );
+    }
+    return Boolean(
+      input.workspaceId &&
+      this.deps.sessions
+        .leaseForWorkspace(input.sessionId, input.workspaceId)
+        ?.capabilities.includes('desktop.control'),
+    );
+  }
+
   private liveGrants() {
     const grants = this.deps.repository.listGrants();
     const live: DesktopAppGrantRecord[] = [];
@@ -42,7 +70,8 @@ export class DesktopAccessService {
   request(input: {
     actor: string;
     sessionId: string;
-    workspaceId: string;
+    workspaceId: string | null;
+    scope?: 'workspace' | 'host';
     windowId: string;
     duration: DesktopAccessDuration;
     identity: DesktopTargetIdentity;
@@ -53,13 +82,10 @@ export class DesktopAccessService {
     if (input.identity.window.windowId !== input.windowId) {
       fail('DESKTOP_TARGET_CHANGED', 'The requested window identity did not match the live HWND');
     }
-    const liveSession = this.deps.sessions.get(input.sessionId);
-    const liveLease = this.deps.sessions.leaseForWorkspace(input.sessionId, input.workspaceId);
-    if (
-      !liveSession ||
-      liveSession.actor !== input.actor ||
-      !liveLease?.capabilities.includes('desktop.control')
-    ) {
+    const scope = input.scope ?? 'workspace';
+    const requesterIdentity =
+      scope === 'host' ? this.deps.hostControlAccess?.identity(input.sessionId) : null;
+    if (!this.liveRequest({ ...input, scope, requesterIdentity })) {
       fail(
         'DESKTOP_ACCESS_SESSION_ENDED',
         'The requesting desktop-control session is no longer active',
@@ -73,6 +99,8 @@ export class DesktopAccessService {
       actor: input.actor,
       sessionId: input.sessionId,
       workspaceId: input.workspaceId,
+      scope,
+      requesterIdentity: requesterIdentity ?? null,
       windowId: input.identity.window.windowId,
       targetExecutablePath: binding.targetPath,
       targetProcessId: input.identity.windowInstance.processId,
@@ -89,7 +117,7 @@ export class DesktopAccessService {
     this.deps.audit?.append({
       actor: input.actor,
       sessionId: input.sessionId,
-      workspaceId: input.workspaceId,
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
       tool: 'desktop_request_access',
       operation: 'desktop:request_access',
       target: binding.displayName,
@@ -124,14 +152,7 @@ export class DesktopAccessService {
   listPending(): DesktopAccessRequestRecord[] {
     const pending = this.deps.repository.listPending(new Date().toISOString());
     return pending.filter((request) => {
-      const session = this.deps.sessions.get(request.sessionId);
-      const lease = this.deps.sessions.leaseForWorkspace(request.sessionId, request.workspaceId);
-      if (
-        session &&
-        session.actor === request.actor &&
-        lease?.capabilities.includes('desktop.control')
-      )
-        return true;
+      if (this.liveRequest(request)) return true;
       this.deps.repository.expireRequest(request.id, new Date().toISOString());
       return false;
     });
@@ -189,13 +210,7 @@ export class DesktopAccessService {
       fail('DESKTOP_ACCESS_REQUEST_EXPIRED', 'Desktop access request expired');
     }
 
-    const session = this.deps.sessions.get(request.sessionId);
-    const lease = this.deps.sessions.leaseForWorkspace(request.sessionId, request.workspaceId);
-    if (
-      !session ||
-      session.actor !== request.actor ||
-      !lease?.capabilities.includes('desktop.control')
-    ) {
+    if (!this.liveRequest(request)) {
       this.deps.repository.expireRequest(request.id, new Date().toISOString());
       fail(
         'DESKTOP_ACCESS_SESSION_ENDED',
@@ -205,8 +220,17 @@ export class DesktopAccessService {
 
     const observed = await this.deps.worker.execute({
       sessionId: request.sessionId,
-      workspaceId: request.workspaceId,
-      roots: this.deps.capabilityRoots(request.workspaceId),
+      workspaceId: request.workspaceId ?? '',
+      ...(request.scope === 'host'
+        ? {
+            scope: {
+              kind: 'host-control' as const,
+              capability: 'desktop.control' as const,
+              identity: request.requesterIdentity as HostControlIdentity,
+            },
+          }
+        : {}),
+      roots: request.workspaceId ? this.deps.capabilityRoots(request.workspaceId) : [],
       operation: { kind: 'desktop.targetIdentity', windowId: request.windowId },
       executionMode: 'host',
     });
@@ -225,16 +249,7 @@ export class DesktopAccessService {
       fail('DESKTOP_TARGET_CHANGED', 'The target or verified host changed; no grant was created');
     }
 
-    const currentSession = this.deps.sessions.get(request.sessionId);
-    const currentLease = this.deps.sessions.leaseForWorkspace(
-      request.sessionId,
-      request.workspaceId,
-    );
-    if (
-      !currentSession ||
-      currentSession.actor !== request.actor ||
-      !currentLease?.capabilities.includes('desktop.control')
-    ) {
+    if (!this.liveRequest(request)) {
       this.deps.repository.expireRequest(request.id, new Date().toISOString());
       fail(
         'DESKTOP_ACCESS_SESSION_ENDED',
@@ -264,7 +279,7 @@ export class DesktopAccessService {
     this.deps.audit?.append({
       actor: decidedBy,
       sessionId: request.sessionId,
-      workspaceId: request.workspaceId,
+      ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
       tool: 'desktop_access_approve',
       operation: 'desktop:access:approve',
       target: grantInput.displayName,
@@ -288,7 +303,7 @@ export class DesktopAccessService {
     this.deps.audit?.append({
       actor: decidedBy,
       sessionId: request.sessionId,
-      workspaceId: request.workspaceId,
+      ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
       tool: 'desktop_access_deny',
       operation: 'desktop:access:deny',
       target: basename(request.hostExecutablePath),

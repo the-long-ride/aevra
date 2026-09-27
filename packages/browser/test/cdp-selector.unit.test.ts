@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { CdpClient } from '../src/cdp-client.js';
 import { cdpBoxForBackend, clearFocusedCdpField, resolveCdpSelector } from '../src/cdp-selector.js';
+import * as cdpInput from '../src/cdp-selector.js';
 
 function fakeClient(respond: (method: string, params: Record<string, unknown>) => unknown): {
   client: CdpClient;
@@ -77,4 +78,47 @@ test('box and clear helpers use bounded CDP input primitives', async () => {
   assert.deepEqual(await cdpBoxForBackend(client, 42), { x: 10, y: 20, width: 20, height: 30 });
   await clearFocusedCdpField(client);
   assert.equal(calls.filter(([method]) => method === 'Input.dispatchKeyEvent').length, 4);
+});
+
+test('CDP drag releases the held button when a move fails', async () => {
+  const { client, calls } = fakeClient((_method, params) => {
+    if (params.type === 'mouseMoved') throw new Error('move rejected');
+    return {};
+  });
+  const drag = (
+    cdpInput as unknown as {
+      dragCdpPoint: (
+        client: CdpClient,
+        start: { x: number; y: number },
+        end: { x: number; y: number },
+      ) => Promise<void>;
+    }
+  ).dragCdpPoint;
+  await assert.rejects(() => drag(client, { x: 10, y: 20 }, { x: 110, y: 70 }));
+  const events = calls
+    .filter(([method]) => method === 'Input.dispatchMouseEvent')
+    .map(([, params]) => params);
+  assert.equal(events[0]?.type, 'mousePressed');
+  assert.equal(events.at(-1)?.type, 'mouseReleased');
+});
+
+test('CDP drag attempts release if press is rejected after dispatch', async () => {
+  const { client, calls } = fakeClient((_method, params) => {
+    if (params.type === 'mousePressed') throw new Error('press rejected');
+    return {};
+  });
+  const drag = (
+    cdpInput as unknown as {
+      dragCdpPoint: (
+        client: CdpClient,
+        start: { x: number; y: number },
+        end: { x: number; y: number },
+      ) => Promise<void>;
+    }
+  ).dragCdpPoint;
+  await assert.rejects(() => drag(client, { x: 10, y: 20 }, { x: 110, y: 70 }));
+  const types = calls
+    .filter(([method]) => method === 'Input.dispatchMouseEvent')
+    .map(([, params]) => params.type);
+  assert.deepEqual(types, ['mousePressed', 'mouseReleased']);
 });

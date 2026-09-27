@@ -9,17 +9,35 @@ import type {
 import type { NavigateResult } from './driver.js';
 import { classifyOrigin } from './origin-policy.js';
 import { buildSnapshot, RefRegistry, type SnapshotElementLike } from './dom-snapshot.js';
+import { boundedSnapshotAnnotations } from './snapshot-annotations.js';
+import type { VisionCapture } from './vision-budget.js';
+
+export type CaptureStage =
+  'capture_started' | 'capture_api_done' | 'encode_done' | 'reply_send_attempt';
+
+export interface CaptureProgress {
+  stage: CaptureStage;
+  elapsedMs: number;
+  bytes?: number;
+}
 
 export interface ExtensionBridge {
   listTabs(): Promise<BrowserTabInfo[]>;
+  focus(tabId: string): Promise<void>;
   serialize(tabId?: string): Promise<SnapshotElementLike>;
-  devicePixelRatio(tabId?: string): Promise<number>;
   apply(
     action: BrowserActionInput,
     elementId: string | null,
     tabId?: string,
+    isCancelled?: () => boolean,
   ): Promise<{ ok: boolean; code?: string }>;
-  captureVisible(tabId?: string): Promise<string>;
+  /** Bounded to the transport budget; the ratio is image pixels per CSS pixel. */
+  captureVisible(
+    tabId?: string,
+    onProgress?: (progress: CaptureProgress) => void,
+    annotations?: () => Promise<SnapshotElementLike | null>,
+    isCancelled?: () => boolean,
+  ): Promise<VisionCapture & { annotationRoot?: SnapshotElementLike | null }>;
   navigate(url: string, waitUntil: 'load' | 'idle', tabId?: string): Promise<NavigateResult>;
   logs(kind: 'console' | 'network', limit: number, tabId?: string): Promise<BrowserLogEntry[]>;
 }
@@ -33,14 +51,82 @@ function failure(op: BrowserActionInput['op'], code: string, message: string): B
   return { op, ok: false, error: { code, message } };
 }
 
+function actionFailureMessage(action: BrowserActionInput, code: string, tabId?: string): string {
+  if (
+    action.op === 'drag' ||
+    (action.op === 'click' &&
+      !action.ref &&
+      !action.selector &&
+      (action.x !== undefined || action.y !== undefined))
+  ) {
+    const target = tabId ?? 'active tab';
+    if (code === 'BROWSER_NATIVE_INPUT_UNAVAILABLE') {
+      return `Native input unavailable for ${target}; check debugger permission or another debugger attachment`;
+    }
+    if (code === 'BROWSER_INPUT_FAILED') return `Native input failed for ${target}`;
+    if (code === 'BROWSER_ORIGIN_BLOCKED') return `Browser origin blocked for ${target}`;
+    if (code === 'NOT_FOUND') return `Browser tab ${target} was not found`;
+  }
+  return `${action.op} did not complete in the page`;
+}
+
+/**
+ * Image-pixels-per-CSS-pixel of the last vision capture, per tab. Coordinates
+ * arrive in the space of the picture the caller last saw, and the capture may
+ * have been downscaled to fit the transport, so only the ratio that picture
+ * was encoded at can turn them back into CSS pixels. Keyed by registry, which
+ * is the extension's per-connection state.
+ */
+const captureScales = new WeakMap<RefRegistry, Map<string, number>>();
+
+function rememberScale(registry: RefRegistry, tabId: string, scale: number): void {
+  let scales = captureScales.get(registry);
+  if (!scales) {
+    scales = new Map();
+    captureScales.set(registry, scales);
+  }
+  scales.set(tabId, scale);
+}
+
+function hasPoint(action: BrowserActionInput): action is BrowserActionInput & {
+  x: number;
+  y: number;
+} {
+  const point = action as { x?: unknown; y?: unknown };
+  return Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y));
+}
+
+/** Coordinates without a prior vision capture are already CSS pixels. */
+async function toCssPoint(
+  registry: RefRegistry,
+  bridge: ExtensionBridge,
+  action: BrowserActionInput,
+  tabId: string | undefined,
+): Promise<BrowserActionInput> {
+  if ((action.op !== 'click' && action.op !== 'drag') || !hasPoint(action)) return action;
+  const scales = captureScales.get(registry);
+  if (!scales) return action;
+  const key = tabId ?? (await bridge.listTabs()).find((tab) => tab.active)?.tabId ?? '';
+  const scale = scales.get(key) ?? 1;
+  const scaled = { ...action, x: action.x / scale, y: action.y / scale };
+  return scaled.op === 'drag'
+    ? { ...scaled, toX: scaled.toX / scale, toY: scaled.toY / scale }
+    : scaled;
+}
+
 async function act(
   registry: RefRegistry,
   bridge: ExtensionBridge,
   params: Record<string, any>,
+  isCancelled?: () => boolean,
 ): Promise<BrowserActionResult[]> {
   const actions: BrowserActionInput[] = Array.isArray(params.actions) ? params.actions : [];
   const results: BrowserActionResult[] = [];
-  for (const action of actions) {
+  for (const requested of actions) {
+    if (isCancelled?.()) {
+      throw Object.assign(new Error('Browser action cancelled'), { code: 'BROWSER_INPUT_FAILED' });
+    }
+    const action = await toCssPoint(registry, bridge, requested, params.tabId);
     const ref = 'ref' in action && action.ref ? String(action.ref) : null;
     let elementId: string | null = null;
     if (ref) {
@@ -73,7 +159,7 @@ async function act(
         continue;
       }
     }
-    const outcome = await bridge.apply(action, elementId, params.tabId);
+    const outcome = await bridge.apply(action, elementId, params.tabId, isCancelled);
     // The page-side code reports *why* it refused - a credential field, a timed
     // out wait. Dropping the code here would surface every failure as a bare
     // false and leave the two transports disagreeing on error reporting.
@@ -83,7 +169,7 @@ async function act(
         : failure(
             action.op,
             outcome.code ?? 'BROWSER_UNAVAILABLE',
-            `${action.op} did not complete in the page`,
+            actionFailureMessage(action, outcome.code ?? 'BROWSER_UNAVAILABLE', params.tabId),
           ),
     );
     if (!outcome.ok && params.stopOnError !== false) break;
@@ -104,19 +190,38 @@ async function snapshot(
   registry: RefRegistry,
   bridge: ExtensionBridge,
   params: Record<string, any>,
+  onProgress?: (progress: CaptureProgress) => void,
+  isCancelled?: () => boolean,
 ): Promise<BrowserSnapshotResult> {
   const tabs = await bridge.listTabs();
   const tab = params.tabId
     ? tabs.find((entry) => entry.tabId === params.tabId)
     : tabs.find((entry) => entry.active);
-  const root = await bridge.serialize(params.tabId);
+  // Chrome's composited screenshot does not need a DOM tree. A loading page
+  // may briefly have no body, and a canvas game can make DOM injection slow.
+  // Neither may prevent the image from reaching the caller.
+  const boundedAnnotations = () =>
+    boundedSnapshotAnnotations(() => bridge.serialize(params.tabId), isCancelled);
+  const capture =
+    params.mode === 'vision'
+      ? await bridge.captureVisible(params.tabId, onProgress, boundedAnnotations, isCancelled)
+      : null;
+  let root: SnapshotElementLike | null;
+  if (capture) {
+    root =
+      'annotationRoot' in capture ? (capture.annotationRoot ?? null) : await boundedAnnotations();
+  } else {
+    root = await bridge.serialize(params.tabId);
+  }
   // Each snapshot takes the next version, which is what makes an older ref
   // stale rather than silently rebound to a different element.
   const built = registry.record(
-    buildSnapshot(root, {
-      version: registry.version() + 1,
-      maxNodes: Number(params.maxNodes ?? 400),
-    }),
+    root
+      ? buildSnapshot(root, {
+          version: registry.version() + 1,
+          maxNodes: Number(params.maxNodes ?? 400),
+        })
+      : { version: registry.version() + 1, nodes: [], elements: [], truncated: false },
   );
   const base = {
     tabId: tab?.tabId ?? '',
@@ -125,17 +230,22 @@ async function snapshot(
     originClass: tab?.originClass ?? classifyOrigin(tab?.url ?? ''),
     snapshotVersion: registry.version(),
   };
-  if (params.mode === 'vision') {
-    // The screenshot comes back in device pixels while every box is in CSS
-    // pixels. Scaling the boxes into the image's own space is what lets a model
-    // point at what it sees; the ratio travels with the result so the caller can
-    // convert back.
-    const devicePixelRatio = await bridge.devicePixelRatio(params.tabId);
+  if (capture) {
+    // The screenshot is bounded to fit the transport, so its scale is whatever
+    // the capture settled on, while every box is in CSS pixels. Scaling the
+    // boxes into the image's own space is what lets a model point at what it
+    // sees; the ratio travels with the result and is remembered for the
+    // coordinate clicks that follow.
+    const { devicePixelRatio } = capture;
+    rememberScale(registry, base.tabId, devicePixelRatio);
     return {
       ...base,
       mode: 'vision',
-      imageDataUri: await bridge.captureVisible(params.tabId),
+      imageDataUri: capture.imageDataUri,
       devicePixelRatio,
+      imageWidth: capture.imageWidth,
+      imageHeight: capture.imageHeight,
+      viewport: capture.viewport,
       boxes: built.nodes
         .filter((node) => node.box)
         .map((node) => ({
@@ -183,9 +293,19 @@ export async function handleExtensionCommand(
   registry: RefRegistry,
   bridge: ExtensionBridge,
   command: ExtensionCommand,
+  onProgress?: (progress: CaptureProgress) => void,
+  isCancelled?: () => boolean,
 ): Promise<unknown> {
   const params = command.params ?? {};
-  if (command.op === 'tabs') return bridge.listTabs();
+  if (command.op === 'tabs') {
+    if (params.action === 'focus') {
+      if (!params.tabId) {
+        throw Object.assign(new Error('focus requires a tabId'), { code: 'INVALID_ARGUMENT' });
+      }
+      await bridge.focus(String(params.tabId));
+    }
+    return bridge.listTabs();
+  }
   if (command.op === 'navigate') {
     return bridge.navigate(
       String(params.url),
@@ -193,8 +313,8 @@ export async function handleExtensionCommand(
       params.tabId,
     );
   }
-  if (command.op === 'snapshot') return snapshot(registry, bridge, params);
-  if (command.op === 'act') return act(registry, bridge, params);
+  if (command.op === 'snapshot') return snapshot(registry, bridge, params, onProgress, isCancelled);
+  if (command.op === 'act') return act(registry, bridge, params, isCancelled);
   if (command.op === 'logs') {
     return bridge.logs(
       params.logKind === 'network' ? 'network' : 'console',

@@ -13,6 +13,7 @@ import type {
   BrowserSnapshotMode,
   BrowserTabAction,
   BrowserTransport,
+  BrowserExtensionPairing,
 } from './browser.js';
 import { BROWSER_OPERATION_KINDS } from './browser.js';
 import type { BackgroundActionInput, DesktopPolicy } from './desktop.js';
@@ -20,6 +21,10 @@ import { DESKTOP_OPERATION_KINDS } from './desktop.js';
 import type { McpUpstreamCall } from './mcp-upstream.js';
 import { MCP_UPSTREAM_OPERATION_KINDS } from './mcp-upstream.js';
 import type { UpstreamTransportConfig } from '../../mcp-upstream/src/transport.js';
+import type {
+  HostControlCapability,
+  HostControlIdentity,
+} from '../../store/src/host-control-grants.js';
 
 export type SearchQueryMode = 'text' | 'regex' | 'files';
 export interface NativeSearchQuery {
@@ -110,6 +115,7 @@ export type WorkerOperation =
       tabId?: string;
       epoch?: number;
       extensionId?: string;
+      pairings?: BrowserExtensionPairing[];
     }
   | { kind: 'browser.tabs'; action: BrowserTabAction; url?: string; tabId?: string }
   | { kind: 'browser.navigate'; tabId?: string; url: string; waitUntil: 'load' | 'idle' }
@@ -123,8 +129,18 @@ export type WorkerOperation =
     }
   | { kind: 'browser.act'; tabId?: string; actions: BrowserActionInput[]; stopOnError: boolean }
   | { kind: 'browser.logs'; tabId?: string; logKind: BrowserLogKind; limit: number; since?: string }
-  | { kind: 'browser.disconnect'; epoch?: number; all?: boolean }
-  | { kind: 'browser.status'; epoch?: number; extensionId?: string }
+  | {
+      kind: 'browser.disconnect';
+      epoch?: number;
+      all?: boolean;
+      pairings?: BrowserExtensionPairing[];
+    }
+  | {
+      kind: 'browser.status';
+      epoch?: number;
+      extensionId?: string;
+      pairings?: BrowserExtensionPairing[];
+    }
   | { kind: 'desktop.connect' }
   | { kind: 'desktop.status' }
   | { kind: 'desktop.disconnect' }
@@ -161,6 +177,7 @@ export type WorkerOperation =
       windowId: string;
       windowLeaseId: string;
     }
+  | { kind: 'desktop.invalidateOwner' }
   | { kind: 'mcp.upstream.connect'; upstreamId: string; config: UpstreamTransportConfig }
   | { kind: 'mcp.upstream.disconnect'; upstreamId?: string }
   | { kind: 'mcp.upstream.status'; upstreamId?: string }
@@ -168,12 +185,34 @@ export type WorkerOperation =
   | { kind: 'mcp.upstream.call'; upstreamId: string; call: McpUpstreamCall }
   | { kind: 'sandbox.inspect' };
 
+export type WorkerScope =
+  | { kind: 'workspace'; workspaceId: string }
+  | {
+      kind: 'host-control';
+      capability: HostControlCapability;
+      identity: HostControlIdentity;
+    };
+
+export function validateScope(scope: WorkerScope, kind: string, roots: unknown[]): void {
+  if (scope.kind === 'host-control') {
+    const prefix =
+      scope.capability === 'browser.control'
+        ? 'browser.'
+        : scope.capability === 'desktop.control'
+          ? 'desktop.'
+          : '';
+    if (!prefix || roots.length !== 0 || !kind.startsWith(prefix))
+      throw new Error('HOST_CONTROL_SCOPE_INVALID');
+  }
+}
+
 export interface OperationEnvelope {
   version: 1;
   daemonInstanceId: string;
   operationId: string;
   sessionId: string;
   workspaceId: string;
+  scope?: WorkerScope;
   issuedAt: string;
   expiresAt: string;
   nonce: string;
@@ -240,7 +279,6 @@ export function parseOperationEnvelope(value: unknown): OperationEnvelope {
     'daemonInstanceId',
     'operationId',
     'sessionId',
-    'workspaceId',
     'issuedAt',
     'expiresAt',
     'nonce',
@@ -248,6 +286,29 @@ export function parseOperationEnvelope(value: unknown): OperationEnvelope {
   ]) {
     if (typeof r[k] !== 'string' || !(r[k] as string).length) throw new Error(`Invalid ${k}`);
   }
+  if (r.scope !== undefined) {
+    const scope = obj(r.scope);
+    if (scope.kind === 'host-control') {
+      if (
+        r.workspaceId !== '' ||
+        (scope.capability !== 'browser.control' && scope.capability !== 'desktop.control') ||
+        !scope.identity ||
+        !['oauth', 'connector', 'session'].includes(String((scope.identity as any).kind)) ||
+        typeof (scope.identity as any).key !== 'string' ||
+        !(scope.identity as any).key
+      )
+        throw new Error('HOST_CONTROL_SCOPE_INVALID');
+      if (!Array.isArray(r.capabilityRoots)) throw new Error('Invalid capabilityRoots');
+      validateScope(scope as WorkerScope, op.kind as string, r.capabilityRoots);
+    } else if (
+      scope.kind !== 'workspace' ||
+      typeof scope.workspaceId !== 'string' ||
+      !scope.workspaceId ||
+      scope.workspaceId !== r.workspaceId
+    )
+      throw new Error('Invalid scope');
+  } else if (typeof r.workspaceId !== 'string' || !r.workspaceId)
+    throw new Error('Invalid workspaceId');
   if (r.executionMode !== 'sandbox' && r.executionMode !== 'host') {
     throw new Error('Invalid executionMode');
   }

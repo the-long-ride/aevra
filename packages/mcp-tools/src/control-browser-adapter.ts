@@ -13,7 +13,7 @@ import {
   mapBrowserNode,
   pendingApproval,
   throwPending,
-  workspaceArgs,
+  assertAdapterGrant,
 } from './control-adapter-base.js';
 import type { McpRuntimeContext } from './service-types.js';
 
@@ -56,6 +56,15 @@ export class McpBrowserControlAdapter extends BaseAdapter {
     return rebound;
   }
 
+  private assertGrant(): void {
+    try {
+      assertAdapterGrant(this.context, this.sessionId, 'browser.control');
+    } catch (error) {
+      this.invalidateObservation();
+      throw error;
+    }
+  }
+
   capabilities(): ControlCapabilities {
     return {
       semantic: true,
@@ -71,8 +80,8 @@ export class McpBrowserControlAdapter extends BaseAdapter {
   }
 
   async observe(): Promise<ControlObservation> {
+    this.assertGrant();
     const value: any = await this.context.callInner(this.sessionId, 'browser_snapshot', {
-      ...workspaceArgs(this.context),
       ...(this.resolvedTabId ? { tabId: this.resolvedTabId } : {}),
       mode: 'a11y',
       maxNodes: this.maxNodes,
@@ -115,6 +124,7 @@ export class McpBrowserControlAdapter extends BaseAdapter {
     action: ControlAction,
     timeoutMs: number,
   ): Promise<ControlDispatchReceipt> {
+    this.assertGrant();
     if (!('ref' in target)) {
       throw new ControlAdapterError(
         'CONTROL_TARGET_INVALID',
@@ -148,7 +158,6 @@ export class McpBrowserControlAdapter extends BaseAdapter {
     }
 
     const result: any = await this.context.callInner(this.sessionId, 'browser_act_many', {
-      ...workspaceArgs(this.context),
       ...(this.resolvedTabId ? { tabId: this.resolvedTabId } : {}),
       actions: [browserAction],
       stopOnError: true,

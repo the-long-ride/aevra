@@ -6,7 +6,11 @@ import { classifyOrigin } from '../../browser/src/origin-policy.js';
 import type { OriginPolicyConfig } from '../../browser/src/origin-policy.js';
 import { scanNavigateUrl } from '../../security/src/browser-url-policy.js';
 import { markUntrusted } from '../../security/src/untrusted.js';
-import { authorizeCapability, gated } from './authorization.js';
+import {
+  authorizeHostControl,
+  gatedHostControl,
+  requireHostControlIdentity,
+} from './host-control-gate.js';
 import {
   browserOperationRisk,
   isFirstVisit,
@@ -16,9 +20,10 @@ import {
   resetVisited,
 } from './browser-risk.js';
 import { browserOperation } from './browser-operations.js';
-import { redactBrowserResult, reclassifyOrigins } from './browser-results.js';
+import { browserApprovalBinding } from './browser-approval-binding.js';
+import { redactBrowserResult, reclassifyOrigins, UNTRUSTED_RESULTS } from './browser-results.js';
 import { AevraToolError } from './errors.js';
-import { argsHash, requiredLease } from './service-helpers.js';
+import { argsHash } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 
 export const BROWSER_TOOL_NAMES = new Set([
@@ -34,19 +39,13 @@ export const BROWSER_TOOL_NAMES = new Set([
   'browser_logs',
 ]);
 
-const UNTRUSTED_RESULTS = new Set([
-  'browser_snapshot',
-  'browser_read',
-  'browser_logs',
-  'browser_tabs',
-]);
-
 async function run(context: McpRuntimeContext, sessionId: string, operation: WorkerOperation) {
-  const lease = requiredLease(context, sessionId);
+  const identity = requireHostControlIdentity(context, sessionId, 'browser.control');
   const result = await context.worker.execute({
     sessionId,
-    workspaceId: lease.workspaceId,
-    roots: context.workspaces.capabilityRoots(lease.workspaceId),
+    workspaceId: '',
+    scope: { kind: 'host-control', capability: 'browser.control', identity },
+    roots: [],
     operation,
     executionMode: 'host',
   });
@@ -85,12 +84,9 @@ function audit(
   result: string,
   redactionCount = 0,
 ) {
-  const lease = context.workspaceId
-    ? context.sessions.leaseForWorkspace(sessionId, context.workspaceId)
-    : context.sessions.activeLease(sessionId);
   context.deps.audit?.append({
     sessionId,
-    ...(lease ? { workspaceId: lease.workspaceId } : {}),
+
     tool,
     operation: tool.replace('browser_', 'browser:').replace('_many', ''),
     target: origin,
@@ -111,11 +107,12 @@ function originOf(url: string): string {
 async function sessionTool(context: McpRuntimeContext, sessionId: string, name: string, args: any) {
   const pairing = context.deps.browserPairing;
   const risk: RiskTier = name === 'browser_connect' ? 'MEDIUM' : 'LOW';
-  const gate = await authorizeCapability(
+  const gate = await authorizeHostControl(
     context,
     sessionId,
     'browser.control',
-    { tool: name, args },
+    name,
+    args,
     `browser:${name === 'browser_connect' ? 'connect' : 'disconnect'}`,
     risk,
   );
@@ -129,6 +126,7 @@ async function sessionTool(context: McpRuntimeContext, sessionId: string, name: 
           ...(args.cdpPort === undefined ? {} : { cdpPort: Number(args.cdpPort) }),
           ...(args.tabId === undefined ? {} : { tabId: String(args.tabId) }),
           ...(pairing ? { epoch: pairing.epoch() } : {}),
+          ...(pairing ? { pairings: pairing.workerPairings?.() ?? [] } : {}),
           ...(paired ? { extensionId: paired } : {}),
         }
       : { kind: 'browser.disconnect' };
@@ -155,11 +153,12 @@ export async function handleBrowserTool(
   const policy = context.deps.browserPolicy?.snapshot();
 
   if (name === 'browser_status') {
-    const gate = await authorizeCapability(
+    const gate = await authorizeHostControl(
       context,
       sessionId,
       'browser.control',
-      { tool: name, args },
+      name,
+      args,
       'browser:status',
       'LOW',
     );
@@ -170,24 +169,60 @@ export async function handleBrowserTool(
     // Stamping the epoch here is what syncs a freshly started worker: it adopts
     // the first epoch it is told, so a status call is enough and no connect has
     // to happen first.
-    const live = (await run(context, sessionId, {
-      kind: 'browser.status',
-      ...(pairing ? { epoch: pairing.epoch() } : {}),
-    })) as {
-      connected: boolean;
-      transport: string | null;
-      tabs: unknown[];
-      epoch: number;
-    };
+    const health = await pairing?.pairingHealth?.();
+    const live = health
+      ? health.worker
+      : ((await run(context, sessionId, {
+          kind: 'browser.status',
+          ...(pairing
+            ? {
+                epoch: pairing.epoch(),
+                extensionId: pairing.pairedExtensionId() ?? '',
+                pairings: pairing.workerPairings?.() ?? [],
+              }
+            : {}),
+        })) as any);
+    const extensionPaired = Boolean(pairing?.pairedExtensionId());
+    const connectionState = live?.connected
+      ? 'attached'
+      : health && !live
+        ? 'worker_unavailable'
+        : live?.listener?.state === 'failed'
+          ? 'listener_failed'
+          : !extensionPaired
+            ? 'not_paired'
+            : live?.extensionSocketAuthenticated
+              ? 'ready_to_connect'
+              : 'waiting_for_extension';
     return {
-      ...live,
-      // Both values, never one masking the other: a worker that disagrees with
-      // core refuses every extension socket, and that has to be visible.
-      epoch: pairing?.epoch() ?? live.epoch ?? 0,
-      workerEpoch: live.epoch ?? 0,
-      tabs: reclassifyOrigins(live.tabs, policy),
-      extensionPaired: Boolean(pairing?.pairedExtensionId()),
+      ...(live ?? {
+        connected: false,
+        transport: null,
+        tabs: [],
+        extensionSocketAuthenticated: false,
+      }),
+      epoch: pairing?.epoch() ?? live?.epoch ?? 0,
+      workerEpoch: live?.workerEpoch ?? live?.epoch ?? 0,
+      tabs: reclassifyOrigins(live?.tabs ?? [], policy),
+      extensionPaired,
+      connectionState,
+      nextAction:
+        connectionState === 'ready_to_connect'
+          ? { tool: 'browser_connect', arguments: { transport: 'extension' } }
+          : null,
       extensionId: pairing?.pairedExtensionId() ?? null,
+      coreExtensionId: health?.coreExtensionId ?? pairing?.pairedExtensionId() ?? null,
+      coreEpoch: health?.coreEpoch ?? pairing?.epoch() ?? 0,
+      listener: live?.listener ?? null,
+      extensionSocketAuthenticated: live?.extensionSocketAuthenticated ?? false,
+      extensionCredentialState: !pairing?.pairedExtensionId()
+        ? 'absent'
+        : live?.extensionSocketAuthenticated
+          ? 'accepted'
+          : 'unknown',
+      workerExtensionId: live?.workerExtensionId ?? null,
+      syncErrorCode: health?.syncErrorCode ?? null,
+      syncCheckedAt: health?.syncCheckedAt ?? null,
     };
   }
 
@@ -214,11 +249,12 @@ export async function handleBrowserTool(
   // itself a worker call that returns every open tab's URL and title, so doing
   // it first would let a session without browser.control enumerate the user's
   // tabs and only then be refused.
-  const entry = await authorizeCapability(
+  const entry = await authorizeHostControl(
     context,
     sessionId,
     'browser.control',
-    { tool: name, args },
+    name,
+    args,
     `browser:${name.replace('browser_', '')}`,
     'LOW',
   );
@@ -250,11 +286,12 @@ export async function handleBrowserTool(
   // not enter approval payloads or UI surfaces.
   const operation = browserOperation(name, args, target.tabId);
 
-  const gate = await authorizeCapability(
+  const gate = await authorizeHostControl(
     context,
     sessionId,
     'browser.control',
-    { tool: name, args },
+    name,
+    args,
     `browser:${name.replace('browser_', '')}`,
     risk,
   );
@@ -282,19 +319,29 @@ export async function handleBrowserTool(
       Array.isArray(redacted.value) ? { result: redacted.value } : (redacted.value as object),
     );
   };
-  if (risk === 'LOW') return execute();
+  if (risk === 'LOW' && !context.hostApprovalProof) return execute();
 
-  return gated(
+  const browserBinding = browserApprovalBinding(
+    await run(context, sessionId, { kind: 'browser.status' }),
+    target.tabId,
+    target.url,
+  );
+  const approvalArgs = { ...args, tabId: target.tabId };
+
+  return gatedHostControl(
     context,
     sessionId,
     {
       family: `browser:${name.replace('browser_', '')}`,
       capability: 'browser.control',
       risk,
-      argsHash: argsHash({ destination, args }),
+      argsHash: argsHash({ destination, args: approvalArgs }),
     },
-    { tool: name, args: { ...args, origin: originOf(destination), originClass } },
-    {},
+    {
+      tool: name,
+      args: { ...approvalArgs, origin: originOf(destination), originClass },
+      browserBinding,
+    },
     execute,
   );
 }

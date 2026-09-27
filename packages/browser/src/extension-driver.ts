@@ -31,6 +31,10 @@ import {
 export class ExtensionDriver implements BrowserDriver {
   readonly transport: BrowserTransport = 'extension';
   private connected = false;
+  private attachedPeerId: string | null = null;
+
+  private static readonly noSocketMessage =
+    'No authenticated extension socket is available. A saved pairing may still exist; check browser_status and reconnect the extension.';
 
   constructor(private readonly server: ExtensionServer) {}
 
@@ -42,23 +46,23 @@ export class ExtensionDriver implements BrowserDriver {
     if (!this.connected) {
       throw new BrowserDriverError('BROWSER_NOT_CONNECTED', 'No extension session is connected');
     }
-    if (!this.server.peer()) {
-      throw new BrowserDriverError('BROWSER_UNAVAILABLE', 'The Aevra extension is not paired');
+    if (!this.server.peer() || this.server.peerId() !== this.attachedPeerId) {
+      throw new BrowserDriverError(
+        'BROWSER_NOT_CONNECTED',
+        'The attached browser profile changed. Call browser_connect again.',
+      );
     }
-    return (
-      timeoutMs === undefined
-        ? this.server.call(op, params)
-        : this.server.call(op, params, timeoutMs)
-    ) as Promise<T>;
+    return this.server.call(op, params, timeoutMs, this.attachedPeerId ?? undefined) as Promise<T>;
   }
 
   async connect(options: ConnectOptions): Promise<BrowserSessionInfo> {
     if (!this.server.peer()) {
-      throw new BrowserDriverError('BROWSER_UNAVAILABLE', 'The Aevra extension is not paired');
+      throw new BrowserDriverError('BROWSER_UNAVAILABLE', ExtensionDriver.noSocketMessage);
     }
     this.connected = true;
+    this.attachedPeerId = this.server.peerId();
     return {
-      sessionId: this.server.peerId(),
+      sessionId: this.attachedPeerId,
       transport: options.transport,
       connected: true,
       tabs: await this.tabs({ action: 'list' }),
@@ -74,7 +78,9 @@ export class ExtensionDriver implements BrowserDriver {
   }
 
   snapshot(request: SnapshotRequest): Promise<BrowserSnapshotResult> {
-    return this.call('snapshot', { ...request });
+    // A screenshot may need browser capture and bounded re-encoding before the
+    // optional DOM labels; ordinary 15-second RPCs do not need this budget.
+    return this.call('snapshot', { ...request }, request.mode === 'vision' ? 30_000 : undefined);
   }
 
   read(request: ReadRequest): Promise<ReadResult> {
@@ -95,5 +101,6 @@ export class ExtensionDriver implements BrowserDriver {
 
   async disconnect(): Promise<void> {
     this.connected = false;
+    this.attachedPeerId = null;
   }
 }

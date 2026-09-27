@@ -47,12 +47,14 @@ beforeEach(() => {
   (globalThis as any).chrome = {
     storage: {
       local: {
-        get: (keys: string[], callback: (result: Record<string, unknown>) => void) => {
+        get: (keys: string[], callback?: (result: Record<string, unknown>) => void) => {
           const result: Record<string, unknown> = {};
           for (const key of keys) {
             if (key in stored) result[key] = stored[key];
           }
-          callback(result);
+          if (!('profileId' in result)) result.profileId = '11111111-1111-4111-8111-111111111111';
+          callback?.(result);
+          return Promise.resolve(result);
         },
         set: async (values: Record<string, unknown>) => {
           Object.assign(stored, values);
@@ -66,7 +68,7 @@ beforeEach(() => {
         sentMessages.push(message);
         if (callback) {
           if ((message as { type?: string })?.type === 'aevra:getStatus') {
-            callback({ connected: true });
+            callback({ connected: true, state: 'connected' });
           } else {
             callback();
           }

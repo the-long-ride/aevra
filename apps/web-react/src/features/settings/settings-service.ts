@@ -67,6 +67,7 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
     // Tolerated like the YOLO route: a core built without browser control
     // must not blank the whole Settings page.
     requestJson<BrowserControlState>('/api/browser', options).catch(() => ({
+      pairings: [],
       extensionId: null,
       epoch: 0,
       pairedAt: null,

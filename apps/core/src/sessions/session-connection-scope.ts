@@ -11,7 +11,13 @@ export interface SessionScope {
 export function connectionIdentityFor(scope: SessionScope, sessionId: string) {
   const source = scope.sessions.get(sessionId) ?? scope.disconnected.get(sessionId);
   if (!source) return null;
+  const connectionKind = source.connectionId
+    ? 'oauth'
+    : source.actor.startsWith('connector:')
+      ? 'connector'
+      : 'session';
   return {
+    connectionKind,
     actor: source.actor,
     subject: source.subject,
     ...(source.connectionId ? { connectionId: source.connectionId } : {}),

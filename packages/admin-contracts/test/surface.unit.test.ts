@@ -45,7 +45,13 @@ test('navigation and onboarding ordering are stable', () => {
 });
 
 test('approval scopes include every persistent choice after once', () => {
-  assert.deepEqual(ADMIN_SURFACE.approvalScopes, ['once', 'session', 'workspace', 'global']);
+  assert.deepEqual(ADMIN_SURFACE.approvalScopes, [
+    'once',
+    'session',
+    'workspace',
+    'global',
+    'connection',
+  ]);
 });
 
 test('surface ids are implementation-neutral stable selectors', () => {

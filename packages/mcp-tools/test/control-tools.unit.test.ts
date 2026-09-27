@@ -27,6 +27,19 @@ test('desktop_act_many executes semantic desktop operations through the existing
   assert.ok(ctx.auditEntries.some((entry: any) => entry.tool === 'control_execute'));
 });
 
+test('desktop_act_many requests host access before observing the desktop', async () => {
+  const ctx = controlDesktopContext({ leaseCapabilities: [] });
+  const result: any = await handleControlTool(ctx.value, 's1', 'desktop_act_many', {
+    windowId: 'w1',
+    actions: [{ op: 'invoke', ref: 'ref_1_1' }],
+  });
+
+  assert.equal(result.status, 'approval_pending');
+  assert.equal(result.requiredCapability, 'desktop.control');
+  assert.equal(ctx.approvals.requests.length, 1);
+  assert.equal(ctx.worker.calls.length, 0);
+});
+
 test('secret-shaped desktop batch data is refused before any semantic mutation or approval', async () => {
   const ctx = controlDesktopContext({ yolo: true });
   const outbound = createHash('sha256').update('control-plan-secret-fixture').digest('hex');

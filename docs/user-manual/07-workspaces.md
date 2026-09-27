@@ -10,6 +10,6 @@ Enter an absolute path to browse its immediate child directories. Path browsing 
 
 Aevra canonicalizes and validates the selected path again when the workspace is registered. Registration, removal, and external mount changes are Admin-only operations and are not exposed as MCP tools.
 
-A remote session may hold access to multiple remembered workspaces, but workspace-scoped tool calls must resolve an authorized workspace explicitly when the session has more than one available root.
+A remote session may hold access to multiple remembered workspaces, but file, command, Git, and other workspace-scoped tool calls must resolve an authorized workspace explicitly when the session has more than one available root. Browser and desktop control use separate exact-connection host grants and require no selected workspace. Legacy `workspace` and `workspaceId` arguments on device tools are accepted but ignored for host authorization.
 
 External mounts use logical paths so remote MCP clients do not receive host filesystem paths as part of the remote workspace view.

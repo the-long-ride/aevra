@@ -19,7 +19,14 @@ function registry() {
       paired = false;
     },
   });
-  return { subject, created, tornDownCount: () => tornDown };
+  return {
+    subject,
+    created,
+    setPeerAuthenticated: (value: boolean) => {
+      paired = value;
+    },
+    tornDownCount: () => tornDown,
+  };
 }
 
 test('require throws BROWSER_NOT_CONNECTED before any connect', () => {
@@ -59,10 +66,24 @@ test('status reports a disconnected registry without throwing', async () => {
   assert.deepEqual(status, {
     connected: false,
     transport: null,
+    attachmentId: null,
     epoch: 0,
     extensionPaired: true,
     tabs: [],
   });
+});
+
+test('status clears an extension session after its authenticated socket closes', async () => {
+  const state = registry();
+  await state.subject.connect({ transport: 'extension' });
+  state.setPeerAuthenticated(false);
+
+  const status = await state.subject.status();
+  assert.equal(status.connected, false);
+  assert.equal(status.transport, null);
+  assert.deepEqual(status.tabs, []);
+  assert.equal(state.created[0]!.disconnected, true);
+  assert.throws(() => state.subject.require(), /BROWSER_NOT_CONNECTED/);
 });
 
 test('a fresh registry is uninitialised and adopts the first epoch it is told', async () => {

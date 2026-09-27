@@ -46,12 +46,26 @@ function pairing() {
         pendingCode: false,
         pendingExpiresAt: null,
       }),
+      pairingHealth: async () => ({
+        coreExtensionId: null,
+        coreEpoch: 3,
+        worker: null,
+        syncErrorCode: 'WORKER_UNAVAILABLE',
+        syncCheckedAt: '2026-09-25T00:00:00Z',
+      }),
       createCode: () => {
         calls.push('createCode');
         return { code: 'ABCDEFGH', expiresAt: 'later' };
       },
-      redeem: async (code: string, extensionId: string) => {
-        calls.push(`redeem:${code}:${extensionId}`);
+      redeem: async (input: {
+        code: string;
+        extensionId: string;
+        profileId: string;
+        profileName: string;
+      }) => {
+        calls.push(
+          `redeem:${input.code}:${input.extensionId}:${input.profileId}:${input.profileName}`,
+        );
         return { token: 'issued', wsUrl: 'ws://127.0.0.1:47833' };
       },
       revokeAll: async () => {
@@ -68,6 +82,7 @@ test('GET /api/browser reports the pairing state', async () => {
   assert.equal(result.handled, true);
   assert.equal(result.status, 200);
   assert.equal(result.body.epoch, 3);
+  assert.equal(result.body.health.syncErrorCode, 'WORKER_UNAVAILABLE');
 });
 
 test('POST /api/browser/code mints a pairing code', async () => {
@@ -78,17 +93,24 @@ test('POST /api/browser/code mints a pairing code', async () => {
   assert.deepEqual(context.calls, ['createCode']);
 });
 
-test('POST /api/browser/pair forwards the code and extension id', async () => {
+test('POST /api/browser/pair forwards the profile pairing identity', async () => {
   const context = pairing();
   const result = await call(
     'POST',
     '/api/browser/pair',
-    { code: 'ABCDEFGH', extensionId: 'abcdefghijklmnopabcdefghijklmnop' },
+    {
+      code: 'ABCDEFGH',
+      extensionId: 'abcdefghijklmnopabcdefghijklmnop',
+      profileId: '11111111-1111-4111-8111-111111111111',
+      profileName: 'TLR',
+    },
     context,
   );
   assert.equal(result.status, 200);
   assert.equal(result.body.wsUrl, 'ws://127.0.0.1:47833');
-  assert.deepEqual(context.calls, ['redeem:ABCDEFGH:abcdefghijklmnopabcdefghijklmnop']);
+  assert.deepEqual(context.calls, [
+    'redeem:ABCDEFGH:abcdefghijklmnopabcdefghijklmnop:11111111-1111-4111-8111-111111111111:TLR',
+  ]);
 });
 
 test('POST /api/browser/revoke bumps the epoch', async () => {

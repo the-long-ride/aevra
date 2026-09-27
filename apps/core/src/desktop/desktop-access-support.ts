@@ -3,7 +3,15 @@ import type {
   DesktopTargetIdentity,
   VerifiedWindowHost,
 } from '../../../../packages/protocol/src/desktop.js';
-import type { WorkerOperation, WorkerResult } from '../../../../packages/protocol/src/worker.js';
+import type {
+  WorkerOperation,
+  WorkerResult,
+  WorkerScope,
+} from '../../../../packages/protocol/src/worker.js';
+import type {
+  HostControlCapability,
+  HostControlIdentity,
+} from '../../../../packages/store/src/host-control-grants.js';
 import {
   DesktopAccessRepository,
   type DesktopAccessRequestRecord,
@@ -20,6 +28,7 @@ interface WorkerLike {
   execute(input: {
     sessionId: string;
     workspaceId: string;
+    scope?: WorkerScope;
     roots: any[];
     operation: WorkerOperation;
     executionMode: 'host';
@@ -36,6 +45,10 @@ export interface DesktopAccessServiceDeps {
   worker: WorkerLike;
   sessions: SessionLike;
   capabilityRoots(workspaceId: string): any[];
+  hostControlAccess?: {
+    has(sessionId: string, capability: HostControlCapability): boolean;
+    identity(sessionId: string): HostControlIdentity | null;
+  };
   audit?: { append(input: any): unknown };
 }
 

@@ -1,20 +1,24 @@
-import { createServer, type Server } from 'node:http';
+import type { Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { Duplex } from 'node:stream';
-import { verifyExtensionToken } from '../../security/src/extension-token.js';
+import type { BrowserExtensionPairing } from '../../protocol/src/browser.js';
 import {
-  acceptKey,
-  encodeFrame,
-  MAX_FRAME_BYTES,
-  readFrames,
-  WS_CLOSE,
-  WS_TEXT,
-} from './ws-server.js';
+  activeExtensionProfile,
+  pairingStillAllowed,
+  type ActiveExtensionProfile,
+  type ExtensionPairingAuthOptions,
+  type ExtensionPeerIdentity,
+} from './extension-pairing-auth.js';
+import {
+  attachExtensionConnection,
+  isValidCaptureProgress,
+  type ExtensionCloseCause,
+} from './extension-server-connection.js';
+import { startExtensionListener } from './extension-server-listener.js';
+import { encodeFrame, MAX_FRAME_BYTES } from './ws-server.js';
 
-export interface ExtensionServerOptions {
-  secret: Buffer;
-  extensionId: string;
-  epoch: () => number;
+export interface ExtensionServerOptions extends ExtensionPairingAuthOptions {
+  /** Compatibility input for older single-profile worker callers. */
   authTimeoutMs?: number;
 }
 
@@ -27,26 +31,29 @@ export interface ExtensionAddress {
 export type ExtensionEventListener = (name: string, payload: unknown) => void;
 
 interface Pending {
+  op: string;
+  vision: boolean;
+  lastStage: string;
+  startedAt: number;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: NodeJS.Timeout;
-}
-
-interface Peer {
-  id: string;
   socket: Duplex;
 }
 
-const DEFAULT_AUTH_TIMEOUT_MS = 3000;
-const LOOPBACK = '127.0.0.1';
+interface Peer extends ExtensionPeerIdentity {
+  id: string;
+  socket: Duplex;
+}
 
 /**
  * Worker-side listener for the Aevra browser extension.
  *
  * MV3 service workers cannot set WebSocket request headers, so the credential
  * arrives as the first frame instead. Two checks guard the socket: the Origin
- * header must be exactly the paired extension, and the first frame must carry
- * a token that verifies at the current epoch.
+ * header must identify a Chromium extension, and the first frame must carry a
+ * token that verifies at the current epoch and matches both that origin and
+ * the paired extension.
  *
  * Only the SECOND of those is a wall. `Origin` is a header a browser sets and
  * refuses to let a page forge - it is not a header the operating system
@@ -61,7 +68,9 @@ const LOOPBACK = '127.0.0.1';
 export class ExtensionServer {
   private server: Server | null = null;
   private current: Peer | null = null;
+  private readonly standby = new Map<Duplex, Peer>();
   private readonly pending = new Map<string, Pending>();
+  private readonly closeCauses = new WeakMap<Duplex, ExtensionCloseCause>();
   private readonly listeners = new Set<ExtensionEventListener>();
   private nextId = 1;
 
@@ -69,123 +78,169 @@ export class ExtensionServer {
 
   async start(input: { port: number }): Promise<ExtensionAddress> {
     if (this.server) throw new Error('Extension server is already listening');
-    const server = createServer();
-    server.on('upgrade', (request, socket: Duplex) => {
-      const origin = String(request.headers.origin ?? '');
-      if (origin !== `chrome-extension://${this.options.extensionId}`) {
-        socket.destroy();
-        return;
-      }
-      const key = String(request.headers['sec-websocket-key'] ?? '');
-      socket.write(
-        [
-          'HTTP/1.1 101 Switching Protocols',
-          'Upgrade: websocket',
-          'Connection: Upgrade',
-          `Sec-WebSocket-Accept: ${acceptKey(key)}`,
-          '\r\n',
-        ].join('\r\n'),
-      );
-      this.attach(socket);
-    });
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(input.port, LOOPBACK, resolve);
-    });
+    const { server, ...address } = await startExtensionListener(input.port, (socket, extensionId) =>
+      this.attach(socket, extensionId),
+    );
     this.server = server;
-    const address = server.address();
-    const port = typeof address === 'object' && address ? address.port : input.port;
-    return { host: LOOPBACK, port, url: `ws://${LOOPBACK}:${port}` };
+    return address;
   }
 
-  private attach(socket: Duplex): void {
-    let authenticated = false;
-    // Annotated: `Buffer.alloc` infers Buffer<ArrayBuffer>, but a decoded
-    // remainder is Buffer<ArrayBufferLike> and would not assign back.
-    let buffer: Buffer = Buffer.alloc(0);
-    const timer = setTimeout(() => {
-      if (!authenticated) socket.destroy();
-    }, this.options.authTimeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS);
-    timer.unref?.();
-
-    socket.on('error', () => socket.destroy());
-    socket.on('close', () => {
-      clearTimeout(timer);
-      if (this.current?.socket === socket) this.current = null;
-    });
-    socket.on('data', (chunk: Buffer) => {
-      buffer = Buffer.concat([buffer, chunk]);
-      // A peer that never completes a frame would otherwise grow this buffer
-      // without limit. The cap is one frame's worth plus the largest header,
-      // so a legal frame still assembles across as many TCP chunks as it takes.
-      if (buffer.length > MAX_FRAME_BYTES + 16) {
-        socket.destroy();
-        return;
-      }
-      let read;
-      try {
-        read = readFrames(buffer);
-      } catch {
-        socket.destroy();
-        return;
-      }
-      buffer = read.rest;
-      for (const frame of read.frames) {
-        if (frame.opcode === WS_CLOSE) {
-          socket.destroy();
-          return;
+  private attach(socket: Duplex, originExtensionId: string): void {
+    attachExtensionConnection(socket, originExtensionId, this.options, {
+      markClose: (cause) => this.markClose(socket, cause),
+      disconnected: () => {
+        this.standby.delete(socket);
+        if (this.current?.socket === socket) {
+          this.current = null;
+          this.promoteStandby();
         }
-        if (frame.opcode !== WS_TEXT) continue;
-        let message: any;
-        try {
-          message = JSON.parse(frame.text);
-        } catch {
-          socket.destroy();
-          return;
-        }
-        if (!authenticated) {
-          // One shot: the first frame either authenticates or the socket dies.
-          // The peer is never told which check failed.
-          if (message?.type !== 'auth' || !this.verify(String(message.token ?? ''))) {
-            socket.destroy();
-            return;
-          }
-          authenticated = true;
-          clearTimeout(timer);
-          this.adopt(socket);
-          continue;
-        }
-        this.handle(message);
-      }
+        // A reply can no longer arrive on a dead socket. Waiting out the RPC
+        // budget anyway is how a dropped socket used to surface as a timeout.
+        this.failPending(
+          socket,
+          'BROWSER_UNAVAILABLE',
+          'The Aevra extension disconnected before replying',
+          this.closeCauses.get(socket) ?? 'remote_close',
+        );
+      },
+      oversized: () => this.dropOversized(socket),
+      authenticated: (pairing, profileName) => this.adopt(socket, pairing, profileName),
+      message: (message) => this.handle(message, socket),
     });
   }
 
-  private verify(token: string): boolean {
-    try {
-      const claims = verifyExtensionToken(this.options.secret, token, {
-        epoch: this.options.epoch(),
-      });
-      return claims.extensionId === this.options.extensionId;
-    } catch {
-      return false;
+  /**
+   * The only frame `readFrames` refuses is one over the cap, and from an
+   * authenticated peer that is a reply too large to carry - a screenshot, in
+   * practice. Saying so, before the close handler's generic reason, is what
+   * turns an unexplained timeout into an actionable error.
+   */
+  private dropOversized(socket: Duplex): void {
+    this.markClose(socket, 'oversized_frame');
+    this.failPending(
+      socket,
+      'BROWSER_REPLY_TOO_LARGE',
+      `The extension reply exceeded the ${MAX_FRAME_BYTES}-byte frame limit`,
+      'oversized_frame',
+    );
+    socket.destroy();
+  }
+
+  private markClose(socket: Duplex, cause: ExtensionCloseCause): void {
+    if (!this.closeCauses.has(socket)) this.closeCauses.set(socket, cause);
+  }
+
+  private failPending(
+    socket: Duplex,
+    code: string,
+    message: string,
+    cause?: ExtensionCloseCause,
+  ): void {
+    for (const [id, pending] of this.pending) {
+      if (pending.socket !== socket) continue;
+      this.pending.delete(id);
+      clearTimeout(pending.timer);
+      const context =
+        pending.op === 'snapshot' && cause ? ` (close=${cause}, stage=${pending.lastStage})` : '';
+      pending.reject(Object.assign(new Error(`${code}: ${message}${context}`), { code }));
     }
   }
 
-  private adopt(socket: Duplex): void {
+  private adopt(socket: Duplex, pairing: BrowserExtensionPairing, profileName: string): void {
     const previous = this.current;
-    this.current = { id: `ext_${randomUUID()}`, socket };
-    if (previous && previous.socket !== socket) previous.socket.destroy();
-    for (const listener of this.listeners) listener('peer', { peerId: this.current.id });
+    const peer: Peer = {
+      id: `ext_${randomUUID()}`,
+      socket,
+      pairingId: pairing.pairingId,
+      profileId: pairing.profileId,
+      profileName,
+      extensionId: pairing.extensionId,
+      credentialId: pairing.credentialId,
+    };
+    if (previous && previous.socket !== socket) {
+      this.standby.set(socket, peer);
+      this.send(socket, { type: 'auth_standby' });
+      return;
+    }
+    this.current = peer;
+    this.send(socket, { type: 'auth_ok' });
+    for (const listener of this.listeners) listener('peer', this.activeProfile());
   }
 
-  private handle(message: any): void {
+  private promoteStandby(): void {
+    const next = this.standby.values().next().value as Peer | undefined;
+    if (!next) return;
+    this.standby.delete(next.socket);
+    this.current = next;
+    this.send(next.socket, { type: 'auth_ok' });
+    for (const listener of this.listeners) listener('peer', this.activeProfile());
+  }
+
+  activeProfile(): ActiveExtensionProfile | null {
+    return activeExtensionProfile(this.current);
+  }
+
+  activePairingStillAllowed(pairings: BrowserExtensionPairing[]): boolean {
+    return pairingStillAllowed(this.current, pairings);
+  }
+
+  dropPeer(): void {
+    const current = this.current;
+    this.current = null;
+    if (current) {
+      this.markClose(current.socket, 'server_stop');
+      current.socket.destroy();
+    }
+    for (const peer of this.standby.values()) {
+      this.markClose(peer.socket, 'server_stop');
+      peer.socket.destroy();
+    }
+    this.standby.clear();
+  }
+
+  pruneStandby(pairings: BrowserExtensionPairing[]): void {
+    for (const peer of this.standby.values()) {
+      if (pairingStillAllowed(peer, pairings)) continue;
+      this.standby.delete(peer.socket);
+      this.markClose(peer.socket, 'pairing_revoked');
+      this.send(peer.socket, { type: 'auth_error', code: 'AUTH_REJECTED' });
+      peer.socket.end();
+    }
+  }
+
+  rejectPeer(): void {
+    const current = this.current;
+    this.current = null;
+    if (!current) return;
+    this.markClose(current.socket, 'pairing_revoked');
+    this.failPending(
+      current.socket,
+      'BROWSER_UNAVAILABLE',
+      'The browser profile pairing was revoked',
+      'pairing_revoked',
+    );
+    if (current.socket.destroyed) return;
+    this.send(current.socket, { type: 'auth_error', code: 'AUTH_REJECTED' });
+    current.socket.end();
+    this.promoteStandby();
+  }
+
+  private handle(message: any, socket: Duplex): void {
+    if (this.current?.socket !== socket) return;
     if (message?.type === 'event') {
       for (const listener of this.listeners) listener(String(message.name ?? ''), message.payload);
       return;
     }
     const id = String(message?.id ?? '');
     const pending = this.pending.get(id);
-    if (!pending) return;
+    if (!pending || pending.socket !== socket) return;
+    if (message.type === 'capture_progress') {
+      if (!pending.vision) return;
+      if (!isValidCaptureProgress(message, pending.lastStage)) return;
+      pending.lastStage = message.stage;
+      return;
+    }
+    if (message.type !== 'result' && message.type !== 'error') return;
     this.pending.delete(id);
     clearTimeout(pending.timer);
     if (message.type === 'error') {
@@ -213,28 +268,51 @@ export class ExtensionServer {
     return this.current?.id ?? '';
   }
 
-  call(op: string, params: Record<string, unknown> = {}, timeoutMs = 15_000): Promise<unknown> {
+  call(
+    op: string,
+    params: Record<string, unknown> = {},
+    timeoutMs = 15_000,
+    expectedPeerId?: string,
+  ): Promise<unknown> {
     const peer = this.current;
-    if (!peer) {
+    if (!peer || (expectedPeerId && peer.id !== expectedPeerId)) {
       return Promise.reject(
-        Object.assign(new Error('The Aevra extension is not connected'), {
-          code: 'BROWSER_UNAVAILABLE',
-        }),
+        Object.assign(
+          new Error(
+            peer
+              ? 'The attached Aevra browser profile changed'
+              : 'The Aevra extension is not connected',
+          ),
+          {
+            code: expectedPeerId ? 'BROWSER_NOT_CONNECTED' : 'BROWSER_UNAVAILABLE',
+          },
+        ),
       );
     }
     const id = String(this.nextId++);
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
+        const pending = this.pending.get(id);
         this.pending.delete(id);
         this.send(peer.socket, { type: 'cancel', id });
+        const context = pending?.vision ? ` (stage=${pending.lastStage})` : '';
         reject(
-          Object.assign(new Error(`BROWSER_TIMEOUT: ${op} exceeded ${timeoutMs}ms`), {
+          Object.assign(new Error(`BROWSER_TIMEOUT: ${op} exceeded ${timeoutMs}ms${context}`), {
             code: 'BROWSER_TIMEOUT',
           }),
         );
       }, timeoutMs);
       timer.unref?.();
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, {
+        op,
+        vision: op === 'snapshot' && params.mode === 'vision',
+        lastStage: 'command_sent',
+        startedAt: Date.now(),
+        resolve,
+        reject,
+        timer,
+        socket: peer.socket,
+      });
       this.send(peer.socket, { id, type: 'cmd', op, params });
     });
   }
@@ -244,13 +322,26 @@ export class ExtensionServer {
   }
 
   async stop(): Promise<void> {
+    if (this.current) {
+      this.failPending(
+        this.current.socket,
+        'BROWSER_NOT_CONNECTED',
+        'extension server stopped',
+        'server_stop',
+      );
+    }
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
-      pending.reject(new Error('BROWSER_NOT_CONNECTED: extension server stopped'));
+      const context =
+        pending.op === 'snapshot' ? ` (close=server_stop, stage=${pending.lastStage})` : '';
+      pending.reject(
+        Object.assign(new Error(`BROWSER_NOT_CONNECTED: extension server stopped${context}`), {
+          code: 'BROWSER_NOT_CONNECTED',
+        }),
+      );
     }
     this.pending.clear();
-    this.current?.socket.destroy();
-    this.current = null;
+    this.dropPeer();
     const server = this.server;
     this.server = null;
     if (!server) return;

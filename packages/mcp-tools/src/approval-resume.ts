@@ -3,6 +3,7 @@ import { consumeCommandApproval } from '../../../apps/core/src/approvals/command
 import type { CommandAnalysis } from '../../protocol/src/index.js';
 import { freshCommandAnalysis } from './approval-command-freshness.js';
 import { AevraToolError } from './errors.js';
+import { resumeHostApproval } from './approval-resume-host.js';
 import { repoState } from './git-state.js';
 import {
   authorizationContext,
@@ -25,6 +26,7 @@ export async function resumeApproval(
   if (!context.approvals) return null;
   const ticket = context.approvals.status(requestId);
   if (!ticket) return null;
+  if (ticket.scope === 'host') return resumeHostApproval(context, sessionId, requestId, ticket);
   if (ticket.state !== 'APPROVED') {
     return isTicketAuthorizedForSession(context, sessionId, ticket) ? ticket : null;
   }

@@ -288,7 +288,11 @@ export function DesktopControlSettings({
     >
       <div className="compact-settings-copy">
         <h3>Desktop control</h3>
-        <span>Restrict which apps computer use can see and act on.</span>
+        <span>
+          Restrict which apps computer use can see and act on. Grant desktop control to an exact AI
+          connection in Dashboard connection details; workspace access does not grant desktop
+          control.
+        </span>
       </div>
       <DesktopModeSelector
         mode={policy.mode}

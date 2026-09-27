@@ -10,6 +10,78 @@ export const handleConnectionRoutes: AdminRouteHandler = async (_req, res, url, 
     return true;
   }
 
+  const controlMatch = path.match(/^\/api\/connections\/([^/]+)\/control$/);
+  if (controlMatch && (method === 'GET' || method === 'POST')) {
+    const connectionId = decodeURIComponent(controlMatch[1]!);
+    try {
+      if (method === 'GET') {
+        sendAdminResponse(
+          res,
+          200,
+          context.connections?.listControl?.(connectionId) ?? {
+            connectionId,
+            browser: false,
+            desktop: false,
+          },
+        );
+        return true;
+      }
+      const body = await readAdminBody(_req);
+      const capability = String(body?.capability ?? '');
+      if (capability !== 'browser.control' && capability !== 'desktop.control') {
+        sendAdminResponse(res, 400, {
+          error: { code: 'INVALID_REQUEST', message: 'Invalid control capability' },
+        });
+        return true;
+      }
+      context.connections?.grantControl?.(connectionId, capability);
+      context.audit?.append?.({
+        actor: 'admin',
+        connectionId,
+        operation: 'connection.control_grant',
+        target: `${connectionId}:${capability}`,
+        result: 'ok',
+        redactionCount: 0,
+        class: 'security',
+      });
+      sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
+    } catch (e: any) {
+      sendAdminResponse(res, e?.code === 'NOT_FOUND' ? 404 : 400, {
+        error: { code: e?.code ?? 'INVALID_REQUEST', message: e?.message ?? 'Request failed' },
+      });
+    }
+    return true;
+  }
+
+  const revokeControlMatch = path.match(/^\/api\/connections\/([^/]+)\/control\/([^/]+)$/);
+  if (revokeControlMatch && method === 'DELETE') {
+    const connectionId = decodeURIComponent(revokeControlMatch[1]!);
+    const capability = decodeURIComponent(revokeControlMatch[2]!);
+    if (capability !== 'browser.control' && capability !== 'desktop.control') {
+      sendAdminResponse(res, 400, {
+        error: { code: 'INVALID_REQUEST', message: 'Invalid control capability' },
+      });
+      return true;
+    }
+    try {
+      await context.connections?.revokeControl?.(connectionId, capability);
+      context.audit?.append?.({
+        actor: 'admin',
+        connectionId,
+        operation: 'connection.control_revoke',
+        target: `${connectionId}:${capability}`,
+        result: 'ok',
+        redactionCount: 0,
+        class: 'security',
+      });
+      sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
+    } catch (e: any) {
+      sendAdminResponse(res, e?.code === 'NOT_FOUND' ? 404 : 400, {
+        error: { code: e?.code ?? 'INVALID_REQUEST', message: e?.message ?? 'Request failed' },
+      });
+    }
+    return true;
+  }
   const revokeConnMatch = path.match(/^\/api\/connections\/([^/]+)\/revoke$/);
   if (revokeConnMatch && method === 'POST') {
     const connectionId = decodeURIComponent(revokeConnMatch[1]!);

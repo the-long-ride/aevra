@@ -55,6 +55,7 @@ test('envelope accepts every desktop operation kind', () => {
       windowId: 'win_1',
       windowLeaseId: 'lease_1',
     },
+    'desktop.invalidateOwner': { kind: 'desktop.invalidateOwner' },
   };
   for (const kind of DESKTOP_OPERATION_KINDS) {
     const operation = samples[kind];

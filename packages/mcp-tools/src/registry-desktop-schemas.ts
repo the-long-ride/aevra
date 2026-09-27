@@ -1,7 +1,7 @@
 import {
   stringProp,
-  workspaceEmptySchema,
-  workspaceTargetProperties,
+  hostControlEmptySchema,
+  hostLegacyWorkspaceProperties,
   type JsonSchema,
 } from './registry-schema-parts.js';
 
@@ -18,14 +18,14 @@ import {
  * no error and no targeting, just text landing wherever focus already was.
  */
 export const desktopInputSchemas: Record<string, JsonSchema> = {
-  desktop_status: workspaceEmptySchema,
-  desktop_connect: workspaceEmptySchema,
-  desktop_disconnect: workspaceEmptySchema,
-  desktop_apps: workspaceEmptySchema,
+  desktop_status: hostControlEmptySchema,
+  desktop_connect: hostControlEmptySchema,
+  desktop_disconnect: hostControlEmptySchema,
+  desktop_apps: hostControlEmptySchema,
   desktop_request_access: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       windowId: stringProp('Fresh window id from desktop_windows or desktop_describe.'),
       duration: {
         type: 'string',
@@ -36,11 +36,11 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
     required: ['windowId', 'duration'],
     additionalProperties: false,
   },
-  desktop_windows: workspaceEmptySchema,
+  desktop_windows: hostControlEmptySchema,
   desktop_describe: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       windowId: stringProp('Target window id. Defaults to the focused window.'),
       maxNodes: { type: 'integer', minimum: 1, maximum: 5000 },
       interactiveOnly: { type: 'boolean', description: 'Return only interactive nodes.' },
@@ -55,7 +55,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_capture: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       windowId: stringProp('Target window id. Defaults to the focused window.'),
     },
     additionalProperties: false,
@@ -63,7 +63,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_click: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       ref: stringProp('Element ref from a previous desktop_describe.'),
       x: { type: 'number', description: 'Screen x-coordinate, when no ref is available.' },
       y: { type: 'number', description: 'Screen y-coordinate, when no ref is available.' },
@@ -73,7 +73,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_type: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       text: stringProp('Text to type into whichever element currently has focus.'),
     },
     required: ['text'],
@@ -82,7 +82,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_key: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       keys: stringProp('Key or key combination to send, e.g. "Enter" or "Ctrl+A".'),
     },
     required: ['keys'],
@@ -91,7 +91,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_scroll: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       deltaY: {
         type: 'number',
         description: 'Vertical scroll delta, delivered wherever the mouse cursor currently is.',
@@ -103,7 +103,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_invoke: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       windowId: stringProp('Target window id.'),
       windowLeaseId: stringProp('Window lease id from desktop_describe in background mode.'),
       snapshotId: stringProp('Snapshot id from desktop_describe in background mode.'),
@@ -115,7 +115,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_set_value: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       windowId: stringProp('Target window id.'),
       windowLeaseId: stringProp('Window lease id from desktop_describe in background mode.'),
       snapshotId: stringProp('Snapshot id from desktop_describe in background mode.'),
@@ -128,7 +128,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_select: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       windowId: stringProp('Target window id.'),
       windowLeaseId: stringProp('Window lease id from desktop_describe in background mode.'),
       snapshotId: stringProp('Snapshot id from desktop_describe in background mode.'),
@@ -140,7 +140,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_toggle: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       windowId: stringProp('Target window id.'),
       windowLeaseId: stringProp('Window lease id from desktop_describe in background mode.'),
       snapshotId: stringProp('Snapshot id from desktop_describe in background mode.'),
@@ -152,7 +152,7 @@ export const desktopInputSchemas: Record<string, JsonSchema> = {
   desktop_release_window: {
     type: 'object',
     properties: {
-      ...workspaceTargetProperties,
+      ...hostLegacyWorkspaceProperties,
       windowId: stringProp('Target window id.'),
       windowLeaseId: stringProp('Window lease id to release.'),
     },

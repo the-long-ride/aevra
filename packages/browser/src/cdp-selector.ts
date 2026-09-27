@@ -91,3 +91,51 @@ export async function clickCdpPoint(
     });
   }
 }
+
+/** Dispatch a short held drag and release the button even if movement fails. */
+export async function dragCdpPoint(
+  client: CdpClient,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+): Promise<void> {
+  const steps = 8;
+  let pressed = false;
+  let last = start;
+  try {
+    pressed = true;
+    await client.send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: start.x,
+      y: start.y,
+      button: 'left',
+      buttons: 1,
+      clickCount: 1,
+    });
+    for (let step = 1; step <= steps; step++) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const point = {
+        x: start.x + ((end.x - start.x) * step) / steps,
+        y: start.y + ((end.y - start.y) * step) / steps,
+      };
+      await client.send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: point.x,
+        y: point.y,
+        button: 'left',
+        buttons: 1,
+      });
+      last = point;
+    }
+  } finally {
+    if (pressed) {
+      await client.send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x: last.x,
+        y: last.y,
+        button: 'left',
+        buttons: 0,
+        clickCount: 1,
+      });
+    }
+  }
+}

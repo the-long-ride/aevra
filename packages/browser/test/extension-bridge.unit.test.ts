@@ -23,15 +23,12 @@ function bridge(overrides: Record<string, unknown> = {}) {
       async serialize() {
         return FIXTURE_PAGE;
       },
-      async devicePixelRatio() {
-        return 1;
-      },
       async apply(action: unknown) {
         calls.push(action);
         return { ok: true };
       },
       async captureVisible() {
-        return 'data:image/png;base64,AAAA';
+        return { imageDataUri: 'data:image/jpeg;base64,AAAA', devicePixelRatio: 1 };
       },
       async navigate(url: string) {
         calls.push(['navigate', url]);
@@ -54,6 +51,23 @@ test('a snapshot assigns refs and reports its version', async () => {
   assert.equal(result.mode, 'a11y');
   assert.ok(result.nodes.length >= 1);
   assert.equal(result.snapshotVersion, registry.version());
+});
+
+test('vision snapshot forwards capture progress to its caller', async () => {
+  const progress: string[] = [];
+  const harness = bridge({
+    async captureVisible(_tabId: string, onProgress?: (event: { stage: string }) => void) {
+      onProgress?.({ stage: 'capture_started' });
+      return { imageDataUri: 'data:image/jpeg;base64,AAAA', devicePixelRatio: 1 };
+    },
+  });
+  await (handleExtensionCommand as any)(
+    new RefRegistry(),
+    harness.value,
+    { op: 'snapshot', params: { mode: 'vision', tabId: '1' } },
+    (event: { stage: string }) => progress.push(event.stage),
+  );
+  assert.deepEqual(progress, ['capture_started']);
 });
 
 test('a ref from an older snapshot version is refused, never remapped', async () => {
@@ -112,6 +126,33 @@ test('stopOnError halts the remaining actions', async () => {
   assert.equal(acted.length, 1);
 });
 
+test('native click failure preserves its code, stops the batch, and names input rather than page completion', async () => {
+  const registry = new RefRegistry();
+  const attempts: unknown[] = [];
+  const harness = bridge({
+    async apply(action: unknown, _elementId: unknown, tabId: string) {
+      attempts.push([action, tabId]);
+      return { ok: false, code: 'BROWSER_NATIVE_INPUT_UNAVAILABLE' };
+    },
+  });
+  const result: any = await handleExtensionCommand(registry, harness.value, {
+    op: 'act',
+    params: {
+      tabId: '1',
+      actions: [
+        { op: 'click', x: 555, y: 620 },
+        { op: 'press_key', key: 'Enter' },
+      ],
+      stopOnError: true,
+    },
+  });
+  assert.equal(result.length, 1);
+  assert.equal(result[0].error.code, 'BROWSER_NATIVE_INPUT_UNAVAILABLE');
+  assert.match(result[0].error.message, /native input/i);
+  assert.doesNotMatch(result[0].error.message, /in the page/i);
+  assert.deepEqual(attempts, [[{ op: 'click', x: 555, y: 620 }, '1']]);
+});
+
 test('a vision snapshot returns an image and labelled boxes, not a node tree', async () => {
   const registry = new RefRegistry();
   const result: any = await handleExtensionCommand(registry, bridge().value, {
@@ -121,6 +162,43 @@ test('a vision snapshot returns an image and labelled boxes, not a node tree', a
   assert.equal(result.mode, 'vision');
   assert.ok(String(result.imageDataUri).startsWith('data:image/'));
   assert.ok(Array.isArray(result.boxes));
+});
+
+test('vision capture succeeds when DOM serialization is unavailable', async () => {
+  const registry = new RefRegistry();
+  let captures = 0;
+  const harness = bridge({
+    async serialize() {
+      throw new TypeError("Cannot read properties of null (reading 'attributes')");
+    },
+    async captureVisible() {
+      captures += 1;
+      return { imageDataUri: 'data:image/jpeg;base64,AAAA', devicePixelRatio: 1 };
+    },
+  });
+  const result: any = await handleExtensionCommand(registry, harness.value, {
+    op: 'snapshot',
+    params: { mode: 'vision', tabId: '1' },
+  });
+  assert.equal(captures, 1);
+  assert.equal(result.imageDataUri, 'data:image/jpeg;base64,AAAA');
+  assert.deepEqual(result.boxes, []);
+  assert.equal(result.snapshotVersion, registry.version());
+});
+
+test('vision capture returns the image when DOM annotation stalls', async () => {
+  const registry = new RefRegistry();
+  const harness = bridge({
+    async serialize() {
+      return new Promise<never>(() => {});
+    },
+  });
+  const result: any = await handleExtensionCommand(registry, harness.value, {
+    op: 'snapshot',
+    params: { mode: 'vision', tabId: '1' },
+  });
+  assert.equal(result.imageDataUri, 'data:image/jpeg;base64,AAAA');
+  assert.deepEqual(result.boxes, []);
 });
 
 test('an unknown op is rejected rather than ignored', async () => {
@@ -158,6 +236,20 @@ test('tabs, navigate, read and logs each route to the bridge', async () => {
     params: { logKind: 'network', limit: 10 },
   });
   assert.deepEqual(logs, []);
+});
+
+test('tabs focus selects the requested tab before listing tabs', async () => {
+  const registry = new RefRegistry();
+  const harness = bridge({
+    async focus(tabId: string) {
+      harness.calls.push(['focus', tabId]);
+    },
+  });
+  await handleExtensionCommand(registry, harness.value, {
+    op: 'tabs',
+    params: { action: 'focus', tabId: '2' },
+  });
+  assert.deepEqual(harness.calls, [['focus', '2']]);
 });
 
 test('stopOnError false keeps going past a stale ref', async () => {

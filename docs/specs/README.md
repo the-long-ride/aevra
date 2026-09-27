@@ -1,6 +1,6 @@
 # Aevra Software Specs
 
-For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.1.2`.
+For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.1.3`.
 
 | #   | File                                                       | Answers the question                                      |
 | --- | ---------------------------------------------------------- | --------------------------------------------------------- |
@@ -18,6 +18,7 @@ For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Ve
 Release feature contracts:
 
 - [Browser control](../browser-control.md) and [browser user manual](../user-manual/18-browser-control.md)
+- [Canvas control reliability design](../superpowers/specs/2026-09-27-browser-canvas-control-reliability-design.md) and [native coordinate input design](../superpowers/specs/2026-09-27-browser-native-coordinate-input-design.md)
 - [Desktop control user manual](../user-manual/19-desktop-control.md)
 - [Control-efficiency implementation contract](../superpowers/specs/2026-09-22-control-efficiency-design.md)
 - [Desktop control design](2026-09-07-aevra-desktop-control-design.md)

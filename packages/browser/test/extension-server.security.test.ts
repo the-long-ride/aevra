@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mintExtensionToken } from '../../security/src/extension-token.js';
 import { ExtensionServer } from '../src/extension-server.js';
+import { ExtensionDriver } from '../src/extension-driver.js';
 import { connectFakeExtension } from './fake-extension.js';
 
 const secret = Buffer.from('c'.repeat(64), 'hex');
@@ -45,19 +46,23 @@ test('a token from a revoked epoch is rejected', async () => {
     const token = validToken(1);
     epoch = 2;
     const peer = await connectFakeExtension(address.url, extensionId, { token });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.deepEqual(peer.received, [{ type: 'auth_error', code: 'AUTH_REJECTED' }]);
     assert.equal(await peer.closedWithin(1500), true);
   } finally {
     await server.stop();
   }
 });
 
-test('a valid token from a different extension id is rejected by the origin pin', async () => {
+test('a different extension installation completes the handshake and receives an auth rejection', async () => {
   const server = new ExtensionServer({ secret, extensionId, epoch: () => 1 });
   const address = await server.start({ port: 0 });
   try {
-    const peer = await connectFakeExtension(address.url, 'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz', {
+    const peer = await connectFakeExtension(address.url, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', {
       token: validToken(),
     });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.deepEqual(peer.received, [{ type: 'auth_error', code: 'AUTH_REJECTED' }]);
     assert.equal(await peer.closedWithin(1500), true);
   } finally {
     await server.stop();
@@ -93,7 +98,7 @@ test('a command with no answer rejects with BROWSER_TIMEOUT', async () => {
   }
 });
 
-test('a second authenticated peer replaces the first', async () => {
+test('a second authenticated peer waits in standby until the first closes', async () => {
   const server = new ExtensionServer({ secret, extensionId, epoch: () => 1 });
   const address = await server.start({ port: 0 });
   try {
@@ -104,8 +109,70 @@ test('a second authenticated peer replaces the first', async () => {
 
     const second = await connectFakeExtension(address.url, extensionId, { token: validToken() });
     await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(server.peer(), firstId);
+    assert.ok(second.received.some((message) => message.type === 'auth_standby'));
+    first.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     assert.notEqual(server.peer(), firstId);
-    assert.equal(await first.closedWithin(1000), true);
+    second.destroy();
+  } finally {
+    await server.stop();
+  }
+});
+
+test('two paired profiles keep one active socket and an attached driver never changes profiles', async () => {
+  const profiles = ['profile-a', 'profile-b'].map((profileId) => ({
+    pairingId: profileId,
+    profileId,
+    profileName: profileId,
+    extensionId,
+    credentialId: `credential-${profileId}`,
+    legacy: false,
+  }));
+  const server = new ExtensionServer({ secret, pairings: () => profiles, epoch: () => 1 });
+  const address = await server.start({ port: 0 });
+  const token = (index: number) =>
+    mintExtensionToken(secret, {
+      extensionId,
+      profileId: profiles[index]!.profileId,
+      credentialId: profiles[index]!.credentialId!,
+      epoch: 1,
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+  try {
+    const first = await connectFakeExtension(address.url, extensionId, {
+      token: token(0),
+      profileId: profiles[0]!.profileId!,
+    });
+    first.onCommand(() => ({ profile: 'a' }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const firstPeerId = server.peerId();
+    const driver = new ExtensionDriver(server);
+    await driver.connect({ transport: 'extension' });
+
+    const second = await connectFakeExtension(address.url, extensionId, {
+      token: token(1),
+      profileId: profiles[1]!.profileId!,
+    });
+    second.onCommand(() => ({ profile: 'b' }));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(server.peerId(), firstPeerId);
+    assert.ok(second.received.some((message) => message.type === 'auth_standby'));
+    assert.deepEqual(await server.call('tabs', {}, 1000), { profile: 'a' });
+    assert.equal(
+      second.received.some((message) => message.type === 'cmd'),
+      false,
+    );
+
+    first.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.notEqual(server.peerId(), firstPeerId);
+    await assert.rejects(
+      () => driver.tabs({ action: 'list' }),
+      (error: any) => error.code === 'BROWSER_NOT_CONNECTED',
+    );
+    assert.deepEqual(await server.call('tabs', {}, 1000), { profile: 'b' });
     second.destroy();
   } finally {
     await server.stop();
@@ -166,6 +233,22 @@ test('calling with no peer connected fails fast rather than hanging', async () =
   await server.start({ port: 0 });
   try {
     await assert.rejects(() => server.call('tabs', {}, 500), /not connected/);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('valid socket receives auth_ok only after authentication', async () => {
+  const server = new ExtensionServer({ secret, extensionId, epoch: () => 1 });
+  const address = await server.start({ port: 0 });
+  try {
+    const peer = await connectFakeExtension(address.url, extensionId, { token: validToken() });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(server.peer() !== null, true);
+    assert.deepEqual(
+      peer.received.filter((frame) => frame.type === 'auth_ok'),
+      [{ type: 'auth_ok' }],
+    );
   } finally {
     await server.stop();
   }

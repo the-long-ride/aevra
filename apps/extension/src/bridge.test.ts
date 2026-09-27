@@ -1,59 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearConsoleLogs, createChromeBridge, recordConsoleLog } from './bridge';
-
-interface FakeTab {
-  id?: number;
-  url?: string;
-  title?: string;
-  active?: boolean;
-}
-
-function installChrome(tabs: FakeTab[], overrides: Record<string, any> = {}) {
-  const listeners: Array<(id: number, info: { status?: string }) => void> = [];
-  const calls: Record<string, any[]> = { executeScript: [], update: [], capture: [] };
-  const chrome = {
-    tabs: {
-      async query(filter: { active?: boolean }) {
-        return filter?.active ? tabs.filter((tab) => tab.active) : tabs;
-      },
-      async get(id: number) {
-        return tabs.find((tab) => tab.id === id) ?? {};
-      },
-      async update(id: number, props: Record<string, unknown>) {
-        calls.update!.push([id, props]);
-        const tab = tabs.find((entry) => entry.id === id);
-        if (tab && typeof props.url === 'string') tab.url = props.url;
-        if (tab && props.active === true) tab.active = true;
-      },
-      async captureVisibleTab(_window: unknown, options: unknown) {
-        calls.capture!.push(options);
-        return 'data:image/png;base64,AAAA';
-      },
-      onUpdated: {
-        addListener(fn: (id: number, info: { status?: string }) => void) {
-          listeners.push(fn);
-        },
-        removeListener(fn: (id: number, info: { status?: string }) => void) {
-          const at = listeners.indexOf(fn);
-          if (at >= 0) listeners.splice(at, 1);
-        },
-      },
-      ...overrides.tabs,
-    },
-    scripting: {
-      async executeScript(input: Record<string, unknown>) {
-        calls.executeScript!.push(input);
-        return [{ result: 'injected' in overrides ? overrides.injected : { ok: true } }];
-      },
-    },
-  };
-  (globalThis as any).chrome = chrome;
-  return {
-    calls,
-    complete: (id: number) => listeners.forEach((fn) => fn(id, { status: 'complete' })),
-    listenerCount: () => listeners.length,
-  };
-}
+import { installChrome } from './bridge-test-support';
 
 beforeEach(() => clearConsoleLogs());
 afterEach(() => {
@@ -84,7 +31,39 @@ describe('listTabs', () => {
   });
 });
 
+describe('focus', () => {
+  it('does not acknowledge focus when Chrome leaves the target inactive', async () => {
+    installChrome([{ id: 1, active: false, windowId: 1 }], {
+      tabs: {
+        async update() {
+          return { id: 1, active: false, windowId: 1 };
+        },
+      },
+    });
+    await expect(createChromeBridge().focus('1')).rejects.toMatchObject({
+      code: 'BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB',
+    });
+  });
+});
+
 describe('tab targeting', () => {
+  it('focuses the target window and reports only its selected tab active', async () => {
+    const fake = installChrome([
+      { id: 1, windowId: 11, active: true },
+      { id: 2, windowId: 22, active: true },
+    ]);
+    const bridge = createChromeBridge();
+    expect((await bridge.listTabs()).filter((tab) => tab.active).map((tab) => tab.tabId)).toEqual([
+      '1',
+    ]);
+    await bridge.focus('2');
+    expect(fake.calls.update).toEqual([[2, { active: true }]]);
+    expect(fake.calls.focusWindow).toEqual([[22, { focused: true }]]);
+    expect((await bridge.listTabs()).filter((tab) => tab.active).map((tab) => tab.tabId)).toEqual([
+      '2',
+    ]);
+  });
+
   it('uses the active tab when none is named', async () => {
     const fake = installChrome([{ id: 7, active: true }]);
     await createChromeBridge().serialize();
@@ -106,6 +85,107 @@ describe('tab targeting', () => {
 });
 
 describe('apply', () => {
+  it('sends a coordinate drag through native input instead of page script', async () => {
+    const fake = installChrome([{ id: 9, active: true, url: 'https://example.test/' }]);
+    const result = await createChromeBridge().apply(
+      { op: 'drag', x: 10, y: 20, toX: 110, toY: 70 },
+      null,
+      '9',
+    );
+    expect(result).toEqual({ ok: true });
+    expect(fake.calls.executeScript).toEqual([]);
+    const sent = fake.calls.debugger.filter((call) => call[0] === 'send');
+    expect(sent[0]?.[3]).toMatchObject({ type: 'mousePressed', x: 10, y: 20, button: 'left' });
+    expect(sent.slice(1, -1).some((call) => call[3]?.type === 'mouseMoved')).toBe(true);
+    expect(sent.at(-1)?.[3]).toMatchObject({ type: 'mouseReleased', x: 110, y: 70 });
+    expect(fake.calls.debugger.at(-1)?.[0]).toBe('detach');
+  });
+
+  it('routes a coordinate-only click to native input on the named tab', async () => {
+    const fake = installChrome([
+      { id: 1, active: true, url: 'https://example.test/' },
+      { id: 9, active: false, url: 'https://idngoalong.zing.vn/play-game-new' },
+    ]);
+    const result = await createChromeBridge().apply({ op: 'click', x: 555, y: 620 }, null, '9');
+    expect(result).toEqual({ ok: true });
+    expect(fake.calls.executeScript).toEqual([]);
+    expect(fake.calls.debugger).toEqual([
+      ['attach', { tabId: 9 }, '1.3'],
+      [
+        'send',
+        { tabId: 9 },
+        'Input.dispatchMouseEvent',
+        {
+          type: 'mousePressed',
+          x: 555,
+          y: 620,
+          button: 'left',
+          clickCount: 1,
+        },
+      ],
+      [
+        'send',
+        { tabId: 9 },
+        'Input.dispatchMouseEvent',
+        {
+          type: 'mouseReleased',
+          x: 555,
+          y: 620,
+          button: 'left',
+          clickCount: 1,
+        },
+      ],
+      ['detach', { tabId: 9 }],
+    ]);
+  });
+
+  it('keeps selector clicks in the isolated DOM path', async () => {
+    const fake = installChrome([{ id: 1, active: true }]);
+    expect(await createChromeBridge().apply({ op: 'click', selector: '#save' }, null, '1')).toEqual(
+      { ok: true },
+    );
+    expect(fake.calls.executeScript).toHaveLength(1);
+    expect(fake.calls.debugger).toEqual([]);
+  });
+
+  it('reports debugger attachment refusal without synthetic fallback', async () => {
+    const fake = installChrome([{ id: 9, active: true, url: 'https://example.test/' }], {
+      debugger: {
+        async attach() {
+          throw new Error('DevTools owns target');
+        },
+      },
+    });
+    expect(await createChromeBridge().apply({ op: 'click', x: 4, y: 5 }, null, '9')).toEqual({
+      ok: false,
+      code: 'BROWSER_NATIVE_INPUT_UNAVAILABLE',
+    });
+    expect(fake.calls.executeScript).toEqual([]);
+  });
+
+  it('passes request cancellation to native input before attachment', async () => {
+    const fake = installChrome([{ id: 9, active: true, url: 'https://example.test/' }]);
+    const outcome = await createChromeBridge().apply(
+      { op: 'click', x: 4, y: 5 },
+      null,
+      '9',
+      () => true,
+    );
+    expect(outcome).toEqual({ ok: false, code: 'BROWSER_INPUT_FAILED' });
+    expect(fake.calls.debugger).toEqual([]);
+    expect(fake.calls.executeScript).toEqual([]);
+  });
+
+  it('rejects malformed direct coordinate input before attaching', async () => {
+    const fake = installChrome([{ id: 9, active: true, url: 'https://example.test/' }]);
+    expect(await createChromeBridge().apply({ op: 'click', x: NaN, y: 5 }, null, '9')).toEqual({
+      ok: false,
+      code: 'INVALID_REQUEST',
+    });
+    expect(fake.calls.debugger).toEqual([]);
+    expect(fake.calls.executeScript).toEqual([]);
+  });
+
   it('passes only the isolated-world opaque element id page-side', async () => {
     const fake = installChrome([{ id: 1, active: true }]);
     await createChromeBridge().apply({ op: 'click', ref: 'ref_3_5' } as never, 'element_42');
@@ -173,33 +253,6 @@ describe('navigate', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-});
-
-describe('captureVisible', () => {
-  it('captures as png', async () => {
-    const fake = installChrome([{ id: 1, active: true }]);
-    expect(await createChromeBridge().captureVisible()).toMatch(/^data:image\/png;base64,/);
-    expect(fake.calls.capture![0]).toEqual({ format: 'png' });
-  });
-
-  it('refuses vision capture for a named inactive tab instead of activating it', async () => {
-    const fake = installChrome([
-      { id: 1, active: true },
-      { id: 2, active: false },
-    ]);
-    await expect(createChromeBridge().captureVisible('2')).rejects.toMatchObject({
-      code: 'BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB',
-    });
-    expect(fake.calls.update).toHaveLength(0);
-    expect(fake.calls.capture).toHaveLength(0);
-  });
-
-  it('captures a named tab when it is already active without changing selection', async () => {
-    const fake = installChrome([{ id: 2, active: true }]);
-    await createChromeBridge().captureVisible('2');
-    expect(fake.calls.update).toHaveLength(0);
-    expect(fake.calls.capture).toHaveLength(1);
   });
 });
 

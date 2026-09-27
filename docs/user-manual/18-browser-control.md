@@ -7,12 +7,11 @@ browser profile.
 
 ## Before you start
 
-Browser control needs the `browser.control` capability on the workspace, granted
-the same way as `commands.run`. It is **off by default** and is **not** implied
-by `network`. Until it is granted, every `browser_*` tool answers
-`CAPABILITY_REQUIRED`.
-
-Grant it in **Permissions → Workspace capabilities**.
+Browser control requires a separate `browser.control` host grant for the exact AI
+connection. In **Dashboard → Connections**, open the connection and grant **Browser
+control**. No workspace selection is needed. Workspace capability profiles and
+`network` access do not grant browser control. A missing grant starts a local
+approval request. File and command access remain scoped to workspaces.
 
 ## Install the extension
 
@@ -56,6 +55,13 @@ the command stops and tells you; re-run with `--yes` to replace it.
 3. Select **Load unpacked** and choose the `aevra-extension` folder — the one
    containing `manifest.json`.
 
+The extension requests the `debugger` permission so vision captures and coordinate
+clicks or drags use the same viewport while canvas interactions receive browser-native input.
+The browser may show a debugger notice while either operation runs. When updating an already loaded unpacked
+extension, Chrome or Brave may pause it until you accept the new permission
+warning in the extensions page. Accept the warning and reload the same folder;
+its saved pairing remains associated with that folder path.
+
 ### Managed fleets
 
 Point `ExtensionSettings` policy at the unzipped folder on each machine. Because
@@ -93,7 +99,34 @@ The extension does nothing until it holds a token from your own Aevra.
 The extension stores a MAC'd token that the Aevra worker verifies offline. It is
 never displayed or logged again after pairing.
 
-Once paired, ask your agent to connect:
+Settings → Browser control lists each paired browser profile separately. Aevra
+identifies the profile with a stable profile ID, so separate Chrome profiles can
+have separate rows even when they use the same extension ID. Only one paired
+profile can own the live extension socket at a time; the profile that
+authenticates most recently becomes active.
+
+Select **Unpair** on a row to revoke only that profile's token. Its extension
+will show **Pair again** and needs a new code. Other paired profiles remain
+authorized. Use **Disconnect all browsers** to clear every pairing and revoke
+all extension tokens.
+
+The extension popup separates **Pairing saved** (a token is stored),
+**Connecting** (Aevra is temporarily unreachable and the extension retries),
+**Connected** (the worker authenticated the socket), and **Pair again** (the
+saved token was rejected). A saved pairing alone does not mean the worker is
+listening or that a browser session is attached. The Aevra Browser control
+settings show listener, authenticated socket, and attached browser status.
+If the popup says **Pair again**, generate a new code and pair again. If the
+listener reports a port failure, free port 47833 or configure another browser
+port, then restart Aevra.
+
+Once paired and granted host browser access, ask your agent to connect:
+
+If Settings says **Extension socket authenticated** and **Browser not attached**,
+the pairing is working. Ask the agent to call `browser_connect` with the input
+below. `browser_status` also returns `ready_to_connect` and this next action.
+If the extension socket disconnects, Aevra reports the browser as detached;
+after the popup shows **Connected** again, ask the agent to reconnect.
 
 ```json
 { "transport": "extension" }
@@ -119,6 +152,15 @@ switch. One thing differs: network logs come only from CDP.
 
 ## Background tabs and refs
 
+For AI browser control, use an accessibility snapshot and its element refs
+first. A stable CSS selector or bounded `browser_execute_script` is the next
+choice when the target is known. Use a vision screenshot and coordinate input
+for canvas or WebGL controls without semantic targets, or after a semantic
+action failed. Extension vision and coordinate actions can briefly attach
+Chrome debugger. Choose points from a fresh image and verify the result with
+another snapshot; `ok:true` confirms delivery, not the intended page state.
+If you explicitly ask for a coordinate action, the AI can send it directly.
+
 An explicit `tabId` does not mean Aevra will bring that tab to the foreground.
 CDP attaches to that target directly. Extension refs are backed by opaque
 isolated-world element identities, not attributes the page can rewrite.
@@ -126,7 +168,32 @@ isolated-world element identities, not attributes the page can rewrite.
 One exception is extension **vision capture**: Chrome can only capture the visible
 tab. If you request a screenshot of a named inactive tab, Aevra refuses with
 `BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB` instead of switching tabs behind you. Use
-accessibility mode, make the tab active yourself, or use CDP.
+`browser_tabs` with `action: "focus"` to select that tab and bring its window
+forward, then capture it, or use
+accessibility mode or CDP.
+
+For a canvas point from a vision image, call `browser_act_many` with
+`{"actions":[{"op":"click","x":355,"y":550}]}`. Aevra also accepts
+`{"actions":[{"click":{"x":355,"y":550}}]}`. Coordinates are in the last
+vision image's pixel space, and malformed actions return `INVALID_REQUEST`
+with the action's array index.
+
+For a held mouse movement on a game canvas or an ordinary page, use
+`{"actions":[{"op":"drag","x":355,"y":550,"toX":520,"toY":550}]}`.
+Aevra presses at the first point, moves with the left button held, and releases
+at the second. Both points use the last vision image's coordinates, or CSS
+pixels before any vision capture. The nested `{"drag":{...}}` form also works.
+
+Vision snapshots and coordinate clicks or drags each use a temporary debugger attachment.
+This keeps screenshot coordinates aligned if the debugger notice changes the
+game viewport. Clicks send native mouse press and release events to the selected
+tab; ref and CSS selector clicks use
+the existing DOM action path. An `ok:true` result means the browser accepted
+the click, so capture another snapshot to confirm the intended game screen
+opened. `BROWSER_NATIVE_INPUT_UNAVAILABLE` means Chrome refused the debugger
+attachment, for example because DevTools already owns the tab;
+`BROWSER_INPUT_FAILED` means an input or detach command failed. Aevra does not
+retry either failure with synthetic page events.
 
 ## Faster multi-step actions
 
@@ -173,8 +240,9 @@ pairing survives.
 
 **Settings → Browser control → Disconnect all browsers** bumps a revocation
 epoch. That invalidates every extension token ever issued and tears down both
-transports immediately — not on the next operation. Re-pairing afterwards is the
-same three steps as above.
+transports immediately — not on the next operation. To remove one profile only,
+use its **Unpair** button in the paired profile list; that profile must complete
+the same three pairing steps above before reconnecting.
 
 Removing the extension from the browser also ends its reach, but the epoch is the
 control that works when you cannot reach the browser.

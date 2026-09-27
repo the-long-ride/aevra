@@ -65,10 +65,82 @@ test('browser_execute_script compiles one bounded script into one browser.act op
 
 test('browser_status needs no live session and reports the paired epoch', async () => {
   const ctx = context();
+  const execute = ctx.worker.execute;
+  ctx.worker.execute = async (input: any) =>
+    input.operation.kind === 'browser.status'
+      ? { ok: true, value: { connected: false, transport: null, tabs: [] } }
+      : execute(input);
   ctx.value.deps.browserPairing = { epoch: () => 2, pairedExtensionId: () => null };
   const status: any = await handleBrowserTool(ctx.value, 's1', 'browser_status', {});
   assert.equal(status.epoch, 2);
   assert.equal(status.extensionPaired, false);
+  assert.equal(status.connectionState, 'not_paired');
+});
+
+test('browser_status keeps saved pairing distinct from an unavailable worker', async () => {
+  const ctx = context();
+  const extensionId = 'abcdefghijklmnopabcdefghijklmnop';
+  ctx.value.deps.browserPairing = {
+    epoch: () => 7,
+    pairedExtensionId: () => extensionId,
+    pairingHealth: async () => ({
+      coreExtensionId: extensionId,
+      coreEpoch: 7,
+      worker: null,
+      syncErrorCode: 'WORKER_UNAVAILABLE',
+      syncCheckedAt: '2026-09-25T00:00:00Z',
+    }),
+  };
+  const status: any = await handleBrowserTool(ctx.value, 's1', 'browser_status', {});
+  assert.equal(status.extensionPaired, true);
+  assert.equal(status.connected, false);
+  assert.equal(status.extensionSocketAuthenticated, false);
+  assert.equal(status.listener, null);
+  assert.equal(status.syncErrorCode, 'WORKER_UNAVAILABLE');
+  assert.equal(status.extensionCredentialState, 'unknown');
+  assert.equal(status.connectionState, 'worker_unavailable');
+  assert.equal(status.nextAction, null);
+});
+
+test('browser_status identifies an authenticated socket that is ready for browser_connect', async () => {
+  const ctx = context();
+  const extensionId = 'abcdefghijklmnopabcdefghijklmnop';
+  ctx.value.deps.browserPairing = {
+    epoch: () => 7,
+    pairedExtensionId: () => extensionId,
+    pairingHealth: async () => ({
+      coreExtensionId: extensionId,
+      coreEpoch: 7,
+      worker: {
+        connected: false,
+        transport: null,
+        tabs: [],
+        epoch: 7,
+        listener: {
+          state: 'listening',
+          port: 47833,
+          errorCode: null,
+          changedAt: '2026-09-25T00:00:00Z',
+        },
+        extensionSocketAuthenticated: true,
+        workerExtensionId: extensionId,
+        workerEpoch: 7,
+        activeProfileName: 'TLR',
+      },
+      syncErrorCode: null,
+      syncCheckedAt: '2026-09-25T00:00:00Z',
+    }),
+  };
+  const status: any = await handleBrowserTool(ctx.value, 's1', 'browser_status', {});
+  assert.equal(status.extensionPaired, true);
+  assert.equal(status.extensionSocketAuthenticated, true);
+  assert.equal(status.connected, false);
+  assert.equal(status.connectionState, 'ready_to_connect');
+  assert.equal(status.extensionCredentialState, 'accepted');
+  assert.deepEqual(status.nextAction, {
+    tool: 'browser_connect',
+    arguments: { transport: 'extension' },
+  });
 });
 
 test('an unknown browser tool name is rejected', async () => {

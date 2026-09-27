@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { RiskTier, NormalizedOperation } from '../../../../packages/protocol/src/index.js';
 import type { ApprovalRepository } from '../../../../packages/store/src/approvals.js';
+import type { HostControlIdentity } from '../../../../packages/store/src/host-control-grants.js';
 import type { AuditService } from '../audit/audit-service.js';
 import { notifySystem } from '../../../../packages/notifications/src/notify.js';
 import { recordTicketDecision } from './approval-audit.js';
 import { deleteCommandApprovalBinding } from './command-binding.js';
 import { presentApproval } from './request-presentation.js';
+import { findReusableConnectionRequest } from './approval-reuse.js';
 import {
   assertTicketOwnership,
   isTicketOwnedByCaller,
@@ -28,6 +30,8 @@ export interface FrozenOperationTicket {
   actor: string;
   sessionId: string;
   workspaceId: string;
+  scope?: 'workspace' | 'host';
+  identity?: HostControlIdentity;
   operation: NormalizedOperation;
   payload?: unknown;
   expectedState: Record<string, string>;
@@ -54,7 +58,8 @@ export type SessionIdentityResolver = (
 ) => { actor: string; subject: string; connectionId?: string } | null;
 
 export class ApprovalService {
-  private approvedHandler?: ApprovedHandler;
+  private approvedHandlers: ApprovedHandler[] = [];
+  private beforeApprovedHandlers: ApprovedHandler[] = [];
   private sessionIdentityResolver?: SessionIdentityResolver;
   private volatilePayloads = new Map<string, unknown>();
   constructor(
@@ -64,7 +69,13 @@ export class ApprovalService {
   ) {}
 
   setApprovedHandler(handler: ApprovedHandler) {
-    this.approvedHandler = handler;
+    this.approvedHandlers = [handler];
+  }
+  addBeforeApprovedHandler(handler: ApprovedHandler) {
+    this.beforeApprovedHandlers.push(handler);
+  }
+  addApprovedHandler(handler: ApprovedHandler) {
+    this.approvedHandlers.push(handler);
   }
   setSessionIdentityResolver(resolver: SessionIdentityResolver) {
     this.sessionIdentityResolver = resolver;
@@ -74,8 +85,15 @@ export class ApprovalService {
     recordTicketDecision(this.audit, ticket, decision, result);
   }
 
-  async request(input: Omit<FrozenOperationTicket, 'id' | 'state' | 'expiresAt'>) {
-    const reusable = this.reusableConnectionRequest(input);
+  async request(
+    input: Omit<FrozenOperationTicket, 'id' | 'state' | 'expiresAt'>,
+    volatilePayload?: unknown,
+  ) {
+    const reusable = findReusableConnectionRequest(
+      input,
+      () => this.repo.list().filter(Boolean) as FrozenOperationTicket[],
+      this.sessionIdentityResolver,
+    );
     if (reusable) {
       const latest = this.status(reusable.id);
       if (latest?.state === 'APPROVED')
@@ -109,7 +127,9 @@ export class ApprovalService {
       createdAt: new Date().toISOString(),
     };
     const stored = this.repo.put(t) as FrozenOperationTicket;
-    if (
+    if (volatilePayload !== undefined) {
+      this.volatilePayloads.set(t.id, volatilePayload);
+    } else if (
       input.payload !== undefined &&
       JSON.stringify(stored.payload) !== JSON.stringify(input.payload)
     ) {
@@ -154,6 +174,14 @@ export class ApprovalService {
   approve(id: string, scope = 'once') {
     const t = this.required(id);
     if (t.state !== 'PENDING') throw new Error(`Cannot approve ${t.state}`);
+    if (
+      t.scope === 'host' &&
+      t.operation.family === 'host-control:request' &&
+      scope !== 'connection'
+    )
+      throw new Error('Host control approval requires connection scope');
+    if (t.scope === 'host' && t.operation.family !== 'host-control:request' && scope !== 'once')
+      throw new Error('Host action approval requires once scope');
     if (t.risk === 'CRITICAL' && scope !== 'once')
       throw new Error('Critical operations only support one-time local approval');
     if ((t.payload as any)?.securityOnce === true && scope !== 'once')
@@ -177,11 +205,14 @@ export class ApprovalService {
       if (payload?.tool === 'workspace_select' && payload.profileId === 'developer')
         t.payload = { ...payload, profileId: 'read-only' };
     }
-    t.state = 'APPROVED';
+    for (const handler of this.beforeApprovedHandlers) handler(t);
     t.decisionScope = scope;
+    // Apply approval side effects before persisting APPROVED. A failed grant
+    // must leave the durable ticket pending so the operator can retry it.
+    for (const handler of this.approvedHandlers) handler(t);
+    t.state = 'APPROVED';
     this.repo.put(t);
     this.record(t, `approved:${scope}`, 'armed');
-    this.approvedHandler?.(t);
     return t;
   }
   deny(id: string) {
@@ -303,41 +334,6 @@ export class ApprovalService {
     return { ...ticket, payload: this.volatilePayloads.get(ticket.id) };
   }
 
-  private reusableConnectionRequest(
-    input: Omit<FrozenOperationTicket, 'id' | 'state' | 'expiresAt'>,
-  ) {
-    if (
-      input.operation.family !== 'workspace:select' ||
-      !input.actor.startsWith('oauth:') ||
-      !this.sessionIdentityResolver
-    )
-      return null;
-    const current = this.sessionIdentityResolver(input.sessionId);
-    if (!current) return null;
-    return (
-      (this.repo.list().filter(Boolean) as FrozenOperationTicket[]).find((ticket) => {
-        if (
-          ticket.operation.family !== input.operation.family ||
-          ticket.workspaceId !== input.workspaceId ||
-          ticket.actor !== input.actor ||
-          !['PENDING', 'APPROVED'].includes(ticket.state)
-        )
-          return false;
-        if (
-          (ticket.connectionSubject && ticket.connectionSubject === current.subject) ||
-          (ticket.connectionId &&
-            current.connectionId &&
-            ticket.connectionId === current.connectionId)
-        ) {
-          return true;
-        }
-        const existing = this.sessionIdentityResolver!(ticket.sessionId);
-        return Boolean(
-          existing && existing.actor === current.actor && existing.subject === current.subject,
-        );
-      }) ?? null
-    );
-  }
   private required(id: string) {
     const t = this.status(id);
     if (!t) throw new Error('approval not found');

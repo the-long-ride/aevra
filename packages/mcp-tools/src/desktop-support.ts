@@ -10,7 +10,7 @@ import { redactText } from '../../security/src/dlp.js';
 import { basename, isProtectedDesktopTitle } from '../../security/src/window-gate.js';
 import { AevraToolError } from './errors.js';
 import { asToolError } from './errors.js';
-import { requiredLease } from './service-helpers.js';
+import { requireHostControlIdentity } from './host-control-gate.js';
 import type { McpRuntimeContext } from './service-types.js';
 
 export async function run(
@@ -18,11 +18,12 @@ export async function run(
   sessionId: string,
   operation: WorkerOperation,
 ) {
-  const lease = requiredLease(context, sessionId);
+  const identity = requireHostControlIdentity(context, sessionId, 'desktop.control');
   const result = await context.worker.execute({
     sessionId,
-    workspaceId: lease.workspaceId,
-    roots: context.workspaces.capabilityRoots(lease.workspaceId),
+    workspaceId: '',
+    scope: { kind: 'host-control', capability: 'desktop.control', identity },
+    roots: [],
     operation,
     executionMode: 'host',
   });
@@ -46,12 +47,9 @@ export function audit(
     window?: string;
   } = {},
 ) {
-  const lease = context.workspaceId
-    ? context.sessions.leaseForWorkspace(sessionId, context.workspaceId)
-    : context.sessions.activeLease(sessionId);
   context.deps.audit?.append({
     sessionId,
-    ...(lease ? { workspaceId: lease.workspaceId } : {}),
+
     tool,
     operation: tool.replace('desktop_', 'desktop:'),
     target,

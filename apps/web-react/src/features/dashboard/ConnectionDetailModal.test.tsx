@@ -333,3 +333,31 @@ test('durable OAuth connection sends selected profile when granting a new worksp
   });
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
 });
+
+test('host browser and desktop grants are independent for the exact OAuth connection', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures({
+    routes: {
+      '/api/connections/oauth-exact/control': {
+        connectionId: 'oauth-exact',
+        browser: false,
+        desktop: true,
+      },
+    },
+  });
+  renderModal({ connectionId: 'oauth-exact', id: 'oauth-exact' });
+  expect(await screen.findByRole('button', { name: 'Grant browser control' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Revoke desktop control' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Grant browser control' }));
+  await waitFor(() =>
+    expect(mutationCall(fetchMock, '/api/connections/oauth-exact/control', 'POST')).toBeTruthy(),
+  );
+  const grant = mutationCall(fetchMock, '/api/connections/oauth-exact/control', 'POST');
+  expect(JSON.parse(String(grant?.[1]?.body))).toEqual({ capability: 'browser.control' });
+  await user.click(screen.getByRole('button', { name: 'Revoke desktop control' }));
+  await waitFor(() =>
+    expect(
+      mutationCall(fetchMock, '/api/connections/oauth-exact/control/desktop.control', 'DELETE'),
+    ).toBeTruthy(),
+  );
+});

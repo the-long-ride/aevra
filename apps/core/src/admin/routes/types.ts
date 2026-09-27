@@ -20,6 +20,7 @@ export interface AdminApiContext {
   oauth?: any;
   connections?: any;
   connectors?: any;
+  hostControlAccess?: any;
   metrics?: any;
   environment?: any;
   vault?: any;

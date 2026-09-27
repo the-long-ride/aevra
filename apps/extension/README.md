@@ -13,6 +13,11 @@ npm run build:extension
 Then open `chrome://extensions`, enable Developer mode, choose **Load unpacked**,
 and select `apps/extension/build/aevra-extension`.
 
+The manifest requests `debugger` for vision captures and coordinate clicks or drags. If Chrome or Brave
+disables an existing unpacked installation after this permission is added,
+accept its warning on the extensions page and reload the same folder. Keeping
+the folder path preserves the extension ID and saved pairing.
+
 The compiler emits into a repo-shaped tree, because the extension imports shared
 source from `packages/` and those relative imports have to keep resolving inside
 the packed extension. `build:extension` assembles that tree with a manifest whose
@@ -48,12 +53,17 @@ every issued token at once.
 
 ## What it can and cannot do
 
-Nothing runs in a page until an operation targets that tab, and then only
-through `chrome.scripting.executeScript` — the manifest declares no content
-scripts. There is no arbitrary script evaluation: every action is a typed,
-auditable operation. Typing into password, one-time-code, and payment fields is
-refused in the content script as well as in the worker, and no approval can
-override it.
+Vision captures and coordinate clicks or drags each use a temporary `chrome.debugger`
+attachment so the debugger notice cannot change the game layout between the
+screenshot and input. Clicks send native mouse press/release commands on the exact
+target tab. Drags send a held press, stepped movement, and release in one action
+for canvas and ordinary pages. Ref and selector actions
+use `chrome.scripting.executeScript` in the isolated world. There is no
+arbitrary script evaluation or general debugger command surface: every action
+remains typed and auditable. Typing into password, one-time-code, and payment
+fields is refused in the content script as well as in the worker, and no
+approval can override it. A coordinate click returning `ok:true` confirms
+input delivery, so use a follow-up snapshot to verify a page-state change.
 
 ## Residual risk
 

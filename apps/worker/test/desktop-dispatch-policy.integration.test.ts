@@ -22,8 +22,14 @@ async function connected() {
   return { registry, driver };
 }
 
-const ownerA = { sessionId: 'session-A', workspaceId: 'ws-A' };
-const ownerB = { sessionId: 'session-B', workspaceId: 'ws-B' };
+const ownerA = {
+  identity: { kind: 'oauth' as const, key: 'connection-A' },
+  surface: 'desktop.control' as const,
+};
+const ownerB = {
+  identity: { kind: 'oauth' as const, key: 'connection-B' },
+  surface: 'desktop.control' as const,
+};
 
 test('target allowed while foreground unrelated succeeds without touching foreground', async () => {
   const { registry, driver } = await connected();
@@ -194,4 +200,65 @@ test('stolen refs across sessions or workspaces fail with DESKTOP_LEASE_EXPIRED'
       ),
     (err: any) => err.code === 'DESKTOP_LEASE_EXPIRED',
   );
+});
+
+test('session app grant uses MCP session ID while desktop lease keeps connection ownership', async () => {
+  const { registry, driver } = await connected();
+  const window = {
+    windowId: 'w1',
+    processName: 'private.exe',
+    executablePath: 'C:\\Apps\\private.exe',
+    title: 'Private',
+  };
+  driver.focusedWindow = async () => window;
+  driver.targetIdentity = async () => ({
+    window,
+    windowInstance: { windowId: 'w1', processId: 1234, processStartedAt: '2026-09-18T00:00:00Z' },
+  });
+  const policy = {
+    mode: 'allowlist' as const,
+    applications: [],
+    unattributedInput: 'deny' as const,
+    appGrants: [
+      {
+        id: 'grant-1',
+        executablePath: window.executablePath,
+        displayName: 'Private',
+        createdAt: '2026-09-18T00:00:00Z',
+        sessionId: 'mcp-session-1',
+      },
+    ],
+  };
+
+  const foreground = { kind: 'desktop.act' as const, op: 'click' as const, x: 1, y: 1, policy };
+  assert.equal(
+    ((await dispatchDesktopOperation(foreground, registry, ownerA, 'mcp-session-1')) as any)
+      .gateVerdict,
+    'allow',
+  );
+  await assert.rejects(
+    () => dispatchDesktopOperation(foreground, registry, ownerA, 'mcp-session-2'),
+    (error: any) => error.code === 'DESKTOP_INPUT_REFUSED',
+  );
+
+  const describe = {
+    kind: 'desktop.describe' as const,
+    mode: 'background' as const,
+    windowId: 'w1',
+    maxNodes: 10,
+    interactiveOnly: true,
+    policy,
+  };
+  const snapshot = (await dispatchDesktopOperation(
+    describe,
+    registry,
+    ownerA,
+    'mcp-session-1',
+  )) as any;
+  assert.ok(snapshot.windowLeaseId);
+  await assert.rejects(
+    () => dispatchDesktopOperation(describe, registry, ownerA, 'mcp-session-2'),
+    (error: any) => error.code === 'DESKTOP_INPUT_REFUSED',
+  );
+  assert.equal(ownerA.identity.key, 'connection-A');
 });

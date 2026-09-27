@@ -15,6 +15,8 @@ export interface CdpTargetState {
   version: number;
   backendIds: number[];
   credentialRefs: Set<string>;
+  /** Image pixels per CSS pixel of the last vision capture; 1 before any. */
+  visionScale: number;
 }
 
 async function createState(target: CdpTarget): Promise<CdpTargetState> {
@@ -36,6 +38,7 @@ async function createState(target: CdpTarget): Promise<CdpTargetState> {
     version: 0,
     backendIds: [],
     credentialRefs: new Set<string>(),
+    visionScale: 1,
   };
 }
 
