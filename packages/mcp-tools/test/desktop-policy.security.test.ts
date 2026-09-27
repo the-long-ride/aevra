@@ -271,7 +271,7 @@ test('desktop_set_value secret value never reaches audit, approvals, or serializ
 });
 
 test('desktop_set_value generates unique requestNonce preventing cross-payload approval reuse', async () => {
-  const ctx = desktopContext({ yolo: false, leaseCapabilities: [] }); // will require approval
+  const ctx = desktopContext({ yolo: false }); // host grant is present; action still requires approval
   const secret1 = 'secret-val-1';
   const secret2 = 'secret-val-2'; // same length!
 
@@ -285,7 +285,7 @@ test('desktop_set_value generates unique requestNonce preventing cross-payload a
 
   const req1 = ctx.approvals.requests[0];
   assert.ok(req1);
-  const nonce1 = req1.payload.original.args.requestNonce;
+  const nonce1 = req1.payload.args.requestNonce;
   assert.ok(nonce1);
 
   await handleDesktopTool(ctx.value, 's1', 'desktop_set_value', {
@@ -298,7 +298,7 @@ test('desktop_set_value generates unique requestNonce preventing cross-payload a
 
   const req2 = ctx.approvals.requests[1];
   assert.ok(req2);
-  const nonce2 = req2.payload.original.args.requestNonce;
+  const nonce2 = req2.payload.args.requestNonce;
   assert.ok(nonce2);
 
   assert.notEqual(nonce1, nonce2);

@@ -3,7 +3,7 @@ import type { BackgroundActionInput, DesktopWindowIdentity } from '../../protoco
 import type { RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { markUntrusted } from '../../security/src/untrusted.js';
-import { gated } from './authorization.js';
+import { gatedHostControl } from './host-control-gate.js';
 import {
   audit,
   policyFor,
@@ -31,8 +31,8 @@ export function backgroundActRisk(name: string): RiskTier {
 
 function sanitizeBackgroundArgs(name: string, args: any): any {
   if (name === 'desktop_set_value' && typeof args?.value === 'string') {
-    const { value, ...rest } = args;
-    const requestNonce = args.requestNonce ?? randomUUID();
+    const { value, requestNonce: suppliedNonce, ...rest } = args;
+    const requestNonce = suppliedNonce ?? randomUUID();
     return { ...rest, valueLength: value.length, requestNonce };
   }
   return args;
@@ -139,7 +139,7 @@ export async function handleBackgroundAction(
     }
   };
 
-  return gated(
+  return gatedHostControl(
     context,
     sessionId,
     {
@@ -148,13 +148,8 @@ export async function handleBackgroundAction(
       risk,
       argsHash: argsHash({ target, args: safeArgs }),
     },
-    { tool: name, args: safeArgs },
-    {
-      windowId,
-      windowLeaseId,
-      snapshotId,
-      ...(safeArgs.requestNonce ? { requestNonce: safeArgs.requestNonce } : {}),
-    },
+    { tool: name, args: safeArgs, ...(op === 'setValue' ? { requiresVolatileArgs: true } : {}) },
     execute,
+    op === 'setValue' ? { tool: name, args: { ...args } } : undefined,
   );
 }

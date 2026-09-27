@@ -11,7 +11,12 @@ test('authenticated IPC executes only signed envelope', async () => {
   const endpoint =
     process.platform === 'win32' ? `\\\\.\\pipe\\aevra-test-${Date.now()}` : path.join(d, 's.sock');
   const secret = Buffer.alloc(32, 3);
-  const server = await startWorkerServer({ endpoint, secret, daemonInstanceId: 'd' });
+  const server = await startWorkerServer({
+    endpoint,
+    secret,
+    browserTokenKey: Buffer.alloc(32, 4),
+    daemonInstanceId: 'd',
+  });
   const client = new SocketWorkerClient(endpoint, secret, 'd');
   const signer = new HmacEnvelopeSigner(secret, 'd');
   const e = signer.sign({

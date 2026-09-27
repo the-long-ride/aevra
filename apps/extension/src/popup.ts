@@ -1,4 +1,6 @@
 import { initPopupResources } from './popup-resources.js';
+import type { ExtensionConnectionState } from './rpc.js';
+import { getBrowserProfileIdentity } from './profile-identity.js';
 
 export {
   NPM_PACKAGE_URL,
@@ -44,9 +46,12 @@ export async function executePairing(
 ): Promise<{ ok: boolean; message: string; token?: string; wsUrl?: string }> {
   const port = resolveAdminPort(portInput);
   const cleanCode = code.trim().toUpperCase();
+  const identity = await getBrowserProfileIdentity();
   const body = JSON.stringify({
     code: cleanCode,
     extensionId: chrome.runtime?.id ?? '',
+    profileId: identity.profileId,
+    profileName: identity.profileName,
   });
 
   let scheme: 'https' | 'http' = 'https';
@@ -73,7 +78,11 @@ export async function executePairing(
     };
   }
 
-  await chrome.storage.local.set({ token: payload.token, wsUrl: payload.wsUrl });
+  await chrome.storage.local.set({
+    token: payload.token,
+    wsUrl: payload.wsUrl,
+    pairedProfileId: identity.profileId,
+  });
   chrome.runtime.sendMessage({ type: 'aevra:paired' });
   return {
     ok: true,
@@ -107,7 +116,13 @@ export function initPopup(): void {
 
   if (!toggle || !profileInput) return;
 
-  function renderStatus(isPaired: boolean, isEnabled: boolean, isConnected: boolean): void {
+  let hasSavedPairing = false;
+
+  function renderStatus(
+    isPaired: boolean,
+    isEnabled: boolean,
+    state: ExtensionConnectionState,
+  ): void {
     if (!statusChip || !statusText || !connectionDesc || !pairingInfo) return;
 
     if (!isPaired) {
@@ -120,7 +135,7 @@ export function initPopup(): void {
     }
 
     if (unpairedBanner) unpairedBanner.setAttribute('hidden', '');
-    pairingInfo.textContent = 'Paired';
+    pairingInfo.textContent = 'Pairing saved';
 
     if (!isEnabled) {
       statusChip.dataset.state = 'off';
@@ -129,10 +144,19 @@ export function initPopup(): void {
       return;
     }
 
-    if (isConnected) {
+    if (state === 'pair-again') {
+      statusChip.dataset.state = 'off';
+      statusText.textContent = 'Pair again';
+      connectionDesc.textContent = 'Saved pairing was rejected. Pair again with a new code.';
+    } else if (state === 'connected') {
       statusChip.dataset.state = 'ok';
       statusText.textContent = 'Connected';
       connectionDesc.textContent = 'Active in this profile';
+    } else if (state === 'standby') {
+      statusChip.dataset.state = 'pending';
+      statusText.textContent = 'Standby';
+      connectionDesc.textContent =
+        'Another paired profile is active. This profile will take over when it disconnects.';
     } else {
       statusChip.dataset.state = 'pending';
       statusText.textContent = 'Connecting';
@@ -143,7 +167,7 @@ export function initPopup(): void {
   void chrome.storage.local.get(
     ['token', 'wsUrl', 'enabled', 'profileName'],
     (stored: Record<string, unknown> = {}) => {
-      const isPaired = Boolean(
+      hasSavedPairing = Boolean(
         typeof stored.token === 'string' &&
         stored.token.length > 0 &&
         typeof stored.wsUrl === 'string' &&
@@ -155,18 +179,18 @@ export function initPopup(): void {
       toggle.checked = isEnabled;
       profileInput.value = profileName;
 
-      if (!isPaired || !isEnabled) {
-        renderStatus(isPaired, isEnabled, false);
+      if (!hasSavedPairing || !isEnabled) {
+        renderStatus(hasSavedPairing, isEnabled, isEnabled ? 'connecting' : 'paused');
         return;
       }
 
-      renderStatus(isPaired, isEnabled, false);
+      renderStatus(hasSavedPairing, isEnabled, isEnabled ? 'connecting' : 'paused');
       try {
         chrome.runtime.sendMessage(
           { type: 'aevra:getStatus' },
-          (response?: { connected?: boolean }) => {
+          (response?: { state?: ExtensionConnectionState }) => {
             if (chrome.runtime.lastError) return;
-            renderStatus(isPaired, isEnabled, Boolean(response?.connected));
+            renderStatus(hasSavedPairing, isEnabled, response?.state ?? 'connecting');
           },
         );
       } catch {
@@ -181,10 +205,10 @@ export function initPopup(): void {
 
     if (isEnabled) {
       chrome.runtime.sendMessage({ type: 'aevra:connect' });
-      renderStatus(true, true, false);
+      renderStatus(hasSavedPairing, true, 'connecting');
     } else {
       chrome.runtime.sendMessage({ type: 'aevra:disconnect' });
-      renderStatus(true, false, false);
+      renderStatus(hasSavedPairing, false, 'paused');
     }
   });
 
@@ -270,15 +294,16 @@ export function initPopup(): void {
       pairStatus.textContent = result.message;
       pairCodeInput.value = '';
 
-      renderStatus(true, toggle.checked, false);
+      hasSavedPairing = true;
+      renderStatus(true, toggle.checked, toggle.checked ? 'connecting' : 'paused');
       setTimeout(() => {
         closeModal();
         try {
           chrome.runtime.sendMessage(
             { type: 'aevra:getStatus' },
-            (response?: { connected?: boolean }) => {
+            (response?: { state?: ExtensionConnectionState }) => {
               if (chrome.runtime.lastError) return;
-              renderStatus(true, toggle.checked, Boolean(response?.connected));
+              renderStatus(true, toggle.checked, response?.state ?? 'connecting');
             },
           );
         } catch {}

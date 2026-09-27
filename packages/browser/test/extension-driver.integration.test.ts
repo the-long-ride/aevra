@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
 import { mintExtensionToken } from '../../security/src/extension-token.js';
 import { RefRegistry, type SnapshotElementLike } from '../src/dom-snapshot.js';
 import { handleExtensionCommand, type ExtensionBridge } from '../src/extension-bridge.js';
@@ -10,6 +12,18 @@ import { FIXTURE_PAGE } from './fixtures.js';
 
 const secret = Buffer.from('d'.repeat(64), 'hex');
 const extensionId = 'abcdefghijklmnopabcdefghijklmnop';
+
+test('connect reports a missing live socket without claiming the pairing was lost', async () => {
+  const server = new ExtensionServer({ secret, extensionId, epoch: () => 1 });
+  const driver = new ExtensionDriver(server);
+  await assert.rejects(
+    () => driver.connect({ transport: 'extension' }),
+    (error: any) =>
+      error.code === 'BROWSER_UNAVAILABLE' &&
+      /authenticated extension socket/i.test(error.message) &&
+      !/not paired/i.test(error.message),
+  );
+});
 
 function textOf(node: SnapshotElementLike): string {
   const own = String(node.textContent ?? '').trim();
@@ -24,6 +38,7 @@ function textOf(node: SnapshotElementLike): string {
  */
 function chromeBridge(url: () => string, setUrl: (next: string) => void): ExtensionBridge {
   return {
+    async focus() {},
     async listTabs() {
       return [
         {
@@ -37,10 +52,6 @@ function chromeBridge(url: () => string, setUrl: (next: string) => void): Extens
     },
     async serialize() {
       return FIXTURE_PAGE;
-    },
-    async devicePixelRatio() {
-      // A HiDPI display, so the box scaling is exercised rather than a no-op.
-      return 2;
     },
     async apply(action) {
       // Models the content script: wait_for polls to its deadline in the page.
@@ -56,7 +67,14 @@ function chromeBridge(url: () => string, setUrl: (next: string) => void): Extens
       return { ok: true };
     },
     async captureVisible() {
-      return 'data:image/png;base64,iVBORw0KGgo=';
+      // A ratio other than 1, so the box scaling is exercised rather than a no-op.
+      return {
+        imageDataUri: 'data:image/jpeg;base64,/9j/4AAQ',
+        devicePixelRatio: 2,
+        imageWidth: 100,
+        imageHeight: 100,
+        viewport: { width: 50, height: 50 },
+      };
     },
     async navigate(next) {
       setUrl(next);

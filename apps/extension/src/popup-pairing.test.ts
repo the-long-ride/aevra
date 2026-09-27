@@ -12,6 +12,10 @@ beforeEach(() => {
   (globalThis as any).chrome = {
     storage: {
       local: {
+        get: async () => ({
+          profileId: '11111111-1111-4111-8111-111111111111',
+          profileName: 'TLR',
+        }),
         set: async (values: Record<string, unknown>) => {
           Object.assign(stored, values);
         },
@@ -56,8 +60,17 @@ describe('popup pairing logic', () => {
     expect(result.ok).toBe(true);
     expect(result.message).toBe('Paired over https.');
     expect(requests[0].url).toBe('https://127.0.0.1:47831/api/browser/pair');
-    expect(requests[0].body).toEqual({ code: 'ABCD1234', extensionId: 'mock-ext-id' });
-    expect(stored).toEqual({ token: 'new-token', wsUrl: 'ws://127.0.0.1:47833' });
+    expect(requests[0].body).toEqual({
+      code: 'ABCD1234',
+      extensionId: 'mock-ext-id',
+      profileId: '11111111-1111-4111-8111-111111111111',
+      profileName: 'TLR',
+    });
+    expect(stored).toEqual({
+      token: 'new-token',
+      wsUrl: 'ws://127.0.0.1:47833',
+      pairedProfileId: '11111111-1111-4111-8111-111111111111',
+    });
     expect(sentMessages).toContainEqual({ type: 'aevra:paired' });
   });
 

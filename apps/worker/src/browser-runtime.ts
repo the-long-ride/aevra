@@ -3,27 +3,49 @@ import type { BrowserDriver, ConnectOptions } from '../../../packages/browser/sr
 import { ExtensionDriver } from '../../../packages/browser/src/extension-driver.js';
 import { ExtensionServer } from '../../../packages/browser/src/extension-server.js';
 import { BrowserSessionRegistry } from '../../../packages/browser/src/registry.js';
-import { deriveBrowserTokenKey } from '../../../packages/security/src/browser-token-key.js';
+import type {
+  BrowserExtensionPairing,
+  BrowserListenerHealth,
+} from '../../../packages/protocol/src/browser.js';
 
 export interface BrowserRuntimeConfig {
-  secret: Buffer;
+  browserTokenKey: Buffer;
   extensionPort?: number;
   createDriver?: (options: ConnectOptions) => Promise<BrowserDriver>;
 }
 
 const DEFAULT_PORT = Number(process.env.AEVRA_BROWSER_PORT ?? 47833);
 
+function failedListener(error: unknown, port: number): BrowserListenerHealth {
+  const code = String((error as { code?: string }).code ?? 'BROWSER_LISTENER_FAILED');
+  return {
+    state: 'failed',
+    port,
+    errorCode: ['EADDRINUSE', 'EACCES', 'EADDRNOTAVAIL'].includes(code)
+      ? code
+      : 'BROWSER_LISTENER_FAILED',
+    changedAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Worker-side owner of every live browser socket, held as a module singleton
- * the way `processRuntime` is. The extension listener is created lazily on the
- * first connect, which is also the first envelope that can carry the epoch and
- * the paired extension id - so no socket is accepted before the worker knows
- * both.
+ * the way `processRuntime` is. Core synchronizes the epoch and complete pairing
+ * registry before the listener accepts extension authentication. Keeping the
+ * listener available with an empty registry lets revoked extensions learn that
+ * they must pair again instead of retrying forever against a closed port.
  */
 class BrowserRuntime {
   private config: BrowserRuntimeConfig | null = null;
   private server: ExtensionServer | null = null;
+  private allowedPairings: BrowserExtensionPairing[] = [];
   private pairedExtensionId: string | null = null;
+  private listener: BrowserListenerHealth = {
+    state: 'stopped',
+    port: DEFAULT_PORT,
+    errorCode: null,
+    changedAt: new Date().toISOString(),
+  };
   private sessions = new BrowserSessionRegistry({
     createDriver: (options) => this.createDriver(options),
     extensionPaired: () => Boolean(this.server?.peer()),
@@ -32,31 +54,72 @@ class BrowserRuntime {
 
   configure(config: BrowserRuntimeConfig): void {
     this.config = config;
+    if (config) this.listener = { ...this.listener, port: config.extensionPort ?? DEFAULT_PORT };
   }
 
   registry(): BrowserSessionRegistry {
     return this.sessions;
   }
 
+  listenerHealth(): BrowserListenerHealth {
+    return { ...this.listener };
+  }
+
+  extensionSocketAuthenticated(): boolean {
+    return Boolean(this.server?.peer());
+  }
+
   extensionId(): string | null {
     return this.pairedExtensionId;
   }
 
+  activeProfile() {
+    return this.server?.activeProfile() ?? null;
+  }
+
   /**
-   * A change of paired extension invalidates the origin pin the running
-   * listener was built with, so the listener is dropped and rebuilt.
+   * Replace the worker's complete authorized profile set. The extension
+   * listener reads this live array for every new authentication attempt.
    */
-  async setExtensionId(extensionId: string): Promise<void> {
-    if (this.pairedExtensionId === extensionId && this.server) return;
-    this.pairedExtensionId = extensionId || null;
-    await this.stopServer();
-    if (this.pairedExtensionId && this.config && !this.config.createDriver) {
+  async setPairings(pairings: BrowserExtensionPairing[]): Promise<void> {
+    const next = pairings.map((pairing) => ({ ...pairing }));
+    const activeStillAllowed = this.server?.activePairingStillAllowed(next) ?? true;
+    this.allowedPairings = next;
+    this.pairedExtensionId = next.at(-1)?.extensionId ?? null;
+    this.server?.pruneStandby(next);
+
+    if (!activeStillAllowed) {
+      if (this.sessions.transport() === 'extension') await this.sessions.disconnect();
+      this.server?.rejectPeer();
+    }
+
+    if (this.config && !this.config.createDriver) {
       try {
         await this.extensionServer(this.config);
-      } catch {
-        // Port may be unavailable or bound in constrained test environments
+      } catch (error) {
+        this.listener = failedListener(error, this.config.extensionPort ?? DEFAULT_PORT);
       }
     }
+  }
+
+  /**
+   * Compatibility adapter for old one-extension worker envelopes.
+   */
+  async setExtensionId(extensionId: string): Promise<void> {
+    await this.setPairings(
+      extensionId
+        ? [
+            {
+              pairingId: `legacy-${extensionId}`,
+              profileId: null,
+              profileName: 'Legacy browser profile',
+              extensionId,
+              credentialId: null,
+              legacy: true,
+            },
+          ]
+        : [],
+    );
   }
 
   private required(): BrowserRuntimeConfig {
@@ -77,24 +140,37 @@ class BrowserRuntime {
 
   private async extensionServer(config: BrowserRuntimeConfig): Promise<ExtensionServer> {
     if (this.server) return this.server;
-    if (!this.pairedExtensionId) {
-      throw Object.assign(new Error('No Aevra extension is paired'), {
-        code: 'BROWSER_UNAVAILABLE',
-      });
-    }
     const server = new ExtensionServer({
-      secret: deriveBrowserTokenKey(config.secret),
-      extensionId: this.pairedExtensionId,
+      secret: config.browserTokenKey,
+      extensionId: this.pairedExtensionId ?? undefined,
+      pairings: () => this.allowedPairings,
       epoch: () => this.sessions.epoch(),
     });
-    await server.start({ port: config.extensionPort ?? DEFAULT_PORT });
-    this.server = server;
+    try {
+      const address = await server.start({ port: config.extensionPort ?? DEFAULT_PORT });
+      this.server = server;
+      this.listener = {
+        state: 'listening',
+        port: address.port,
+        errorCode: null,
+        changedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.listener = failedListener(error, config.extensionPort ?? DEFAULT_PORT);
+      throw error;
+    }
     return server;
   }
 
   private async stopServer(): Promise<void> {
     const server = this.server;
     this.server = null;
+    this.listener = {
+      state: 'stopped',
+      port: this.config?.extensionPort ?? DEFAULT_PORT,
+      errorCode: null,
+      changedAt: new Date().toISOString(),
+    };
     if (server) await server.stop();
   }
 

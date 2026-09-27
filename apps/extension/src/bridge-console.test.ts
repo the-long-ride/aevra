@@ -1,5 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearConsoleLogs, createChromeBridge, recordConsoleLog } from './bridge';
+import { fitVisibleCapture } from './vision-capture';
+
+vi.mock('./vision-capture', () => ({
+  fitVisibleCapture: vi.fn(async () => ({
+    imageDataUri: 'data:image/jpeg;base64,',
+    devicePixelRatio: 1,
+  })),
+}));
 
 interface Injection {
   funcName: string;
@@ -21,7 +29,10 @@ function installChrome(results: Record<string, unknown> = {}) {
         return [{ id: 7, url: 'https://example.com/', title: 'Example', active: true }];
       },
       async get() {
-        return { url: 'https://example.com/' };
+        return { id: 7, url: 'https://example.com/', active: true, windowId: 1 };
+      },
+      async captureVisibleTab() {
+        return 'data:image/jpeg;base64,AAAA';
       },
       async update(id: number) {
         // Chrome reports the load asynchronously; without it the bridge would
@@ -49,6 +60,10 @@ function installChrome(results: Record<string, unknown> = {}) {
         }
         return [{ result: { ok: true } }];
       },
+    },
+    debugger: {
+      async attach() {},
+      async detach() {},
     },
   };
   return injections;
@@ -100,20 +115,29 @@ describe('console capture injection', () => {
   });
 });
 
-describe('devicePixelRatio', () => {
-  it('reads the ratio out of the page', async () => {
-    installChrome({ readDevicePixelRatio: 2 });
-    await expect(createChromeBridge().devicePixelRatio()).resolves.toBe(2);
+describe('the viewport a capture is fitted with', () => {
+  it('uses Chrome tab dimensions without injecting code into the page', async () => {
+    const injections = installChrome();
+    (globalThis as any).chrome.tabs.get = async () => ({
+      id: 7,
+      url: 'https://example.com/',
+      active: true,
+      windowId: 1,
+      width: 800,
+      height: 500,
+    });
+    vi.mocked(fitVisibleCapture).mockClear();
+    await createChromeBridge().captureVisible();
+    expect(injections).toHaveLength(0);
+    expect(vi.mocked(fitVisibleCapture).mock.calls[0]![1]).toEqual({ width: 800, height: 500 });
   });
 
-  it('falls back to 1 when the page cannot be reached', async () => {
-    installChrome({ readDevicePixelRatio: new Error('no access') });
-    await expect(createChromeBridge().devicePixelRatio()).resolves.toBe(1);
-  });
-
-  it('falls back to 1 when the page reports a nonsense ratio', async () => {
-    installChrome({ readDevicePixelRatio: 0 });
-    await expect(createChromeBridge().devicePixelRatio()).resolves.toBe(1);
+  it('lets the frame dimensions serve as a fallback when Chrome omits tab dimensions', async () => {
+    const injections = installChrome();
+    vi.mocked(fitVisibleCapture).mockClear();
+    await createChromeBridge().captureVisible();
+    expect(injections).toHaveLength(0);
+    expect(vi.mocked(fitVisibleCapture).mock.calls[0]![1]).toBeNull();
   });
 });
 

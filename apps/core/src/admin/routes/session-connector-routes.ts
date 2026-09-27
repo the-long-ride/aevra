@@ -163,6 +163,55 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
     return true;
   }
 
+  match = path.match(/^\/api\/connectors\/([^/]+)\/control(?:\/([^/]+))?$/);
+  if (match && ['GET', 'POST', 'DELETE'].includes(method)) {
+    const connectorId = decodeURIComponent(match[1]!);
+    const connector = context.connectors
+      ?.list?.()
+      .find((entry: any) => String(entry.id) === connectorId);
+    if (!connector) {
+      sendAdminResponse(res, 404, {
+        error: { code: 'NOT_FOUND', message: 'Connector not found' },
+      });
+      return true;
+    }
+    const identity = { kind: 'connector' as const, key: connectorId };
+    if (method === 'GET') {
+      const grants = context.hostControlAccess?.list?.(identity) ?? [];
+      sendAdminResponse(res, 200, {
+        connectionId: connectorId,
+        browser: grants.some(
+          (grant: any) => grant.capability === 'browser.control' && !grant.revokedAt,
+        ),
+        desktop: grants.some(
+          (grant: any) => grant.capability === 'desktop.control' && !grant.revokedAt,
+        ),
+      });
+      return true;
+    }
+    const body = method === 'POST' ? await readAdminBody(req) : null;
+    const capability = decodeURIComponent(match[2] ?? String(body?.capability ?? ''));
+    if (capability !== 'browser.control' && capability !== 'desktop.control') {
+      sendAdminResponse(res, 400, {
+        error: { code: 'INVALID_REQUEST', message: 'Invalid control capability' },
+      });
+      return true;
+    }
+    if (method === 'POST') context.hostControlAccess?.grant?.(identity, capability, 'admin');
+    else await context.hostControlAccess?.revoke?.(identity, capability);
+    context.audit?.append?.({
+      actor: 'admin',
+      connectionId: connectorId,
+      operation: method === 'POST' ? 'connection.control_grant' : 'connection.control_revoke',
+      target: capability,
+      result: 'ok',
+      redactionCount: 0,
+      class: 'security',
+    });
+    sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
+    return true;
+  }
+
   match = path.match(/^\/api\/connectors\/([^/]+)\/rotate$/);
   if (match && method === 'POST') {
     const connectorId = match[1]!;

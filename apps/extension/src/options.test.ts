@@ -29,6 +29,10 @@ beforeEach(() => {
     },
     storage: {
       local: {
+        get: async () => ({
+          profileId: '11111111-1111-4111-8111-111111111111',
+          profileName: 'TLR',
+        }),
         set: async (values: Record<string, unknown>) => Object.assign(stored, values),
       },
     },
@@ -54,8 +58,14 @@ describe('options pairing form', () => {
     expect(requests[0].body).toEqual({
       code: 'ABCDEFGH',
       extensionId: 'abcdefghijklmnopabcdefghijklmnop',
+      profileId: '11111111-1111-4111-8111-111111111111',
+      profileName: 'TLR',
     });
-    expect(stored).toEqual({ token: 'issued', wsUrl: 'ws://127.0.0.1:47833' });
+    expect(stored).toEqual({
+      token: 'issued',
+      wsUrl: 'ws://127.0.0.1:47833',
+      pairedProfileId: '11111111-1111-4111-8111-111111111111',
+    });
     expect(document.getElementById('status')!.textContent).toBe('Paired over https.');
   });
 
@@ -151,6 +161,39 @@ describe('options pairing form', () => {
     const text = document.getElementById('status')!.textContent ?? '';
     expect(text).toMatch(/not reachable/i);
     expect(text).toMatch(/certificate/i);
+    expect(stored).toEqual({});
+  });
+
+  it('falls back to the default admin port when the port field is invalid or absent', async () => {
+    const urls: string[] = [];
+    (globalThis as any).fetch = async (url: string) => {
+      urls.push(url);
+      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://x' }) };
+    };
+    (document.getElementById('port') as HTMLInputElement).value = '70000';
+    await import('./options');
+    await submit('abcdefgh');
+    expect(urls[0]).toBe('https://127.0.0.1:47831/api/browser/pair');
+
+    vi.resetModules();
+    renderPage();
+    document.getElementById('port')!.remove();
+    await import('./options');
+    await submit('abcdefgh');
+    expect(urls[1]).toBe('https://127.0.0.1:47831/api/browser/pair');
+  });
+
+  it('reports the HTTP status when a refusal carries no JSON body', async () => {
+    (globalThis as any).fetch = async () => ({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <');
+      },
+    });
+    await import('./options');
+    await submit('abcdefgh');
+    expect(document.getElementById('status')!.textContent).toBe('Pairing failed: 502');
     expect(stored).toEqual({});
   });
 });

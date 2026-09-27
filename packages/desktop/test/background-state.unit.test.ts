@@ -10,8 +10,14 @@ test('deterministic clock tests for 60-second expiry, quota rejection, renewal, 
     now: () => tick,
     id: () => `lease-${++sequence}`,
   });
-  const ownerA: DesktopOwner = { sessionId: 'ses-a', workspaceId: 'ws-1' };
-  const ownerB: DesktopOwner = { sessionId: 'ses-b', workspaceId: 'ws-1' };
+  const ownerA: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'one' },
+    surface: 'desktop.control',
+  };
+  const ownerB: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'two' },
+    surface: 'desktop.control',
+  };
   const win1 = { windowId: 'win-1', processId: 100, processStartedAt: '2026-09-18T10:00:00Z' };
 
   // Owner A acquires win1
@@ -39,6 +45,28 @@ test('deterministic clock tests for 60-second expiry, quota rejection, renewal, 
   assert.equal(leaseB.windowLeaseId, 'lease-2');
 });
 
+test('invalidating an owner removes only that owner leases', () => {
+  let sequence = 0;
+  const state = new BackgroundDesktopState({
+    now: () => 1_000,
+    id: () => `lease-${++sequence}`,
+  });
+  const ownerA: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'one' },
+    surface: 'desktop.control',
+  };
+  const ownerB: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'two' },
+    surface: 'desktop.control',
+  };
+  state.acquire(ownerA, { windowId: 'win-a', processId: 1, processStartedAt: 'time' }, 1);
+  state.acquire(ownerB, { windowId: 'win-b', processId: 2, processStartedAt: 'time' }, 1);
+
+  assert.equal((state as any).invalidateOwner(ownerA), 1);
+  assert.equal(state.isWindowLeased('win-a'), false);
+  assert.equal(state.isWindowLeased('win-b'), true);
+});
+
 test('same HWND with new process instance is not treated as the same window', () => {
   let tick = 0;
   let sequence = 0;
@@ -46,7 +74,10 @@ test('same HWND with new process instance is not treated as the same window', ()
     now: () => tick,
     id: () => `lease-${++sequence}`,
   });
-  const ownerA: DesktopOwner = { sessionId: 'ses-a', workspaceId: 'ws-1' };
+  const ownerA: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'one' },
+    surface: 'desktop.control',
+  };
   const winOld = { windowId: 'win-1', processId: 100, processStartedAt: '2026-09-18T10:00:00Z' };
   const winNew = { windowId: 'win-1', processId: 200, processStartedAt: '2026-09-18T11:00:00Z' };
 
@@ -63,7 +94,10 @@ test('quota limits: max 8 leases per owner and 32 host-wide', () => {
     now: () => 1_000,
     id: () => `lease-${++sequence}`,
   });
-  const owner: DesktopOwner = { sessionId: 'ses-1', workspaceId: 'ws-1' };
+  const owner: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'one' },
+    surface: 'desktop.control',
+  };
 
   for (let i = 0; i < 8; i++) {
     state.acquire(owner, { windowId: `win-${i}`, processId: 100 + i, processStartedAt: 'time' }, 1);
@@ -82,8 +116,14 @@ test('bind and resolve nodes, invalidateSnapshot, and epoch mismatch', () => {
     now: () => tick,
     id: () => 'lease-1',
   });
-  const owner: DesktopOwner = { sessionId: 'ses-1', workspaceId: 'ws-1' };
-  const otherOwner: DesktopOwner = { sessionId: 'ses-2', workspaceId: 'ws-1' };
+  const owner: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'one' },
+    surface: 'desktop.control',
+  };
+  const otherOwner: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'two' },
+    surface: 'desktop.control',
+  };
   const win = { windowId: 'win-1', processId: 100, processStartedAt: 'time' };
 
   const { windowLeaseId } = state.acquire(owner, win, 1);
@@ -157,8 +197,14 @@ test('release is idempotent for owner, cannot release foreign leases', () => {
     now: () => 1000,
     id: () => 'lease-1',
   });
-  const ownerA: DesktopOwner = { sessionId: 'ses-a', workspaceId: 'ws-1' };
-  const ownerB: DesktopOwner = { sessionId: 'ses-b', workspaceId: 'ws-1' };
+  const ownerA: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'one' },
+    surface: 'desktop.control',
+  };
+  const ownerB: DesktopOwner = {
+    identity: { kind: 'oauth', key: 'two' },
+    surface: 'desktop.control',
+  };
   const win1 = { windowId: 'win-1', processId: 100, processStartedAt: 'time' };
 
   const { windowLeaseId } = state.acquire(ownerA, win1, 1);

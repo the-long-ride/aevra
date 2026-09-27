@@ -25,7 +25,8 @@ export async function dispatchBrowserOperation(op: BrowserOperation): Promise<Wo
 
   if (op.kind === 'browser.connect') {
     if (op.epoch !== undefined) await registry.setEpoch(op.epoch);
-    if (op.extensionId) await browserRuntime.setExtensionId(op.extensionId);
+    if (op.pairings !== undefined) await browserRuntime.setPairings(op.pairings);
+    else if (op.extensionId !== undefined) await browserRuntime.setExtensionId(op.extensionId);
     return {
       ok: true,
       value: await registry.connect({
@@ -41,6 +42,7 @@ export async function dispatchBrowserOperation(op: BrowserOperation): Promise<Wo
     // uninitialised registry it adopts the value and returns - so a disconnect
     // carrying an epoch must still disconnect.
     if (op.epoch !== undefined) await registry.setEpoch(op.epoch);
+    if (op.all) await browserRuntime.setPairings(op.pairings ?? []);
     await registry.disconnect();
     return { ok: true, value: { disconnected: true, epoch: registry.epoch() } };
   }
@@ -52,8 +54,23 @@ export async function dispatchBrowserOperation(op: BrowserOperation): Promise<Wo
     // adopts the first epoch it is told, and only then does the monotonic
     // guard apply.
     if (op.epoch !== undefined) await registry.setEpoch(op.epoch);
-    if (op.extensionId) await browserRuntime.setExtensionId(op.extensionId);
-    return { ok: true, value: await registry.status() };
+    if (op.pairings !== undefined) await browserRuntime.setPairings(op.pairings);
+    else if (op.extensionId !== undefined) await browserRuntime.setExtensionId(op.extensionId);
+    const activeProfile = browserRuntime.activeProfile();
+    return {
+      ok: true,
+      value: {
+        ...(await registry.status()),
+        listener: browserRuntime.listenerHealth(),
+        extensionSocketAuthenticated: browserRuntime.extensionSocketAuthenticated(),
+        workerExtensionId: browserRuntime.extensionId(),
+        workerEpoch: registry.epoch(),
+        activePairingId: activeProfile?.pairingId ?? null,
+        activeProfileId: activeProfile?.profileId ?? null,
+        activeProfileName: activeProfile?.profileName ?? null,
+        activeExtensionId: activeProfile?.extensionId ?? null,
+      },
+    };
   }
 
   if (op.kind === 'browser.tabs') {

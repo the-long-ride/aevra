@@ -14,6 +14,7 @@ import {
   cdpCenterForBackend,
   clearFocusedCdpField,
   clickCdpPoint,
+  dragCdpPoint,
   resolveCdpSelector,
 } from './cdp-selector.js';
 import {
@@ -22,7 +23,7 @@ import {
   type CdpTargetState,
 } from './cdp-target-session.js';
 import { readDocument } from './cdp-read.js';
-import { captureViewport } from './cdp-vision.js';
+import { captureViewport, cssDragPoints, cssPoint, scaledBoxes } from './cdp-vision.js';
 import { parseRef } from './dom-snapshot.js';
 import { classifyOrigin } from './origin-policy.js';
 import {
@@ -38,7 +39,6 @@ import {
   type SnapshotRequest,
   type TabRequest,
 } from './driver.js';
-
 /** Per-target CDP sessions; selecting a target does not activate it, and refs are target-safe. */
 export class CdpDriver implements BrowserDriver {
   readonly transport: BrowserTransport = 'cdp';
@@ -174,13 +174,13 @@ export class CdpDriver implements BrowserDriver {
     };
     if (request.mode === 'a11y') return base;
     const capture = await captureViewport(state.client);
-    const boxes: Array<{ ref: string; label: string; box: BrowserBox }> = [];
-    for (let index = 0; index < mapping.nodes.length; index += 1) {
-      const box = await this.boxFor(state, index).catch(() => null);
-      if (box) {
-        boxes.push({ ref: mapping.nodes[index]!.ref, label: mapping.nodes[index]!.name, box });
-      }
-    }
+    // Kept so the coordinate clicks that follow can be put back in CSS pixels.
+    state.visionScale = capture.devicePixelRatio;
+    const boxes = await scaledBoxes(
+      mapping.nodes,
+      (index) => this.boxFor(state, index),
+      capture.devicePixelRatio,
+    );
     return { ...base, ...capture, boxes };
   }
 
@@ -244,13 +244,17 @@ export class CdpDriver implements BrowserDriver {
       if (action.op === 'click') {
         const point =
           action.x !== undefined && action.y !== undefined
-            ? { x: action.x, y: action.y }
+            ? cssPoint({ x: action.x, y: action.y }, state.visionScale)
             : await cdpCenterForBackend(
                 client,
                 (await this.actionTarget(state, action)).backendNodeId,
               );
         await clickCdpPoint(client, point);
         return { op: 'click', ok: true };
+      }
+      if (action.op === 'drag') {
+        await dragCdpPoint(client, ...cssDragPoints(action, state.visionScale));
+        return { op: 'drag', ok: true };
       }
       if (action.op === 'type') {
         const target = await this.actionTarget(state, action);
@@ -277,7 +281,7 @@ export class CdpDriver implements BrowserDriver {
       if (action.op === 'scroll') {
         const point =
           action.x !== undefined && action.y !== undefined
-            ? { x: action.x, y: action.y }
+            ? cssPoint({ x: action.x, y: action.y }, state.visionScale)
             : await cdpCenterForBackend(
                 client,
                 (await this.actionTarget(state, action)).backendNodeId,

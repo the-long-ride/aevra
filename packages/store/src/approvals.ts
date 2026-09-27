@@ -8,13 +8,16 @@ export class ApprovalRepository {
     const payload = sanitizeStructuredSecrets(t.payload ?? null);
     this.db
       .prepare(
-        `INSERT OR REPLACE INTO pending_approvals(id,actor,session_id,workspace_id,operation_json,expected_state_json,risk,state,expires_at,cancellation_reason,decision_scope,connection_subject,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT OR REPLACE INTO pending_approvals(id,actor,session_id,workspace_id,scope,identity_kind,identity_key,operation_json,expected_state_json,risk,state,expires_at,cancellation_reason,decision_scope,connection_subject,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         t.id,
         t.actor,
         t.sessionId,
-        t.workspaceId,
+        t.scope === 'host' ? null : t.workspaceId,
+        t.scope ?? 'workspace',
+        t.scope === 'host' ? t.identity?.kind : null,
+        t.scope === 'host' ? t.identity?.key : null,
         JSON.stringify({ normalized: t.operation, payload }),
         JSON.stringify(t.expectedState ?? {}),
         t.risk,
@@ -38,6 +41,8 @@ export class ApprovalRepository {
       connectionId: r.connection_subject ?? undefined,
       connectionSubject: r.connection_subject ?? undefined,
       workspaceId: r.workspace_id,
+      scope: r.scope,
+      ...(r.scope === 'host' ? { identity: { kind: r.identity_kind, key: r.identity_key } } : {}),
       operation: (() => {
         const x = JSON.parse(r.operation_json);
         return x.normalized ?? x;

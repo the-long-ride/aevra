@@ -79,6 +79,10 @@ export function installApiFixtures(options: FixtureOptions = {}) {
     ],
     ['/api/workspaces', [{ id: 'ws-1', name: 'Aevra', hostRoot: '/repo' }]],
     [
+      '/api/connectors/connector-1/control',
+      { connectionId: 'connector-1', browser: false, desktop: false },
+    ],
+    [
       '/api/dashboard/runtime',
       {
         status: { version: '0.1.0' },

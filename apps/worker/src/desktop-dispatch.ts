@@ -51,6 +51,7 @@ export async function dispatchDesktopOperation(
   operation: DesktopOperation,
   registry: DesktopSessionRegistry,
   owner?: DesktopOwner,
+  sessionId?: string,
 ): Promise<unknown> {
   // Connect, status, and disconnect stay off the queue: the kill switch must
   // reach a wedged session. desktop.apps joins them for a different reason -
@@ -59,6 +60,10 @@ export async function dispatchDesktopOperation(
   if (operation.kind === 'desktop.status') return registry.status();
   if (operation.kind === 'desktop.disconnect') return registry.disconnect();
   if (operation.kind === 'desktop.apps') return detectInstalledApps();
+  if (operation.kind === 'desktop.invalidateOwner') {
+    if (!owner) throw new DesktopDriverError('DESKTOP_OWNER_REQUIRED', 'Desktop owner is required');
+    return { invalidated: registry.invalidateOwner(owner) };
+  }
 
   return registry.run(async (driver, epoch) => {
     if (operation.kind === 'desktop.windows') return driver.windows();
@@ -105,7 +110,7 @@ export async function dispatchDesktopOperation(
             target,
             operation.policy,
             'background',
-            owner.sessionId,
+            sessionId,
           );
           if (!verdict.allowed) {
             throw new DesktopDriverError(
@@ -237,7 +242,7 @@ export async function dispatchDesktopOperation(
         liveTarget,
         operation.policy,
         'background',
-        owner.sessionId,
+        sessionId,
       );
       if (!verdict.allowed) {
         throw new DesktopDriverError(
@@ -292,7 +297,7 @@ export async function dispatchDesktopOperation(
     }
 
     const verdict = targetIdentity
-      ? evaluateDesktopTargetGate(targetIdentity, operation.policy, 'input', owner?.sessionId)
+      ? evaluateDesktopTargetGate(targetIdentity, operation.policy, 'input', sessionId)
       : evaluateWindowGate(identity, operation.policy, 'input');
     // The window identity and the gate's verdict are attached to the result
     // (allowed path) or to the thrown error's `details` (refused path) so the

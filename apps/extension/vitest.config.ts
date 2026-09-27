@@ -10,9 +10,11 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      // Only genuinely non-shipping files are excluded: the tests themselves and
-      // this config. Every other file under src/ runs in the browser and counts.
-      exclude: ['src/**/*.test.ts', 'vitest.config.ts'],
+      // Only genuinely non-shipping files are excluded: the tests themselves,
+      // their shared fakes (`*-test-support.ts`, the same convention web-react
+      // excludes), and this config. Every other file under src/ runs in the
+      // browser and counts.
+      exclude: ['src/**/*.test.ts', 'src/**/*-test-support.ts', 'vitest.config.ts'],
       thresholds: {
         lines: 85,
         statements: 85,

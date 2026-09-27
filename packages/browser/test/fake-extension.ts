@@ -6,6 +6,7 @@ export type CommandHandler = (command: { op: string; params: any }) => unknown |
 
 export interface FakeExtensionOptions {
   token?: string;
+  profileId?: string;
   skipAuth?: boolean;
 }
 
@@ -17,6 +18,7 @@ export class FakeExtension {
   private handler: CommandHandler = () => undefined;
   private rawHandler: ((command: any) => unknown) | null = null;
   private closed = false;
+  readonly received: any[] = [];
 
   private constructor(private readonly socket: Socket) {
     socket.on('close', () => {
@@ -59,7 +61,11 @@ export class FakeExtension {
     const peer = new FakeExtension(socket);
     await peer.awaitHandshake();
     if (!options.skipAuth && options.token) {
-      peer.send({ type: 'auth', token: options.token });
+      peer.send({
+        type: 'auth',
+        token: options.token,
+        ...(options.profileId ? { profileId: options.profileId } : {}),
+      });
     }
     return peer;
   }
@@ -95,6 +101,7 @@ export class FakeExtension {
         } catch {
           continue;
         }
+        this.received.push(message);
         if (message?.type !== 'cmd') continue;
         if (this.rawHandler) {
           const frame = this.rawHandler(message);
@@ -134,6 +141,17 @@ export class FakeExtension {
 
   send(payload: unknown): void {
     if (!this.socket.destroyed) this.socket.write(encodeFrame(JSON.stringify(payload), true));
+  }
+
+  /** Sends one masked JSON message split across two RFC 6455 frames. */
+  sendFragmented(payload: unknown, splitAt: number): void {
+    if (this.socket.destroyed) return;
+    const json = JSON.stringify(payload);
+    const first = encodeFrame(json.slice(0, splitAt), true);
+    const last = encodeFrame(json.slice(splitAt), true);
+    first[0] = 0x01; // text, FIN=0
+    last[0] = 0x80; // continuation, FIN=1
+    this.socket.write(Buffer.concat([first, last]));
   }
 
   async closedWithin(ms: number): Promise<boolean> {

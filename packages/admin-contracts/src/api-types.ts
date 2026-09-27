@@ -1,4 +1,9 @@
 import type { SystemCapabilitySnapshot } from '../../protocol/src/index.js';
+import type {
+  BrowserTabInfo,
+  BrowserTransport,
+  BrowserWorkerHealth,
+} from '../../protocol/src/browser.js';
 export type { SystemCapabilitySnapshot } from '../../protocol/src/index.js';
 export type {
   CommandAnalysis,
@@ -14,6 +19,39 @@ export type ApprovalState = 'PENDING' | 'APPROVED' | 'DENIED' | 'EXPIRED';
 
 export type ExposureProvider = 'local' | 'direct' | 'cloudflare' | 'ngrok' | 'external';
 export type LocalProtocol = 'https' | 'http';
+
+export interface BrowserPairingRecord {
+  pairingId: string;
+  profileId: string | null;
+  profileName: string;
+  extensionId: string;
+  pairedAt: string;
+  connected: boolean;
+}
+
+export interface BrowserControlHealth {
+  coreExtensionId: string | null;
+  coreEpoch: number;
+  worker:
+    | (BrowserWorkerHealth & {
+        connected: boolean;
+        transport: BrowserTransport | null;
+        tabs: BrowserTabInfo[];
+      })
+    | null;
+  syncErrorCode: string | null;
+  syncCheckedAt: string;
+}
+
+export interface BrowserControlSnapshot {
+  pairings: BrowserPairingRecord[];
+  extensionId: string | null;
+  epoch: number;
+  pairedAt: string | null;
+  pendingCode: boolean;
+  pendingExpiresAt?: string | null;
+  health?: BrowserControlHealth;
+}
 
 export interface ExposureConfig {
   provider: ExposureProvider;

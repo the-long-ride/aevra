@@ -1,17 +1,22 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { SocketWorkerClient, type WorkerClient } from '../../../../packages/ipc/src/client.js';
 import { HmacEnvelopeSigner } from '../../../../packages/ipc/src/envelope.js';
 import type { CapabilityRoot, ExecutionMode } from '../../../../packages/protocol/src/index.js';
-import type { WorkerOperation, WorkerResult } from '../../../../packages/protocol/src/worker.js';
+import type {
+  WorkerOperation,
+  WorkerResult,
+  WorkerScope,
+} from '../../../../packages/protocol/src/worker.js';
 import { deriveBrowserTokenKey } from '../../../../packages/security/src/browser-token-key.js';
 
 export interface AuthorizedWorkerInput {
   sessionId: string;
   workspaceId: string;
+  scope?: WorkerScope;
   roots: CapabilityRoot[];
   operation: WorkerOperation;
   expectedState?: Record<string, string>;
@@ -21,6 +26,7 @@ export interface WorkerManagerOptions {
   entryPath?: string;
   startupTimeoutMs?: number;
   startupPollMs?: number;
+  browserTokenKeyPath?: string;
 }
 
 type ExitInfo = { code: number | null; signal: NodeJS.Signals | null };
@@ -36,11 +42,29 @@ function workerDiagnostics(stderr: string, stdout: string) {
   return detail ? `: ${detail}` : '';
 }
 
+export function loadOrCreateBrowserTokenKey(keyPath: string): Buffer {
+  mkdirSync(path.dirname(keyPath), { recursive: true });
+  if (!existsSync(keyPath)) {
+    try {
+      writeFileSync(keyPath, randomBytes(32).toString('base64url'), {
+        encoding: 'utf8',
+        flag: 'wx',
+        mode: 0o600,
+      });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+  }
+  const key = Buffer.from(readFileSync(keyPath, 'utf8').trim(), 'base64url');
+  if (key.length !== 32) throw new Error(`Invalid browser token key at ${keyPath}`);
+  return key;
+}
+
 export class WorkerManager {
   private child?: ChildProcess;
   private client?: SocketWorkerClient;
   private signer?: HmacEnvelopeSigner;
-  private secret?: Buffer;
+  private browserKey?: Buffer;
   readonly daemonInstanceId = randomUUID();
   constructor(
     private endpoint: string,
@@ -51,7 +75,10 @@ export class WorkerManager {
     if (this.client) return this.client;
     if (process.platform !== 'win32' && existsSync(this.endpoint))
       rmSync(this.endpoint, { force: true });
-    const secret = (this.secret = randomBytes(32));
+    const secret = randomBytes(32);
+    this.browserKey = this.options.browserTokenKeyPath
+      ? loadOrCreateBrowserTokenKey(this.options.browserTokenKeyPath)
+      : deriveBrowserTokenKey(secret);
     this.signer = new HmacEnvelopeSigner(secret, this.daemonInstanceId);
     const entry = this.options.entryPath ?? defaultWorkerEntry();
     if (!existsSync(entry))
@@ -66,6 +93,7 @@ export class WorkerManager {
         ...process.env,
         AEVRA_WORKER_ENDPOINT: this.endpoint,
         AEVRA_WORKER_SECRET: secret.toString('base64url'),
+        AEVRA_BROWSER_TOKEN_KEY: this.browserKey.toString('base64url'),
         AEVRA_DAEMON_INSTANCE_ID: this.daemonInstanceId,
         AEVRA_PROCESS_LOG_DIR: this.processLogDir,
       },
@@ -130,12 +158,12 @@ export class WorkerManager {
    * signs operation envelopes and must not be reachable from a route handler.
    */
   browserTokenKey(): Buffer {
-    if (!this.secret) {
+    if (!this.browserKey) {
       throw Object.assign(new Error('Execution Worker unavailable'), {
         code: 'EXECUTOR_UNAVAILABLE',
       });
     }
-    return deriveBrowserTokenKey(this.secret);
+    return Buffer.from(this.browserKey);
   }
   async execute(input: AuthorizedWorkerInput): Promise<WorkerResult> {
     if (!this.client || !this.signer)
@@ -149,6 +177,7 @@ export class WorkerManager {
       operationId: `op_${randomUUID()}`,
       sessionId: input.sessionId,
       workspaceId: input.workspaceId,
+      ...(input.scope ? { scope: input.scope } : {}),
       issuedAt: new Date(now).toISOString(),
       expiresAt: new Date(now + 30_000).toISOString(),
       nonce: randomUUID(),
@@ -175,7 +204,7 @@ export class WorkerManager {
     await this.client?.close();
     this.client = undefined;
     this.signer = undefined;
-    this.secret = undefined;
+    this.browserKey = undefined;
     await this.stopChild();
     if (process.platform !== 'win32') rmSync(this.endpoint, { force: true });
   }
@@ -183,7 +212,7 @@ export class WorkerManager {
     await this.client?.close();
     this.client = undefined;
     this.signer = undefined;
-    this.secret = undefined;
+    this.browserKey = undefined;
     await this.stopChild();
     if (process.platform !== 'win32') rmSync(this.endpoint, { force: true });
   }

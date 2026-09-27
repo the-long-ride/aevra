@@ -70,7 +70,9 @@ export function configureRuntimeOperations(
 export function createRuntimeWorkerManager(config: CoreConfig, deps: RuntimeDependencies) {
   return (
     deps.worker ??
-    new WorkerManager(config.workerSocketPath, path.join(config.stateDir, 'process-logs'))
+    new WorkerManager(config.workerSocketPath, path.join(config.stateDir, 'process-logs'), {
+      browserTokenKeyPath: path.join(config.stateDir, 'browser-token.key'),
+    })
   );
 }
 
@@ -141,6 +143,7 @@ export function createDesktopAccessService(
   sessions: SessionManager,
   workspaces: WorkspaceService,
   audit: AuditService,
+  hostControlAccess?: import('./control/host-control-access.js').HostControlAccess,
 ): DesktopAccessService {
   return new DesktopAccessService({
     repository: new DesktopAccessRepository(database.raw()),
@@ -148,6 +151,7 @@ export function createDesktopAccessService(
     sessions,
     capabilityRoots: (workspaceId) => workspaces.capabilityRoots(workspaceId),
     audit,
+    hostControlAccess,
   });
 }
 
@@ -307,21 +311,7 @@ export async function createRuntimeDataServices(config: CoreConfig, db: AevraDat
 
 export async function syncBrowserPairingStatus(
   browserPairing: BrowserPairingService,
-  workerGateway: WorkerGateway,
+  _workerGateway: WorkerGateway,
 ): Promise<void> {
-  const initialPairing = browserPairing.state();
-  if (initialPairing.extensionId) {
-    await workerGateway
-      .execute({
-        sessionId: 'admin:browser',
-        workspaceId: 'system',
-        roots: [],
-        operation: {
-          kind: 'browser.status',
-          epoch: initialPairing.epoch,
-          extensionId: initialPairing.extensionId,
-        },
-      })
-      .catch(() => {});
-  }
+  await browserPairing.pairingHealth();
 }

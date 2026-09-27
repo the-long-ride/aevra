@@ -4,19 +4,36 @@ import type {
   BrowserTabInfo,
 } from '../../../packages/protocol/src/browser.js';
 import type { NavigateResult } from '../../../packages/browser/src/driver.js';
-import type { ExtensionBridge } from '../../../packages/browser/src/extension-bridge.js';
+import type {
+  CaptureProgress,
+  ExtensionBridge,
+} from '../../../packages/browser/src/extension-bridge.js';
 import type { SnapshotElementLike } from '../../../packages/browser/src/dom-snapshot.js';
 import {
   applyPageAction,
   installConsoleCapture,
   installConsoleRelay,
-  readDevicePixelRatio,
   serializePage,
 } from './content.js';
+import { fitVisibleCapture } from './vision-capture.js';
+import { dispatchNativeClick, dispatchNativeDrag, withDebuggerViewport } from './native-click.js';
 
 const MAX_LOGS = 500;
 const NAVIGATE_TIMEOUT_MS = 30_000;
 const IDLE_SETTLE_MS = 500;
+/**
+ * Quality of the raw frame, which never leaves the service worker: it is only
+ * the source the bounded capture is re-encoded from. JPEG because the browser
+ * encodes it far faster than PNG at 4K and above.
+ */
+const FRAME_QUALITY = 90;
+
+function activeTabRequired(): Error {
+  return Object.assign(
+    new Error('Extension vision capture requires the target tab to be active in its window'),
+    { code: 'BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB' },
+  );
+}
 
 const consoleLogs: BrowserLogEntry[] = [];
 
@@ -32,7 +49,7 @@ export function clearConsoleLogs(): void {
 
 async function activeTabId(tabId?: string): Promise<number> {
   if (tabId) return Number(tabId);
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab?.id) throw Object.assign(new Error('No active tab'), { code: 'NOT_FOUND' });
   return tab.id;
 }
@@ -98,7 +115,10 @@ function whenLoaded(id: number, timeoutMs = NAVIGATE_TIMEOUT_MS): Promise<boolea
 export function createChromeBridge(): ExtensionBridge {
   return {
     async listTabs(): Promise<BrowserTabInfo[]> {
-      const tabs = await chrome.tabs.query({});
+      const [tabs, [selected]] = await Promise.all([
+        chrome.tabs.query({}),
+        chrome.tabs.query({ active: true, lastFocusedWindow: true }),
+      ]);
       // originClass is always NORMAL here: the worker reclassifies every origin.
       // The extension is deliberately not a policy authority.
       return tabs
@@ -107,9 +127,18 @@ export function createChromeBridge(): ExtensionBridge {
           tabId: String(tab.id),
           url: tab.url ?? '',
           title: tab.title ?? '',
-          active: tab.active === true,
+          active: tab.id === selected?.id,
           originClass: 'NORMAL' as const,
         }));
+    },
+
+    async focus(tabId: string): Promise<void> {
+      const id = Number(tabId);
+      const tab = await chrome.tabs.update(id, { active: true });
+      if (tab.windowId !== undefined) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      }
+      if (!(await chrome.tabs.get(id)).active) throw activeTabRequired();
     },
 
     async serialize(tabId?: string): Promise<SnapshotElementLike> {
@@ -118,32 +147,116 @@ export function createChromeBridge(): ExtensionBridge {
       return inject(id, serializePage, [], 'ISOLATED');
     },
 
-    async devicePixelRatio(tabId?: string): Promise<number> {
-      const ratio = await inject(await activeTabId(tabId), readDevicePixelRatio, []).catch(() => 1);
-      return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
-    },
-
-    async apply(action: BrowserActionInput, elementId: string | null, tabId?: string) {
+    async apply(
+      action: BrowserActionInput,
+      elementId: string | null,
+      tabId?: string,
+      isCancelled?: () => boolean,
+    ) {
       const id = await activeTabId(tabId);
+      if (action.op === 'drag') {
+        if (![action.x, action.y, action.toX, action.toY].every(Number.isFinite)) {
+          return { ok: false, code: 'INVALID_REQUEST' };
+        }
+        try {
+          await dispatchNativeDrag(
+            id,
+            { x: action.x, y: action.y },
+            { x: action.toX, y: action.toY },
+            isCancelled,
+          );
+          return { ok: true };
+        } catch (error) {
+          return {
+            ok: false,
+            code: String((error as { code?: string }).code ?? 'BROWSER_INPUT_FAILED'),
+          };
+        }
+      }
+      if (
+        action.op === 'click' &&
+        !elementId &&
+        !action.ref &&
+        !action.selector &&
+        (action.x !== undefined || action.y !== undefined)
+      ) {
+        if (
+          typeof action.x !== 'number' ||
+          !Number.isFinite(action.x) ||
+          typeof action.y !== 'number' ||
+          !Number.isFinite(action.y)
+        ) {
+          return { ok: false, code: 'INVALID_REQUEST' };
+        }
+        try {
+          await dispatchNativeClick(id, { x: action.x, y: action.y }, isCancelled);
+          return { ok: true };
+        } catch (error) {
+          return {
+            ok: false,
+            code: String((error as { code?: string }).code ?? 'BROWSER_INPUT_FAILED'),
+          };
+        }
+      }
       const outcome = await inject(id, applyPageAction, [action, elementId], 'ISOLATED');
       return outcome?.ok === true
         ? { ok: true }
         : { ok: false, code: String(outcome?.code ?? 'BROWSER_UNAVAILABLE') };
     },
 
-    async captureVisible(tabId?: string): Promise<string> {
+    async captureVisible(
+      tabId?: string,
+      onProgress?: (progress: CaptureProgress) => void,
+      annotations?: () => Promise<SnapshotElementLike | null>,
+      isCancelled?: () => boolean,
+    ) {
       // Chrome can only capture the currently visible tab. Shared mode must not
       // activate a background target behind the user's back, so a named inactive
       // tab is an explicit unsupported case rather than an activation side effect.
       const id = await activeTabId(tabId);
-      const tab = await chrome.tabs.get(id);
-      if (tabId && tab.active !== true) {
-        throw Object.assign(
-          new Error('Extension vision capture requires the target tab to already be active'),
-          { code: 'BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB' },
-        );
-      }
-      return chrome.tabs.captureVisibleTab(tab.windowId as number, { format: 'png' });
+      if (!(await chrome.tabs.get(id)).active) throw activeTabRequired();
+      return withDebuggerViewport(
+        id,
+        async (isLive) => {
+          const tab = await chrome.tabs.get(id);
+          if (!tab.active) throw activeTabRequired();
+          // Capture the composited surface while the debugger banner is present:
+          // native coordinate clicks will use this same viewport layout.
+          const started = performance.now();
+          const report = (stage: CaptureProgress['stage'], bytes?: number) => {
+            if (!isLive()) return;
+            try {
+              onProgress?.({
+                stage,
+                elapsedMs: Math.max(0, Math.round(performance.now() - started)),
+                ...(bytes === undefined ? {} : { bytes }),
+              });
+            } catch {
+              // Progress cannot change the screenshot result.
+            }
+          };
+          report('capture_started');
+          const frame = await chrome.tabs.captureVisibleTab(tab.windowId as number, {
+            format: 'jpeg',
+            quality: FRAME_QUALITY,
+          });
+          if (!isLive())
+            throw Object.assign(new Error('Capture expired'), { code: 'BROWSER_TIMEOUT' });
+          report('capture_api_done', frame.length);
+          if (!(await chrome.tabs.get(id)).active) throw activeTabRequired();
+          const annotationRoot = annotations ? await annotations() : undefined;
+          if (!isLive())
+            throw Object.assign(new Error('Capture expired'), { code: 'BROWSER_TIMEOUT' });
+          const viewport =
+            tab.width && tab.height ? { width: tab.width, height: tab.height } : null;
+          const capture = await fitVisibleCapture(frame, viewport);
+          if (!isLive())
+            throw Object.assign(new Error('Capture expired'), { code: 'BROWSER_TIMEOUT' });
+          report('encode_done', capture.imageDataUri.length);
+          return annotations ? { ...capture, annotationRoot } : capture;
+        },
+        isCancelled,
+      );
     },
 
     async navigate(

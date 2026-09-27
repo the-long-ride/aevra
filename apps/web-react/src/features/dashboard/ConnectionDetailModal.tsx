@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useDialog } from '../../components/Dialog';
 import { Dropdown } from '../../components/Dropdown';
 import { requestJson } from '../../services/api-client';
+import { ConnectionControlGrantsPanel } from './ConnectionControlGrants';
 
 export interface ActiveConnection {
   id?: string;
@@ -293,6 +294,12 @@ export function ConnectionDetailModal({
               </>
             )}
           </dl>
+          {durableOAuth && connection.connectionId ? (
+            <ConnectionControlGrantsPanel
+              connectionId={connection.connectionId}
+              onChanged={onChanged}
+            />
+          ) : null}
           <div className="connection-workspaces">
             <h3>Workspaces</h3>
             {granted.length ? (

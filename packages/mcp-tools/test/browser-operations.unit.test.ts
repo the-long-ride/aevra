@@ -85,6 +85,13 @@ test('act defaults stopOnError to true and refuses an empty list', () => {
   assert.throws(() => browserOperation('browser_act_many', {}), /at least one action/);
 });
 
+test('nested coordinate click is normalized before worker dispatch', () => {
+  const operation = browserOperation('browser_act_many', {
+    actions: [{ click: { x: 355, y: 550 } }],
+  }) as any;
+  assert.deepEqual(operation.actions, [{ op: 'click', x: 355, y: 550 }]);
+});
+
 test('wait_for is refused past the driver ceiling rather than clamped', () => {
   assert.throws(
     () =>
@@ -112,6 +119,19 @@ test('secret-shaped outbound text is refused, not redacted', () => {
       () => browserOperation('browser_act_many', { actions: [action] }),
       /will not type secret-shaped data/,
       `${action.op} carried a secret-shaped value outward`,
+    );
+  }
+});
+
+test('nested secret-shaped type and select are refused before dispatch', () => {
+  const payload = randomBytes(32).toString('base64url');
+  for (const action of [
+    { type: { selector: '#note', text: payload } },
+    { select: { selector: '#color', value: payload } },
+  ]) {
+    assert.throws(
+      () => browserOperation('browser_act_many', { actions: [action] }),
+      /will not type secret-shaped data/,
     );
   }
 });

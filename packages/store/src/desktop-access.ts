@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { HostControlIdentity } from './host-control-grants.js';
 
 export type DesktopAccessRequestState = 'PENDING' | 'APPROVED' | 'DENIED' | 'EXPIRED';
 export type DesktopAccessDuration = 'session' | 'persistent';
@@ -7,7 +8,9 @@ export interface DesktopAccessRequestRecord {
   id: string;
   actor: string;
   sessionId: string;
-  workspaceId: string;
+  workspaceId: string | null;
+  scope: 'workspace' | 'host';
+  requesterIdentity: HostControlIdentity | null;
   windowId: string;
   targetExecutablePath: string;
   targetProcessId: number;
@@ -45,7 +48,7 @@ export interface NewDesktopAppGrant extends Omit<DesktopAppGrantRecord, 'pathKey
   pathKey: string;
 }
 
-const requestColumns = `id, actor, session_id AS sessionId, workspace_id AS workspaceId,
+const requestColumns = `id, actor, session_id AS sessionId, workspace_id AS workspaceId, scope, requester_identity_kind AS requesterIdentityKind, requester_identity_key AS requesterIdentityKey,
   window_id AS windowId, target_executable_path AS targetExecutablePath,
   target_process_id AS targetProcessId, target_process_started_at AS targetProcessStartedAt,
   host_executable_path AS hostExecutablePath, host_window_id AS hostWindowId,
@@ -57,6 +60,22 @@ const requestColumns = `id, actor, session_id AS sessionId, workspace_id AS work
 const grantColumns = `id, executable_path AS executablePath, path_key AS pathKey,
   scope_key AS scopeKey, display_name AS displayName, created_at AS createdAt,
   created_by AS createdBy, session_id AS sessionId`;
+
+type RequestRow = Omit<DesktopAccessRequestRecord, 'requesterIdentity'> & {
+  requesterIdentityKind: HostControlIdentity['kind'] | null;
+  requesterIdentityKey: string | null;
+};
+
+function requestFromRow(row: RequestRow): DesktopAccessRequestRecord {
+  const { requesterIdentityKind, requesterIdentityKey, ...record } = row;
+  return {
+    ...record,
+    requesterIdentity:
+      row.scope === 'host' && requesterIdentityKind && requesterIdentityKey
+        ? { kind: requesterIdentityKind, key: requesterIdentityKey }
+        : null,
+  };
+}
 
 export class DesktopAccessRepository {
   constructor(private readonly db: DatabaseSync) {}
@@ -104,22 +123,25 @@ export class DesktopAccessRepository {
           input.hostWindowId,
           input.hostProcessId,
           input.hostProcessStartedAt,
-        ) as DesktopAccessRequestRecord | undefined;
-      if (existing) return { request: existing, existing: true };
+        ) as RequestRow | undefined;
+      if (existing) return { request: requestFromRow(existing), existing: true };
 
       this.db
         .prepare(
           `INSERT INTO desktop_access_requests(
-        id,actor,session_id,workspace_id,window_id,target_executable_path,target_process_id,
+        id,actor,session_id,workspace_id,scope,requester_identity_kind,requester_identity_key,window_id,target_executable_path,target_process_id,
         target_process_started_at,host_executable_path,host_window_id,host_process_id,
         host_process_started_at,requested_duration,state,expires_at,created_at,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'PENDING',?,?,?)`,
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'PENDING',?,?,?)`,
         )
         .run(
           input.id,
           input.actor,
           input.sessionId,
           input.workspaceId,
+          input.scope,
+          input.requesterIdentity?.kind ?? null,
+          input.requesterIdentity?.key ?? null,
           input.windowId,
           input.targetExecutablePath,
           input.targetProcessId,
@@ -141,8 +163,9 @@ export class DesktopAccessRepository {
   getRequest(id: string): DesktopAccessRequestRecord | null {
     const request = this.db
       .prepare(`SELECT ${requestColumns} FROM desktop_access_requests WHERE id=?`)
-      .get(id) as DesktopAccessRequestRecord | undefined;
-    return request ?? null;
+      .get(id) as RequestRow | undefined;
+    if (!request) return null;
+    return requestFromRow(request);
   }
 
   expireRequest(id: string, now: string): void {
@@ -161,12 +184,14 @@ export class DesktopAccessRepository {
       WHERE state='PENDING' AND expires_at<=?`,
       )
       .run(now, now);
-    return this.db
-      .prepare(
-        `SELECT ${requestColumns} FROM desktop_access_requests
+    return (
+      this.db
+        .prepare(
+          `SELECT ${requestColumns} FROM desktop_access_requests
       WHERE state='PENDING' ORDER BY created_at`,
-      )
-      .all() as unknown as DesktopAccessRequestRecord[];
+        )
+        .all() as unknown as RequestRow[]
+    ).map(requestFromRow);
   }
 
   denyRequest(id: string, decidedBy: string, now: string): DesktopAccessRequestRecord | null {

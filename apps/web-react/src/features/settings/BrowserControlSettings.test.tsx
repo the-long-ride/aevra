@@ -3,8 +3,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { BrowserControlSettings } from './BrowserControlSettings';
 import type { OriginPolicySnapshot } from './BrowserOriginPolicy';
 
-const unpaired = { extensionId: null, epoch: 1, pairedAt: null, pendingCode: false };
+const unpaired = { pairings: [], extensionId: null, epoch: 1, pairedAt: null, pendingCode: false };
 const paired = {
+  pairings: [
+    {
+      pairingId: 'profile-1',
+      profileId: 'profile-1',
+      profileName: 'TLR',
+      extensionId: 'abcdefghijklmnopabcdefghijklmnop',
+      pairedAt: '2026-09-05T10:00:00.000Z',
+      connected: false,
+    },
+  ],
   extensionId: 'abcdefghijklmnopabcdefghijklmnop',
   epoch: 1,
   pairedAt: '2026-09-05T10:00:00.000Z',
@@ -26,12 +36,82 @@ describe('BrowserControlSettings', () => {
     render(
       <BrowserControlSettings status={unpaired} onChanged={vi.fn()} loadPolicy={loadPolicy} />,
     );
-    expect(screen.getByText(/no extension paired/i)).toBeTruthy();
+    expect(screen.getByText(/no browser profiles paired/i)).toBeTruthy();
   });
 
   it('shows the paired extension id', () => {
     render(<BrowserControlSettings status={paired} onChanged={vi.fn()} loadPolicy={loadPolicy} />);
     expect(screen.getByText(/abcdefghijklmnopabcdefghijklmnop/)).toBeTruthy();
+  });
+
+  it('shows saved pairing separately from a failed listener', () => {
+    render(
+      <BrowserControlSettings
+        status={{
+          ...paired,
+          health: {
+            coreExtensionId: paired.extensionId,
+            coreEpoch: 1,
+            worker: {
+              listener: {
+                state: 'failed',
+                port: 47833,
+                errorCode: 'EADDRINUSE',
+                changedAt: '2026-09-25T00:00:00Z',
+              },
+              extensionSocketAuthenticated: false,
+              workerExtensionId: paired.extensionId,
+              workerEpoch: 1,
+              connected: false,
+              transport: null,
+              tabs: [],
+            },
+            syncErrorCode: null,
+            syncCheckedAt: '2026-09-25T00:00:00Z',
+          },
+        }}
+        onChanged={vi.fn()}
+        loadPolicy={loadPolicy}
+      />,
+    );
+    expect(screen.getByText(/Paired, offline/)).toBeTruthy();
+    expect(screen.getByText(/Listener failed.*EADDRINUSE/)).toBeTruthy();
+    expect(screen.getByText(/Close the other app using this port, then retry/i)).toBeTruthy();
+  });
+
+  it('tells the user how to attach an authenticated extension socket', () => {
+    render(
+      <BrowserControlSettings
+        status={{
+          ...paired,
+          pairings: [{ ...paired.pairings[0]!, connected: true }],
+          health: {
+            coreExtensionId: paired.extensionId,
+            coreEpoch: 1,
+            worker: {
+              listener: {
+                state: 'listening',
+                port: 47833,
+                errorCode: null,
+                changedAt: '2026-09-25T00:00:00Z',
+              },
+              extensionSocketAuthenticated: true,
+              activeProfileName: 'TLR',
+              workerExtensionId: paired.extensionId,
+              workerEpoch: 1,
+              connected: false,
+              transport: null,
+              tabs: [],
+            },
+            syncErrorCode: null,
+            syncCheckedAt: '2026-09-25T00:00:00Z',
+          },
+        }}
+        onChanged={vi.fn()}
+        loadPolicy={loadPolicy}
+      />,
+    );
+    expect(screen.getByText(/authenticated.*browser_connect.*extension/i)).toBeTruthy();
   });
 
   it('renders the pairing code returned by the server', async () => {

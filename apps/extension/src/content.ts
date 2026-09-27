@@ -92,7 +92,11 @@ export function serializePage(): SerializedElement {
     return node;
   };
 
-  return walk(document.body);
+  const root = document.body ?? document.documentElement;
+  if (!root) {
+    return { elementId: '', tagName: 'document', attributes: {}, children: [], textContent: '' };
+  }
+  return walk(root);
 }
 
 /**
@@ -241,16 +245,32 @@ export function applyPageAction(
   // so rather than falling through and dispatching at NaN.
   const hasPoint = Number.isFinite(Number(action.x)) && Number.isFinite(Number(action.y));
   if (action.op === 'click' && element === null && hasPoint) {
-    // Coordinates arrive in the screenshot's pixel space, which this transport
-    // captures at the display's device pixel ratio. `elementFromPoint` wants CSS
-    // pixels, so on a HiDPI display an unconverted click lands short of its
-    // target by that ratio.
-    const ratio = Number(window.devicePixelRatio);
-    const scale = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
-    const found =
-      document.elementFromPoint?.(Number(action.x) / scale, Number(action.y) / scale) ?? null;
+    // Coordinates arrive in CSS pixels: the extension converts them out of the
+    // screenshot's pixel space - whose scale only it knows, because the capture
+    // may have been downscaled to fit the transport - before injecting.
+    const x = Number(action.x);
+    const y = Number(action.y);
+    const found = document.elementFromPoint?.(x, y) ?? null;
     if (!found) return { ok: false, code: 'NOT_FOUND' };
-    (found as HTMLElement).click();
+    // A canvas app reads where it was clicked from the event itself.
+    // HTMLElement.click() carries no coordinates and no press or release, so a
+    // game listening for pointerdown never saw it. A dispatched `click` still
+    // runs a link's or button's activation, so DOM pages lose nothing.
+    const mouse = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: x,
+      clientY: y,
+      button: 0,
+    };
+    const pointer = { ...mouse, pointerId: 1, pointerType: 'mouse', isPrimary: true };
+    const Pointer = typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
+    found.dispatchEvent(new Pointer('pointerdown', { ...pointer, buttons: 1 }));
+    found.dispatchEvent(new MouseEvent('mousedown', { ...mouse, buttons: 1 }));
+    found.dispatchEvent(new Pointer('pointerup', { ...pointer, buttons: 0 }));
+    found.dispatchEvent(new MouseEvent('mouseup', { ...mouse, buttons: 0 }));
+    found.dispatchEvent(new MouseEvent('click', { ...mouse, buttons: 0 }));
     return { ok: true };
   }
 

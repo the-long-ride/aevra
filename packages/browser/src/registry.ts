@@ -8,6 +8,7 @@ import { BrowserDriverError, type BrowserDriver, type ConnectOptions } from './d
 export interface RegistryStatus {
   connected: boolean;
   transport: BrowserTransport | null;
+  attachmentId: string | null;
   epoch: number;
   extensionPaired: boolean;
   tabs: BrowserTabInfo[];
@@ -36,6 +37,10 @@ export class BrowserSessionRegistry {
 
   epoch(): number {
     return this.epochValue ?? 0;
+  }
+
+  transport(): BrowserTransport | null {
+    return this.info?.transport ?? null;
   }
 
   initialised(): boolean {
@@ -111,16 +116,52 @@ export class BrowserSessionRegistry {
       epoch: this.epoch(),
       extensionPaired: this.deps.extensionPaired(),
     };
+    // An extension driver cannot outlive its authenticated socket. A capture
+    // that loses the socket must not leave status claiming an attached browser
+    // or permit later commands to reuse that stale session.
+    if (this.driver?.transport === 'extension' && !base.extensionPaired) {
+      await this.disconnect();
+    }
     if (!this.driver) {
-      return { ...base, connected: false, transport: null, tabs: [] };
+      return { ...base, connected: false, transport: null, attachmentId: null, tabs: [] };
     }
     let tabs = this.info?.tabs ?? [];
     try {
       tabs = await this.driver.tabs({ action: 'list' });
-    } catch {
+    } catch (error) {
+      if (
+        this.driver?.transport === 'extension' &&
+        (error as { code?: string }).code === 'BROWSER_NOT_CONNECTED'
+      ) {
+        await this.disconnect();
+        return {
+          ...base,
+          connected: false,
+          transport: null,
+          attachmentId: null,
+          tabs: [],
+        };
+      }
       // A live refresh is best effort; a wedged socket must not make status unusable.
     }
-    return { ...base, connected: true, transport: this.driver.transport, tabs };
+    if (this.driver?.transport === 'extension' && !this.deps.extensionPaired()) {
+      await this.disconnect();
+      return {
+        ...base,
+        extensionPaired: false,
+        connected: false,
+        transport: null,
+        attachmentId: null,
+        tabs: [],
+      };
+    }
+    return {
+      ...base,
+      connected: true,
+      transport: this.driver.transport,
+      attachmentId: this.info?.sessionId ?? null,
+      tabs,
+    };
   }
 
   async disconnect(): Promise<void> {

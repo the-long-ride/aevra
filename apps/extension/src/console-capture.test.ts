@@ -201,35 +201,49 @@ describe('installConsoleRelay', () => {
   });
 });
 
-describe('coordinate clicks under a scaled display', () => {
-  it('converts screenshot pixels to CSS pixels before hit testing', () => {
+// Coordinates reach the page already in CSS pixels: the extension converts them
+// from the capture's own pixel space, whose scale only it knows.
+describe('coordinate clicks', () => {
+  it('hit tests at the CSS point it is given, whatever the display ratio', () => {
     setRatio(2);
     const target = document.createElement('button');
-    const click = vi.fn();
-    target.click = click;
     const hitTest = vi.fn().mockReturnValue(target);
     document.elementFromPoint = hitTest as never;
 
     const outcome = applyPageAction({ op: 'click', x: 200, y: 100 }, null);
 
-    expect(hitTest).toHaveBeenCalledWith(100, 50);
-    expect(click).toHaveBeenCalled();
+    expect(hitTest).toHaveBeenCalledWith(200, 100);
     expect(outcome).toEqual({ ok: true });
   });
 
-  it('passes coordinates through unchanged on an unscaled display', () => {
+  // A canvas game reads where it was clicked from the event. HTMLElement.click()
+  // carries no coordinates and no press, so the game never saw it.
+  it('dispatches a positioned press, release and click a canvas app can read', () => {
     setRatio(1);
-    const target = document.createElement('button');
-    target.click = vi.fn();
-    const hitTest = vi.fn().mockReturnValue(target);
-    document.elementFromPoint = hitTest as never;
+    const canvas = document.createElement('canvas');
+    document.body.append(canvas);
+    const seen: Array<[string, number, number]> = [];
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      canvas.addEventListener(type, (event) => {
+        const mouse = event as MouseEvent;
+        seen.push([type, mouse.clientX, mouse.clientY]);
+      });
+    }
+    document.elementFromPoint = vi.fn().mockReturnValue(canvas) as never;
 
-    applyPageAction({ op: 'click', x: 200, y: 100 }, null);
+    applyPageAction({ op: 'click', x: 321, y: 123 }, null);
 
-    expect(hitTest).toHaveBeenCalledWith(200, 100);
+    expect(seen).toEqual([
+      ['pointerdown', 321, 123],
+      ['mousedown', 321, 123],
+      ['pointerup', 321, 123],
+      ['mouseup', 321, 123],
+      ['click', 321, 123],
+    ]);
+    canvas.remove();
   });
 
-  it('reports NOT_FOUND when nothing sits at the converted point', () => {
+  it('reports NOT_FOUND when nothing sits at the point', () => {
     setRatio(3);
     document.elementFromPoint = vi.fn().mockReturnValue(null) as never;
     expect(applyPageAction({ op: 'click', x: 30, y: 60 }, null)).toEqual({

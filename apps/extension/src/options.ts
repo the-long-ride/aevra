@@ -1,3 +1,5 @@
+import { getBrowserProfileIdentity } from './profile-identity.js';
+
 export {};
 
 const DEFAULT_ADMIN_PORT = 47831;
@@ -38,9 +40,12 @@ async function post(scheme: 'https' | 'http', body: string): Promise<Response | 
 
 async function pair(): Promise<void> {
   statusLine.textContent = 'Pairing…';
+  const identity = await getBrowserProfileIdentity();
   const body = JSON.stringify({
     code: codeInput.value.trim().toUpperCase(),
     extensionId: chrome.runtime.id,
+    profileId: identity.profileId,
+    profileName: identity.profileName,
   });
   // Admin listens TLS-only whenever a certificate exists, which is the default,
   // so https goes first. That certificate is self-signed and a service worker
@@ -66,7 +71,11 @@ async function pair(): Promise<void> {
     return;
   }
   // The token is stored and never logged or rendered.
-  await chrome.storage.local.set({ token: payload.token, wsUrl: payload.wsUrl });
+  await chrome.storage.local.set({
+    token: payload.token,
+    wsUrl: payload.wsUrl,
+    pairedProfileId: identity.profileId,
+  });
   chrome.runtime.sendMessage({ type: 'aevra:paired' });
   codeInput.value = '';
   statusLine.textContent = `Paired over ${scheme}.`;

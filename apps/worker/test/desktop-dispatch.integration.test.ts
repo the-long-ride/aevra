@@ -94,8 +94,14 @@ test('desktop.apps resolves without a connected session', async () => {
   assert.ok(Array.isArray(apps));
 });
 
-const ownerA = { sessionId: 'session-A', workspaceId: 'ws-A' };
-const ownerB = { sessionId: 'session-B', workspaceId: 'ws-B' };
+const ownerA = {
+  identity: { kind: 'oauth' as const, key: 'connection-A' },
+  surface: 'desktop.control' as const,
+};
+const ownerB = {
+  identity: { kind: 'oauth' as const, key: 'connection-B' },
+  surface: 'desktop.control' as const,
+};
 
 test('background describe acquires lease and returns snapshot info', async () => {
   const { registry } = await connected();
@@ -118,6 +124,46 @@ test('background describe acquires lease and returns snapshot info', async () =>
   assert.ok(desc.leaseExpiresAt);
   assert.equal(desc.nodes.length, 1);
   assert.equal(desc.nodes[0].ref, 'ref_1_1');
+});
+
+test('desktop owner invalidation expires outstanding background leases', async () => {
+  const { registry } = await connected();
+  const desc = (await dispatchDesktopOperation(
+    {
+      kind: 'desktop.describe',
+      mode: 'background',
+      windowId: 'w1',
+      maxNodes: 10,
+      interactiveOnly: true,
+      policy: allowAll,
+    },
+    registry,
+    ownerA,
+  )) as any;
+
+  assert.deepEqual(
+    await dispatchDesktopOperation({ kind: 'desktop.invalidateOwner' }, registry, ownerA),
+    { invalidated: 1 },
+  );
+  await assert.rejects(
+    () =>
+      dispatchDesktopOperation(
+        {
+          kind: 'desktop.backgroundAct',
+          action: {
+            windowId: 'w1',
+            windowLeaseId: desc.windowLeaseId,
+            snapshotId: desc.snapshotId,
+            ref: 'ref_1_1',
+            op: 'invoke',
+          },
+          policy: allowAll,
+        },
+        registry,
+        ownerA,
+      ),
+    /DESKTOP_LEASE_EXPIRED/,
+  );
 });
 
 test('backgroundAct succeeds and performs semantic action', async () => {

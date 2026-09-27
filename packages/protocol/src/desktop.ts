@@ -1,3 +1,5 @@
+import type { HostControlIdentity } from '../../store/src/host-control-grants.js';
+
 export const DESKTOP_OPERATION_KINDS = [
   'desktop.connect',
   'desktop.status',
@@ -10,13 +12,14 @@ export const DESKTOP_OPERATION_KINDS = [
   'desktop.act',
   'desktop.backgroundAct',
   'desktop.releaseWindow',
+  'desktop.invalidateOwner',
 ] as const;
 
 export type DesktopOperationKind = (typeof DESKTOP_OPERATION_KINDS)[number];
 
 export interface DesktopOwner {
-  sessionId: string;
-  workspaceId: string;
+  identity: HostControlIdentity;
+  surface: 'desktop.control';
 }
 
 export type BackgroundAction = 'invoke' | 'setValue' | 'select' | 'toggle';

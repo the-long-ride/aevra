@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { DesktopWindowIdentity } from '../../protocol/src/desktop.js';
 import type { RiskTier } from '../../protocol/src/index.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
-import { gated } from './authorization.js';
+import { gatedHostControl } from './host-control-gate.js';
 import {
   audit,
   policyFor,
@@ -76,8 +76,8 @@ export function sanitizeArgsForAuthorization(name: string, args: any): any {
     return { ...rest, keyCount: keys.length };
   }
   if (name === 'desktop_set_value' && typeof args?.value === 'string') {
-    const { value, ...rest } = args;
-    const requestNonce = args.requestNonce ?? randomUUID();
+    const { value, requestNonce: suppliedNonce, ...rest } = args;
+    const requestNonce = suppliedNonce ?? randomUUID();
     return { ...rest, valueLength: value.length, requestNonce };
   }
   return args;
@@ -116,6 +116,7 @@ export async function handleAct(
   const auditTarget =
     op === 'type' ? `${target} (${String(args.text ?? '').length} chars)` : target;
   const safeArgs = sanitizeArgsForAuthorization(name, args);
+  const hasPrivateContent = op === 'type' || op === 'key';
 
   const execute = async () => {
     try {
@@ -158,7 +159,7 @@ export async function handleAct(
   // LOW short-circuits inside `gated`, so `desktop_scroll` still costs nothing;
   // everything else reaches an approval unless a permission rule or a one-time
   // grant already covers it.
-  return gated(
+  return gatedHostControl(
     context,
     sessionId,
     {
@@ -167,8 +168,8 @@ export async function handleAct(
       risk,
       argsHash: argsHash({ target, args: safeArgs }),
     },
-    { tool: name, args: safeArgs },
-    {},
+    { tool: name, args: safeArgs, ...(hasPrivateContent ? { requiresVolatileArgs: true } : {}) },
     execute,
+    hasPrivateContent ? { tool: name, args: { ...args } } : undefined,
   );
 }

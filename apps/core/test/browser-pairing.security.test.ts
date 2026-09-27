@@ -6,6 +6,11 @@ import { deriveBrowserTokenKey } from '../../../packages/security/src/browser-to
 import { BrowserPairingService } from '../src/browser/pairing-service.js';
 
 const extensionId = 'abcdefghijklmnopabcdefghijklmnop';
+const profileId = '11111111-1111-4111-8111-111111111111';
+
+function pairingInput(code: string, requestedExtensionId = extensionId) {
+  return { code, extensionId: requestedExtensionId, profileId, profileName: 'TLR' };
+}
 
 /** Callers branch on the machine-readable code, not the prose message. */
 function hasCode(code: string) {
@@ -21,7 +26,29 @@ function service(now: () => number = () => Date.now()) {
       get: (key: string, fallback: unknown) => store.get(key) ?? fallback,
       set: (key: string, value: unknown) => void store.set(key, value),
     } as any,
-    { execute: async (input: any) => (executed.push(input), { ok: true, value: {} }) } as any,
+    {
+      execute: async (input: any) => (
+        executed.push(input),
+        {
+          ok: true,
+          value: {
+            connected: false,
+            transport: null,
+            tabs: [],
+            epoch: input.operation.epoch,
+            workerExtensionId: input.operation.extensionId,
+            workerEpoch: input.operation.epoch,
+            listener: {
+              state: 'listening',
+              port: 47833,
+              errorCode: null,
+              changedAt: new Date().toISOString(),
+            },
+            extensionSocketAuthenticated: false,
+          },
+        }
+      ),
+    } as any,
     () => deriveBrowserTokenKey(secret),
     { now },
   );
@@ -31,15 +58,15 @@ function service(now: () => number = () => Date.now()) {
 test('a pairing code redeems exactly once', async () => {
   const { subject } = service();
   const { code } = subject.createCode();
-  assert.ok(await subject.redeem(code, extensionId));
-  await assert.rejects(() => subject.redeem(code, extensionId), hasCode('PAIRING_CODE_INVALID'));
+  assert.ok(await subject.redeem(pairingInput(code)));
+  await assert.rejects(() => subject.redeem(pairingInput(code)), hasCode('PAIRING_CODE_INVALID'));
 });
 
 test('an unknown pairing code is rejected', async () => {
   const { subject } = service();
   subject.createCode();
   await assert.rejects(
-    () => subject.redeem('ZZZZZZZZ', extensionId),
+    () => subject.redeem(pairingInput('ZZZZZZZZ')),
     hasCode('PAIRING_CODE_INVALID'),
   );
 });
@@ -49,14 +76,14 @@ test('a pairing code expires after five minutes', async () => {
   const { subject } = service(() => clock);
   const { code } = subject.createCode();
   clock += 5 * 60_000 + 1;
-  await assert.rejects(() => subject.redeem(code, extensionId), hasCode('PAIRING_CODE_INVALID'));
+  await assert.rejects(() => subject.redeem(pairingInput(code)), hasCode('PAIRING_CODE_INVALID'));
 });
 
 test('a malformed extension id is rejected before any token is minted', async () => {
   const { subject } = service();
   const { code } = subject.createCode();
   await assert.rejects(
-    () => subject.redeem(code, 'not a valid id'),
+    () => subject.redeem(pairingInput(code, 'not a valid id')),
     hasCode('EXTENSION_ID_INVALID'),
   );
 });
@@ -64,7 +91,7 @@ test('a malformed extension id is rejected before any token is minted', async ()
 test('the minted token verifies against the derived key at the current epoch', async () => {
   const { subject, secret } = service();
   const { code } = subject.createCode();
-  const result = await subject.redeem(code, extensionId);
+  const result = await subject.redeem(pairingInput(code));
   const claims = verifyExtensionToken(deriveBrowserTokenKey(secret), result.token, {
     epoch: subject.epoch(),
   });
@@ -74,7 +101,7 @@ test('the minted token verifies against the derived key at the current epoch', a
 test('the minted token does not verify against the raw worker secret', async () => {
   const { subject, secret } = service();
   const { code } = subject.createCode();
-  const result = await subject.redeem(code, extensionId);
+  const result = await subject.redeem(pairingInput(code));
   assert.throws(
     () => verifyExtensionToken(secret, result.token, { epoch: subject.epoch() }),
     /invalid token signature/,
@@ -96,7 +123,7 @@ test('revokeAll bumps the epoch and pushes a disconnect envelope to the worker',
 test('a token minted before a revocation no longer verifies at the new epoch', async () => {
   const { subject, secret } = service();
   const { code } = subject.createCode();
-  const result = await subject.redeem(code, extensionId);
+  const result = await subject.redeem(pairingInput(code));
   await subject.revokeAll();
   assert.throws(
     () =>
@@ -110,11 +137,21 @@ test('a token minted before a revocation no longer verifies at the new epoch', a
 test('state never exposes the token or the pairing code', async () => {
   const { subject } = service();
   const { code } = subject.createCode();
-  await subject.redeem(code, extensionId);
+  await subject.redeem(pairingInput(code));
   const state = subject.state();
   const serialized = JSON.stringify(state);
   assert.equal(serialized.includes(code), false);
   assert.equal(state.extensionId, extensionId);
   assert.equal(typeof state.epoch, 'number');
   assert.equal(Object.prototype.hasOwnProperty.call(state, 'token'), false);
+});
+
+test('pairing health distinguishes saved configuration from unavailable worker', async () => {
+  const { subject } = service();
+  const code = subject.createCode().code;
+  await subject.redeem(pairingInput(code));
+  const health = await subject.pairingHealth();
+  assert.equal(health.coreExtensionId, extensionId);
+  assert.equal(health.worker !== null, true);
+  assert.equal(health.syncErrorCode, null);
 });

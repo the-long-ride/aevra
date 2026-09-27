@@ -89,7 +89,7 @@ test('control_execute runs a plan on an observed surface and audits success', as
   const entry = ctx.audit.events.find((e: any) => e.tool === 'control_execute');
   assert.equal(entry?.result, 'SUCCEEDED');
   assert.equal(entry?.target, surfaceId);
-  assert.equal(entry?.workspaceId, ctx.workspaceId);
+  assert.equal(entry?.workspaceId, undefined);
 });
 
 test('control_execute against a surface never observed fails and audits the failure', async () => {

@@ -9,6 +9,7 @@ function context(reply: Reply, workspaceId: string | null = 'ws-1') {
   const calls: Array<{ tool: string; args: any }> = [];
   const value = {
     ...(workspaceId ? { workspaceId } : {}),
+    deps: { hostControlAccess: { has: () => true } },
     async callInner(_sessionId: string, tool: string, args: any) {
       calls.push({ tool, args });
       return reply(tool, args);
@@ -58,7 +59,7 @@ test('browser observe maps nodes, caches unchanged snapshots, and bumps generati
   assert.equal(adapter.surfaceId, 'browser:t1');
   assert.deepEqual(calls[0], {
     tool: 'browser_snapshot',
-    args: { workspaceId: 'ws-1', mode: 'a11y', maxNodes: 50 },
+    args: { mode: 'a11y', maxNodes: 50 },
   });
   assert.equal(first.coverage.truncated, true);
   assert.equal(first.url, 'https://example.test/');
@@ -127,7 +128,7 @@ test('browser dispatch translates every control action into one browser action',
     const receipt = await adapter.dispatch({ ref: 'e1' }, action, 500);
     assert.deepEqual(calls.at(-1), {
       tool: 'browser_act_many',
-      args: { workspaceId: 'ws-1', tabId: 't1', actions: [expected], stopOnError: true },
+      args: { tabId: 't1', actions: [expected], stopOnError: true },
     });
     assert.equal(receipt.dispatched, action.op !== 'wait_for');
   }

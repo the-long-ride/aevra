@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { after } from 'node:test';
+import { after, test } from 'node:test';
+import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
@@ -13,6 +14,13 @@ const PAGE = `<!doctype html><title>Invoices</title><body>
 <button id="new">New invoice</button>
 <input type="text" aria-label="Search">
 <input type="password" name="password" aria-label="Password">
+<div id="drag-area" style="position:absolute;left:100px;top:100px;width:300px;height:100px;background:#ddd">Drag area</div>
+<p id="drag-status">Waiting</p>
+<script>
+document.getElementById('drag-area').addEventListener('pointermove', (event) => {
+  if (event.buttons === 1) document.getElementById('drag-status').textContent = 'Dragged';
+});
+</script>
 </body>`;
 
 let server: Server | undefined;
@@ -94,6 +102,22 @@ runDriverConformance('CdpDriver', async () => {
       await driver.disconnect();
     },
   };
+});
+
+test('CdpDriver drag delivers held movement to an ordinary page', async () => {
+  await ensureFixtures();
+  const driver = new CdpDriver();
+  try {
+    await driver.connect({ transport: 'cdp', cdpPort: port });
+    await driver.navigate({ url: startUrl, waitUntil: 'load' });
+    const result = await driver.act([{ op: 'drag', x: 120, y: 130, toX: 250, toY: 130 }], {
+      stopOnError: true,
+    });
+    assert.deepEqual(result, [{ op: 'drag', ok: true }]);
+    assert.match((await driver.read({ format: 'text' })).content, /Dragged/);
+  } finally {
+    await driver.disconnect();
+  }
 });
 
 // The spawned browser and the fixture server both hold the event loop open, so

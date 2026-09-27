@@ -1,0 +1,94 @@
+.browser-pairing-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+}
+
+.browser-pairing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.browser-pairing-details {
+  min-width: 0;
+  flex: 1;
+}
+
+.browser-pairing-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.browser-pairing-state {
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.browser-pairing-state.active {
+  color: var(--success);
+}
+
+.browser-pairing-row dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 6px 0 0;
+  font-size: 11px;
+}
+
+.browser-pairing-row dl div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.browser-pairing-row dt {
+  color: var(--mute);
+}
+
+.browser-pairing-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.browser-pairing-row code {
+  font-size: 10px;
+}
+
+.browser-pairing-unpair {
+  flex: 0 0 auto;
+}
+
+.browser-pairing-row-error {
+  margin: 6px 0 0;
+}
+
+.browser-pairing-empty {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--hairline-strong);
+  color: var(--mute);
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .browser-pairing-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .browser-pairing-unpair {
+    align-self: flex-start;
+  }
+}

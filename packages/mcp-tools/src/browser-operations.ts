@@ -2,6 +2,7 @@ import { MAX_WAIT_FOR_MS } from '../../browser/src/driver.js';
 import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { redactText } from '../../security/src/dlp.js';
 import { AevraToolError } from './errors.js';
+import { normalizeBrowserActions } from './browser-action-input.js';
 import { parseBrowserScript } from './browser-script.js';
 
 /**
@@ -113,9 +114,7 @@ export function browserOperation(name: string, args: any, tabId?: string): Worke
   const actions =
     name === 'browser_execute_script'
       ? parseBrowserScript(args.script)
-      : Array.isArray(args.actions)
-        ? args.actions
-        : [];
+      : normalizeBrowserActions(args.actions);
   if (!actions.length) {
     throw new AevraToolError('INVALID_REQUEST', `${name} requires at least one action`);
   }

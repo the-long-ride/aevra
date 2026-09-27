@@ -81,6 +81,26 @@ export function presentApproval(ticket: FrozenOperationTicket): ApprovalPresenta
   const family = String(ticket.operation?.family ?? ''),
     payload: any = ticket.payload ?? {},
     args: any = payload.args ?? {};
+  if (ticket.scope === 'host' && family === 'host-control:request')
+    return {
+      title: 'Host control access',
+      action:
+        ticket.operation.capability === 'browser.control'
+          ? 'Grant browser control'
+          : 'Grant desktop control',
+      target: clean(ticket.identity?.key ?? ticket.actor, 120),
+      preview: 'Persistent access for this exact connection until revoked',
+    };
+  if (ticket.scope === 'host') {
+    const capability = String(ticket.operation.capability ?? '');
+    return {
+      title:
+        capability === 'browser.control' ? 'Browser action approval' : 'Desktop action approval',
+      action: `Allow ${clean(payload.tool || family || 'host action', 100)}`,
+      target: clean(ticket.identity?.key ?? ticket.actor, 120),
+      preview: 'One-time approval for this exact action',
+    };
+  }
   if (family === 'workspace:select' || payload.tool === 'workspace_select')
     return {
       title: 'Workspace access',

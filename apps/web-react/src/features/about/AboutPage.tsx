@@ -14,14 +14,14 @@ export function AboutPage() {
     ? String(status.version).startsWith('v')
       ? status.version
       : `v${status.version}`
-    : 'v1.1.2';
+    : 'v1.1.3';
 
   return (
     <section className="about-page" data-surface-id="page:about">
       <section className="page-head">
         <div>
           <h2>About</h2>
-          <p>Workspace-scoped local MCP execution gateway for AI web interfaces.</p>
+          <p>Local MCP execution gateway for AI web interfaces.</p>
         </div>
       </section>
 

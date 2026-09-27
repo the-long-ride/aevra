@@ -40,6 +40,18 @@ beforeEach(() => {
 });
 
 describe('serializePage', () => {
+  it('uses the document element while the body is absent during navigation', () => {
+    const body = document.body;
+    body.remove();
+    try {
+      const root = serializePage();
+      expect(root.tagName).toBe('html');
+      expect(root.attributes).toEqual({});
+    } finally {
+      document.documentElement.append(body);
+    }
+  });
+
   it('captures tag, attributes, text and nesting', () => {
     const root = page('<h1 id="t">Invoices</h1><button>New invoice</button>');
     expect(root.tagName).toBe('body');

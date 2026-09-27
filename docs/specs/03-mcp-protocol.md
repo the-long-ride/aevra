@@ -1,6 +1,6 @@
 # 03 — MCP Protocol
 
-**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.1.2`
+**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.1.3`
 
 ## Transport
 
@@ -10,7 +10,7 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 
 ## Session lifecycle
 
-1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.1.2"}`.
+1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.1.3"}`.
 2. Every subsequent `POST` carries that header; `DELETE` disconnects. The session's admission identity (actor + subject + durable OAuth connection when present) must match on every call.
 3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
 4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
@@ -58,13 +58,24 @@ Use `command_run_many` for one or more commands only when each command is expect
 ### Browser pattern
 
 `browser_connect {transport:'extension'|'cdp', cdpPort?}` attaches one session
-per Worker; `browser_status` answers even when nothing is attached, which is when
-a caller most needs to ask. `browser_snapshot` returns an accessibility tree of
+per Worker for an AI connection with a host browser grant. A paired, authenticated
+extension socket is `ready_to_connect` until that call attaches it; `browser_status`
+reports the state and next action even when nothing is attached. Browser and
+desktop tool schemas accept legacy workspace fields but ignore them for host
+authorization. `browser_snapshot` returns an accessibility tree of
 `ref_<version>_<index>` handles, or, in `mode:'vision'`, a screenshot plus
 labelled boxes and the `devicePixelRatio` those boxes and any `{x, y}` action
 coordinates are expressed in. Each snapshot takes the next version, so a ref from
 an older one is refused as `BROWSER_REF_STALE` rather than silently rebound to a
-different element. `browser_act_many` runs an ordered batch.
+different element. `browser_act_many` accepts flat and single-key nested actions,
+normalizes and validates them before dispatch, then runs an ordered batch.
+Coordinate `click` and `drag` use the last vision image's scale; drag presses,
+moves held, and releases within one action on canvas and ordinary pages. The
+extension uses a temporary Chrome debugger attachment for vision capture and
+native coordinate click or drag, while ref and selector clicks use the DOM path.
+Models should try accessibility refs, then stable CSS selectors, and reserve
+vision/coordinate input for controls without semantic targets or failed semantic
+actions. Action success confirms delivery; observe again to verify page state.
 `browser_execute_script` accepts a bounded non-Turing-complete Playwright-like
 CSS action grammar and compiles it to that same `browser.act` worker operation;
 it never exposes page evaluation and deliberately excludes navigation. CDP keeps a
@@ -74,11 +85,15 @@ held in Chrome's isolated world, so page-authored DOM attributes cannot retarget
 existing ref. Extension vision capture refuses a named inactive tab instead of
 activating it.
 
+Extension vision captures only the selected visible tab and bounds the JPEG
+reply to the transport budget. Oversized replies and lost sockets fail promptly;
+pending captures retain stage and close-cause diagnostics without page content.
+
 ### Desktop pattern
 
 `desktop_connect` starts the packaged native helper for the current platform.
 Windows uses UI Automation (UIA); macOS uses Accessibility/AX; Linux uses AT-SPI2.
-Capability flags are literal: v1.1.2 retains shared semantic tree/action support,
+Capability flags are literal: v1.1.3 retains shared semantic tree/action support,
 first shipped in v1.1.1, on all three platforms, while legacy foreground
 mouse/keyboard injection and pixel capture remain Windows-only.
 Permission/provider failures are errors, not empty successful trees.
@@ -116,7 +131,7 @@ declared postcondition locally. Failure skips dependent mutations. A successful
 dispatch whose resulting state cannot be established is `unknown`; it is never
 blindly replayed.
 
-Plan ownership is connection+workspace bound. A durable keyed digest and redacted
+Plan ownership is bound to the exact host-control connection. A durable keyed digest and redacted
 dispatch journal deduplicate request IDs across daemon restart. Raw typed/set values
 and UI observations are not persisted in the plan journal. Startup converts
 incomplete plans to `unknown`; terminal step summaries can be reattached by the
@@ -124,7 +139,7 @@ same owner/request/digest. `control_plan_status` and `control_plan_cancel` are
 owner checked.
 
 Mode `sharedSemantic` is implemented. Mode `isolated` is deliberately fail-closed
-in v1.1.2: unless a separately provisioned runner has verified containment, the
+in v1.1.3: unless a separately provisioned runner has verified containment, the
 adapter returns `CONTROL_ISOLATION_UNAVAILABLE` with
 `chooseIsolatedRunner`. A same-desktop worker is never relabeled as isolated.
 

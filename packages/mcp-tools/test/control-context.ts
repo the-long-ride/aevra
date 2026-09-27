@@ -61,6 +61,13 @@ export function controlContext(options: ControlContextOptions = {}) {
   const deps: any = {
     ...(options.audit === false ? {} : { audit }),
     ...(options.controlPlans ? { controlPlans: options.controlPlans } : {}),
+    hostControlAccess: {
+      identity: (id: string) =>
+        options.connectionId
+          ? { kind: 'oauth', key: options.connectionId }
+          : { kind: 'session', key: id },
+      has: () => true,
+    },
   };
   const sessions: any = {
     get: (id: string) => ({ id, actor: 'oauth:ChatGPT', subject: 'subject' }),

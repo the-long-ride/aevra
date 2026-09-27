@@ -43,6 +43,41 @@ test('presents workspace and local-skill requests clearly', () => {
   assert.match(skills.action, /skills and instructions/i);
 });
 
+test('distinguishes persistent host grants from one-time host actions', () => {
+  const grant = presentApproval(
+    ticket({
+      scope: 'host',
+      identity: { kind: 'connector', key: 'connector-1' },
+      operation: {
+        family: 'host-control:request',
+        capability: 'browser.control',
+        risk: 'HIGH',
+        argsHash: 'x',
+      },
+      payload: { tool: 'host_control_request' },
+    }),
+  );
+  assert.equal(grant.title, 'Host control access');
+  assert.match(grant.preview ?? '', /Persistent access/);
+
+  const action = presentApproval(
+    ticket({
+      scope: 'host',
+      identity: { kind: 'connector', key: 'connector-1' },
+      operation: {
+        family: 'browser:click',
+        capability: 'browser.control',
+        risk: 'HIGH',
+        argsHash: 'x',
+      },
+      payload: { tool: 'browser_click', args: { ref: 'button-1' } },
+    }),
+  );
+  assert.equal(action.title, 'Browser action approval');
+  assert.equal(action.action, 'Allow browser_click');
+  assert.match(action.preview ?? '', /One-time approval/);
+});
+
 test('presents file, git, command and shell intent without environment values', () => {
   const del = presentApproval(
     ticket({

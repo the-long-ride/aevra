@@ -1,4 +1,5 @@
 import { McpToolService } from '../../../../packages/mcp-tools/src/service.js';
+import type { McpToolDependencies } from '../../../../packages/mcp-tools/src/service.js';
 import { SkillsService } from '../skills/skills-service.js';
 import { ManifestService } from '../workspaces/manifest-service.js';
 import { ApprovalService } from '../approvals/approval-service.js';
@@ -43,6 +44,7 @@ export function buildAdminApiContext(input: {
   localFilesystem: any;
   oauth: any;
   connections: any;
+  hostControlAccess: any;
   environment: any;
   vault: any;
   database: any;
@@ -77,6 +79,7 @@ export function buildAdminApiContext(input: {
     localFilesystem: input.localFilesystem,
     oauth: input.oauth,
     connections: input.connections,
+    hostControlAccess: input.hostControlAccess,
     environment: input.environment,
     vault: input.vault,
     database: input.database,
@@ -103,10 +106,14 @@ export function createCoreToolService(
   workerGateway: any,
   reads: any,
   approvals: any,
-  deps: any,
+  deps: Record<string, any> & {
+    browserPairing: NonNullable<McpToolDependencies['browserPairing']>;
+  },
 ) {
   return new McpToolService(sessions, workspaces, workerGateway, reads, approvals, {
     operations: deps.operations,
+    hostControlAccess: deps.hostControlAccess,
+    hostControlApproval: deps.hostControlApproval,
     resumableOperations: deps.resumableOperations,
     controlPlans: deps.controlPlans,
     processes: deps.processes,
@@ -122,6 +129,7 @@ export function createCoreToolService(
     desktopAccess: deps.desktopAccess,
     desktopAppCatalog: deps.desktopAppCatalog,
     systemCapabilities: deps.systemCapabilities,
+    browserPairing: deps.browserPairing,
     browserPolicy: deps.browserPolicy,
     manifests: new ManifestService(workspaces),
     upstreams: deps.upstreams ?? deps.mcpUpstreams,

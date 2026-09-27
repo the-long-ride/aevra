@@ -16,9 +16,15 @@ import {
   type ControlDispatchReceipt,
 } from '../../control/src/adapter.js';
 import type { McpRuntimeContext } from './service-types.js';
+import { requireHostControl } from './host-control-gate.js';
+import type { HostControlCapability } from '../../store/src/host-control-grants.js';
 
-export function workspaceArgs(context: McpRuntimeContext) {
-  return context.workspaceId ? { workspaceId: context.workspaceId } : {};
+export function assertAdapterGrant(
+  context: McpRuntimeContext,
+  sessionId: string,
+  capability: HostControlCapability,
+): void {
+  requireHostControl(context, sessionId, capability);
 }
 
 export function pendingApproval(value: any): boolean {
@@ -107,6 +113,12 @@ export abstract class BaseAdapter implements ControlAdapter {
     action: ControlAction,
     timeoutMs: number,
   ): Promise<ControlDispatchReceipt>;
+
+  invalidateObservation(): void {
+    this.lastFingerprint = '';
+    this.lastObservation = undefined;
+    this.generation++;
+  }
 
   inheritObservationState(source: BaseAdapter): void {
     this.revision = source.revision;

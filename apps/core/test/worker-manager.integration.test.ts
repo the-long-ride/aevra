@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { WorkerManager } from '../src/worker/worker-manager.js';
+import { loadOrCreateBrowserTokenKey, WorkerManager } from '../src/worker/worker-manager.js';
 import { workerSocketPathForPlatform } from '../src/config.js';
 
 test('worker manager includes child stderr when bootstrap exits', async () => {
@@ -51,6 +51,15 @@ test('Windows worker endpoint is unique per core process', () => {
     workerSocketPathForPlatform('/tmp/aevra', 'linux', 4242),
     path.join('/tmp/aevra', 'worker.sock'),
   );
+});
+
+test('browser extension token key survives core restarts', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'aevra-browser-key-'));
+  const keyPath = path.join(dir, 'browser-token.key');
+  const first = loadOrCreateBrowserTokenKey(keyPath);
+  const restarted = loadOrCreateBrowserTokenKey(keyPath);
+  assert.equal(first.length, 32);
+  assert.deepEqual(restarted, first);
 });
 
 test('worker manager starts the packaged worker from its module location and fully stops it', async () => {

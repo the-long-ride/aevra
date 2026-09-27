@@ -7,6 +7,7 @@ import { ProcessesPanel } from '../processes/ProcessesPanel';
 import { requestJson } from '../../services/api-client';
 import type { DashboardData } from './dashboard-service';
 import type { RuntimeModalKind } from './RuntimeOverview';
+import { ConnectorControlGrants } from './ConnectorControlGrants';
 
 const titles: Record<RuntimeModalKind, string> = {
   processes: 'Managed processes',
@@ -88,6 +89,18 @@ export function RuntimeManagementModal({
               { key: 'authType', label: 'Auth' },
               { key: 'createdAt', label: 'Created', dateTime: true },
               { key: 'lastUsedAt', label: 'Last used', dateTime: true },
+              {
+                key: 'control',
+                label: 'Device control',
+                sortable: false,
+                search: false,
+                render: (row) =>
+                  row.authType === 'Bearer connector' ? (
+                    <ConnectorControlGrants connectorId={row.id} onChanged={onRefresh} />
+                  ) : (
+                    <span className="muted">Granted per OAuth connection</span>
+                  ),
+              },
               {
                 key: 'actions',
                 label: '',

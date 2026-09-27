@@ -27,7 +27,8 @@ export function startServiceWorker(): ExtensionRpc {
         recordConsoleLog(String(message.text ?? ''), String(message.level ?? 'log'));
       }
       if (message?.type === 'aevra:paired' || message?.type === 'aevra:connect') {
-        void rpc.connect(true);
+        if (message?.type === 'aevra:paired') rpc.newPairing();
+        else void rpc.connect(true);
       }
       if (message?.type === 'aevra:disconnect') {
         rpc.disconnect();
@@ -36,10 +37,14 @@ export function startServiceWorker(): ExtensionRpc {
         if (!rpc.isConnected()) {
           void rpc.connect();
         }
-        sendResponse?.({ connected: rpc.isConnected() });
+        sendResponse?.({ connected: rpc.isConnected(), ...rpc.status() });
       }
     },
   );
+
+  // A manual extension reload does not fire onStartup. Reconnect a saved
+  // pairing when this worker is evaluated; unpaired profiles remain idle.
+  void rpc.connect();
 
   return rpc;
 }

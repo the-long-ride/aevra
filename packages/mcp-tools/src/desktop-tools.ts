@@ -17,7 +17,7 @@ import {
   evaluateWindowGate,
   isProtectedDesktopTitle,
 } from '../../security/src/window-gate.js';
-import { authorizeCapability } from './authorization.js';
+import { authorizeHostControl } from './host-control-gate.js';
 import { handleAct, sanitizeArgsForAuthorization } from './desktop-act.js';
 import { BACKGROUND_ACT_OP, handleBackgroundAction } from './desktop-background.js';
 import {
@@ -31,7 +31,6 @@ import {
   targetOf,
 } from './desktop-support.js';
 import { AevraToolError } from './errors.js';
-import { requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
 import { DESKTOP_TOOL_NAMES, riskFor } from './desktop-tool-catalog.js';
 
@@ -244,11 +243,12 @@ export async function handleDesktopTool(
     throw new AevraToolError('CAPABILITY_REQUIRED', `Tool ${name} is not enabled`);
   }
   const risk = riskFor(name);
-  const gate = await authorizeCapability(
+  const gate = await authorizeHostControl(
     context,
     sessionId,
     'desktop.control',
-    { tool: name, args: sanitizeArgsForAuthorization(name, args) },
+    name,
+    sanitizeArgsForAuthorization(name, args),
     `desktop:${name.replace('desktop_', '')}`,
     risk,
   );
@@ -303,14 +303,15 @@ export async function handleDesktopTool(
     if (!verdict.reason.includes('refused by allowlist')) {
       throw new AevraToolError('DESKTOP_ACCESS_REQUEST_UNAVAILABLE', verdict.reason);
     }
-    const lease = requiredLease(context, sessionId);
+    const hostAccess = context.deps.hostControlAccess;
     const session = context.sessions.get(sessionId);
-    if (!lease || !session)
+    if (!hostAccess?.has(sessionId, 'desktop.control') || !session)
       throw new AevraToolError('CAPABILITY_REQUIRED', 'Desktop session is no longer active');
     const result = context.deps.desktopAccess.request({
       actor: session.actor,
       sessionId,
-      workspaceId: lease.workspaceId,
+      workspaceId: null,
+      scope: 'host',
       windowId,
       duration,
       identity,

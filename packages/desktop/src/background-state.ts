@@ -54,7 +54,11 @@ function sameHost(a?: VerifiedWindowHost, b?: VerifiedWindowHost): boolean {
 }
 
 function isSameOwner(a: DesktopOwner, b: DesktopOwner): boolean {
-  return a.sessionId === b.sessionId && a.workspaceId === b.workspaceId;
+  return (
+    a.surface === b.surface &&
+    a.identity.kind === b.identity.kind &&
+    a.identity.key === b.identity.key
+  );
 }
 
 export class BackgroundDesktopState {
@@ -298,5 +302,15 @@ export class BackgroundDesktopState {
 
   reset(): void {
     this.leases.clear();
+  }
+
+  invalidateOwner(owner: DesktopOwner): number {
+    let invalidated = 0;
+    for (const [leaseId, lease] of this.leases) {
+      if (!isSameOwner(lease.owner, owner)) continue;
+      this.leases.delete(leaseId);
+      invalidated++;
+    }
+    return invalidated;
   }
 }

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FakeSocket, paired } from './rpc-test-support';
 
 const registered: Record<string, Array<(...args: any[]) => void>> = {};
 
@@ -34,9 +35,23 @@ beforeEach(() => {
 
 afterEach(() => {
   delete (globalThis as any).chrome;
+  delete (globalThis as any).WebSocket;
+  vi.unstubAllGlobals();
 });
 
 describe('service worker wiring', () => {
+  it('connects a saved pairing as soon as the worker starts after reload', async () => {
+    FakeSocket.last = null;
+    (globalThis as any).chrome.storage.local.get = async () => paired;
+    (globalThis as any).WebSocket = FakeSocket;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 426 })),
+    );
+    await import('./service-worker');
+    await vi.waitFor(() => expect(FakeSocket.last).not.toBeNull());
+  });
+
   it('re-establishes the socket on startup signal', async () => {
     const { startServiceWorker } = await import('./service-worker');
     // Importing the module already starts one worker, as it does in Chrome.
@@ -81,7 +96,9 @@ describe('service worker wiring', () => {
     registered.message![0]!({ type: 'aevra:getStatus' }, {}, (response: any) => {
       reply = response;
     });
-    expect(reply).toEqual({ connected: true });
+    expect(reply).toEqual(
+      expect.objectContaining({ connected: true, state: 'unpaired', lastErrorCode: null }),
+    );
   });
 
   it('attempts to connect when aevra:getStatus arrives and disconnected', async () => {
@@ -95,7 +112,9 @@ describe('service worker wiring', () => {
       reply = response;
     });
     expect(connect).toHaveBeenCalledTimes(1);
-    expect(reply).toEqual({ connected: false });
+    expect(reply).toEqual(
+      expect.objectContaining({ connected: false, state: 'unpaired', lastErrorCode: null }),
+    );
   });
 
   it('records forwarded console text without reconnecting', async () => {

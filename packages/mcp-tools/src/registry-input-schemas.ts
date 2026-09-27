@@ -26,6 +26,7 @@ export const inputSchemas: Record<string, JsonSchema> = {
   ...controlInputSchemas,
   ...desktopInputSchemas,
   aevra_status: emptySchema,
+  control_access_status: emptySchema,
   workspace_list: emptySchema,
   workspace_select: {
     type: 'object',

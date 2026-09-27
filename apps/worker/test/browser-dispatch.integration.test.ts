@@ -26,7 +26,7 @@ function envelope(operation: WorkerOperation) {
 
 test.beforeEach(() => {
   browserRuntime.configure({
-    secret: randomBytes(32),
+    browserTokenKey: randomBytes(32),
     createDriver: async (options) => new FakeDriver(options.transport),
   });
 });

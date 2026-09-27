@@ -1,5 +1,78 @@
 # Changelog
 
+## [1.1.3] - 2026-09-27
+
+### Changed - Host Browser and Desktop Access
+
+- Browser and desktop control now use grants on the exact AI connection, independent
+  of workspace selection. A workspace grant alone cannot authorize host control;
+  legacy workspace arguments on these tools are accepted but ignored for access.
+- Browser control settings list paired profiles individually. Unpair revokes one
+  profile while **Disconnect all browsers** revokes every profile and drops both
+  browser transports.
+
+### Added - Browser Actions
+
+- `browser_act_many` accepts both flat actions such as
+  `{ "op": "click", "x": 355, "y": 550 }` and single-key nested actions such as
+  `{ "click": { "x": 355, "y": 550 } }`. Invalid forms return `INVALID_REQUEST`
+  with the action index before dispatch.
+- Coordinate `drag` presses, moves with the left button held, and releases in one
+  action on both extension and CDP transports. It works on canvas and ordinary
+  pages; a failed move attempts release before returning an error.
+- Model-facing browser guidance prefers accessibility refs, then stable CSS
+  selectors. Vision and coordinate actions are the fallback for canvas controls
+  without semantic targets or failed semantic actions.
+
+### Fixed - Browser Pairing Status
+
+- `browser_status` now marks a paired, authenticated socket as
+  `ready_to_connect` and returns the exact `browser_connect` call. The Admin UI
+  shows that next step when a browser session has not yet been attached.
+- A missing live extension socket now reports that state accurately instead of
+  saying the saved pairing was lost.
+- When an authenticated extension socket closes, browser status now clears the
+  stale attached session and tab list instead of continuing to report connected.
+
+### Fixed - Browser Tab Focus
+
+- `browser_tabs {action:'focus'}` now selects the requested extension tab and
+  brings its window forward. Tab listings report only the selected tab in the
+  last focused window as active.
+
+### Fixed - Vision Snapshots on Canvas and HiDPI Pages
+
+- **Vision snapshot timeout**: the extension returned the viewport as a
+  device-pixel PNG. On a large or HiDPI canvas page that PNG exceeded the 8 MiB
+  extension frame, and the socket was dropped. The caller then waited for
+  `BROWSER_TIMEOUT: snapshot exceeded 15000ms`. Both transports now capture a
+  bounded JPEG of the visible viewport through a shared budget (1280 px longest
+  edge, with quality and then size stepped down as needed), which fits the
+  worker's 1 MiB IPC frame.
+- **Fail fast on lost replies**: an oversized reply fails with
+  `BROWSER_REPLY_TOO_LARGE`, and a disconnect fails with `BROWSER_UNAVAILABLE`,
+  both immediately instead of after the RPC timeout. The extension refuses to
+  send a frame the worker would reject.
+- **Keep the extension alive during capture**: an authenticated socket sends a
+  small keepalive every 20 seconds so Chromium does not suspend its MV3 service
+  worker while a slow vision request is running. A capture error returns on that
+  request and leaves the socket available for later browser commands.
+- **Coordinate clicks on canvas apps**: extension coordinate clicks use a
+  temporary Chrome debugger attachment for browser-native press and release
+  events rather than page-generated events. Both transports convert `{x, y}`
+  using the ratio of the tab's last vision capture. Extension vision capture
+  uses the same temporary debugger viewport so the notice does not shift click
+  positions relative to the screenshot. Ref and selector clicks keep their DOM
+  action path.
+- **Snapshot diagnostics**: capture stages and extension socket-close causes are
+  retained for a pending vision request, making disconnects and timeouts easier
+  to distinguish without exposing image or page content.
+- **No extension error while Aevra is stopped**: Chrome logs every refused
+  WebSocket as an extension error that cannot be caught. The extension now
+  probes the listener over plain HTTP (the worker answers `426`) and dials only
+  when the listener may be up. While Aevra is not running it logs one warning per
+  outage and keeps retrying on the existing backoff.
+
 ## [1.1.2] - 2026-09-24
 
 ### Fixed - npm Runtime Packaging

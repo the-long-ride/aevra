@@ -9,8 +9,20 @@ const PATHS = new Set([
   '/api/browser/policy',
 ]);
 
+function pairingIdFromPath(pathname: string): string | null {
+  const match = /^\/api\/browser\/pairings\/([^/]+)$/.exec(pathname);
+  if (!match) return null;
+  try {
+    const pairingId = decodeURIComponent(match[1]!);
+    return pairingId && !pairingId.includes('/') ? pairingId : null;
+  } catch {
+    return null;
+  }
+}
+
 export const handleBrowserRoutes: AdminRouteHandler = async (req, res, url, context) => {
-  if (!PATHS.has(url.pathname)) return false;
+  const pairingId = pairingIdFromPath(url.pathname);
+  if (!PATHS.has(url.pathname) && pairingId === null) return false;
   const method = req.method ?? 'GET';
   const browser = context.browser;
   if (!browser) {
@@ -21,7 +33,8 @@ export const handleBrowserRoutes: AdminRouteHandler = async (req, res, url, cont
   }
 
   if (url.pathname === '/api/browser' && method === 'GET') {
-    sendAdminResponse(res, 200, browser.state());
+    const health = await browser.pairingHealth();
+    sendAdminResponse(res, 200, { ...browser.state(health), health });
     return true;
   }
   if (url.pathname === '/api/browser/code' && method === 'POST') {
@@ -33,8 +46,27 @@ export const handleBrowserRoutes: AdminRouteHandler = async (req, res, url, cont
     sendAdminResponse(
       res,
       200,
-      await browser.redeem(String(input?.code ?? ''), String(input?.extensionId ?? '')),
+      await browser.redeem({
+        code: String(input?.code ?? ''),
+        extensionId: String(input?.extensionId ?? ''),
+        profileId: String(input?.profileId ?? ''),
+        profileName: String(input?.profileName ?? ''),
+      }),
     );
+    return true;
+  }
+  if (pairingId && method === 'DELETE') {
+    try {
+      sendAdminResponse(res, 200, await browser.unpair(pairingId));
+    } catch (cause) {
+      const error = cause as { code?: string; message?: string; status?: number };
+      sendAdminResponse(res, error.status ?? 500, {
+        error: {
+          code: error.code ?? 'BROWSER_PAIRING_REMOVE_FAILED',
+          message: error.message ?? 'Browser pairing could not be removed',
+        },
+      });
+    }
     return true;
   }
   if (url.pathname === '/api/browser/revoke' && method === 'POST') {

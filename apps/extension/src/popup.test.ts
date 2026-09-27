@@ -38,12 +38,13 @@ beforeEach(() => {
   (globalThis as any).chrome = {
     storage: {
       local: {
-        get: (keys: string[], callback: (result: Record<string, unknown>) => void) => {
+        get: (keys: string[], callback?: (result: Record<string, unknown>) => void) => {
           const result: Record<string, unknown> = {};
           for (const key of keys) {
             if (key in stored) result[key] = stored[key];
           }
-          callback(result);
+          callback?.(result);
+          return Promise.resolve(result);
         },
         set: async (values: Record<string, unknown>) => {
           Object.assign(stored, values);
@@ -57,7 +58,7 @@ beforeEach(() => {
         sentMessages.push(message);
         if (callback) {
           if ((message as { type?: string })?.type === 'aevra:getStatus') {
-            callback({ connected: true });
+            callback({ connected: true, state: 'connected' });
           } else {
             callback();
           }
@@ -91,6 +92,21 @@ describe('popup extension UI', () => {
     expect(unpairedBanner.hasAttribute('hidden')).toBe(false);
   });
 
+  it('stays unpaired when connection is toggled without saved credentials', async () => {
+    const { initPopup } = await import('./popup.js');
+    initPopup();
+
+    const toggle = document.getElementById('connection-toggle') as HTMLInputElement;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+
+    expect(document.getElementById('status-text')!.textContent).toBe('Unpaired');
+    expect(document.getElementById('pairing-info')!.textContent).toBe('Not paired');
+    expect(document.getElementById('unpaired-banner')!.hasAttribute('hidden')).toBe(false);
+  });
+
   it('renders off status when paired but connection is disabled', async () => {
     stored.token = 'tok';
     stored.wsUrl = 'ws://127.0.0.1:47833';
@@ -111,7 +127,7 @@ describe('popup extension UI', () => {
     expect(profileInput.value).toBe('Work Profile');
     expect(statusText.textContent).toBe('Off');
     expect(statusChip.dataset.state).toBe('off');
-    expect(pairingInfo.textContent).toBe('Paired');
+    expect(pairingInfo.textContent).toBe('Pairing saved');
     expect(unpairedBanner.hasAttribute('hidden')).toBe(true);
   });
 
@@ -132,6 +148,25 @@ describe('popup extension UI', () => {
     expect(connectionDesc.textContent).toBe('Active in this profile');
   });
 
+  it('shows standby when another paired profile currently owns browser control', async () => {
+    stored.token = 'tok';
+    stored.wsUrl = 'ws://127.0.0.1:47833';
+    stored.enabled = true;
+    (globalThis as any).chrome.runtime.sendMessage = (
+      _message: unknown,
+      callback?: (response?: unknown) => void,
+    ) => callback?.({ connected: false, state: 'standby' });
+
+    const { initPopup } = await import('./popup.js');
+    initPopup();
+
+    expect(document.getElementById('status-text')!.textContent).toBe('Standby');
+    expect(document.getElementById('status-chip')!.dataset.state).toBe('pending');
+    expect(document.getElementById('connection-desc')!.textContent).toContain(
+      'Another paired profile is active',
+    );
+  });
+
   it('renders connecting status when service worker reports disconnected', async () => {
     stored.token = 'tok';
     stored.wsUrl = 'ws://127.0.0.1:47833';
@@ -142,7 +177,7 @@ describe('popup extension UI', () => {
       callback?: (response?: unknown) => void,
     ) => {
       sentMessages.push(message);
-      callback?.({ connected: false });
+      callback?.({ connected: false, state: 'connecting' });
     };
 
     const { initPopup } = await import('./popup.js');
@@ -155,6 +190,22 @@ describe('popup extension UI', () => {
     expect(statusText.textContent).toBe('Connecting');
     expect(statusChip.dataset.state).toBe('pending');
     expect(connectionDesc.textContent).toBe('Connecting to Aevra…');
+  });
+
+  it('offers Pair again when saved credentials were rejected', async () => {
+    stored.token = 'tok';
+    stored.wsUrl = 'ws://127.0.0.1:47833';
+    (globalThis as any).chrome.runtime.sendMessage = (
+      _message: unknown,
+      callback?: (response?: unknown) => void,
+    ) => {
+      callback?.({ state: 'pair-again', lastErrorCode: 'AUTH_REJECTED' });
+    };
+    const { initPopup } = await import('./popup.js');
+    initPopup();
+    expect(document.getElementById('status-text')!.textContent).toBe('Pair again');
+    expect(document.getElementById('pairing-info')!.textContent).toBe('Pairing saved');
+    expect(document.getElementById('connection-desc')!.textContent).toContain('rejected');
   });
 
   it('toggles connection off and sends aevra:disconnect', async () => {

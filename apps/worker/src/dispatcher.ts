@@ -1,4 +1,8 @@
-import type { VerifiedEnvelope, WorkerResult } from '../../../packages/protocol/src/worker.js';
+import {
+  validateScope,
+  type VerifiedEnvelope,
+  type WorkerResult,
+} from '../../../packages/protocol/src/worker.js';
 import type { DesktopOwner } from '../../../packages/protocol/src/desktop.js';
 import {
   fileList,
@@ -36,6 +40,7 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
   try {
     const op = envelope.operation;
     const roots = envelope.capabilityRoots;
+    if (envelope.scope?.kind === 'host-control') validateScope(envelope.scope, op.kind, roots);
     if (op.kind === 'file.list') return { ok: true, value: await fileList(op.path, roots) };
     if (op.kind === 'file.read') {
       return {
@@ -103,12 +108,20 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
     // same way every other branch in this function wraps its own value.
     if (isDesktopOperation(op)) {
       const owner: DesktopOwner = {
-        sessionId: envelope.sessionId,
-        workspaceId: envelope.workspaceId,
+        identity:
+          envelope.scope?.kind === 'host-control'
+            ? envelope.scope.identity
+            : { kind: 'session', key: envelope.sessionId },
+        surface: 'desktop.control',
       };
       return {
         ok: true,
-        value: await dispatchDesktopOperation(op, desktopRuntime.registry(), owner),
+        value: await dispatchDesktopOperation(
+          op,
+          desktopRuntime.registry(),
+          owner,
+          envelope.sessionId,
+        ),
       };
     }
     if (isMcpUpstreamOperation(op)) {

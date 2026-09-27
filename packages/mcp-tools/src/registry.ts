@@ -10,6 +10,7 @@ import { searchInputSchema } from './search-tool.js';
 
 export const STABLE_TOOL_NAMES = [
   'aevra_status',
+  'control_access_status',
   'workspace_list',
   'workspace_select',
   'workspace_current',
@@ -239,6 +240,7 @@ const operationInputs: Partial<Record<AevraToolName, JsonSchema>> = {
 
 const readOnly = new Set<AevraToolName>([
   'aevra_status',
+  'control_access_status',
   'workspace_list',
   'workspace_select',
   'workspace_current',

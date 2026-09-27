@@ -20,6 +20,20 @@ export function actionsForApproval(item: ApprovalItem): ApprovalAction[] {
     label: item.operation.capability === 'commands.run' ? 'Run once' : 'Allow',
     scope: 'once',
   };
+  if (item.operation.family === 'host-control:request')
+    return [
+      deny,
+      {
+        id: 'approve-connection',
+        label: 'Allow this connection',
+        scope: 'connection',
+      },
+    ];
+  if (
+    item.operation.capability === 'browser.control' ||
+    item.operation.capability === 'desktop.control'
+  )
+    return [deny, once];
   if (item.risk === 'CRITICAL') return [deny, once];
   if (!PERSISTABLE_CAPABILITIES.has(item.operation.capability)) return [deny, once];
   return [

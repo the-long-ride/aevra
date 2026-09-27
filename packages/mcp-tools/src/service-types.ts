@@ -1,6 +1,10 @@
-import type { CapabilityRoot, SystemCapabilitySnapshot } from '../../protocol/src/index.js';
+import type {
+  CapabilityRoot,
+  RiskTier,
+  SystemCapabilitySnapshot,
+} from '../../protocol/src/index.js';
 import type { ControlPlanResult } from '../../protocol/src/control.js';
-import type { WorkerOperation, WorkerResult } from '../../protocol/src/worker.js';
+import type { WorkerOperation, WorkerResult, WorkerScope } from '../../protocol/src/worker.js';
 import type { DesktopAppCatalogResult } from '../../protocol/src/desktop.js';
 import type { ApprovalService } from '../../../apps/core/src/approvals/approval-service.js';
 import type { AuditService } from '../../../apps/core/src/audit/audit-service.js';
@@ -20,6 +24,7 @@ export interface WorkerGateway {
   execute(input: {
     sessionId: string;
     workspaceId: string;
+    scope?: WorkerScope;
     roots: CapabilityRoot[];
     operation: WorkerOperation;
     expectedState?: Record<string, string>;
@@ -43,6 +48,8 @@ export interface ManifestSummary {
 
 export interface McpToolDependencies {
   operations?: OperationService;
+  hostControlAccess?: import('../../../apps/core/src/control/host-control-access.js').HostControlAccess;
+  hostControlApproval?: import('../../../apps/core/src/control/host-control-approval.js').HostControlApproval;
   resumableOperations?: ResumableOperationService;
   controlPlans?: {
     claim(input: {
@@ -123,6 +130,10 @@ export interface McpToolDependencies {
   browserPairing?: {
     epoch(): number;
     pairedExtensionId(): string | null;
+    workerPairings?(): import('../../protocol/src/browser.js').BrowserExtensionPairing[];
+    pairingHealth?(): Promise<
+      import('../../../apps/core/src/browser/pairing-service.js').BrowserPairingHealth
+    >;
   };
   // Structural for the same reason as browserPairing: mcp-tools must not
   // depend on a core class for one accessor.
@@ -148,7 +159,8 @@ export interface McpToolDependencies {
     request(input: {
       actor: string;
       sessionId: string;
-      workspaceId: string;
+      workspaceId: string | null;
+      scope?: 'workspace' | 'host';
       windowId: string;
       duration: 'session' | 'persistent';
       identity: import('../../protocol/src/desktop.js').DesktopTargetIdentity;
@@ -171,6 +183,17 @@ export interface McpToolDependencies {
 
 export type McpDependencies = McpToolDependencies;
 
+/** Created only while an approved host ticket is being dispatched. */
+export interface HostApprovalProof {
+  requestId: string;
+  sessionId: string;
+  capability: 'browser.control' | 'desktop.control';
+  family: string;
+  risk: RiskTier;
+  payloadHash: string;
+  consumed: boolean;
+}
+
 export interface McpRuntimeContext {
   sessions: SessionManager;
   workspaces: WorkspaceService;
@@ -180,8 +203,14 @@ export interface McpRuntimeContext {
   approvals?: ApprovalService;
   deps: McpDependencies;
   oneTimeCapabilities: Set<string>;
+  hostApprovalProof?: HostApprovalProof;
   processStart: (sessionId: string, args: any) => Promise<any>;
-  callInner: (sessionId: string, name: string, args: any) => Promise<any>;
+  callInner: (
+    sessionId: string,
+    name: string,
+    args: any,
+    proof?: HostApprovalProof,
+  ) => Promise<any>;
   proxyOperation: (sessionId: string, operation: McpProxyOperation) => Promise<unknown>;
 }
 

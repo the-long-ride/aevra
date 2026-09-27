@@ -1,7 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { MAX_FRAME_BYTES } from './frame-limits.js';
 
 export interface DecodedFrame {
   opcode: number;
+  fin: boolean;
+  payload: Buffer;
   text: string;
 }
 
@@ -11,6 +14,7 @@ export interface FrameRead {
 }
 
 export const WS_TEXT = 0x1;
+export const WS_CONTINUATION = 0x0;
 export const WS_CLOSE = 0x8;
 
 /**
@@ -18,12 +22,11 @@ export const WS_CLOSE = 0x8;
  *
  * A 64-bit length header is 8 bytes the peer chooses, and the reader below
  * buffers until the declared payload actually arrives - so an unbounded length
- * is an unbounded allocation driven from the other end of the socket. Nothing
- * the extension sends comes close to this; a frame that claims more is a peer
- * misbehaving, and the caller drops the socket rather than waiting for bytes
- * that would never be legitimate.
+ * is an unbounded allocation driven from the other end of the socket. A frame
+ * that claims more is refused on its header; the extension checks the same
+ * cap before sending, so a legitimate reply that big becomes an error instead.
  */
-export const MAX_FRAME_BYTES = 8 * 1024 * 1024;
+export { MAX_FRAME_BYTES } from './frame-limits.js';
 
 class WsFrameError extends Error {
   constructor(message: string) {
@@ -76,6 +79,7 @@ export function readFrames(buffer: Buffer): FrameRead {
   const frames: DecodedFrame[] = [];
   let offset = 0;
   while (offset + 2 <= buffer.length) {
+    const fin = (buffer[offset]! & 0x80) !== 0;
     const opcode = buffer[offset]! & 0x0f;
     const masked = (buffer[offset + 1]! & 0x80) !== 0;
     let length = buffer[offset + 1]! & 0x7f;
@@ -102,7 +106,7 @@ export function readFrames(buffer: Buffer): FrameRead {
     if (masked) {
       for (let index = 0; index < payload.length; index += 1) payload[index] ^= key[index % 4]!;
     }
-    frames.push({ opcode, text: payload.toString('utf8') });
+    frames.push({ opcode, fin, payload, text: payload.toString('utf8') });
     offset = cursor + length;
   }
   return { frames, rest: buffer.subarray(offset) };

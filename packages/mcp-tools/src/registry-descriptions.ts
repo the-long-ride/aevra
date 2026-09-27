@@ -7,6 +7,8 @@ import type { AevraToolName } from './registry.js';
  */
 export const toolDescriptions: Partial<Record<AevraToolName, string>> = {
   aevra_status: 'Show the current Aevra MCP session, active workspace, and granted capabilities.',
+  control_access_status:
+    'Show this exact AI connection identity and its independent host browser and desktop grants without selecting a workspace.',
   workspace_list: 'List workspaces already registered by the local Aevra administrator.',
   workspace_select:
     'Select an already-registered workspace for this MCP session without modifying workspace files.',
@@ -63,18 +65,27 @@ export const toolDescriptions: Partial<Record<AevraToolName, string>> = {
   skill_write: 'Write one bounded UTF-8 file inside an existing Aevra skill package.',
   instructions_read: 'Read merged Aevra/AGENTS.md instructions for the active workspace.',
   instructions_write: 'Write the user or active-workspace Aevra AGENTS.md instruction file.',
+  browser_connect:
+    'Attach this host-granted AI connection to a paired browser. When browser_status reports ready_to_connect, call with transport extension; pairing alone does not attach a browser session.',
+  browser_status:
+    'Show pairing, authenticated extension socket, and browser attachment as distinct states. If connectionState is ready_to_connect, use nextAction to call browser_connect.',
+  browser_snapshot:
+    'Inspect a browser tab. Use accessibility mode first for element refs; use vision for canvas, WebGL, or when accessibility cannot identify the target. Extension vision temporarily attaches Chrome debugger.',
+  browser_act_many:
+    'Act on a browser tab. Prefer an accessibility ref, then a stable CSS selector. Use coordinate actions as a last resort for canvas-like targets without semantic controls or after semantic action fails; extension coordinate click and drag attach Chrome debugger. Verify the result with a snapshot.',
   browser_execute_script:
-    'Execute a bounded Playwright-like script against one browser tab as a single policy-checked action batch; arbitrary JavaScript is not evaluated.',
+    'Execute a bounded Playwright-like script with stable CSS selectors against one browser tab as a single policy-checked action batch; arbitrary JavaScript is not evaluated.',
   control_observe:
-    'Observe one browser tab or desktop window as a bounded semantic control surface with owner-bound references.',
+    'Observe a host-granted browser tab or desktop window without selecting a workspace; references belong to the exact AI connection.',
   control_execute:
-    'Execute a strict bounded ControlPlan locally across previously observed surfaces, revalidating targets and policy between steps.',
+    'Execute a strict host-granted ControlPlan across previously observed browser or desktop surfaces, checking each grant and policy before dispatch.',
   control_plan_status: 'Read owner-bound status and terminal result for one control plan.',
   control_plan_cancel:
     'Cancel future steps of one owner-bound control plan without claiming already-dispatched external effects were rolled back.',
   desktop_act_many:
-    'Execute an ordered batch of semantic desktop provider actions without synthesizing host cursor, keyboard, clipboard, or focus input.',
-  desktop_status: 'Show the current Aevra desktop session, connection, and window state.',
+    'Execute host-granted semantic desktop actions without selecting a workspace or synthesizing host cursor, keyboard, clipboard, or focus input.',
+  desktop_status:
+    'Show the current Aevra desktop session, connection, and window state. Requires a host desktop grant, not a workspace selection.',
   desktop_connect: 'Connect to the local Aevra desktop control helper for this session.',
   desktop_disconnect: 'Disconnect the local Aevra desktop control session.',
   desktop_apps: 'List apps in scope for desktop.control, resolved from the current desktop policy.',

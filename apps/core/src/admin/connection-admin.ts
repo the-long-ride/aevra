@@ -1,3 +1,5 @@
+import type { HostControlCapability } from '../../../../packages/store/src/host-control-grants.js';
+import type { HostControlAccess } from '../control/host-control-access.js';
 import type { OAuthRepository } from '../../../../packages/store/src/oauth.js';
 
 export type AdminConnectionStatus = 'CONNECTED' | 'GRACE' | 'OFFLINE' | 'REVOKED';
@@ -46,6 +48,35 @@ export class ConnectionAdminService {
     private onRevoke?: (connectionId: string) => void,
   ) {}
 
+  private controlAccess?: HostControlAccess;
+  setControlAccess(access: HostControlAccess) {
+    this.controlAccess = access;
+  }
+  listControl(connectionId: string) {
+    const record = this.oauth.getConnection(connectionId);
+    if (!record) throw Object.assign(new Error('Connection not found'), { code: 'NOT_FOUND' });
+    const identity = { kind: 'oauth' as const, key: connectionId };
+    const list = this.controlAccess?.list(identity) ?? [];
+    return {
+      connectionId,
+      browser: list.some((grant) => grant.capability === 'browser.control' && !grant.revokedAt),
+      desktop: list.some((grant) => grant.capability === 'desktop.control' && !grant.revokedAt),
+    };
+  }
+  grantControl(connectionId: string, capability: HostControlCapability) {
+    const record = this.oauth.getConnection(connectionId);
+    if (!record || record.status !== 'ACTIVE')
+      throw Object.assign(new Error('Active connection not found'), { code: 'NOT_FOUND' });
+    if (!this.controlAccess) throw new Error('Host control access not configured');
+    return this.controlAccess.grant({ kind: 'oauth', key: connectionId }, capability, 'admin');
+  }
+  async revokeControl(connectionId: string, capability: HostControlCapability) {
+    if (!this.oauth.getConnection(connectionId))
+      throw Object.assign(new Error('Connection not found'), { code: 'NOT_FOUND' });
+    return (
+      (await this.controlAccess?.revoke({ kind: 'oauth', key: connectionId }, capability)) ?? false
+    );
+  }
   setGrantHandler(handler: ConnectionGrantHandler) {
     this.grantHandler = handler;
   }
