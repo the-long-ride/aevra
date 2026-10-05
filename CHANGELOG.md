@@ -28,6 +28,18 @@
   Windows reasserts the request every 5 seconds instead of 30, and macOS now
   also blocks system sleep on AC power (`caffeinate -i -s`).
 
+### Changed - Quality Gate CI
+
+- Pull requests run only the jobs their changed files need. Docs-only changes
+  run static checks alone; web, extension, native helper and Node changes each
+  run their own jobs. Workflow, dependency and unknown paths still run all.
+- Branch pushes no longer start a second run next to the pull request. Pushes to
+  `main` and manual dispatch still run every job, so release artifacts are
+  unchanged. Tag releases on `main` commits.
+- New `Quality gate result` job: require this single check in branch protection.
+- Playwright browsers and Cargo builds are cached, Podman is installed only when
+  missing, and helper tests reuse the release build.
+
 ## [1.1.3] - 2026-09-27
 
 ### Changed - Host Browser and Desktop Access
