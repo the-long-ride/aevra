@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.4] - 2026-10-06
+
+### Fixed - Desktop Helper Discovery
+
+- `AEVRA_DESKTOP_HELPER_PATH` pointing at a missing file no longer hides the
+  packaged helper. Aevra logs a warning and falls back to
+  `dist/helper/<platform>-<arch>/` and local Cargo builds instead of failing
+  with `DESKTOP_HELPER_NOT_INSTALLED`.
+- An empty or whitespace-only `AEVRA_DESKTOP_HELPER_PATH` is treated as unset.
+- `DESKTOP_HELPER_NOT_INSTALLED` now lists every path checked and names a stale
+  override instead of telling you to set the variable that is already set. The
+  same data is returned as `checkedPaths` and `missingOverride` error details.
+
 ## [1.1.3] - 2026-09-27
 
 ### Changed - Host Browser and Desktop Access
