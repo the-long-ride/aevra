@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { DesktopSessionRegistry } from '../../../packages/desktop/src/registry.js';
 import { FakeDesktopDriver } from '../../../packages/desktop/test/fake-driver.js';
 import { dispatchDesktopOperation } from '../src/desktop-dispatch.js';
-import { desktopRuntime } from '../src/desktop-runtime.js';
+import { DesktopRuntime, resolveHelperBinaryPath } from '../src/desktop-runtime.js';
 
 const allowAll = {
   mode: 'denylist' as const,
@@ -69,19 +69,19 @@ test('capture is never refused by policy', async () => {
 // pins the OTHER deliberate failure mode -- the binary is simply not there
 // -- which now gets its own code, DESKTOP_HELPER_NOT_INSTALLED, distinct
 // from DESKTOP_DRIVER_DIED ("it started and then died"). The override is
-// forced to a path that cannot exist so this assertion is deterministic
-// regardless of whatever a developer has actually built locally.
+// forced to a path that cannot exist and the default locations are emptied,
+// so this stays deterministic regardless of what a developer has built
+// locally (a stale override now falls back to those defaults).
 test('desktopRuntime.registry() connect() rejects with DESKTOP_HELPER_NOT_INSTALLED when the binary cannot be found', async () => {
-  const original = process.env.AEVRA_DESKTOP_HELPER_PATH;
-  process.env.AEVRA_DESKTOP_HELPER_PATH = fileURLToPath(
-    new URL('./does-not-exist.exe', import.meta.url),
+  const missing = fileURLToPath(new URL('./does-not-exist.exe', import.meta.url));
+  const runtime = new DesktopRuntime(() =>
+    resolveHelperBinaryPath({
+      env: { AEVRA_DESKTOP_HELPER_PATH: missing },
+      candidates: [],
+      warn: () => {},
+    }),
   );
-  try {
-    await assert.rejects(() => desktopRuntime.registry().connect(), /DESKTOP_HELPER_NOT_INSTALLED/);
-  } finally {
-    if (original === undefined) delete process.env.AEVRA_DESKTOP_HELPER_PATH;
-    else process.env.AEVRA_DESKTOP_HELPER_PATH = original;
-  }
+  await assert.rejects(() => runtime.registry().connect(), /DESKTOP_HELPER_NOT_INSTALLED/);
 });
 
 test('desktop.apps resolves without a connected session', async () => {

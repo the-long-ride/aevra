@@ -35,7 +35,7 @@ export function isKeepAwakeMode(value: unknown): value is KeepAwakeMode {
 }
 
 function normalizeMode(value: unknown): KeepAwakeMode {
-  return isKeepAwakeMode(value) ? value : 'remote-connections';
+  return isKeepAwakeMode(value) ? value : 'always';
 }
 
 export function countKeepAwakeRemoteConnections(rows: Array<{ status?: unknown }>): number {
@@ -65,9 +65,7 @@ export class KeepAwakeService {
     private readonly signals: KeepAwakeSignals,
     options: KeepAwakeOptions = {},
   ) {
-    this.modeValue = normalizeMode(
-      settings.get('power.keepAwake', { mode: 'remote-connections' }).mode,
-    );
+    this.modeValue = normalizeMode(settings.get('power.keepAwake', { mode: 'always' }).mode);
     this.platform = options.platform ?? process.platform;
     this.intervalMs = options.intervalMs ?? 5_000;
     this.setIntervalFn = options.setInterval ?? setInterval;
@@ -108,7 +106,10 @@ export class KeepAwakeService {
     const desired = this.shouldInhibit(remoteConnections, managedProcesses);
 
     if (desired) {
-      if (!this.activeValue || !this.inhibitor.supported()) await this.inhibitor.acquire();
+      // acquire() is idempotent, so calling it on every poll also restarts a
+      // helper that died between polls. Only "always" holds the display on: a
+      // Modern Standby laptop enters standby, offline, once the display is off.
+      await this.inhibitor.acquire({ keepDisplayOn: this.modeValue === 'always' });
       this.activeValue = this.inhibitor.supported();
     } else {
       if (this.activeValue) await this.inhibitor.release();

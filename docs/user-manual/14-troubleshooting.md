@@ -34,7 +34,7 @@ Use the effective public `https://<host>/mcp` endpoint with OAuth. A 401 without
 
 ## Aevra reconnects after Windows lock or sleep
 
-Locking the workstation alone does not invalidate the logical OAuth connection, but system sleep or network suspension can close the physical MCP transport. Aevra reconnects through the durable OAuth connection and restores remembered workspace grants. To reduce sleep-triggered disconnects, choose a **Keep awake** policy in Settings. This prevents system idle sleep only; it does not disable the lock screen or force the display to stay on.
+Locking the workstation alone does not invalidate the logical OAuth connection, but system sleep or network suspension can close the physical MCP transport. Aevra reconnects through the durable OAuth connection and restores remembered workspace grants. To prevent sleep-triggered disconnects, keep the **Keep awake** policy in Settings on **While Aevra is running** (the default). That mode blocks system sleep and keeps the display on, because Windows Modern Standby laptops (check with `powercfg /a`: "Standby (S0 Low Power Idle)") go to standby and drop the network as soon as the display turns off. It does not disable the lock screen, and closing the lid or choosing Sleep still sleeps the machine. The other modes block system sleep only and leave the display timeout unchanged.
 
 If Keep Awake reports unavailable, the platform sleep inhibitor could not be started. Aevra continues running normally and reports the failure instead of crashing. Fix the local platform/service issue or choose **Off**; reconnect continuity remains the fallback for transport loss.
 

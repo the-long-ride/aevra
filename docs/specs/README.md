@@ -1,6 +1,6 @@
 # Aevra Software Specs
 
-For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.1.3`.
+For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.1.4`.
 
 | #   | File                                                       | Answers the question                                      |
 | --- | ---------------------------------------------------------- | --------------------------------------------------------- |

@@ -309,7 +309,7 @@ test('Settings configures keep awake policy without changing screen lock behavio
   expect(screen.getByText('1 remote connection')).toBeInTheDocument();
   expect(screen.getByLabelText('Sleep inhibition enabled')).toHaveClass('is-active');
   expect(screen.queryByText(/Active.*1 remote connection/)).not.toBeInTheDocument();
-  expect(screen.getByText(/screen lock and display timeout remain unchanged/i)).toBeInTheDocument();
+  expect(screen.getByText(/also keeps the display on/i)).toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: 'Prevent system sleep' }));
   await user.click(screen.getByRole('option', { name: 'While Aevra is running' }));

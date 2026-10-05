@@ -1,10 +1,14 @@
 name: Quality gate
 
+# Pull requests run only the jobs their changed files need (scripts/ci-changes.mjs).
+# Pushes to main run every job: the release downloads the helper and extension
+# artifacts from that push run, so it must always be complete.
 on:
   pull_request:
   push:
     branches:
-      - '**'
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,6 +18,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Changed areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      node: ${{ steps.areas.outputs.node }}
+      web: ${{ steps.areas.outputs.web }}
+      extension: ${{ steps.areas.outputs.extension }}
+      helper: ${{ steps.areas.outputs.helper }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: areas
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/ci-changes.mjs
+
   static-checks:
     name: Static and repository checks
     runs-on: ubuntu-latest
@@ -32,6 +54,8 @@ jobs:
 
   node-coverage:
     name: Node coverage (85%)
+    needs: changes
+    if: needs.changes.outputs.node == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -41,15 +65,25 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps chromium
+      - id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       - name: Pre-pull sandbox image
         run: docker pull node:22-alpine
-      - name: Install Podman
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq podman
+      - name: Install Podman when the runner lacks it
+        run: command -v podman || (sudo apt-get update -qq && sudo apt-get install -y -qq podman)
       - run: npm run test:coverage:node
 
   web-coverage:
     name: Web coverage (85%)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -63,6 +97,8 @@ jobs:
 
   extension:
     name: Extension coverage (85%) and package
+    needs: changes
+    if: needs.changes.outputs.extension == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -84,6 +120,8 @@ jobs:
 
   browser-parity:
     name: Build and browser parity
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -93,12 +131,22 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps chromium
+      - id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       - run: npm run build
       - run: npm run test:ui-parity:only
 
   portability:
     name: Portability (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.node == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -112,11 +160,23 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install chromium
+      # Each OS keeps browsers in a different default folder; only one exists per runner.
+      - id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~/AppData/Local/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
       - run: npm run test:portability
 
   desktop-helper:
     name: Desktop helper (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.helper == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -131,8 +191,12 @@ jobs:
       - name: Install Linux accessibility build prerequisites
         if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libwayland-dev libxkbcommon-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: helper
       - run: cargo build --locked --release
-      - run: cargo test --locked
+      # Same profile as the build above, so the tests reuse its compiled crates.
+      - run: cargo test --locked --release
       - id: package
         name: Stage native helper artifact
         shell: bash
@@ -153,3 +217,29 @@ jobs:
           name: desktop-helper-${{ steps.package.outputs.slug }}
           path: helper/artifact/${{ steps.package.outputs.slug }}/
           if-no-files-found: error
+
+  # One stable check for branch protection. Jobs skipped because their area did
+  # not change pass; a failed or cancelled job fails this one.
+  gate:
+    name: Quality gate result
+    if: always()
+    needs:
+      - changes
+      - static-checks
+      - node-coverage
+      - web-coverage
+      - extension
+      - browser-parity
+      - portability
+      - desktop-helper
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail when any job failed or was cancelled
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            if [[ "$result" == failure || "$result" == cancelled ]]; then exit 1; fi
+          done

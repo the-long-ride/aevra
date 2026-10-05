@@ -1,6 +1,6 @@
 # Package and Test Runner Boundaries
 
-**Audience:** maintainers and AI agents · **Scope:** npm runtime files, Node test-runner temp storage, and release CI · **Verified against:** `1.1.3`
+**Audience:** maintainers and AI agents · **Scope:** npm runtime files, Node test-runner temp storage, and release CI · **Verified against:** `1.1.4`
 
 ## Published npm runtime
 
@@ -34,7 +34,19 @@ cleanup, and a later run does not sweep another invocation's directory.
 
 ## Release CI
 
-Quality gate runs for every branch push and pull request. A release waits up to
+Quality gate runs for pull requests, pushes to `main`, and manual dispatch.
+On a pull request a `changes` job (`scripts/ci-changes.mjs`) diffs against the
+base commit and maps files to areas: `node`, `web`, `extension`, `helper`.
+Static checks always run; each other job runs only when its area changed.
+Docs-only changes run static checks alone, `docs/user-manual` counts as `node`
+because core tests and the package read it, and workflow, dependency, build
+config or unknown paths run every job. Pushes to `main` and manual runs always
+run every job. A final `Quality gate result` job fails when any job failed or
+was cancelled; it is the one check branch protection should require, because
+a skipped matrix job never reports its per-OS check names.
+
+Tag releases only on commits pushed to `main`: other branch pushes no longer
+start a run, and the release accepts push runs only. A release waits up to
 120 minutes for a completed successful push-triggered run on the exact commit
 being released, then uses that run's artifacts. Missing and in-progress runs
 remain pending during the wait; a completed failure stops the release. Review

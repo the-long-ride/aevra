@@ -36,7 +36,9 @@ test('full repository gate runs each expensive validation path once', () => {
 
 test('quality gate parallelizes validation and runs portability across Windows macOS and Linux', () => {
   assert.match(workflow, /pull_request:/);
-  assert.match(workflow, /push:\s*\n\s*branches:\s*\n\s*-\s*['"]\*\*['"]/);
+  // Branch pushes are covered by their pull request; main always runs in full.
+  assert.match(workflow, /push:\s*\n\s*branches:\s*\n\s*-\s*main\s*\n/);
+  assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /ubuntu-latest/);
   assert.match(workflow, /windows-latest/);
   assert.match(workflow, /macos-latest/);
@@ -70,11 +72,53 @@ test('quality gate parallelizes validation and runs portability across Windows m
   assert.doesNotMatch(workflow, /ci-skip|Exclude unchanged|mv packages\/executor\/test/);
 });
 
+test('pull requests run only the jobs their changed areas need', () => {
+  assert.match(workflow, /  changes:[\s\S]*fetch-depth: 0[\s\S]*node scripts\/ci-changes\.mjs/);
+  assert.match(workflow, /BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
+  const start = (name) => workflow.search(new RegExp(`^  ${name}:\\r?$`, 'm'));
+  const job = (name, next) => workflow.slice(start(name), start(next));
+  assert.doesNotMatch(job('static-checks', 'node-coverage'), /if:/);
+  for (const [name, next, area] of [
+    ['node-coverage', 'web-coverage', 'node'],
+    ['web-coverage', 'extension', 'web'],
+    ['extension', 'browser-parity', 'extension'],
+    ['browser-parity', 'portability', 'web'],
+    ['portability', 'desktop-helper', 'node'],
+    ['desktop-helper', 'gate', 'helper'],
+  ]) {
+    assert.match(
+      job(name, next),
+      new RegExp(`if: needs\\.changes\\.outputs\\.${area} == 'true'`),
+      name,
+    );
+  }
+});
+
+test('one always-running result job fails on any failed or cancelled job', () => {
+  const gate = workflow.slice(workflow.indexOf('  gate:'));
+  assert.match(gate, /if: always\(\)/);
+  for (const name of [
+    'changes',
+    'static-checks',
+    'node-coverage',
+    'web-coverage',
+    'extension',
+    'browser-parity',
+    'portability',
+    'desktop-helper',
+  ]) {
+    assert.match(gate, new RegExp(`- ${name}\\r?\\n`), name);
+  }
+  assert.match(gate, /join\(needs\.\*\.result, ' '\)/);
+  assert.match(gate, /failure \|\| "\$result" == cancelled/);
+});
+
 test('quality gate builds native helpers on all supported desktop operating systems', () => {
-  const helper = workflow.slice(workflow.indexOf('  desktop-helper:'));
+  const helper = workflow.slice(workflow.indexOf('  desktop-helper:'), workflow.indexOf('  gate:'));
   assert.match(helper, /os: \[windows-latest, macos-latest, ubuntu-latest\]/);
   assert.match(helper, /cargo build --locked --release/);
-  assert.match(helper, /cargo test --locked/);
+  assert.match(helper, /cargo test --locked --release/);
+  assert.match(helper, /Swatinem\/rust-cache@v2/);
   assert.match(helper, /desktop-helper-\$\{\{ steps\.package\.outputs\.slug \}\}/);
   assert.match(helper, /libwayland-dev/);
   assert.match(helper, /libxkbcommon-dev/);

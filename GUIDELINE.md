@@ -2,7 +2,7 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current source version is **1.1.3**. It includes command understanding,
+The current source version is **1.1.4**. It includes command understanding,
 workspace containment, typed command rules, efficient browser/control plans,
 cross-platform shared-semantic desktop control, MCP upstream servers, and
 workspace manifests. Version 1.1.2 fixed missing compiled modules in npm
@@ -10,7 +10,8 @@ installs, adds a packed-package CLI check to the release gates, and gives Node
 test runners a private temporary directory that they clean after each run.
 Version 1.1.3 also adds host-scoped browser and desktop grants, independent
 browser-profile pairing, reliable canvas vision capture, and native coordinate
-click and drag. The feature-specific manuals and canonical specs linked below are the source of
+click and drag. Version 1.1.4 fixes desktop-helper discovery when
+`AEVRA_DESKTOP_HELPER_PATH` names a missing file. The feature-specific manuals and canonical specs linked below are the source of
 truth for detailed contracts and security limitations.
 
 ---
@@ -138,7 +139,9 @@ drops both transports immediately. Full procedure: [Browser control](docs/user-m
 
 Official packages include a native helper for Windows, macOS, and Linux. Source
 development can build it with `cargo build --release --manifest-path helper/Cargo.toml`;
-`AEVRA_DESKTOP_HELPER_PATH` is an explicit override. Grant
+`AEVRA_DESKTOP_HELPER_PATH` is an explicit override when it names an existing
+file; a blank value is ignored, and a missing file logs a warning and falls back
+to the packaged or Cargo-built helper. Grant
 `desktop.control` to the exact AI connection and run inside an interactive user session with the platform
 accessibility provider available.
 
@@ -150,7 +153,7 @@ synthesizes host pointer/keyboard input. Use background `desktop_describe` plus
 legacy foreground input and pixel capture; macOS/Linux portable mode reports
 those capabilities unavailable.
 
-Strict `isolated` mode is not a label for the ordinary worker: v1.1.3 refuses
+Strict `isolated` mode is not a label for the ordinary worker: v1.1.4 refuses
 it until a separately provisioned runner has passed containment qualification.
 Read [Desktop control](docs/user-manual/19-desktop-control.md) before enabling it.
 
@@ -290,19 +293,19 @@ The state folder stores:
 
 ## 8. Troubleshooting Common Issues
 
-| Issue / Error Code              | Cause                                                          | Solution                                                                                                                                |
-| ------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `401 unauthorized` on `/mcp`    | Connection missing valid OAuth or Bearer token                 | Authorize via OAuth dialog or pass valid `Authorization: Bearer <token>` connector header.                                              |
-| `ADMIN_CREDENTIALS_REQUIRED`    | `AEVRA_USERNAME` or `AEVRA_PASSWORD` not set at startup        | Export both environment variables before launching `aevra start`.                                                                       |
-| `SESSION_WORKSPACE_REQUIRED`    | Client connected but has not selected an admitted workspace    | Call `workspace_select` with a registered workspace ID or name.                                                                         |
-| `CAPABILITY_REQUIRED`           | Current capability profile or lease denies the operation       | Upgrade workspace profile in Admin UI or approve step-up permission in Requests.                                                        |
-| `APPROVAL_PENDING`              | High-risk or sensitive operation requires local confirmation   | Open `aevra ui`, click Allow on the request ticket, then call `approval_wait`.                                                          |
-| `APPROVAL_CONTEXT_CHANGED`      | State changed while approval was pending                       | Re-issue the tool call against the current repository / workspace state.                                                                |
-| `WORKSPACE_ESCAPE`              | Path attempts traversal outside registered capability root     | Ensure files and links resolve inside workspace boundaries or configure an external mount.                                              |
-| `EXECUTOR_UNAVAILABLE`          | Docker/Podman container sandbox backend unavailable            | Start Docker/Podman or explicitly configure host execution permission in workspace settings.                                            |
-| `MERGE_CONFLICT`                | Concurrent conflicting writes on overlapping lines             | Aevra wrote nothing; re-read latest content via `file_read` and apply resolved patch.                                                   |
-| `SAFE_MODE`                     | Database integrity check failed on startup                     | Admin UI remains open in read-only diagnostic mode to export data and restore database backups.                                         |
-| `BROWSER_ORIGIN_BLOCKED`        | Browser reached an Aevra or otherwise blocked origin           | Use an allowed origin and review **Settings → Browser control**; approvals cannot override structural refusals.                         |
-| `DESKTOP_HELPER_NOT_INSTALLED`  | Native helper binary is missing for this platform/architecture | Reinstall the official package, build `helper/`, or set `AEVRA_DESKTOP_HELPER_PATH`.                                                    |
-| `CONTROL_ISOLATION_UNAVAILABLE` | A strict isolated plan has no verified isolated runner         | Use `sharedSemantic` only when that mode is acceptable, or provision/qualify a separate runner; Aevra will not downgrade automatically. |
-| `UPSTREAM_CATALOG_CHANGED`      | A downstream MCP server changed its advertised catalog         | Review the catalog diff in **Settings → MCP servers** and acknowledge it before calls resume.                                           |
+| Issue / Error Code              | Cause                                                          | Solution                                                                                                                                         |
+| ------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `401 unauthorized` on `/mcp`    | Connection missing valid OAuth or Bearer token                 | Authorize via OAuth dialog or pass valid `Authorization: Bearer <token>` connector header.                                                       |
+| `ADMIN_CREDENTIALS_REQUIRED`    | `AEVRA_USERNAME` or `AEVRA_PASSWORD` not set at startup        | Export both environment variables before launching `aevra start`.                                                                                |
+| `SESSION_WORKSPACE_REQUIRED`    | Client connected but has not selected an admitted workspace    | Call `workspace_select` with a registered workspace ID or name.                                                                                  |
+| `CAPABILITY_REQUIRED`           | Current capability profile or lease denies the operation       | Upgrade workspace profile in Admin UI or approve step-up permission in Requests.                                                                 |
+| `APPROVAL_PENDING`              | High-risk or sensitive operation requires local confirmation   | Open `aevra ui`, click Allow on the request ticket, then call `approval_wait`.                                                                   |
+| `APPROVAL_CONTEXT_CHANGED`      | State changed while approval was pending                       | Re-issue the tool call against the current repository / workspace state.                                                                         |
+| `WORKSPACE_ESCAPE`              | Path attempts traversal outside registered capability root     | Ensure files and links resolve inside workspace boundaries or configure an external mount.                                                       |
+| `EXECUTOR_UNAVAILABLE`          | Docker/Podman container sandbox backend unavailable            | Start Docker/Podman or explicitly configure host execution permission in workspace settings.                                                     |
+| `MERGE_CONFLICT`                | Concurrent conflicting writes on overlapping lines             | Aevra wrote nothing; re-read latest content via `file_read` and apply resolved patch.                                                            |
+| `SAFE_MODE`                     | Database integrity check failed on startup                     | Admin UI remains open in read-only diagnostic mode to export data and restore database backups.                                                  |
+| `BROWSER_ORIGIN_BLOCKED`        | Browser reached an Aevra or otherwise blocked origin           | Use an allowed origin and review **Settings → Browser control**; approvals cannot override structural refusals.                                  |
+| `DESKTOP_HELPER_NOT_INSTALLED`  | Native helper binary is missing for this platform/architecture | Reinstall the official package, build `helper/`, or point `AEVRA_DESKTOP_HELPER_PATH` at an existing file; the message lists every path checked. |
+| `CONTROL_ISOLATION_UNAVAILABLE` | A strict isolated plan has no verified isolated runner         | Use `sharedSemantic` only when that mode is acceptable, or provision/qualify a separate runner; Aevra will not downgrade automatically.          |
+| `UPSTREAM_CATALOG_CHANGED`      | A downstream MCP server changed its advertised catalog         | Review the catalog diff in **Settings → MCP servers** and acknowledge it before calls resume.                                                    |

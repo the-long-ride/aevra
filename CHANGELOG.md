@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.1.4] - 2026-10-06
+
+### Fixed - Desktop Helper Discovery
+
+- `AEVRA_DESKTOP_HELPER_PATH` pointing at a missing file no longer hides the
+  packaged helper. Aevra logs a warning and falls back to
+  `dist/helper/<platform>-<arch>/` and local Cargo builds instead of failing
+  with `DESKTOP_HELPER_NOT_INSTALLED`.
+- An empty or whitespace-only `AEVRA_DESKTOP_HELPER_PATH` is treated as unset.
+- `DESKTOP_HELPER_NOT_INSTALLED` now lists every path checked and names a stale
+  override instead of telling you to set the variable that is already set. The
+  same data is returned as `checkedPaths` and `missingOverride` error details.
+
+### Fixed - Keep Awake
+
+- The default keep-awake mode is now `always`, so a running Aevra blocks sleep
+  without any setup. Saved settings are kept.
+- `always` also keeps the display on. On Windows Modern Standby (S0 low power
+  idle) laptops, turning the display off entered standby and dropped the network
+  even while Aevra held a system-required request. The other modes still leave
+  the display timeout alone.
+- The keep-awake helper now exits with Aevra. Before, a crashed Aevra left the
+  PowerShell, `caffeinate` or `systemd-inhibit` helper running and the machine
+  awake.
+- Aevra re-checks the helper on every 5-second poll and restarts it if it died.
+  Windows reasserts the request every 5 seconds instead of 30, and macOS now
+  also blocks system sleep on AC power (`caffeinate -i -s`).
+
+### Changed - Quality Gate CI
+
+- Pull requests run only the jobs their changed files need. Docs-only changes
+  run static checks alone; web, extension, native helper and Node changes each
+  run their own jobs. Workflow, dependency and unknown paths still run all.
+- Branch pushes no longer start a second run next to the pull request. Pushes to
+  `main` and manual dispatch still run every job, so release artifacts are
+  unchanged. Tag releases on `main` commits.
+- New `Quality gate result` job: require this single check in branch protection.
+- Playwright browsers and Cargo builds are cached, Podman is installed only when
+  missing, and helper tests reuse the release build.
+
 ## [1.1.3] - 2026-09-27
 
 ### Changed - Host Browser and Desktop Access

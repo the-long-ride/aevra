@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import type { KeepAwakeMode, KeepAwakeStatus } from '@aevra/admin-contracts';
 import { Dropdown } from '../../components/Dropdown';
 
@@ -78,7 +78,9 @@ export function KeepAwakeSettings({
         </button>
       </form>
       <p className="section-note compact-settings-note">
-        Prevents automatic system sleep only; screen lock and display timeout remain unchanged.
+        "While Aevra is running" (default) also keeps the display on, because Modern Standby laptops
+        go offline once the display turns off. Screen lock still works; closing the lid or choosing
+        Sleep still sleeps.
       </p>
       {error ? (
         <p role="alert" className="inline-result warning-text">

@@ -1,6 +1,6 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.1.3`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.1.4`
 
 ## Ports and listeners (fixed hosts)
 
@@ -13,27 +13,27 @@
 
 ## Environment variables
 
-| Variable                                                                                      | Default                       | Meaning                                                                         |
-| --------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------- |
-| `AEVRA_USERNAME`                                                                              | required                      | Admin username                                                                  |
-| `AEVRA_PASSWORD`                                                                              | required                      | Admin password                                                                  |
-| `AEVRA_STATE_DIR`                                                                             | platform state dir            | State directory override                                                        |
-| `AEVRA_PUBLIC_PORT`                                                                           | `47830`                       | Public HTTPS/HTTP gateway port                                                  |
-| `AEVRA_ADMIN_PORT`                                                                            | `47831`                       | Admin listener port                                                             |
-| `AEVRA_MCP_PORT`                                                                              | `47832`                       | MCP listener port                                                               |
-| `AEVRA_TLS_CERT`                                                                              | managed localhost certificate | Advanced certificate PEM override; requires `AEVRA_TLS_KEY`                     |
-| `AEVRA_TLS_KEY`                                                                               | managed localhost key         | Advanced private-key PEM override; requires `AEVRA_TLS_CERT`                    |
-| `AEVRA_TLS_CA`                                                                                | system/managed trust          | Optional CA PEM used by local CLI HTTPS verification                            |
-| `AEVRA_CF_ISSUER`                                                                             | saved Cloudflare issuer       | Cloudflare Access JWT issuer override                                           |
-| `AEVRA_CF_AUDIENCE`                                                                           | saved Cloudflare audience     | Cloudflare Access audience override                                             |
-| `AEVRA_OAUTH_ACCESS_TOKEN_TTL_MS`                                                             | 1 hour                        | OAuth access-token lifetime                                                     |
-| `AEVRA_OAUTH_REFRESH_TOKEN_TTL_MS`                                                            | 30 days                       | Absolute refresh-family lifetime; must exceed access-token TTL                  |
-| `AEVRA_CONNECTION_RECONNECT_GRACE_MS`                                                         | 15 minutes                    | Grace after OAuth transport detach; `0` disables grace                          |
-| `AEVRA_ADMIN_PUBLIC_URL`                                                                      | unset                         | Bootstrap/canonical remote Admin HTTPS URL when no saved Admin URL overrides it |
-| `AEVRA_BROWSER_PORT`                                                                          | `47833`                       | Loopback WebSocket port the paired browser extension connects to                |
-| `AEVRA_DESKTOP_HELPER_PATH`                                                                   | packaged helper               | Explicit native desktop-helper binary override; authoritative when set          |
-| `AEVRA_TRUSTED_ADMIN_ORIGINS`                                                                 | empty                         | Comma-separated additional exact HTTPS Admin origins; additive to saved trust   |
-| `AEVRA_WORKER_ENDPOINT`, `AEVRA_WORKER_SECRET`, `AEVRA_DAEMON_INSTANCE_ID`, `AEVRA_PROCESS_*` | internal                      | Core/Worker and detached-process handshake; never user-set                      |
+| Variable                                                                                      | Default                       | Meaning                                                                                                                                      |
+| --------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AEVRA_USERNAME`                                                                              | required                      | Admin username                                                                                                                               |
+| `AEVRA_PASSWORD`                                                                              | required                      | Admin password                                                                                                                               |
+| `AEVRA_STATE_DIR`                                                                             | platform state dir            | State directory override                                                                                                                     |
+| `AEVRA_PUBLIC_PORT`                                                                           | `47830`                       | Public HTTPS/HTTP gateway port                                                                                                               |
+| `AEVRA_ADMIN_PORT`                                                                            | `47831`                       | Admin listener port                                                                                                                          |
+| `AEVRA_MCP_PORT`                                                                              | `47832`                       | MCP listener port                                                                                                                            |
+| `AEVRA_TLS_CERT`                                                                              | managed localhost certificate | Advanced certificate PEM override; requires `AEVRA_TLS_KEY`                                                                                  |
+| `AEVRA_TLS_KEY`                                                                               | managed localhost key         | Advanced private-key PEM override; requires `AEVRA_TLS_CERT`                                                                                 |
+| `AEVRA_TLS_CA`                                                                                | system/managed trust          | Optional CA PEM used by local CLI HTTPS verification                                                                                         |
+| `AEVRA_CF_ISSUER`                                                                             | saved Cloudflare issuer       | Cloudflare Access JWT issuer override                                                                                                        |
+| `AEVRA_CF_AUDIENCE`                                                                           | saved Cloudflare audience     | Cloudflare Access audience override                                                                                                          |
+| `AEVRA_OAUTH_ACCESS_TOKEN_TTL_MS`                                                             | 1 hour                        | OAuth access-token lifetime                                                                                                                  |
+| `AEVRA_OAUTH_REFRESH_TOKEN_TTL_MS`                                                            | 30 days                       | Absolute refresh-family lifetime; must exceed access-token TTL                                                                               |
+| `AEVRA_CONNECTION_RECONNECT_GRACE_MS`                                                         | 15 minutes                    | Grace after OAuth transport detach; `0` disables grace                                                                                       |
+| `AEVRA_ADMIN_PUBLIC_URL`                                                                      | unset                         | Bootstrap/canonical remote Admin HTTPS URL when no saved Admin URL overrides it                                                              |
+| `AEVRA_BROWSER_PORT`                                                                          | `47833`                       | Loopback WebSocket port the paired browser extension connects to                                                                             |
+| `AEVRA_DESKTOP_HELPER_PATH`                                                                   | packaged helper               | Native desktop-helper binary override when the file exists; blank is unset, a missing file warns and falls back to the packaged/Cargo helper |
+| `AEVRA_TRUSTED_ADMIN_ORIGINS`                                                                 | empty                         | Comma-separated additional exact HTTPS Admin origins; additive to saved trust                                                                |
+| `AEVRA_WORKER_ENDPOINT`, `AEVRA_WORKER_SECRET`, `AEVRA_DAEMON_INSTANCE_ID`, `AEVRA_PROCESS_*` | internal                      | Core/Worker and detached-process handshake; never user-set                                                                                   |
 
 Remote Admin origins are normalized to exact HTTPS origins. Wildcards and embedded credentials are rejected. `Forwarded` / `X-Forwarded-*` headers never establish Admin trust. The MCP `publicUrl` is not automatically trusted as an Admin origin.
 
@@ -42,7 +42,7 @@ Remote Admin origins are normalized to exact HTTPS origins. Wildcards and embedd
 - `exposure.config`: provider (`local|direct|cloudflare|ngrok|external`), optional `localProtocol` (`https|http`, default `https`), canonical MCP/OAuth `publicUrl`, optional independent `adminPublicUrl`, additional `trustedAdminOrigins`, and provider-specific fields.
 - Managed ngrok supports `domainMode: automatic|stable`; stable mode requires the configured public URL and refuses a discovered-domain mismatch instead of silently falling back.
 - `execution.settings`: sandbox backend (`auto|docker|podman|native`), cache policy, workspace drain timeout (default 60,000 ms), and parallel search limit (default 8, clamped 1..32).
-- `power.keepAwake`: `off|remote-connections|managed-processes|always`; default `remote-connections`.
+- `power.keepAwake`: `off|remote-connections|managed-processes|always`; default `always` (also holds the display on).
 - Transport validation checks runtime endpoints against encryption, loopback constraints, and provider requirements, classifying state as `secure`, `local-http`, `action-required`, or `invalid`.
 - `policy.desktop`: mode (`allow-all|allowlist|denylist`), allowed/denied `applications` list, `unattributedInput` (`allow|deny`), and desktop path-exposure settings. The authenticated host stores the shared custom app catalog and exact-path grants in SQLite; access requests are temporary, owner-bound SQLite records. The browser-local `aevra.custom_desktop_apps` key is retained only until each entry is imported through Settings.
 - `policy.yolo`: mode (`workspace|unrestricted`, default `workspace`), normalized via `normalizeYoloMode` across Admin API and runtime; managed via console radio controls and immediate persistence.
