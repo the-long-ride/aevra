@@ -6,8 +6,18 @@ interface InhibitorChild {
   once(event: 'error' | 'exit', listener: (...args: any[]) => void): this;
 }
 
+export interface AcquireOptions {
+  /**
+   * Also keep the display on. On Windows Modern Standby (S0 low power idle)
+   * machines, turning the display off enters standby and drops the network even
+   * while a system-required request is held, so this is the only way to stay
+   * reachable there.
+   */
+  keepDisplayOn?: boolean;
+}
+
 export interface SleepInhibitor {
-  acquire(): Promise<void>;
+  acquire(options?: AcquireOptions): Promise<void>;
   release(): Promise<void>;
   supported(): boolean;
   message(): string | undefined;
@@ -19,6 +29,8 @@ export interface SleepInhibitorDependencies {
     args: string[],
     options: { shell: false; windowsHide: true; stdio: 'ignore' },
   ): InhibitorChild;
+  /** PID the helper watches so it exits with Aevra instead of outliving it. */
+  parentPid?: number;
 }
 
 const defaultDependencies: SleepInhibitorDependencies = {
@@ -27,7 +39,10 @@ const defaultDependencies: SleepInhibitorDependencies = {
   },
 };
 
-function windowsEncodedCommand() {
+function windowsEncodedCommand(parentPid: number, keepDisplayOn: boolean) {
+  const flags = keepDisplayOn
+    ? '$ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED -bor $ES_DISPLAY_REQUIRED'
+    : '$ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED';
   const script = `$source = @'
 using System;
 using System.Runtime.InteropServices;
@@ -39,11 +54,14 @@ public static class AevraPower {
 Add-Type -TypeDefinition $source
 $ES_CONTINUOUS = [uint32]2147483648
 $ES_SYSTEM_REQUIRED = [uint32]0x00000001
+$ES_DISPLAY_REQUIRED = [uint32]0x00000002
+$parentPid = ${parentPid}
 try {
   while ($true) {
-    $state = [AevraPower]::SetThreadExecutionState($ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED)
+    if (-not (Get-Process -Id $parentPid -ErrorAction SilentlyContinue)) { break }
+    $state = [AevraPower]::SetThreadExecutionState(${flags})
     if ($state -eq 0) { throw 'SetThreadExecutionState failed' }
-    Start-Sleep -Seconds 30
+    Start-Sleep -Seconds 5
   }
 } finally {
   [void][AevraPower]::SetThreadExecutionState($ES_CONTINUOUS)
@@ -51,39 +69,70 @@ try {
   return Buffer.from(script, 'utf16le').toString('base64');
 }
 
-function platformCommand(platform: NodeJS.Platform) {
+function platformCommand(platform: NodeJS.Platform, parentPid: number, keepDisplayOn: boolean) {
   if (platform === 'win32') {
     return {
       executable: 'powershell.exe',
-      args: ['-NoProfile', '-NonInteractive', '-EncodedCommand', windowsEncodedCommand()],
+      args: [
+        '-NoProfile',
+        '-NonInteractive',
+        '-EncodedCommand',
+        windowsEncodedCommand(parentPid, keepDisplayOn),
+      ],
     };
   }
-  if (platform === 'darwin') return { executable: 'caffeinate', args: ['-i'] };
+  if (platform === 'darwin') {
+    // -i idle sleep, -s system sleep (on AC power), -d display; -w exits with Aevra.
+    return {
+      executable: 'caffeinate',
+      args: ['-i', '-s', ...(keepDisplayOn ? ['-d'] : []), '-w', String(parentPid)],
+    };
+  }
   if (platform === 'linux') {
+    // `tail --pid` ends when Aevra exits, which releases the logind inhibitor.
     return {
       executable: 'systemd-inhibit',
-      args: ['--what=idle:sleep', '--mode=block', '--why=Aevra keep awake', 'sleep', 'infinity'],
+      args: [
+        '--what=idle:sleep',
+        '--mode=block',
+        '--why=Aevra keep awake',
+        'tail',
+        `--pid=${parentPid}`,
+        '-f',
+        '/dev/null',
+      ],
     };
   }
   return undefined;
 }
 
+function isSupportedPlatform(platform: NodeJS.Platform) {
+  return platform === 'win32' || platform === 'darwin' || platform === 'linux';
+}
+
 class ProcessSleepInhibitor implements SleepInhibitor {
   private child?: InhibitorChild;
+  private childKeepsDisplayOn = false;
   private supportedValue: boolean;
   private messageValue?: string;
+  private readonly parentPid: number;
 
   constructor(
     private readonly platform: NodeJS.Platform,
     private readonly dependencies: SleepInhibitorDependencies,
   ) {
-    this.supportedValue = platformCommand(platform) !== undefined;
+    this.parentPid = dependencies.parentPid ?? process.pid;
+    this.supportedValue = isSupportedPlatform(platform);
     if (!this.supportedValue) this.messageValue = `Keep awake is not supported on ${platform}`;
   }
 
-  async acquire(): Promise<void> {
-    if (this.child && !this.child.killed) return;
-    const command = platformCommand(this.platform);
+  async acquire(options: AcquireOptions = {}): Promise<void> {
+    const keepDisplayOn = options.keepDisplayOn === true;
+    if (this.child && !this.child.killed) {
+      if (this.childKeepsDisplayOn === keepDisplayOn) return;
+      await this.release();
+    }
+    const command = platformCommand(this.platform, this.parentPid, keepDisplayOn);
     if (!command) {
       this.supportedValue = false;
       this.messageValue = `Keep awake is not supported on ${this.platform}`;
@@ -97,6 +146,7 @@ class ProcessSleepInhibitor implements SleepInhibitor {
         stdio: 'ignore',
       });
       this.child = child;
+      this.childKeepsDisplayOn = keepDisplayOn;
       this.supportedValue = true;
       this.messageValue = undefined;
       child.once('error', (error: unknown) => {

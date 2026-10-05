@@ -26,6 +26,7 @@ function inhibitorDouble() {
   let acquired = false;
   let acquireCalls = 0;
   let releaseCalls = 0;
+  let lastOptions: { keepDisplayOn?: boolean } | undefined;
   return {
     get acquired() {
       return acquired;
@@ -36,13 +37,17 @@ function inhibitorDouble() {
     get releaseCalls() {
       return releaseCalls;
     },
+    get lastOptions() {
+      return lastOptions;
+    },
     setFailure(value: string) {
       supported = false;
       message = value;
       acquired = false;
     },
-    async acquire() {
+    async acquire(options?: { keepDisplayOn?: boolean }) {
       acquireCalls += 1;
+      lastOptions = options;
       if (supported) acquired = true;
     },
     async release() {
@@ -58,8 +63,53 @@ function inhibitorDouble() {
   };
 }
 
-test('defaults to remote connections and inhibits while a remote connection is connected or in grace', async () => {
+test('defaults to always so a running Aevra blocks sleep and holds the display on', async () => {
   const settings = settingsDouble();
+  const inhibitor = inhibitorDouble();
+  const service = new KeepAwakeService(
+    settings as any,
+    inhibitor,
+    { remoteConnectionCount: () => 0, managedProcessCount: () => 0 },
+    { platform: 'win32' },
+  );
+
+  await service.refresh();
+
+  assert.equal(service.status().mode, 'always');
+  assert.equal(service.status().active, true);
+  assert.equal(service.status().reason, 'Aevra is running');
+  assert.deepEqual(inhibitor.lastOptions, { keepDisplayOn: true });
+});
+
+test('an unknown stored mode falls back to always', async () => {
+  const service = new KeepAwakeService(
+    settingsDouble({ mode: 'sometimes' }) as any,
+    inhibitorDouble(),
+    { remoteConnectionCount: () => 0, managedProcessCount: () => 0 },
+    { platform: 'linux' },
+  );
+
+  assert.equal((await service.refresh()).mode, 'always');
+});
+
+test('every poll re-acquires so a helper that died between polls is restarted', async () => {
+  const inhibitor = inhibitorDouble();
+  const service = new KeepAwakeService(
+    settingsDouble({ mode: 'always' }) as any,
+    inhibitor,
+    { remoteConnectionCount: () => 0, managedProcessCount: () => 0 },
+    { platform: 'win32' },
+  );
+
+  await service.refresh();
+  await service.refresh();
+  await service.refresh();
+
+  assert.equal(inhibitor.acquireCalls, 3);
+});
+
+test('remote-connections mode inhibits while a remote connection is connected or in grace', async () => {
+  const settings = settingsDouble({ mode: 'remote-connections' });
   const inhibitor = inhibitorDouble();
   let remoteConnections = 0;
   const service = new KeepAwakeService(
@@ -88,6 +138,7 @@ test('defaults to remote connections and inhibits while a remote connection is c
   assert.equal(inhibitor.acquired, true);
   assert.equal(service.status().active, true);
   assert.equal(service.status().reason, '2 remote connections');
+  assert.deepEqual(inhibitor.lastOptions, { keepDisplayOn: false });
 });
 
 test('configure validates and persists modes while refreshing immediately', async () => {
@@ -159,7 +210,7 @@ test('start evaluates immediately and close clears polling and releases inhibiti
 });
 
 test('status reflects an asynchronous inhibitor failure before the next policy poll', async () => {
-  const settings = settingsDouble();
+  const settings = settingsDouble({ mode: 'remote-connections' });
   const inhibitor = inhibitorDouble();
   const service = new KeepAwakeService(
     settings as any,

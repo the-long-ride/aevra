@@ -42,7 +42,7 @@ Remote Admin origins are normalized to exact HTTPS origins. Wildcards and embedd
 - `exposure.config`: provider (`local|direct|cloudflare|ngrok|external`), optional `localProtocol` (`https|http`, default `https`), canonical MCP/OAuth `publicUrl`, optional independent `adminPublicUrl`, additional `trustedAdminOrigins`, and provider-specific fields.
 - Managed ngrok supports `domainMode: automatic|stable`; stable mode requires the configured public URL and refuses a discovered-domain mismatch instead of silently falling back.
 - `execution.settings`: sandbox backend (`auto|docker|podman|native`), cache policy, workspace drain timeout (default 60,000 ms), and parallel search limit (default 8, clamped 1..32).
-- `power.keepAwake`: `off|remote-connections|managed-processes|always`; default `remote-connections`.
+- `power.keepAwake`: `off|remote-connections|managed-processes|always`; default `always` (also holds the display on).
 - Transport validation checks runtime endpoints against encryption, loopback constraints, and provider requirements, classifying state as `secure`, `local-http`, `action-required`, or `invalid`.
 - `policy.desktop`: mode (`allow-all|allowlist|denylist`), allowed/denied `applications` list, `unattributedInput` (`allow|deny`), and desktop path-exposure settings. The authenticated host stores the shared custom app catalog and exact-path grants in SQLite; access requests are temporary, owner-bound SQLite records. The browser-local `aevra.custom_desktop_apps` key is retained only until each entry is imported through Settings.
 - `policy.yolo`: mode (`workspace|unrestricted`, default `workspace`), normalized via `normalizeYoloMode` across Admin API and runtime; managed via console radio controls and immediate persistence.
