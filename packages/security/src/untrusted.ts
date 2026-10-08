@@ -1,4 +1,7 @@
 const CONTROL_CHARACTERS = /[^\P{Cc}\t\n\r]|\p{Cf}/gu;
+// CSI (ESC [ ... final byte), OSC (ESC ] ... BEL or ST) and other two-byte ESC sequences.
+const ANSI_SEQUENCES =
+  /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)|\u001b[ -/]*[0-~]/g;
 const BEGIN = '----- BEGIN UNTRUSTED CONTENT';
 const END = '----- END UNTRUSTED CONTENT -----';
 
@@ -21,6 +24,16 @@ export const UNTRUSTED_CONTENT_NOTICE =
  */
 export function stripControlCharacters(value: string): string {
   return String(value ?? '').replace(CONTROL_CHARACTERS, '');
+}
+
+/**
+ * Removes whole terminal escape sequences, not only the escape byte, so colour
+ * and cursor codes do not survive as visible text such as `[90m`. Run this
+ * before `stripControlCharacters`, which would otherwise delete the ESC byte
+ * and leave the rest of the sequence behind.
+ */
+export function stripAnsiSequences(value: string): string {
+  return String(value ?? '').replace(ANSI_SEQUENCES, '');
 }
 
 /**

@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { controlPlanDesktopMigrations } from './migrations/control-plan-desktop.js';
 import { gatewayFoundationMigrations } from './migrations/gateway-foundation.js';
 import { hostControlMigrations } from './migrations/host-control.js';
+import { tokenUsageMigrations } from './migrations/token-usage.js';
 import { upstreamAuthPolicyMigrations } from './migrations/upstream-auth-policy.js';
 
 export const migrations = [
@@ -9,6 +10,7 @@ export const migrations = [
   ...upstreamAuthPolicyMigrations,
   ...controlPlanDesktopMigrations,
   ...hostControlMigrations,
+  ...tokenUsageMigrations,
 ];
 export function applyMigrations(db: DatabaseSync) {
   db.exec(
