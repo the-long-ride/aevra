@@ -1,7 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type {
+  TokenUsageRange,
+  TokenUsageReport,
+} from '../../../../../packages/admin-contracts/src/token-usage.js';
 import type { SystemCapabilitySnapshot } from '../../../../../packages/protocol/src/index.js';
 import type { KeepAwakeService } from '../../power/keep-awake-service.js';
 import type { UpstreamRegistryService } from '../../mcp-upstream/upstream-registry-service.js';
+import type { ConnectorProfileStore } from '../../usage/connector-profiles.js';
 
 export interface AdminApiContext {
   workspaces?: any;
@@ -33,6 +38,8 @@ export interface AdminApiContext {
   desktopAccess?: any;
   desktopAppCatalog?: any;
   mcpUpstreams?: UpstreamRegistryService;
+  usage?: { report(range: TokenUsageRange): TokenUsageReport } | undefined;
+  connectorProfiles?: ConnectorProfileStore | undefined;
   systemCapabilities?: () => SystemCapabilitySnapshot;
   mcpDiagnostics?: () => unknown;
   safeMode?: () => boolean;

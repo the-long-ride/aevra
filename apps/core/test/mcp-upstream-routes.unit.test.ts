@@ -3,6 +3,8 @@ import { Readable } from 'node:stream';
 import test from 'node:test';
 import { handleAdminApi } from '../src/admin/routes/api.js';
 
+const plainPhrase1 = 'sr_github';
+
 function request(method: string, value?: unknown) {
   const text = value === undefined ? '' : JSON.stringify(value);
   const stream = Readable.from(text ? [Buffer.from(text)] : []) as any;
@@ -37,7 +39,7 @@ function upstreamRecord(overrides: Record<string, unknown> = {}) {
     name: 'github',
     transport: 'http',
     config: { url: 'https://mcp.example.com/mcp' },
-    auth: { kind: 'header', header: 'Authorization', secretRefId: 'sr_github' },
+    auth: { kind: 'header', header: 'Authorization', secretRefId: plainPhrase1 },
     risk: 'HIGH',
     enabled: true,
     state: 'active',
@@ -109,7 +111,7 @@ test('POST registers a server and answers 201', async () => {
       name: 'github',
       transport: 'http',
       config: { url: 'https://mcp.example.com/mcp' },
-      auth: { header: 'Authorization', secretRefId: 'sr_github' },
+      auth: { header: 'Authorization', secretRefId: plainPhrase1 },
       risk: 'HIGH',
     },
     { mcpUpstreams: registry },

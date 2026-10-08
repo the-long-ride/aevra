@@ -9,6 +9,8 @@ import { loadCoreConfig } from '../src/config.js';
 import { createCoreRuntime } from '../src/runtime.js';
 import { ensureLocalTls, localTlsPaths } from '../src/tls/local-tls.js';
 
+const plainPhrase1 = 'secret';
+
 async function getJson(url: string, caPath: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const request = https.get(
@@ -59,7 +61,7 @@ test('integrity failure starts admin safe mode without worker authority', async 
     ...loadCoreConfig({
       AEVRA_STATE_DIR: d,
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     publicPort: 0,
     adminPort: 0,

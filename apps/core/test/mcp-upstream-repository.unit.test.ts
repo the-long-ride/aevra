@@ -4,13 +4,15 @@ import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { UpstreamRepository } from '../src/mcp-upstream/upstream-repository.js';
 import type { UpstreamRecord } from '../src/mcp-upstream/upstream-records.js';
 
+const plainPhrase1 = 'sr_1';
+
 function record(overrides: Partial<UpstreamRecord> = {}): UpstreamRecord {
   return {
     id: 'mu_1',
     name: 'github',
     transport: 'http',
     config: { url: 'https://a.test/mcp' },
-    auth: { header: 'Authorization', secretRefId: 'sr_1' },
+    auth: { header: 'Authorization', secretRefId: plainPhrase1 },
     risk: 'HIGH',
     enabled: true,
     catalogFingerprint: null,

@@ -58,6 +58,8 @@ export function buildAdminApiContext(input: {
   desktopAccess: any;
   desktopAppCatalog: any;
   mcpUpstreams: any;
+  usage?: any;
+  connectorProfiles?: any;
   systemCapabilities: () => any;
   getMcpDiagnostics: () => any;
   isSafeMode: () => boolean;
@@ -93,6 +95,8 @@ export function buildAdminApiContext(input: {
     desktopAccess: input.desktopAccess,
     desktopAppCatalog: input.desktopAppCatalog,
     mcpUpstreams: input.mcpUpstreams,
+    usage: input.usage,
+    connectorProfiles: input.connectorProfiles,
     systemCapabilities: input.systemCapabilities,
     mcpDiagnostics: input.getMcpDiagnostics,
     safeMode: input.isSafeMode,

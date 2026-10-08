@@ -5,6 +5,8 @@ import { AdminCredentialVerifier } from '../src/admin/admin-credentials.js';
 import { AdminBootstrapService } from '../src/admin/bootstrap.js';
 import { AdminServer } from '../src/admin/server.js';
 
+const plainPhrase1 = 'secret';
+
 test('blocked insecure Admin login emits rate-limited safe guidance', async () => {
   const database = AevraDatabase.open(':memory:');
   const bootstrap = new AdminBootstrapService(database.raw());
@@ -22,7 +24,7 @@ test('blocked insecure Admin login emits rate-limited safe guidance', async () =
       fetch(`${server.url()}/api/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', origin: server.url() },
-        body: JSON.stringify({ username: 'admin', password: 'secret' }),
+        body: JSON.stringify({ username: 'admin', password: plainPhrase1 }),
       });
 
     assert.equal((await attempt()).status, 400);

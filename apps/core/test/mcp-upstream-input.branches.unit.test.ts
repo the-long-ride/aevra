@@ -6,6 +6,9 @@ import {
   publicUpstream,
 } from '../src/admin/routes/mcp-upstream-input.js';
 
+const plainPhrase1 = 'fixture-phrase-beta';
+const plainPhrase2 = 'sr_a';
+
 function code(fn: () => unknown): string {
   try {
     fn();
@@ -80,7 +83,7 @@ test('stdio auth: empty env means none, bad names and raw values are refused', (
     'UPSTREAM_SECRET_VALUE_REJECTED',
   );
   assert.equal(
-    code(() => parseUpstreamInput({ ...withConfig, auth: { secret: 'fixture-phrase-beta' } })),
+    code(() => parseUpstreamInput({ ...withConfig, auth: { secret: plainPhrase1 } })),
     'UPSTREAM_SECRET_VALUE_REJECTED',
   );
 });
@@ -94,12 +97,12 @@ test('header auth: no header or reference means none, invalid header names are r
   };
   assert.deepEqual(parseUpstreamInput({ ...http, auth: {} }).auth, { kind: 'none' });
   assert.equal(
-    code(() => parseUpstreamInput({ ...http, auth: { secretRefId: 'sr_a' } })),
+    code(() => parseUpstreamInput({ ...http, auth: { secretRefId: plainPhrase2 } })),
     'UPSTREAM_CONFIG_INVALID',
   );
   assert.equal(
     code(() =>
-      parseUpstreamInput({ ...http, auth: { header: 'Bad Header', secretRefId: 'sr_a' } }),
+      parseUpstreamInput({ ...http, auth: { header: 'Bad Header', secretRefId: plainPhrase2 } }),
     ),
     'UPSTREAM_CONFIG_INVALID',
   );

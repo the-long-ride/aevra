@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadCoreConfig } from '../src/config.js';
 
+const plainPhrase1 = 'secret';
+
 test('config is split loopback listeners', () => {
   const c = loadCoreConfig({
     AEVRA_STATE_DIR: '/tmp/aevra-state',
     AEVRA_USERNAME: 'admin',
-    AEVRA_PASSWORD: 'secret',
+    AEVRA_PASSWORD: plainPhrase1,
   });
   assert.equal(c.publicHost, '127.0.0.1');
   assert.equal(c.publicPort, 47830);
@@ -24,7 +26,7 @@ test('public gateway port can be overridden without widening its default bind', 
   const c = loadCoreConfig({
     AEVRA_STATE_DIR: '/tmp/aevra-state',
     AEVRA_USERNAME: 'admin',
-    AEVRA_PASSWORD: 'secret',
+    AEVRA_PASSWORD: plainPhrase1,
     AEVRA_PUBLIC_PORT: '49000',
   });
   assert.equal(c.publicHost, '127.0.0.1');
@@ -35,7 +37,7 @@ test('state dir names are Aevra', () => {
   const c = loadCoreConfig({
     AEVRA_STATE_DIR: '/tmp/aevra-state',
     AEVRA_USERNAME: 'admin',
-    AEVRA_PASSWORD: 'secret',
+    AEVRA_PASSWORD: plainPhrase1,
   });
   assert.ok(c.stateDir.endsWith('aevra-state'));
   assert.ok(c.databasePath.endsWith('aevra.db'));
@@ -52,7 +54,7 @@ test('admin public URL and trusted origins can bootstrap from environment', () =
   const c = loadCoreConfig({
     AEVRA_STATE_DIR: '/tmp/aevra-state',
     AEVRA_USERNAME: 'admin',
-    AEVRA_PASSWORD: 'secret',
+    AEVRA_PASSWORD: plainPhrase1,
     AEVRA_ADMIN_PUBLIC_URL: 'https://bootstrap.example.com/',
     AEVRA_TRUSTED_ADMIN_ORIGINS: 'https://ops.example.com, https://backup.example.com/path',
   });

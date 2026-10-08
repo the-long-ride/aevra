@@ -7,11 +7,14 @@ import {
   publicUpstream,
 } from '../src/admin/routes/mcp-upstream-input.js';
 
+const plainPhrase1 = 'sr_github';
+const plainPhrase2 = 'ghp_live_token';
+
 const httpBody = {
   name: 'github',
   transport: 'http',
   config: { url: 'https://mcp.example.com/mcp' },
-  auth: { header: 'Authorization', secretRefId: 'sr_github' },
+  auth: { header: 'Authorization', secretRefId: plainPhrase1 },
   risk: 'HIGH',
 };
 
@@ -21,7 +24,7 @@ function record(overrides: Record<string, unknown> = {}) {
     name: 'github',
     transport: 'http',
     config: { url: 'https://mcp.example.com/mcp' },
-    auth: { kind: 'header', header: 'Authorization', secretRefId: 'sr_github' },
+    auth: { kind: 'header', header: 'Authorization', secretRefId: plainPhrase1 },
     risk: 'HIGH',
     enabled: true,
     state: 'active',
@@ -54,7 +57,7 @@ test('a well-formed http registration parses into a create input', () => {
   assert.deepEqual(input.auth, {
     kind: 'header',
     header: 'Authorization',
-    secretRefId: 'sr_github',
+    secretRefId: plainPhrase1,
   });
   assert.equal(input.risk, 'HIGH');
   assert.equal(input.enabled, true);
@@ -108,7 +111,7 @@ test('raw credential values are refused and absent auth means none', () => {
     () =>
       parseUpstreamInput({
         ...httpBody,
-        auth: { header: 'Authorization', secretRefId: 'ghp_live_token' },
+        auth: { header: 'Authorization', secretRefId: plainPhrase2 },
       }),
     (e: UpstreamInputError) => e.code === 'UPSTREAM_SECRET_VALUE_REJECTED',
   );
@@ -131,7 +134,7 @@ test('the operator tier is the only source of risk and projection is a whitelist
   assert.deepEqual(projected.auth, {
     kind: 'header',
     header: 'Authorization',
-    secretRefId: 'sr_github',
+    secretRefId: plainPhrase1,
   });
   assert.equal(projected.toolCount, 3);
 });

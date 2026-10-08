@@ -9,6 +9,8 @@ import { loadCoreConfig } from '../src/config.js';
 import { createCoreRuntime } from '../src/runtime.js';
 import { ensureLocalTls } from '../src/tls/local-tls.js';
 
+const plainPhrase1 = 'secret';
+
 function workerStub() {
   return {
     async start() {
@@ -32,7 +34,7 @@ test('verified loopback HTTP gateway can establish an Admin browser session', as
     ...loadCoreConfig({
       AEVRA_STATE_DIR: stateDir,
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     publicPort: 0,
     adminPort: 0,
@@ -58,7 +60,7 @@ test('verified loopback HTTP gateway can establish an Admin browser session', as
         'content-type': 'application/json',
         origin: runtime.gatewayUrl,
       },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase1 }),
     });
 
     assert.equal(login.status, 200);

@@ -50,6 +50,7 @@ import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
 import { RuntimeExposureWiring } from './exposure/runtime-wiring.js';
 import type { KeepAwakeService } from './power/keep-awake-service.js';
 import { createRuntimeKeepAwakeService } from './power/runtime-keep-awake.js';
+import { createRuntimeUsage } from './usage/runtime-usage.js';
 export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
 export async function createCoreRuntime(
   config: CoreConfig,
@@ -61,16 +62,17 @@ export async function createCoreRuntime(
     mcp: McpIngressServer | undefined,
     exposureWiring: RuntimeExposureWiring | undefined,
     keepAwake: KeepAwakeService | undefined,
+    usageWiring: ReturnType<typeof createRuntimeUsage> | undefined,
     safeMode = false,
     started = false;
   const wm = createRuntimeWorkerManager(config, deps);
   const cleanup = async () => {
     await closeRuntimeResources(
-      [keepAwake, exposureWiring, mcp, admin],
+      [keepAwake, exposureWiring, mcp, admin, usageWiring],
       worker ? wm : undefined,
       db,
     );
-    keepAwake = exposureWiring = mcp = admin = worker = undefined;
+    keepAwake = exposureWiring = mcp = admin = usageWiring = worker = undefined;
     db = undefined;
     started = false;
   };
@@ -199,6 +201,7 @@ export async function createCoreRuntime(
           dataServices = await createRuntimeDataServices(config, db);
         const { vault, environment, databaseAdmin } = dataServices;
         const mcpUpstreams = createMcpUpstreams(db, workerGateway, dataServices.secretStore);
+        usageWiring = createRuntimeUsage(raw, settings);
         const tools = adminRuntime.createCoreToolService(
           sessions,
           workspaces,
@@ -289,6 +292,7 @@ export async function createCoreRuntime(
               getMcpDiagnostics: () => mcp?.diagnosticsSnapshot() ?? null,
               isSafeMode: () => safeMode,
               commandEvaluator: tools.evaluateCommandInput.bind(tools),
+              ...usageWiring.admin,
             }),
           },
           () =>
@@ -322,6 +326,7 @@ export async function createCoreRuntime(
             trustForwardedClientIp: () => exposureWiring?.trustForwardedClientIp() === true,
             connectionLimiter,
             invalidBearerLimiter,
+            ...usageWiring.mcp,
           },
         );
         await Promise.all([admin.start(), mcp.start()]);

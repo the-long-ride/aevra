@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sanitizeStructuredSecrets } from '../../../../packages/security/src/dlp.js';
+import { boundedClone } from './activity-bounds.js';
 
 export type McpActivityKind = 'tool' | 'rpc' | 'session';
 export type McpActivityState = 'running' | 'success' | 'error';
@@ -9,7 +10,7 @@ const MAX_ACTIVITY_DETAIL_CHARS = 12_000;
 function activityDetail(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   try {
-    const serialized = JSON.stringify(sanitizeStructuredSecrets(value), null, 2);
+    const serialized = JSON.stringify(boundedClone(sanitizeStructuredSecrets(value)), null, 2);
     if (serialized === undefined) return undefined;
     if (serialized.length <= MAX_ACTIVITY_DETAIL_CHARS) return serialized;
     return `${serialized.slice(0, MAX_ACTIVITY_DETAIL_CHARS)}\n… [truncated]`;

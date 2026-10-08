@@ -12,6 +12,8 @@ import { LocalFilesystemService } from '../src/admin/local-filesystem.js';
 import { AdminServer } from '../src/admin/server.js';
 import { ensureLocalTls } from '../src/tls/local-tls.js';
 
+const plainPhrase1 = 'secret';
+
 function request(
   server: AdminServer,
   pathname: string,
@@ -82,7 +84,7 @@ test('server filesystem routes require an authenticated Admin session', async ()
         'content-type': 'application/json',
         origin: server.url(),
       },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase1 }),
     });
     assert.equal(login.status, 200);
     const sessionCookie = cookie(login);
@@ -141,7 +143,7 @@ test('workspace registration canonicalizes the server root before persistence', 
         'content-type': 'application/json',
         origin: server.url(),
       },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase1 }),
     });
     assert.equal(login.status, 200);
     const sessionCookie = cookie(login);

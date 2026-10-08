@@ -2,9 +2,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { VerifiedRemoteIdentity } from '../auth/cloudflare.js';
 import type { AevraOAuthService } from '../auth/oauth.js';
 import { handleJsonRpc } from '../../../../packages/mcp-tools/src/register.js';
+import type { ConnectorProfile } from '../../../../packages/mcp-tools/src/tool-groups.js';
+import { responseFailed, type UsageMeter } from '../usage/usage-meter.js';
 import type { McpActivityRecorder } from './activity-recorder.js';
 import type { McpDiagnostics } from './diagnostics.js';
-import { remoteIp, sendJson } from './http-response.js';
+import { remoteIp, sendJsonBody } from './http-response.js';
 import {
   MODERN_PROTOCOL_VERSION,
   ModernProtocolError,
@@ -30,6 +32,8 @@ interface ModernRuntimeDependencies {
   activity: McpActivityRecorder;
   hooks?: McpHookEmitter;
   oauth?: AevraOAuthService;
+  usage?: UsageMeter | undefined;
+  connectorProfile?: ((actor: string) => ConnectorProfile | undefined) | undefined;
 }
 
 function runtimeHooks(deps: ModernRuntimeDependencies): McpHookEmitter | undefined {
@@ -55,15 +59,24 @@ async function emitHook(
     : payload;
 }
 
+interface ResponseDelivery {
+  req: IncomingMessage;
+  /** Receives the final serialized body once the before_response hook has run. */
+  onBody: (body: string) => void;
+}
+
 async function sendHookedResponse(
   res: ServerResponse,
   hooks: McpHookEmitter | undefined,
   context: Record<string, unknown>,
   status: number,
   payload: unknown,
+  delivery?: ResponseDelivery,
 ) {
   const effective = await emitHook(hooks, 'before_response', context, payload);
-  sendJson(res, status, effective);
+  const body = JSON.stringify(effective) ?? '';
+  delivery?.onBody(body);
+  await sendJsonBody(res, status, body, delivery?.req);
   await emitHook(hooks, 'response_finished', context, effective);
 }
 
@@ -133,25 +146,42 @@ export async function handleModernRuntimeRequest(
   if (body?.method === 'tools/call')
     deps.diagnostics.recordToolCall(body?.params?.name, session.id);
 
+  const input = body?.method === 'tools/call' ? body?.params?.arguments : body?.params;
   const activity = deps.activity.begin(
     identity.actor,
     session.id,
     body?.method,
     body?.params?.name,
-    body?.method === 'tools/call' ? body?.params?.arguments : body?.params,
+    input,
   );
+  const usage = deps.usage;
+  const token = usage?.begin(identity.actor, body?.method, body?.params?.name, input);
+  let savedTokens = 0;
   try {
     const raw = await handleJsonRpc(
       deps.runtime.service,
       session.id,
       body,
       MODERN_PROTOCOL_VERSION,
+      {
+        profile: deps.connectorProfile?.(identity.actor),
+        onSaved: (_chars, tokens) => {
+          savedTokens += tokens;
+        },
+      },
     );
     const result = decorateModernResult(raw, body?.method, deps.oauth?.issuer);
     deps.activity.finish(activity, result);
-    await sendHookedResponse(res, hooks, context, 200, result);
+    await sendHookedResponse(res, hooks, context, 200, result, {
+      req,
+      onBody: (text) => {
+        if (usage && token)
+          usage.finish(token, text, { savedTokens, failed: responseFailed(result) });
+      },
+    });
   } catch (error) {
     deps.activity.fail(activity, error);
+    if (usage && token) usage.fail(token);
     await emitHook(hooks, 'response_failed', context, {
       error: error instanceof Error ? error.message : String(error),
     });

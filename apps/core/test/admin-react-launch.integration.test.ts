@@ -7,12 +7,14 @@ import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { AdminBootstrapService } from '../src/admin/bootstrap.js';
 import { AdminServer } from '../src/admin/server.js';
 
+const plainPhrase1 = 'secret';
+
 test('legacy bootstrap routes cannot mint an authenticated browser session', async () => {
   const db = AevraDatabase.open(':memory:');
   const bootstrap = new AdminBootstrapService(db.raw());
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
     bootstrap,
-    controlSecret: 'secret',
+    controlSecret: plainPhrase1,
   });
   await server.start();
   try {

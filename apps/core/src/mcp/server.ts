@@ -2,7 +2,8 @@ import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https, { type ServerOptions as HttpsServerOptions } from 'node:https';
 import type { RemoteIdentityVerifier, VerifiedRemoteIdentity } from '../auth/cloudflare.js';
 import type { AevraOAuthService } from '../auth/oauth.js';
-import { handleJsonRpc } from '../../../../packages/mcp-tools/src/register.js';
+import type { ConnectorProfile } from '../../../../packages/mcp-tools/src/tool-groups.js';
+import type { UsageMeter } from '../usage/usage-meter.js';
 import type { McpActivityLog } from './activity-log.js';
 import { McpActivityRecorder } from './activity-recorder.js';
 import { McpDiagnostics } from './diagnostics.js';
@@ -12,6 +13,7 @@ import {
   type ConnectorAdmission,
   type ConnectorAdmissionOutcome,
 } from './identity-resolver.js';
+import { runLegacyRpc } from './legacy-dispatch.js';
 import { handleModernRuntimeRequest, type McpHookEmitter } from './modern-runtime.js';
 import { MODERN_PROTOCOL_VERSION, isModernRequest } from './modern-protocol.js';
 import { handleOAuthRoute } from './oauth-routes.js';
@@ -39,6 +41,8 @@ export interface McpIngressServerOptions {
   trustForwardedClientIp?: () => boolean;
   invalidBearerLimiter?: any;
   connectionLimiter?: any;
+  usage?: UsageMeter | undefined;
+  connectorProfile?: ((actor: string) => ConnectorProfile | undefined) | undefined;
 }
 
 const LEGACY_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] as const;
@@ -233,6 +237,8 @@ export class McpIngressServer {
         activity: this.activity,
         hooks: this.options.hooks,
         oauth: this.options.oauth,
+        usage: this.options.usage,
+        connectorProfile: this.options.connectorProfile,
       });
       return;
     }
@@ -263,7 +269,20 @@ export class McpIngressServer {
       res.end();
       return;
     }
-    await this.dispatchLegacyRpc(res, identity.actor, sessionId, body);
+    await runLegacyRpc(
+      {
+        service: this.runtime!.service,
+        diagnostics: this.diagnostics,
+        activity: this.activity,
+        usage: this.options.usage,
+        connectorProfile: this.options.connectorProfile,
+      },
+      req,
+      res,
+      identity.actor,
+      sessionId,
+      body,
+    );
   }
 
   private initializeLegacySession(
@@ -312,32 +331,6 @@ export class McpIngressServer {
     this.runtime!.sessions.disconnect(sessionId);
     res.statusCode = 204;
     res.end();
-  }
-
-  private async dispatchLegacyRpc(
-    res: ServerResponse,
-    actor: string,
-    sessionId: string,
-    body: any,
-  ) {
-    if (body?.method === 'tools/call') {
-      this.diagnostics.recordToolCall(body?.params?.name, sessionId);
-    }
-    const activity = this.activity.begin(
-      actor,
-      sessionId,
-      body?.method,
-      body?.params?.name,
-      body?.method === 'tools/call' ? body?.params?.arguments : body?.params,
-    );
-    try {
-      const result = await handleJsonRpc(this.runtime!.service, sessionId, body);
-      this.activity.finish(activity, result);
-      sendJson(res, 200, result);
-    } catch (error) {
-      this.activity.fail(activity, error);
-      throw error;
-    }
   }
 
   private sameIdentity(sessionId: string, identity: VerifiedRemoteIdentity) {

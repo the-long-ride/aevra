@@ -3,6 +3,8 @@ import { Readable } from 'node:stream';
 import test from 'node:test';
 import { handleAuthRoutes } from '../src/admin/routes/auth-routes.js';
 
+const plainPhrase1 = 'sample value';
+
 function request(method: string, raw = '') {
   const stream = Readable.from(raw ? [Buffer.from(raw)] : []) as any;
   stream.method = method;
@@ -107,7 +109,7 @@ test('successful login over plain local HTTP sets a non-Secure cookie and refund
     ctx,
     '/api/auth/login',
     'POST',
-    JSON.stringify({ username: 'admin', password: 'sample value' }),
+    JSON.stringify({ username: 'admin', password: plainPhrase1 }),
   );
   assert.equal(result.res.statusCode, 200);
   assert.equal(

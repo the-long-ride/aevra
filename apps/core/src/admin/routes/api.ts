@@ -5,6 +5,7 @@ import { handleApprovalPermissionRoutes } from './approval-permission-routes.js'
 import { handleBrowserRoutes } from './browser-routes.js';
 import { handleCommandExplainRoutes } from './command-explain-routes.js';
 import { handleConnectionRoutes } from './connection-routes.js';
+import { handleConnectorProfileRoutes } from './connector-profile-routes.js';
 import { handleDesktopRoutes } from './desktop-routes.js';
 import { sendAdminResponse } from './http.js';
 import { handleLocalFilesystemRoutes } from './local-filesystem-routes.js';
@@ -14,6 +15,7 @@ import { handlePowerRoutes } from './power-routes.js';
 import { handleSessionConnectorRoutes } from './session-connector-routes.js';
 import { handleSettingsRoutes } from './settings-routes.js';
 import type { AdminApiContext, AdminRouteHandler } from './types.js';
+import { handleUsageRoutes } from './usage-routes.js';
 import { handleWorkspaceRoutes } from './workspace-routes.js';
 import { handleYoloPolicyRoutes } from './yolo-policy-routes.js';
 
@@ -35,6 +37,8 @@ const handlers: AdminRouteHandler[] = [
   handleYoloPolicyRoutes,
   handleSettingsRoutes,
   handleAccessRoutes,
+  handleUsageRoutes,
+  handleConnectorProfileRoutes,
 ];
 
 export async function handleAdminApi(

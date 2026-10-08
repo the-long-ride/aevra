@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { McpActivityLog } from '../src/mcp/activity-log.js';
 
+const hiddenWords = 'synthetic hidden words';
+
 test('MCP activity log updates one operation through its lifecycle', () => {
   const log = new McpActivityLog(10);
   const seen: string[] = [];
@@ -47,7 +49,7 @@ test('MCP activity details are sanitized and bounded before entering the activit
     sessionId: 'ses_1',
     kind: 'tool',
     action: 'file_read',
-    input: { path: 'README.md', password: 'synthetic-secret' },
+    input: { path: 'README.md', password: hiddenWords },
   });
   const finished = log.finish(started.id, 'success', 12, undefined, {
     content: 'sensitive file contents',
@@ -55,9 +57,25 @@ test('MCP activity details are sanitized and bounded before entering the activit
   });
 
   assert.match(started.input ?? '', /README\.md/);
-  assert.equal((started.input ?? '').includes('synthetic-secret'), false);
+  assert.equal((started.input ?? '').includes(hiddenWords), false);
   assert.match(started.input ?? '', /\[REDACTED\]/);
   assert.equal((finished?.output ?? '').includes('sensitive file contents'), false);
   assert.match(finished?.output ?? '', /\[REDACTED\]/);
   assert.ok((finished?.output?.length ?? 0) < 13_000);
+});
+
+test('activity redacts copies of secrets discovered beyond clone limits', () => {
+  const fillers = Object.fromEntries(Array.from({ length: 210 }, (_, i) => [`k${i}`, i]));
+  const values = [
+    { message: 'short-password', ...fillers, password: 'short-password' },
+    { message: 'short-password', items: [...Array(50).fill(null), { password: 'short-password' }] },
+  ];
+  for (const input of values) {
+    const log = new McpActivityLog();
+    const started = log.begin({ actor: 'a', sessionId: 's', kind: 'tool', action: 'x', input });
+    const finished = log.finish(started.id, 'success', 0, undefined, input);
+    assert.ok(!started.input?.includes('short-password'));
+    assert.ok(!finished?.output?.includes('short-password'));
+    assert.match(started.input ?? '', /REDACTED/);
+  }
 });

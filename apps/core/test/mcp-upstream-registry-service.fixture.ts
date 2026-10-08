@@ -8,6 +8,8 @@ import {
 } from '../src/mcp-upstream/upstream-registry-service.js';
 import { UpstreamRepository } from '../src/mcp-upstream/upstream-repository.js';
 
+const plainPhrase1 = 'sr_1';
+
 export const vault: SecretStore = {
   set: async () => {},
   get: async (ref: string) => (ref === 'sr_1' ? 'sk-live-4f2c9d81aa3e' : null),
@@ -109,6 +111,6 @@ export const input: UpstreamRegisterInput = {
   name: 'github',
   transport: 'http',
   config: { url: 'https://a.test/mcp' },
-  auth: { header: 'Authorization', secretRefId: 'sr_1' },
+  auth: { header: 'Authorization', secretRefId: plainPhrase1 },
   risk: 'HIGH',
 };

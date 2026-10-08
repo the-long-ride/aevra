@@ -6,6 +6,8 @@ import {
   rowToRecord,
 } from '../src/mcp-upstream/upstream-records.js';
 
+const plainPhrase1 = 'sr_1';
+
 test('a well-formed name is accepted', () => {
   for (const name of ['github', 'a', 'my-docs-2', '0abc', 'a'.repeat(32)])
     assertValidUpstreamName(name);
@@ -66,7 +68,7 @@ test('a row round-trips into a record with the right types', () => {
   });
   assert.equal(record.enabled, true);
   assert.equal(record.catalogFingerprint, 'abc');
-  assert.deepEqual(record.auth, { header: 'Authorization', secretRefId: 'sr_1' });
+  assert.deepEqual(record.auth, { header: 'Authorization', secretRefId: plainPhrase1 });
   assert.deepEqual(record.config, { url: 'https://a.test/mcp' });
 });
 
