@@ -26,3 +26,4 @@ docs/research/
 .test-dist-mcp/
 .test-dist-cxb/
 .test-dist-core/
+/handoff.md

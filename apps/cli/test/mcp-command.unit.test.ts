@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runMcpCommand } from '../src/commands/mcp-command.js';
+
+const plainPhrase1 = 'sr_github';
 function response(body: unknown = {}, ok = true, status = 200) {
   return {
     ok,
@@ -47,7 +49,7 @@ test('mcp list prints summary without credentials', async () => {
           toolCount: 12,
           risk: 'HIGH',
           transport: 'http',
-          auth: { secretRefId: 'sr_github' },
+          auth: { secretRefId: plainPhrase1 },
         },
       ],
     }),
@@ -93,7 +95,7 @@ test('mcp add posts http and stdio registration bodies', async () => {
       transport: 'http',
       url: 'https://mcp.example.com/mcp',
       header: 'Authorization',
-      secretRef: 'sr_github',
+      secretRef: plainPhrase1,
       risk: 'HIGH',
       args: [],
       env: {},
@@ -104,7 +106,7 @@ test('mcp add posts http and stdio registration bodies', async () => {
     name: 'github',
     transport: 'http',
     config: { url: 'https://mcp.example.com/mcp' },
-    auth: { header: 'Authorization', secretRefId: 'sr_github' },
+    auth: { header: 'Authorization', secretRefId: plainPhrase1 },
     risk: 'HIGH',
   });
 });

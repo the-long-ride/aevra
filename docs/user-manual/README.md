@@ -21,3 +21,4 @@
 19. [Browser control](18-browser-control.md)
 20. [Desktop control](19-desktop-control.md)
 21. [MCP servers](20-mcp-upstreams.md)
+22. [Token usage and tool surface](21-token-usage-and-tool-surface.md)

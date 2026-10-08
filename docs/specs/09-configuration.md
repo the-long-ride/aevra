@@ -1,6 +1,6 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.1.4`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.2.0`
 
 ## Ports and listeners (fixed hosts)
 
@@ -48,6 +48,7 @@ Remote Admin origins are normalized to exact HTTPS origins. Wildcards and embedd
 - `policy.yolo`: mode (`workspace|unrestricted`, default `workspace`), normalized via `normalizeYoloMode` across Admin API and runtime; managed via console radio controls and immediate persistence.
 - `browser.policy`: `loopbackClass` (`block|normal|trusted`), managed via console-styled radio controls.
 - Command-family overrides, network rules, environment profiles, secret references, hooks, permissions, and workspace mappings are managed through their dedicated Admin APIs/UI.
+- `mcp.connectorProfiles`: maps client actors (`connector:<name>`, `oauth:<client>`, `client:<id>`) to `{ toolGroups?: ToolGroup[], resultFormat?: ('both'|'text'|'structured') }`. Managed via `GET /api/connector-profiles` and `PUT /api/connector-profiles/:actor`.
 - Data export & import: `GET /api/data/export` outputs portable JSON configuration; UI `Data` tab manages file-based backup preview and restore.
 
 ## CLI (`apps/cli`)
@@ -78,7 +79,7 @@ Aevra never advertises a plaintext localhost endpoint. With no TLS override it p
 
 ## Timings (defaults)
 
-Lease idle `30 min` · reconnect grace `15 min` · approval fast-wait `20 s` · ticket lifetime `5 min` (HIGH `2 min`, CRITICAL `60 s`) · OAuth access token `1 h` · OAuth refresh family `30 d` · JWKS cache `5 min` · connector `last_used_at` write throttle `1/min` · keep-awake reevaluation `5 s`.
+Lease idle `30 min` · reconnect grace `15 min` · approval fast-wait `20 s` · ticket lifetime `5 min` (HIGH `2 min`, CRITICAL `60 s`) · OAuth access token `1 h` · OAuth refresh family `30 d` · JWKS cache `5 min` · connector `last_used_at` write throttle `1/min` · keep-awake reevaluation `5 s` · token usage flush `30 s` · token hourly rollup threshold `7 d`.
 
 Admin password login uses a dedicated per-IP token bucket. Failed credential attempts consume capacity; successful verification refunds the reservation, so ordinary CLI/UI administration does not self-throttle. Exhaustion returns `429` with `Retry-After`.
 
@@ -90,6 +91,6 @@ Foreground `aevra start [--ui]` is independent from the installed user service. 
 
 **Boundaries:** what the values _do_ — see the referenced specs.
 
-**Related:** [`07-state-migration`](07-state-migration.md) · [`../user-manual/12-service`](../user-manual/12-service.md)
+**Related:** [`07-state-migration`](07-state-migration.md) · [`11-token-efficiency-and-usage`](11-token-efficiency-and-usage.md) · [`../user-manual/12-service`](../user-manual/12-service.md)
 
 **Next →** back to [`README`](README.md) · manual: [`../user-manual/README`](../user-manual/README.md)

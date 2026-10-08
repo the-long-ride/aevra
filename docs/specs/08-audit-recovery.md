@@ -1,10 +1,10 @@
 # 08 — Audit & Recovery
 
-**Audience:** engineers & AI agents · **Scope:** audit chain, change sets, safe mode, crash semantics · **Verified against:** `1.1.4`
+**Audience:** engineers & AI agents · **Scope:** audit chain, change sets, safe mode, crash semantics · **Verified against:** `1.2.0`
 
 ## Audit chain
 
-Every significant action appends a redacted event to `audit_events` with `previous_hash` and `content_hash` — a tamper-evident chain, checkpointed in `audit_chain_checkpoints`. The Web UI can **verify the chain** and export redacted JSON/JSONL. Secrets and credential-shaped strings are DLP-masked before anything is persisted or returned. Desktop input and set values (`desktop_set_value`, `desktop_type`) are redacted from audit events (preserving only value length and nonce), and screenshot captures are audited strictly by SHA-256 content hash without storing raw pixels.
+Every significant action appends a redacted event to `audit_events` with `previous_hash` and `content_hash` — a tamper-evident chain, checkpointed in `audit_chain_checkpoints`. The Web UI can **verify the chain** and export redacted JSON/JSONL. Connector profile mutations append `connector.profile.update` audit events. Secrets and credential-shaped strings are DLP-masked before anything is persisted or returned. Desktop input and set values (`desktop_set_value`, `desktop_type`) are redacted from audit events (preserving only value length and nonce), and screenshot captures are audited strictly by SHA-256 content hash without storing raw pixels.
 
 ## Change sets
 
@@ -44,6 +44,6 @@ Startup validates DB integrity (`PRAGMA integrity_check`). Failure ⇒ **SAFE MO
 
 **Boundaries:** approval policy (`02`); snapshot file formats are internal.
 
-**Related:** [`02-security-model`](02-security-model.md) · [`06-workspaces-execution`](06-workspaces-execution.md) · [`../user-manual/12-troubleshooting`](../user-manual/12-troubleshooting.md)
+**Related:** [`02-security-model`](02-security-model.md) · [`06-workspaces-execution`](06-workspaces-execution.md) · [`11-token-efficiency-and-usage`](11-token-efficiency-and-usage.md) · [`../user-manual/12-troubleshooting`](../user-manual/12-troubleshooting.md)
 
 **Next →** [`09-configuration`](09-configuration.md)

@@ -2,7 +2,7 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current source version is **1.1.4**. It includes command understanding,
+The current source version is **1.2.0**. It includes command understanding,
 workspace containment, typed command rules, efficient browser/control plans,
 cross-platform shared-semantic desktop control, MCP upstream servers, and
 workspace manifests. Version 1.1.2 fixed missing compiled modules in npm
@@ -38,8 +38,9 @@ cd aevra
 # Install dependencies for root workspace and web dashboard
 npm install
 
-# Build CLI and React web dashboard
-npm run build
+# Build CLI, React web dashboard, and the native desktop helper
+# Requires a local Rust/Cargo toolchain
+npm run build:local
 
 # Link CLI globally for current user
 npm link
@@ -153,7 +154,7 @@ synthesizes host pointer/keyboard input. Use background `desktop_describe` plus
 legacy foreground input and pixel capture; macOS/Linux portable mode reports
 those capabilities unavailable.
 
-Strict `isolated` mode is not a label for the ordinary worker: v1.1.4 refuses
+Strict `isolated` mode is not a label for the ordinary worker: v1.2.0 refuses
 it until a separately provisioned runner has passed containment qualification.
 Read [Desktop control](docs/user-manual/19-desktop-control.md) before enabling it.
 

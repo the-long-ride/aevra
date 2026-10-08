@@ -1,6 +1,6 @@
 # 02 — Security Model
 
-**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.1.4`
+**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.2.0`
 
 Security is two questions: **who gets in** (admission) and **what may they do** (authority). They never mix.
 
@@ -146,6 +146,13 @@ All administrative removals, deletions, and revocations in the Web UI are fail-s
 - **Mandatory confirmation dialogs:** No resource is deleted on single-click. Deleting a workspace, external mount, secret reference, lifecycle hook, network rule, command-family override, MCP upstream server, permission rule, remote MCP session, local admin session, custom desktop application record, or managed process requires confirming an interactive modal (`dialog.confirm`).
 - **Standardized visual affordance:** Destructive removal buttons use the compact terminal marker `[x]` with semantic danger tone and explicit accessible labels (`aria-label` and `title`), preventing ambiguous or unintended clicks.
 - **Fail-closed operations:** Cancelling any confirmation dialog aborts the request immediately without state mutations or background side-effects.
+
+## Connector profiles & tool group boundaries
+
+- **Per-actor tool surface scoping:** Settings key `mcp.connectorProfiles` allows operators to scope accessible tool groups per actor (`connector:<name>`, `oauth:<client>`, `client:<id>`). Available groups: `files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, and `upstream`. The `core` group is always enabled.
+- **Fail-closed group enforcement:** Invoking a tool belonging to a disabled group is rejected immediately at the protocol dispatcher with `TOOL_GROUP_DISABLED`, preventing unauthorized tool execution before any command or file handler is touched.
+- **Audit tracking:** Updating a connector profile via `PUT /api/connector-profiles/:actor` appends an immutable audit event (`connector.profile.update`).
+- **Result format boundaries:** Per-connector `resultFormat` (`both`, `text`, `structured`) ensures client-compatible serialization while preventing payload duplication when structured or text-only formats are chosen.
 
 ## Fail-closed rules & SecurityGuard
 

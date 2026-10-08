@@ -1,6 +1,6 @@
 # 04 — Connectors
 
-**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `1.1.4`
+**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `1.2.0`
 
 A **connector** is a named admission credential for one AI client — the thing that makes "works with any web AI" true, because the client needs no auth capability at all: the credential _is_ the URL.
 
@@ -56,12 +56,21 @@ Local operators can inspect or revoke durable OAuth connections from the Admin U
 
 Access tokens, refresh tokens, PKCE verifiers, and authorization codes are **never persisted in plaintext**: like connector tokens, only their SHA-256 hashes are stored and compared in constant time, so a durable-state dump cannot yield a usable credential. Refresh tokens rotate on use, and replaying a spent one revokes the whole family. Regression coverage: `apps/core/test/oauth-secret-persistence.unit.test.ts`.
 
+## Connector profiles and tool surface
+
+Operators can tailor the MCP tool surface and response encoding per client actor (`connector:<name>`, `oauth:<client>`, `client:<id>`):
+
+- **Tool groups:** `files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, and `upstream`. The `core` group (`aevra_status`, `control_access_status`, `workspace_*`, `operation_*`, `approval_*`) is always enabled.
+- **Enforcement:** Disabled groups are omitted from `tools/list`; invoking a tool in a disabled group fails with `TOOL_GROUP_DISABLED`.
+- **Result format:** `both` (default text plus `structuredContent`), `text` (content text only), or `structured` (`structuredContent` plus stub text).
+- **Settings & API:** Stored in setting `mcp.connectorProfiles`. Managed via `GET /api/connector-profiles` and `PUT /api/connector-profiles/:actor` (appends audit event `connector.profile.update`). Changes take effect on the client's next `tools/list`.
+
 ## Deployment rule
 
 The Cloudflare Access application must cover **`/mcp` only** when used with Cloudflare Access. Connector URLs carry their own unguessable credential and must _not_ sit behind Access (a web AI client cannot complete an Access login). Both paths share everything downstream: sessions, leases, capability profiles, approvals, audit.
 
 **Boundaries:** general admission (`02`), tunnel setup (manual `03`/`05`).
 
-**Related:** [`02-security-model`](02-security-model.md) · [`../user-manual/03-remote-access`](../user-manual/03-remote-access.md)
+**Related:** [`02-security-model`](02-security-model.md) · [`11-token-efficiency-and-usage`](11-token-efficiency-and-usage.md) · [`../user-manual/03-remote-access`](../user-manual/03-remote-access.md)
 
 **Next →** [`05-skills-instructions`](05-skills-instructions.md)

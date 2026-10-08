@@ -1,6 +1,6 @@
 # Package and Test Runner Boundaries
 
-**Audience:** maintainers and AI agents · **Scope:** npm runtime files, Node test-runner temp storage, and release CI · **Verified against:** `1.1.4`
+**Audience:** maintainers and AI agents · **Scope:** npm runtime files, Node test-runner temp storage, and release CI · **Verified against:** `1.2.0`
 
 ## Published npm runtime
 

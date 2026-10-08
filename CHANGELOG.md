@@ -1,5 +1,46 @@
 # Changelog
 
+## [1.2.0] - 2026-10-08
+
+### Added - Token Usage Accounting & Storage
+
+- **Lightweight token estimator (`heuristic-v1`):** Protocol-level estimator (`packages/protocol/src/token-estimate.ts`) calculates non-negative integer token estimates across request arguments, responses, and saved characters: ASCII `ceil(length / 4)`, CJK/Hangul/kana/full-width/emoji 1.0, and other Unicode characters 0.5.
+- **SQLite token storage (migration 25):** Added `token_usage` table (`WITHOUT ROWID`, PK `(granularity, bucket, connector, tool)`) in migration `025_token_usage`. Tracks `calls`, `errors`, `input_tokens`, `output_tokens`, `saved_tokens`, and `duration_ms` without storing command arguments, outputs, or file paths.
+- **In-memory accumulator & automated roll-up:** `UsageMeter` accumulates live request counters in memory, flushing to SQLite every 30 seconds and on runtime shutdown. Hourly records (UTC `YYYY-MM-DDTHH`) older than 7 days are automatically rolled into host-local day records (`YYYY-MM-DD`) and pruned, keeping storage under ~1.5 MB/year.
+- **Admin Usage API:** New endpoint `GET /api/usage/tokens?range=24h|7d|30d|90d|all` returns zero-filled timeseries, today totals, range totals, top 10 tools by output tokens, and per-connector breakdowns. Invalid ranges return 400 `INVALID_RANGE`.
+- **Runtime Overview analytics:** Added `TokenUsageStats` cards in the dashboard overview grid (Tokens out today, Tokens in today, Saved today with percentage, Avg tokens per call, Top tool today) seamlessly unified into a 7×2 flow layout with identical 1-column spans, 10px uppercase labels, 16px values, and subtle 11px context notes. Placed interactive SVG history chart legend and heuristic note on a single row with space-between alignment.
+
+### Added - Connector Tool Surfaces & Result Formats
+
+- **Per-connector tool groups:** Configure enabled tool surfaces per client in setting `mcp.connectorProfiles`: `files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, and `upstream`. The `core` group (`aevra_status`, `control_access_status`, `workspace_*`, `operation_*`, `approval_*`) is always on.
+- **Fail-closed group enforcement:** Calling a tool in a disabled group immediately returns error code `TOOL_GROUP_DISABLED` naming the group and Settings path.
+- **Per-connector result format:** Choose `both` (dual text + structuredContent, default), `text` (text only), or `structured` (`structuredContent` only) to eliminate duplicate payload transmission for capable clients.
+- **Admin Connector Profiles API:** `GET /api/connector-profiles` lists known actors with group token estimates; `PUT /api/connector-profiles/:actor` updates settings and appends a `connector.profile.update` audit event.
+- **Connection modal UI:** Added "Tool surface" controls to the Connection Detail Modal with live token savings estimations per group.
+
+### Changed - Result Shaping & Output Budgets
+
+- **Edge result shaper:** Automatically shapes tool results at the MCP ingress edge (`handleJsonRpc`):
+  - **S1 (Unwrap):** Unwraps `{ ok: true, value: X }` -> `X` on `shell_run`, `command_run`, and `command_run_many` items.
+  - **S2 (Batch flattening):** Drops redundant array `index`, duplicate inner `path`, and default `sensitivity: NORMAL` in `file_read_many`, `file_write_many`, and `command_run_many`. Hoists `untrusted` notices once to the root envelope.
+  - **S3 (Summary cleanup):** Omits `failed: 0` and `skipped: 0` from batch summaries.
+  - **S4 (Command defaults):** Drops `signal: null` and empty `stderr: ""` from command execution records.
+  - **S5 (Command output & budget):** Strips ANSI sequences, normalizes CRLF to LF, keeps the final state of carriage-return redrawn lines, collapses 3+ consecutive duplicate lines, and enforces `maxOutputChars` budget.
+  - **S6 (Approval summaries):** `approval_status` and `approval_wait` return concise summaries by default unless `detail: "full"`, preventing multikilobyte payload consumption on approval polling loops.
+  - **Content preservation:** Underlying file content in `file_read*` operations is strictly preserved byte-for-byte.
+- **Configurable command budgets:** `maxOutputChars` input (integer 256–200,000, default 16,000) on `shell_run`, `command_run`, and `command_run_many`. Over-budget streams retain the first 25% and last 75% joined by `\n… [N chars omitted] …\n` and set `truncated: true`.
+
+### Changed - Advertised Schema Compaction & Transport
+
+- **Compact `tools/list`:** Stripped deprecated compatibility fields from host tools (`browser_*`, `desktop_*`, `control_*`), omitted default-false hints (`readOnlyHint`, `idempotentHint`), removed bare `{ type: 'object' }` output schemas, and shortened repeated workspace descriptions. Serialized default definition catalog is guarded at ≤ 54,000 characters (~20% reduction).
+- **Transport optimizations:** Serializes responses once via `sendJsonBody`, memoizes serialized tool lists per enabled group set, and bounds in-memory activity log object depth and length before serialization.
+- **HTTP response compression:** Automatically gzip-compresses MCP JSON responses of 1,024 bytes or larger when the client sends `Accept-Encoding: gzip` (`Vary: Accept-Encoding`). SSE event streams remain uncompressed.
+
+### Fixed
+
+- **Source-level ANSI sequence stripping:** Replaced partial control character stripping with `stripAnsiSequences` in `packages/security/src/untrusted.ts`, stripping complete CSI and OSC sequences so command outputs and approval previews no longer contain orphaned formatting artifacts such as `[90m` or `[2K`.
+- **Browser CDP navigation retry:** Automatically retries transient `Not attached to an active page` CDP errors during navigation commits on Chromium, preventing intermittent page snapshot failures during fast navigation sequences.
+
 ## [1.1.4] - 2026-10-06
 
 ### Fixed - Desktop Helper Discovery

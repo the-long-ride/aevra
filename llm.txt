@@ -1,7 +1,7 @@
 # Aevra — Architecture & Usage Guide for AI Assistants (llm.txt)
 
 > **Specification & Operator Reference for Language Models**
-> Version: 1.1.1
+> Version: 1.2.0
 > Author: the-long-ride (made by <3)
 > Repository: https://github.com/the-long-ride/aevra
 > Issues: https://github.com/the-long-ride/aevra/issues
@@ -36,7 +36,8 @@ Aevra Core Daemon                         React 19 Admin Web UI
 - Session & Lease Manager                 - Interactive Approvals
 - Policy Engine & Capability Profiles     - Workspaces & Mount Points
 - Floating-IP OAuth Continuity            - Live MCP Activity Timeline
-- Token Bucket Rate Limiting              - System Capabilities & Settings
+- Token Bucket Rate Limiting              - Token Usage Stats & History Chart
+- Token Metering & MCP Result Shaper      - Connector Tool Surfaces & Settings
    │
    ▼ (Local Authenticated IPC - Named Pipe / Unix Domain Socket)
 Execution Worker (Port 47833 WebSocket for Browser Extension)
@@ -82,37 +83,38 @@ Execution Worker (Port 47833 WebSocket for Browser Extension)
    - Aevra decouples identity from IP addresses using cryptographic session subjects and rotating refresh tokens, preserving workspace leases across runner IP shifts.
    - Uses atomic execution claims (`claimExecution`) to guarantee that parallel cloud runners never double-execute the same approved operation.
 
+5. **Host Control Grants & Per-Connector Tool Surfaces**:
+   - `browser.control` and `desktop.control` require explicit host connection grants, decoupled from workspace selection.
+   - Operators can scope tools per client connection into tool groups: `core` (always on), `files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, and `upstream`.
+   - Invoking a tool in a disabled group returns error code `TOOL_GROUP_DISABLED`.
+
 ---
 
-## 4. Built-in MCP Tools Reference (73 Tools)
+## 4. Built-in MCP Tools Reference (74 Tools)
 
 The model-facing surface favors bounded batch interfaces; singular file/command
 primitives remain internal implementation details.
 
-### Workspace, Files, Commands, Git, Processes
+### Status & Workspace
 
+- Status: `aevra_status` (reports session, leases, capabilities, and system info), `control_access_status` (reports connection-level host browser/desktop grants).
 - Workspace: `workspace_list`, `workspace_select`, `workspace_current`.
+
+### Files, Commands, Git, Processes
+
 - Files/search: `file_list`, `file_read_many`, `file_search`, `search`,
-  `file_write_many`, `file_move`, `file_delete`.
-- Commands: `command_run_many` and `shell_run`. Use managed processes for
-  long-running work.
+  `file_write_many`, `file_move`, `file_delete`. File contents are preserved verbatim.
+- Commands: `command_run_many` and `shell_run`. Supports optional `maxOutputChars` budget (256–200,000, default 16,000). Use managed processes for long-running work.
 - Processes: `process_start/list/status/wait/logs/stop/restart`.
 - Git: `git_status/add/diff/log/branch/commit/push`.
 - Durable mutation inspection: `operation_get`, `operation_list`.
 - Change sets: `change_begin/status/commit/rollback`.
-- Approvals: `approval_status/wait/cancel`.
-- Skills/instructions: `skills_list`, `skill_read/write`,
-  `instructions_read/write`.
+- Approvals: `approval_status/wait/cancel`. Supports optional `detail: "summary" | "full"` (default `"summary"` to prevent token waste during polling).
+- Skills/instructions: `skills_list`, `skill_read/write`, `instructions_read/write`.
 
 ### Browser Automation (Chromium MV3 Extension & CDP)
 
-Ten `browser_*` tools provide lifecycle, tabs/navigation, accessibility or
-vision snapshots, page reads, ordered actions, a bounded Playwright-like
-`browser_execute_script` fast lane, and logs. There is no arbitrary page
-JavaScript evaluation. CDP operations are target-pinned without tab activation;
-extension public refs map to opaque identities held in Chrome's isolated world.
-Credential-shaped field values are omitted and model typing into credential
-fields is refused.
+Ten `browser_*` tools provide lifecycle (`browser_connect/status/disconnect`), tabs/navigation (`browser_tabs/navigate`), accessibility or vision snapshots (`browser_snapshot`), page reads (`browser_read`), ordered actions (`browser_act_many` with coordinate `click` and `drag`), a bounded Playwright-like `browser_execute_script` fast lane, and logs (`browser_logs`). Operates as a true background auto-clicker without stealing window focus. Credential-shaped field values are omitted and model typing into credential fields is refused.
 
 ### Guarded Control Plans
 
@@ -123,8 +125,8 @@ fields is refused.
 - `desktop_act_many`: semantic desktop batch convenience API.
 
 Matching request IDs use a durable keyed digest. Incomplete plans become unknown
-after restart and are not replayed. Strict `isolated` mode is fail-closed in
-v1.1.1 until a separately provisioned runner has verified containment.
+after restart and are not replayed. Strict `isolated` mode is fail-closed
+until a separately provisioned runner has verified containment.
 
 ### Desktop Automation
 
@@ -135,14 +137,30 @@ Shared semantic control is available through Windows UIA, macOS Accessibility
 input. Windows additionally supports explicit legacy foreground click/type/key/
 scroll and pixel capture. macOS/Linux portable mode intentionally reports those
 foreground/capture capabilities unavailable. `desktop_request_access` submits a
-pending request for human review when an attributed application is refused; it
-does not grant access by itself.
+pending request for human review when an attributed application is refused.
+When `AEVRA_DESKTOP_HELPER_PATH` points to a missing file, Aevra safely falls back
+to bundled or Cargo helper binaries.
 
 ### Upstream MCP Proxies
 
 External MCP servers (stdio, SSE, HTTP) can be registered via Admin UI or
-`aevra mcp add`. Their tools are projected under namespaced tool names and
-remain subject to Aevra policy/audit boundaries.
+`aevra mcp add`. Their tools are projected under namespaced tool names (`server__tool`)
+and remain subject to Aevra policy/audit boundaries.
+
+### Token Efficiency, Result Shaping & Transport (v1.2.0)
+
+- **Advertised Schema Compaction:** `tools/list` omits deprecated properties, default-false hints (`readOnlyHint`, `idempotentHint`), and bare output schemas, keeping definition size under 54,000 characters (~20% token savings).
+- **Result Shaper:** Compacts tool results automatically at the MCP edge:
+  - Unwraps `{ ok: true, value: X }` -> `X` on command/shell results.
+  - Flattens batch arrays (`file_read_many`, `file_write_many`, `command_run_many`), dropping duplicate `path`, array `index`, and default `sensitivity: NORMAL`, while hoisting `untrusted` notices once to top level. Drops `failed: 0` and `skipped: 0` from summaries.
+  - Drops `signal: null` and empty `stderr: ""` from command results.
+  - Strips whole ANSI CSI/OSC escape sequences at the source, normalizes CRLF, collapses 3+ repeated lines, and enforces `maxOutputChars` budgets (head 25% + tail 75% with `truncated: true`).
+  - Approval tickets return concise summaries by default unless `detail: "full"`.
+  - File content (`file_read*` `content`) is strictly unaltered byte-for-byte.
+- **Per-Connector Result Formats:** Configurable in Admin UI as `both` (dual text + structured, default), `text` (text only), or `structured` (`structuredContent` only).
+- **Token Estimation & Analytics:** Estimates text tokens using `heuristic-v1` (ASCII `ceil(len/4)`, CJK/emoji 1.0, others 0.5). Accumulated in memory and flushed to SQLite (`token_usage` table) every 30s. Displayed in live stat boxes and SVG historical charts on the Admin Dashboard.
+- **HTTP Response Compression:** Gzip-compresses responses ≥ 1,024 bytes when the client sends `Accept-Encoding: gzip`.
+- **Bounded Activity Detail:** Sanitized in-memory activity logs are bounded to prevent memory bloating.
 
 ---
 
@@ -238,3 +256,26 @@ When you are acting as an AI assistant interacting with Aevra via MCP tools or g
 
 - For browser actions, verify that the browser extension/CDP transport is connected (reportable via `aevra status` or `aevra_status`).
 - Prefer shared semantic desktop actions on every supported OS. Use Windows foreground input only when explicitly required; never treat it as fallback for `sharedSemantic` or `isolated` plans.
+
+### Tip 7: Managing Command Output Budgets (`maxOutputChars`)
+
+- `shell_run`, `command_run`, and `command_run_many` enforce an output budget per stream (default 16,000 characters). When output exceeds the budget, Aevra retains the first 25% and last 75%, joined with `… [N chars omitted] …`, and sets `truncated: true`.
+- If you expect very large output or want to strictly constrain output to save context tokens, pass `maxOutputChars` (256 to 200,000) explicitly:
+  ```json
+  {
+    "workspace": "my-project",
+    "commands": [{ "command": "npm", "args": ["test"] }],
+    "maxOutputChars": 32000
+  }
+  ```
+
+### Tip 8: Lightweight Approval Polling (`detail: "summary"`)
+
+- Polling pending approvals via `approval_status` or `approval_wait` returns a concise summary by default (action, summary, risk, expiration), saving thousands of tokens per poll.
+- Avoid passing `"detail": "full"` on recurring polling loops. Only request `"detail": "full"` when you specifically need the complete command analysis graph or full raw script text.
+
+### Tip 9: Handling Scoped Tool Surfaces (`TOOL_GROUP_DISABLED`)
+
+- If a tool invocation returns `TOOL_GROUP_DISABLED: Tool <name> is in the "<group>" group, which is disabled for this connector`, the administrator has filtered your tool surface in **Connections > Tool surface** to conserve context tokens.
+- Available groups: `core` (always on), `files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, `upstream`.
+- If your task strictly requires tools from a disabled group, inform the operator so they can toggle the group on in the Aevra Web UI.
