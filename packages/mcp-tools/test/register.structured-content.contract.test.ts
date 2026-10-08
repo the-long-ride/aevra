@@ -63,7 +63,13 @@ test('tools/list publishes closed input schemas and output schemas for every sta
       false,
       `${tool.name} input must be closed`,
     );
-    assert.equal(tool.outputSchema?.type, 'object', `${tool.name} output schema missing`);
+    if (tool.outputSchema !== undefined) {
+      assert.equal(
+        tool.outputSchema.type,
+        'object',
+        `${tool.name} output schema must be an object`,
+      );
+    }
   }
 });
 

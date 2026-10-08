@@ -1,14 +1,18 @@
 import type {
   BrowserActionInput,
   BrowserActionResult,
-  BrowserBox,
   BrowserLogEntry,
   BrowserSessionInfo,
   BrowserSnapshotResult,
   BrowserTabInfo,
   BrowserTransport,
 } from '../../protocol/src/browser.js';
-import { axTreeToNodes, markCredentialFields, type AxNode } from './cdp-ax.js';
+import {
+  axTreeToNodes,
+  markCredentialFields,
+  snapshotDocumentWithRetry,
+  type AxNode,
+} from './cdp-ax.js';
 import {
   cdpBoxForBackend,
   cdpCenterForBackend,
@@ -54,14 +58,9 @@ export class CdpDriver implements BrowserDriver {
   }
 
   private async targets(): Promise<CdpTarget[]> {
-    const response = await fetch('http://127.0.0.1:' + this.port + '/json/list');
-    if (!response.ok) {
-      throw new BrowserDriverError(
-        'BROWSER_UNAVAILABLE',
-        'CDP endpoint returned ' + response.status,
-      );
-    }
-    return (await response.json()) as CdpTarget[];
+    const res = await fetch(`http://127.0.0.1:${this.port}/json/list`);
+    if (!res.ok) throw new BrowserDriverError('BROWSER_UNAVAILABLE', `CDP returned ${res.status}`);
+    return (await res.json()) as CdpTarget[];
   }
 
   async connect(options: ConnectOptions): Promise<BrowserSessionInfo> {
@@ -81,10 +80,9 @@ export class CdpDriver implements BrowserDriver {
   async tabs(request: TabRequest): Promise<BrowserTabInfo[]> {
     const registry = this.registry();
     if (request.action === 'open' && request.url) {
-      await fetch(
-        'http://127.0.0.1:' + this.port + '/json/new?' + encodeURIComponent(request.url),
-        { method: 'PUT' },
-      );
+      const openUrl =
+        'http://127.0.0.1:' + this.port + '/json/new?' + encodeURIComponent(request.url);
+      await fetch(openUrl, { method: 'PUT' });
     }
     if (request.action === 'close' && request.tabId) {
       await fetch('http://127.0.0.1:' + this.port + '/json/close/' + request.tabId);
@@ -141,9 +139,11 @@ export class CdpDriver implements BrowserDriver {
   async snapshot(request: SnapshotRequest): Promise<BrowserSnapshotResult> {
     const state = await this.registry().target(request.tabId);
     state.version = ++this.snapshotSequence;
-    const url = await this.currentUrl(state);
-    const tree = await state.client.send<{ nodes: AxNode[] }>('Accessibility.getFullAXTree');
-    const mapping = axTreeToNodes(tree.nodes ?? [], state.version, request.maxNodes);
+    const { url, nodes } = await snapshotDocumentWithRetry(
+      () => this.currentUrl(state),
+      () => state.client.send<{ nodes: AxNode[] }>('Accessibility.getFullAXTree'),
+    );
+    const mapping = axTreeToNodes(nodes, state.version, request.maxNodes);
     state.backendIds = mapping.backendIds;
 
     const attributesByIndex = new Map<number, string[]>();
@@ -178,14 +178,10 @@ export class CdpDriver implements BrowserDriver {
     state.visionScale = capture.devicePixelRatio;
     const boxes = await scaledBoxes(
       mapping.nodes,
-      (index) => this.boxFor(state, index),
+      (index) => cdpBoxForBackend(state.client, Number(state.backendIds[index])),
       capture.devicePixelRatio,
     );
     return { ...base, ...capture, boxes };
-  }
-
-  private async boxFor(state: CdpTargetState, index: number): Promise<BrowserBox> {
-    return cdpBoxForBackend(state.client, Number(state.backendIds[index]));
   }
 
   private resolveIndex(state: CdpTargetState, ref: string): number {
@@ -193,7 +189,7 @@ export class CdpDriver implements BrowserDriver {
     if (parsed.version !== state.version || state.backendIds[parsed.index] === undefined) {
       throw new BrowserDriverError(
         'BROWSER_REF_STALE',
-        ref + ' is not from the current target snapshot',
+        `${ref} is not from the current target snapshot`,
       );
     }
     return parsed.index;

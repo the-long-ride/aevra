@@ -96,7 +96,7 @@ test('keep-running reads the detached log and result sidecar', async () => {
     assert.equal(logs.cursor, 2);
     assert.equal(logs.eof, true);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -122,7 +122,7 @@ test('keep-running without a written log or finished result stays running', asyn
     const logs = runtime.logs(started.processId);
     assert.deepEqual(logs, { ...logs, cursor: 0, lines: [], eof: false });
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -144,7 +144,7 @@ test(
       assert.equal(status.state, 'completed');
       assert.ok(runtime.logs(started.processId).lines.some((line) => line.includes('shim says')));
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   },
 );

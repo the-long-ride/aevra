@@ -2,6 +2,7 @@ import type { FrozenOperationTicket } from '../../../apps/core/src/approvals/app
 import { consumeCommandApproval } from '../../../apps/core/src/approvals/command-binding.js';
 import type { CommandAnalysis } from '../../protocol/src/index.js';
 import { freshCommandAnalysis } from './approval-command-freshness.js';
+import { rememberOutputBudget } from './result-shaper/common.js';
 import { AevraToolError } from './errors.js';
 import { resumeHostApproval } from './approval-resume-host.js';
 import { repoState } from './git-state.js';
@@ -234,12 +235,13 @@ async function executeFrozen(
 
   if (payload.tool === 'command_run') {
     const commandPayload = { ...payload.args.command, workspaceId: ticket.workspaceId };
-    return context.deps.operations!.runCommand(
+    const result = await context.deps.operations!.runCommand(
       sessionId,
       commandPayload,
       payload.args.executionMode,
       payload.args.networkPolicy,
     );
+    return rememberOutputBudget(result, payload.args);
   }
 
   const ctx = ticket.workspaceId ? { ...context, workspaceId: ticket.workspaceId } : context;

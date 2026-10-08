@@ -8,6 +8,7 @@ import { classifyCommand } from '../../../apps/core/src/policy/command-family.js
 import { commandPermissionMatcher } from '../../../apps/core/src/policy/command-matcher.js';
 import { evaluateAndDecideCommand } from './command-decision-bridge.js';
 import { bindCommandApproval } from '../../../apps/core/src/approvals/command-binding.js';
+import { rememberOutputBudget } from './result-shaper/common.js';
 import { resumeApproval } from './approval-resume.js';
 import { authorizeCapability } from './authorization.js';
 import { AevraToolError } from './errors.js';
@@ -56,6 +57,7 @@ export async function shellTool(context: McpRuntimeContext, sessionId: string, a
       command,
       executionMode: mode,
       networkDestinations: args.networkDestinations,
+      maxOutputChars: args.maxOutputChars,
     },
     {
       tool: 'shell_run',
@@ -100,6 +102,7 @@ export async function commandTool(
           env: command.env,
           timeoutMs: command.timeoutMs,
           cwdLogical: command.cwdLogical,
+          maxOutputChars: args.maxOutputChars,
         }
       : { ...args, executionMode: mode },
   };
@@ -250,7 +253,7 @@ export async function commandTool(
           script: source.script,
         }
       : {}),
-    args: { command, executionMode: mode, networkPolicy },
+    args: { command, executionMode: mode, networkPolicy, maxOutputChars: args.maxOutputChars },
   };
 
   const once = oneTimeAllowed(context, sessionId, 'commands.run', permissionMatcher);
@@ -294,5 +297,11 @@ export async function commandTool(
   }
 
   const commandPayload = { ...command, workspaceId: lease.workspaceId };
-  return context.deps.operations!.runCommand(sessionId, commandPayload, mode, networkPolicy);
+  const result = await context.deps.operations!.runCommand(
+    sessionId,
+    commandPayload,
+    mode,
+    networkPolicy,
+  );
+  return rememberOutputBudget(result, args);
 }

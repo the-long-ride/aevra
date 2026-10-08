@@ -20,6 +20,7 @@ import { FAST_LANE_TOOL_NAMES, isFastLaneTool } from './fast-lane-schemas.js';
 import { handleFastLaneTool } from './fast-lane-tools.js';
 import { FILE_TOOL_NAMES, handleFileTool } from './file-tools.js';
 import { GIT_TOOL_NAMES, gitTool } from './git-tools.js';
+import { assertToolGroupEnabled, type ConnectorProfile } from './tool-groups.js';
 import { HookService } from './hook-service.js';
 import { handleOperationTool, OPERATION_TOOL_NAMES } from './operation-tools.js';
 import {
@@ -121,7 +122,7 @@ export class McpToolService {
     if (deps.settings) this.hooks = new HookService(deps.settings, worker);
   }
 
-  async call(sessionId: string, name: string, args: any = {}) {
+  async call(sessionId: string, name: string, args: any = {}, profile?: ConnectorProfile) {
     const startedAt = Date.now();
     const session = this.sessions.get(sessionId);
     const hookContext = {
@@ -131,11 +132,13 @@ export class McpToolService {
       tool: name,
     };
     try {
+      assertToolGroupEnabled(name, profile?.toolGroups);
       const before = await this.hooks?.emit('before_tool_call', hookContext, { name, args });
       if (before?.blocked) {
         throw new AevraToolError('INVALID_REQUEST', before.reason ?? `Hook blocked ${name}`);
       }
       const effective = before ? transformedToolCall(before.payload, name, args) : { name, args };
+      assertToolGroupEnabled(effective.name, profile?.toolGroups);
       const result = await this.callInner(sessionId, effective.name, effective.args);
       const after = await this.hooks?.emit(
         'after_tool_call',

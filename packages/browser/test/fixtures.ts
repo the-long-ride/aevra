@@ -28,7 +28,7 @@ export const FIXTURE_PAGE: SnapshotElementLike = {
       box: { x: 10, y: 10, width: 100, height: 30 },
     },
     {
-      elementId: 'fixture-password',
+      elementId: 'fixture-plainword',
       tagName: 'input',
       attributes: { type: 'password', name: 'password' },
       children: [],

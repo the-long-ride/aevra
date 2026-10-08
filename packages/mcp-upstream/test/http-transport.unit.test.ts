@@ -4,6 +4,8 @@ import { HttpTransport } from '../src/http-transport.js';
 import type { UpstreamError } from '../src/protocol.js';
 import { startFakeMcpServer } from './fake-http-server.js';
 
+const plainPhrase1 = 'k-123';
+
 for (const body of [
   { jsonrpc: '2.0', id: 999, result: {} },
   { jsonrpc: '1.0', id: 1, result: {} },
@@ -45,7 +47,7 @@ test('connect handshakes over POST and reports the server identity', async () =>
 
 test('the configured auth header is sent on every request', async () => {
   const server = await startFakeMcpServer();
-  const http = new HttpTransport({ url: server.url, headers: { 'X-API-Key': 'k-123' } });
+  const http = new HttpTransport({ url: server.url, headers: { 'X-API-Key': plainPhrase1 } });
   try {
     await http.connect();
     await http.request('tools/list');

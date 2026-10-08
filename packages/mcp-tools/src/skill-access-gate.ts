@@ -3,6 +3,7 @@ import type {
   ApprovalService,
   FrozenOperationTicket,
 } from '../../../apps/core/src/approvals/approval-service.js';
+import type { ConnectorProfile } from './tool-groups.js';
 import { renderInstructionPrompt } from './instruction-prompt.js';
 import { AevraToolError } from './errors.js';
 import { splitProxyName, splitProxyResourceUri } from './upstream-names.js';
@@ -12,7 +13,7 @@ const SKILL_FAMILY = 'skills:read';
 const SKILL_SCOPE = 'local-skills';
 
 export interface SkillReadableMcpService {
-  call(sessionId: string, name: string, args?: any): Promise<any>;
+  call(sessionId: string, name: string, args?: any, profile?: ConnectorProfile): Promise<any>;
   resourcesList?(sessionId: string): { resources: any[] } | Promise<{ resources: any[] }>;
   resourceRead?(sessionId: string, uri: string): Promise<any>;
   promptsList?(): { prompts: any[] } | Promise<{ prompts: any[] }>;
@@ -43,7 +44,7 @@ export class SessionSkillAccessGate {
     private approvals: ApprovalService,
   ) {}
 
-  async call(sessionId: string, name: string, args: any = {}) {
+  async call(sessionId: string, name: string, args: any = {}, profile?: ConnectorProfile) {
     if (name === 'approval_wait') {
       const requestId = String(args?.requestId ?? '');
       const ticket = this.approvals.status(requestId);
@@ -54,7 +55,7 @@ export class SessionSkillAccessGate {
       const access = await this.ensureSkillAccess(sessionId);
       if (!access.granted) return access.result;
     }
-    return this.inner.call(sessionId, name, args);
+    return this.inner.call(sessionId, name, args, profile);
   }
 
   async resourcesList(sessionId: string) {

@@ -80,6 +80,25 @@ export const changeSetIdSchema: JsonSchema = {
   required: ['changeSetId'],
   additionalProperties: false,
 };
+export const maxOutputCharsSchema = {
+  type: 'integer',
+  minimum: 256,
+  maximum: 200_000,
+  description: 'Max characters kept per stdout/stderr (default 16000). The middle is cut.',
+};
+export const approvalReadSchema: JsonSchema = {
+  type: 'object',
+  properties: {
+    requestId: stringProp('Approval request ID.'),
+    detail: {
+      type: 'string',
+      enum: ['summary', 'full'],
+      description: 'summary (default) or the full ticket.',
+    },
+  },
+  required: ['requestId'],
+  additionalProperties: false,
+};
 export const approvalIdSchema: JsonSchema = {
   type: 'object',
   properties: { requestId: stringProp('Approval request ID.') },
