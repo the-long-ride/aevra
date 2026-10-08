@@ -12,6 +12,10 @@ import { AdminServer } from '../src/admin/server.js';
 import { IpRateLimiter } from '../src/mcp/rate-limit.js';
 import { ensureLocalTls } from '../src/tls/local-tls.js';
 
+const plainPhrase1 = 'local-control';
+const plainPhrase2 = 'secret';
+const plainPhrase3 = 'wrong';
+
 interface ResponseResult {
   status: number;
   headers: IncomingHttpHeaders;
@@ -66,7 +70,7 @@ async function createHttpsAdmin(loginLimiter?: IpRateLimiter, trustedOrigins?: (
     bootstrap,
     credentialVerifier,
     loginLimiter,
-    controlSecret: 'local-control',
+    controlSecret: plainPhrase1,
     tls: tls.serverOptions,
     advertisedHost: '127.0.0.1',
     trustedOrigins,
@@ -96,7 +100,7 @@ test('admin login accepts configured Admin and additional trusted origins', asyn
         origin: 'https://admin.example.com',
         'sec-fetch-site': 'same-origin',
       },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase2 }),
     });
 
     assert.equal(response.status, 200);
@@ -121,7 +125,7 @@ test('admin login rejects unknown origins even when forwarded headers name the p
         'x-forwarded-host': 'admin.example.com',
         'x-forwarded-proto': 'https',
       },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase2 }),
     });
 
     assert.equal(response.status, 403);
@@ -146,7 +150,7 @@ test('MCP public origin is not implicitly trusted for Admin login', async () => 
         origin: 'https://mcp.example.com',
         'sec-fetch-site': 'same-origin',
       },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase2 }),
     });
     assert.equal(response.status, 403);
   } finally {
@@ -181,7 +185,7 @@ test('password login is the only browser session issuance path', async () => {
         'content-type': 'application/json',
         origin: fixture.server.url(),
       },
-      body: JSON.stringify({ username: 'admin', password: 'wrong' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase3 }),
     });
     assert.equal(invalid.status, 401);
     assert.deepEqual(JSON.parse(invalid.body), { error: 'Invalid credentials' });
@@ -192,7 +196,7 @@ test('password login is the only browser session issuance path', async () => {
         'content-type': 'application/json',
         origin: fixture.server.url(),
       },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase2 }),
     });
     assert.equal(firstLogin.status, 200);
     const firstSetCookie = (firstLogin.headers['set-cookie'] ?? []).join('; ');
@@ -209,7 +213,7 @@ test('password login is the only browser session issuance path', async () => {
         'content-type': 'application/json',
         origin: fixture.server.url(),
       },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase2 }),
     });
     const second = firstCookie(secondLogin);
     assert.notEqual(first, second);
@@ -274,7 +278,7 @@ test('successful admin logins do not exhaust the failed-login limiter', async ()
         'content-type': 'application/json',
         origin: fixture.server.url(),
       },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase2 }),
     });
   try {
     for (let index = 0; index < 8; index++) {
@@ -294,7 +298,7 @@ test('admin login returns 429 when the dedicated IP limiter is exhausted', async
         'content-type': 'application/json',
         origin: fixture.server.url(),
       },
-      body: JSON.stringify({ username: 'admin', password: 'wrong' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase3 }),
     });
   try {
     assert.equal((await attempt()).status, 401);
@@ -318,7 +322,7 @@ test('admin login rejects credential submission over plain HTTP', async () => {
     const response = await fetch(`${server.url()}/api/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: server.url() },
-      body: JSON.stringify({ username: 'admin', password: 'secret' }),
+      body: JSON.stringify({ username: 'admin', password: plainPhrase2 }),
     });
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), {

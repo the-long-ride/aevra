@@ -14,6 +14,8 @@ import {
   usageText,
 } from '../src/cli-support.js';
 
+const plainPhrase1 = 'sample words';
+
 function login(status: number, body: unknown, headers: Record<string, string> = {}) {
   return {
     ok: status < 400,
@@ -32,7 +34,7 @@ function deps(loginResponse: ReturnType<typeof login>, after?: ReturnType<typeof
     calls,
     value: {
       controlSecret: async () => 'control words',
-      credentials: async () => ({ username: 'sample', password: 'sample words' }),
+      credentials: async () => ({ username: 'sample', password: plainPhrase1 }),
       base: () => 'http://127.0.0.1:9/',
       fetch: async (_config: object, path: string, init?: any) => {
         calls.push({ path, init });
@@ -184,12 +186,14 @@ test('cli support text helpers cover every shell and error shape', () => {
   );
   assert.match(credentials, /^missing\nSet both AEVRA_USERNAME/);
   assert.ok(
-    readyLines({ adminUrl: 'a', mcpUrl: 'm', gatewayUrl: 'g' }).some((line) =>
-      line.includes('Gateway'),
+    readyLines({ adminUrl: 'a', mcpUrl: 'm', gatewayUrl: 'g', desktopHelperReady: true }).some(
+      (line) => line.includes('Gateway'),
     ),
   );
   assert.equal(
-    readyLines({ adminUrl: 'a', mcpUrl: 'm' }).some((line) => line.includes('Gateway')),
+    readyLines({ adminUrl: 'a', mcpUrl: 'm', desktopHelperReady: false }).some((line) =>
+      line.includes('Gateway'),
+    ),
     false,
   );
   assert.match(completionText('bash'), /complete -F _aevra aevra/);

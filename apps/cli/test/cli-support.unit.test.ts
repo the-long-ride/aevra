@@ -23,6 +23,7 @@ test('aevra start ready output renders the service endpoints as a table', () => 
     gatewayUrl: 'http://127.0.0.1:47830',
     adminUrl: 'https://localhost:47831',
     mcpUrl: 'https://localhost:47832',
+    desktopHelperReady: true,
   });
   assert.deepEqual(lines, [
     '',
@@ -32,18 +33,35 @@ test('aevra start ready output renders the service endpoints as a table', () => 
     ' ▄█▀██ ██▄█▀ ██▄██ ██   ▄█▀██',
     '▄▀█▄██▄▀█▄▄▄  ▀█▀ ▄█▀  ▄▀█▄██',
     '',
-    '┌───────────┬─────────────────────────────┐',
-    '│ Service   │ Value                       │',
-    '├───────────┼─────────────────────────────┤',
-    '│ Core      │ ready                       │',
-    '│ Gateway   │ http://127.0.0.1:47830      │',
-    '│ MCP       │ https://localhost:47832/mcp │',
-    '│ Dashboard │ https://localhost:47831     │',
-    '└───────────┴─────────────────────────────┘',
+    '┌────────────────┬─────────────────────────────┐',
+    '│ Service        │ Value                       │',
+    '├────────────────┼─────────────────────────────┤',
+    '│ Core           │ ready                       │',
+    '│ Desktop helper │ ready                       │',
+    '│ Gateway        │ http://127.0.0.1:47830      │',
+    '│ MCP            │ https://localhost:47832/mcp │',
+    '│ Dashboard      │ https://localhost:47831     │',
+    '└────────────────┴─────────────────────────────┘',
     '',
   ]);
   assert.doesNotMatch(lines.join('\n'), /Press Ctrl\+C/);
   assert.doesNotMatch(lines.join('\n'), /\x1b\[/);
+});
+
+test('startup reports a missing desktop helper without losing the other services', () => {
+  const lines = readyLines({
+    adminUrl: 'https://localhost:47831',
+    mcpUrl: 'https://localhost:47832',
+    desktopHelperReady: false,
+  });
+  const rows = lines.filter((line) => line.startsWith('│') && !line.includes('Service'));
+  assert.match(rows[0]!, /Core\s+│ ready/);
+  assert.match(rows[1]!, /Desktop helper\s+│ missing/);
+  assert.ok(rows[2]!.includes('MCP'));
+  assert.equal(
+    rows.some((line) => line.includes('Gateway')),
+    false,
+  );
 });
 
 test('CLI setup recognizes only Cloudflare Access as the Access verifier branch', () => {

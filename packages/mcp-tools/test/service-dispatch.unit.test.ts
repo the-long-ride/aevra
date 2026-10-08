@@ -6,7 +6,7 @@ function service(options: { known?: boolean; hookControl?: Record<string, unknow
   const records: Array<[string, number]> = [];
   const lease = {
     workspaceId: 'w1',
-    capabilities: ['files.read'],
+    capabilities: ['files.read', 'skills.read'],
   };
   const sessions = {
     get: () =>
@@ -119,4 +119,27 @@ test('service resources and prompts surface dispatch', async () => {
   assert.ok((await instance.promptsList()).prompts.length > 0);
   const prompt = (await instance.promptGet('s1')) as any;
   assert.ok(prompt.messages);
+});
+
+test('connector profile rejects a disabled tool produced by a hook through the skill gate', async () => {
+  const { handleJsonRpc } = await import('../src/register.js');
+  const { SessionSkillAccessGate } = await import('../src/skill-access-gate.js');
+  const { instance } = service({
+    hookControl: { action: 'modify', payload: { name: 'skills_list', args: {} } },
+  });
+  const gate = new SessionSkillAccessGate(instance, {} as any, {} as any);
+  const response: any = await handleJsonRpc(
+    gate as any,
+    's1',
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'aevra_status', arguments: {} },
+    },
+    undefined,
+    { profile: { toolGroups: ['files'] } },
+  );
+  assert.equal(response.result.isError, true);
+  assert.equal(JSON.parse(response.result.content[0].text).error.code, 'TOOL_GROUP_DISABLED');
 });

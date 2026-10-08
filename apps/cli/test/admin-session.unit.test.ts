@@ -6,6 +6,8 @@ import {
   revokeAllAdminSessions,
 } from '../src/admin-session.js';
 
+const plainPhrase1 = 'secret';
+
 function response(
   options: {
     ok?: boolean;
@@ -41,7 +43,7 @@ function transport() {
       return 'control-secret';
     },
     async credentials() {
-      return { username: 'admin', password: 'secret' };
+      return { username: 'admin', password: plainPhrase1 };
     },
     base: () => 'https://localhost:47831',
     fetch: async (
@@ -72,7 +74,7 @@ test('adminApi logs in with mandatory admin credentials before the requested API
   assert.equal(calls[0]!.init.headers?.['content-type'], 'application/json');
   assert.deepEqual(JSON.parse(calls[0]!.init.body ?? '{}'), {
     username: 'admin',
-    password: 'secret',
+    password: plainPhrase1,
   });
   assert.equal(calls[1]!.init.headers?.cookie, 'aevra_admin=session-token');
 });

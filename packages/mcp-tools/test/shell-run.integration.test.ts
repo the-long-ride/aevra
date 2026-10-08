@@ -22,6 +22,7 @@ function fixture(
   executionSettings: { sandboxBackend: 'auto' | 'docker' | 'podman' | 'native' } = {
     sandboxBackend: 'auto',
   },
+  stdout = 'ok',
 ) {
   const db = AevraDatabase.open(':memory:');
   const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), 'aevra-shell-'));
@@ -49,7 +50,7 @@ function fixture(
       executions.push(args);
       return {
         ok: true,
-        value: { exitCode: 0, signal: null, stdout: 'ok', stderr: '', durationMs: 1 },
+        value: { exitCode: 0, signal: null, stdout, stderr: '', durationMs: 1 },
       };
     },
     classify: () => ({ family: 'shell', effect: 'UNKNOWN', risk: 'LOW', outputKeys: [] }),
@@ -96,7 +97,8 @@ test('shell_run requires high-risk local approval and resumes through command_ru
   assert.deepEqual(x.executions[0][1].args, ['-lc', 'pwd']);
   assert.equal(x.executions[0][1].cwdLogical, '/packages/api');
   assert.equal(x.executions[0][2], 'sandbox');
-  assert.equal(resumed.result.structuredContent.ok, true);
+  assert.equal(resumed.result.structuredContent.exitCode, 0);
+  assert.equal(resumed.result.structuredContent.stdout, 'ok');
   x.db.close();
 });
 
@@ -165,3 +167,49 @@ test('explicit sandbox execution wins over the native host default', async () =>
   assert.equal(x.executions[0][2], 'sandbox');
   x.db.close();
 });
+
+for (const profile of ['developer', 'read-only']) {
+  for (const tool of ['shell_run', 'command_run']) {
+    for (const maxOutputChars of [1000, 25000]) {
+      test(`${profile} ${tool} preserves output budget ${maxOutputChars} after approval`, async () => {
+        const x = fixture(profile, { sandboxBackend: 'auto' }, 'q'.repeat(20000));
+        try {
+          await x.service.call(x.session.id, 'workspace_select', { workspace: x.workspace.id });
+          const args =
+            tool === 'shell_run'
+              ? { script: 'pwd', cwdLogical: '/', maxOutputChars }
+              : { executable: 'bash', args: ['-lc', 'pwd'], cwdLogical: '/', maxOutputChars };
+          const pending: any = await handleJsonRpc(x.service, x.session.id, {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: tool, arguments: args },
+          });
+          let result = pending.result.structuredContent;
+          assert.equal(result.status, 'approval_pending');
+          for (let attempt = 0; result.status === 'approval_pending' && attempt < 4; attempt++) {
+            const ticket = x.approvals.status(result.requestId)!;
+            x.approvals.approve(ticket.id, 'once');
+            const resumed: any = await handleJsonRpc(x.service, x.session.id, {
+              jsonrpc: '2.0',
+              id: 2,
+              method: 'tools/call',
+              params: { name: 'approval_wait', arguments: { requestId: ticket.id } },
+            });
+            result = resumed.result.structuredContent;
+          }
+          assert.equal(result.exitCode, 0);
+          if (maxOutputChars < 20000) {
+            assert.equal(result.truncated, true);
+            assert.ok(result.stdout.length < 1100);
+          } else {
+            assert.equal(result.stdout.length, 20000);
+            assert.equal(result.truncated, undefined);
+          }
+        } finally {
+          x.db.close();
+        }
+      });
+    }
+  }
+}

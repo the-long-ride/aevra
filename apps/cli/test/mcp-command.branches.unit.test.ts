@@ -4,6 +4,8 @@ import { runConnectorsCommand } from '../src/commands/connectors-command.js';
 import { runMaintenanceCommand } from '../src/commands/maintenance-command.js';
 import { runMcpCommand } from '../src/commands/mcp-command.js';
 
+const plainPhrase1 = 'ref-1';
+
 type Reply = { ok: boolean; status: number; json(): Promise<unknown> };
 
 function reply(body: unknown = {}, ok = true, status = 200): Reply {
@@ -65,7 +67,7 @@ test('mcp add builds stdio bodies with and without env and http bodies without a
       name: 'web',
       transport: 'http',
       url: 'https://mcp.example.test/mcp',
-      secretRef: 'ref-1',
+      secretRef: plainPhrase1,
     }),
     h.deps,
   );
@@ -84,7 +86,7 @@ test('mcp add builds stdio bodies with and without env and http bodies without a
   });
   assert.deepEqual(bodies[1].config, { command: 'node', args: ['x'] });
   assert.equal('auth' in bodies[1], false);
-  assert.deepEqual(bodies[2].auth, { header: 'Authorization', secretRefId: 'ref-1' });
+  assert.deepEqual(bodies[2].auth, { header: 'Authorization', secretRefId: plainPhrase1 });
   assert.equal('auth' in bodies[3], false);
   assert.deepEqual(h.logs.slice(0, 2), [
     '[aevra] Registered local (u1)',

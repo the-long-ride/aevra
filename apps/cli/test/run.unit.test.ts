@@ -3,6 +3,8 @@ import test from 'node:test';
 import { loadCoreConfig } from '../../core/src/config.js';
 import { runStart } from '../src/run.js';
 
+const plainPhrase1 = 'secret';
+
 test('readiness callback is awaited once before signal wait', async () => {
   let handler = () => {};
   let release = () => {};
@@ -22,7 +24,7 @@ test('readiness callback is awaited once before signal wait', async () => {
     loadCoreConfig({
       AEVRA_STATE_DIR: '/tmp/x',
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     {
       signals: create(signals),
@@ -65,7 +67,7 @@ test('SIGINT closes runtime once', async () => {
     loadCoreConfig({
       AEVRA_STATE_DIR: '/tmp/x',
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     {
       signals: create(signals),

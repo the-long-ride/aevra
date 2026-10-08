@@ -11,6 +11,7 @@ import type { ExposureConfig } from '../../core/src/exposure/types.js';
 import { loadAdminCredentials } from '../../core/src/admin/admin-credentials.js';
 import { loadCoreConfig } from '../../core/src/config.js';
 import { createCoreRuntime } from '../../core/src/runtime.js';
+import { resolveHelperBinaryPath } from '../../worker/src/desktop-runtime.js';
 import { createUserServiceAdapter } from '../../core/src/service/service-manager.js';
 import { AEVRA_VERSION } from '../../core/src/version.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
@@ -169,7 +170,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
               createRuntime: createCoreRuntime,
               onReady: hooks.onReady,
             }),
-          readyLines,
+          readyLines: (info) =>
+            readyLines({ ...info, desktopHelperReady: Boolean(resolveHelperBinaryPath().path) }),
           openUi: async (currentConfig, destination) => {
             const url = await createAuthenticatedUiUrl(currentConfig, admin, destination);
             openBrowser(url);

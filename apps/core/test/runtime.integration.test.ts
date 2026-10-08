@@ -10,6 +10,8 @@ import { ensureLocalTls } from '../src/tls/local-tls.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { SettingsRepository } from '../../../packages/store/src/settings.js';
 
+const plainPhrase1 = 'secret';
+
 function workerStub() {
   return {
     async start() {
@@ -33,7 +35,7 @@ test('runtime exposes distinct loopback listeners', async () => {
     ...loadCoreConfig({
       AEVRA_STATE_DIR: d,
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     publicPort: 0,
     adminPort: 0,
@@ -63,7 +65,7 @@ test('runtime starts configured managed Cloudflare through the provider-neutral 
     ...loadCoreConfig({
       AEVRA_STATE_DIR: d,
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     publicPort: 0,
     adminPort: 0,
@@ -127,7 +129,7 @@ test('runtime starts and closes keep-awake service from persisted policy', async
     ...loadCoreConfig({
       AEVRA_STATE_DIR: d,
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     publicPort: 0,
     adminPort: 0,
@@ -174,7 +176,7 @@ test('runtime cleans partially started worker when public gateway startup fails'
     ...loadCoreConfig({
       AEVRA_STATE_DIR: d,
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     publicPort: address.port,
     adminPort: 0,

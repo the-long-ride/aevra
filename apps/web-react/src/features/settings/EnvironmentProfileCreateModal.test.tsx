@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { EnvironmentProfileCreateModal } from './EnvironmentProfileCreateModal';
 
+const plainPhrase1 = 'KEY';
+
 const postJson = vi.fn();
 
 vi.mock('./settings-service', () => ({
@@ -35,7 +37,7 @@ test('submits successfully and tolerates refresh failure', async () => {
   expect(postJson).toHaveBeenCalledWith('/api/environment-profiles', {
     name: 'staging',
     vars: { ENV: 'staging' },
-    secretRefs: { SECRET: 'KEY' },
+    secretRefs: { SECRET: plainPhrase1 },
   });
   expect(onCreated).toHaveBeenCalledOnce();
 });

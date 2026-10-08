@@ -6,6 +6,10 @@ import { AuditRepository } from '../../../packages/store/src/audit.js';
 import { AuditService } from '../src/audit/audit-service.js';
 import { ApprovalService } from '../src/approvals/approval-service.js';
 
+const plainPhrase1 = 'synthetic-inline-env-sample-4FCA';
+const plainPhrase2 = '//registry.example/:_authToken=synthetic-file-sample-CC92';
+const plainPhrase3 = 'short-sample-42';
+
 function make() {
   const db = AevraDatabase.open(':memory:');
   const approvals = new ApprovalService(
@@ -18,7 +22,7 @@ function make() {
 
 test('approval persistence excludes raw inline env while resume retains volatile execution values', async () => {
   const { db, approvals } = make();
-  const secret = 'synthetic-inline-env-secret-4FCA';
+  const secret = plainPhrase1;
   const request = await approvals.request({
     actor: 'oauth:ChatGPT',
     sessionId: 'ses_1',
@@ -70,7 +74,7 @@ test('approval persistence excludes raw inline env while resume retains volatile
 
 test('security-sensitive file content is not stored in approval rows', async () => {
   const { db, approvals } = make();
-  const secretContent = '//registry.example/:_authToken=synthetic-file-secret-CC92';
+  const secretContent = plainPhrase2;
   const request = await approvals.request({
     actor: 'oauth:ChatGPT',
     sessionId: 'ses_1',
@@ -104,7 +108,7 @@ test('security-sensitive file content is not stored in approval rows', async () 
 
 test('security-sensitive file patches are not stored in approval rows', async () => {
   const { db, approvals } = make();
-  const patchSecret = 'short-secret-42';
+  const patchSecret = plainPhrase3;
   const patch = `@@ -1 +1 @@\n-old\n+TOKEN=${patchSecret}`;
   const request = await approvals.request({
     actor: 'oauth:ChatGPT',

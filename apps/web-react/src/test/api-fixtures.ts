@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { connectorProfilesFixture, tokenUsageReport } from './token-usage-fixture';
 
 export interface FixtureOptions {
   onboardingCompleted?: boolean;
@@ -208,6 +209,8 @@ export function installApiFixtures(options: FixtureOptions = {}) {
         ],
       },
     ],
+    ['/api/usage/tokens?range=24h', tokenUsageReport()],
+    ['/api/connector-profiles', connectorProfilesFixture()],
     ['/api/permissions', []],
     [
       '/api/browser',

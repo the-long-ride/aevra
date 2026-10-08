@@ -27,7 +27,7 @@
 
 **aevra** is a local **MCP execution gateway** that lets AI assistants (such as ChatGPT, Claude, and Grok), any AI platform with an MCP connector, and all AI coding agents (such as Cursor, Windsurf, Claude Code, Cline, Roo Code, and Copilot) work directly on your machine: edit files, run commands, manage Git repositories, automate desktop software, drive browsers, and bridge upstream MCP servers under explicit security boundaries.
 
-As a unified MCP gateway, aevra acts as both a secure execution host and an upstream proxy aggregator. It serves 73 built-in system tools while republishing external downstream MCP servers under collision-resistant namespaces (`server__tool`). When an AI client requests an action, aevra validates the request against your configured capability profile, enforces fine-grained path and command policies, prompts for human approval on sensitive operations, and records each action to a tamper-evident audit log.
+As a unified MCP gateway, aevra acts as both a secure execution host and an upstream proxy aggregator. It serves 74 built-in system tools while republishing external downstream MCP servers under collision-resistant namespaces (`server__tool`). When an AI client requests an action, aevra validates the request against your configured capability profile, enforces fine-grained path and command policies, prompts for human approval on sensitive operations, and records each action to a tamper-evident audit log.
 
 It supports any client or platform using the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) standard, runs on Windows, macOS, and Linux, and connects over local loopback, private networks, or public tunnels with floating-IP session continuity.
 
@@ -50,7 +50,8 @@ Public MCP Gateway (Port 47830 - Direct HTTPS / Cloudflare / Tailscale / ngrok /
   │                                                   │
 MCP Data Plane (Port 47832)               Admin Control Plane (Port 47831)
 aevra Core Daemon                         React Web UI
-(policy · sessions · floating-IP continuity) (approvals · live activity · settings · MCP upstreams)
+(policy · sessions · floating-IP continuity (approvals · live activity · settings · MCP upstreams
+ · token metering · result shaper)         · token usage analytics · tool surface controls)
   │
 Local IPC (named pipe / unix socket)
   │
@@ -78,12 +79,16 @@ Most local MCP servers do one job (files, a shell, or a browser) and trust which
 - **Evidence you can verify.** Every action lands in a hash-chained audit log. Secret paths are denied, sensitive output is masked, and multi-file edits are journaled change sets you can roll back.
 - **Computer use that stays out of your way.** Desktop control goes through native accessibility APIs (UIA, AX, AT-SPI), and browser actions are pinned to background tabs, so the agent works without moving your cursor or stealing focus. Canvas and WebGL apps get browser-native coordinate clicks. Password, OTP, and payment fields are refused. See the [desktop](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/19-desktop-control.md) and [browser](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/18-browser-control.md) guides.
 - **Fewer model round trips.** Batch tools (`file_read_many`, `file_write_many`, `command_run_many`) and bounded browser and desktop plans do in one call what would otherwise take many.
+- **Built for token efficiency.** Compact advertised schemas cut definition tokens by ~20%. Results are automatically shaped at the edge: redundant batch wrappers and duplicate paths are flattened, security notices hoisted, whole ANSI escapes stripped, repeated lines collapsed, and output stream budgets (`maxOutputChars`) enforced. Connectors can toggle tool groups off to send only the tools that model needs.
 
 ---
 
 ## Core features
 
-- **73 built-in MCP tools and fast lane interfaces:** Includes batch file operations, command execution, workspace management, Git actions, background processes, change sets, browser automation, and desktop control. Upstream MCP tools load dynamically under namespaced names.
+- **74 built-in MCP tools and fast lane interfaces:** Includes batch file operations, command execution, workspace management, Git actions, background processes, change sets, browser automation, and desktop control. Upstream MCP tools load dynamically under namespaced names.
+- **Token usage metering & live analytics:** Accurately measures incoming, outgoing, and saved tokens using a lightweight heuristic estimator (`heuristic-v1`). Non-sensitive metrics accumulate in memory and persist to SQLite (`token_usage` table) with automatic 7-day roll-up. The React Admin Dashboard features live stat cards and an interactive historical SVG chart (24h to all-time). See the [token usage and tool surface guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/21-token-usage-and-tool-surface.md).
+- **Per-connector tool surface & result formats:** Customize advertised tool groups (`files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, `upstream`) per AI client to drastically reduce session token overhead. Select between dual `both`, `text`-only, or `structured` MCP result formats.
+- **HTTP response compression & transport speed:** Automatically gzip-compresses MCP JSON responses of 1,024 bytes or larger for clients that accept it, caches serialized tool lists, and bounds activity log depth to keep local execution fast.
 - **Shared-semantic desktop automation & background auto-clicker (Windows, macOS, Linux):** Operates as a background auto-clicker and desktop automation engine. `desktop_invoke`, `desktop_set_value`, `desktop_select`, `desktop_toggle`, `desktop_release_window`, and background `desktop_describe` use native accessibility providers (UIA / AX / AT-SPI) without moving physical pointers, synthesizing host mouse or keyboard input, or stealing window focus. Windows keeps its additional integrity/secure-desktop defenses; macOS/Linux surface permission/provider failures explicitly. Strict `isolated` control never downgrades to the host session and is refused until a separately qualified runner is available. See the [desktop control guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/19-desktop-control.md).
 - **Foreground desktop control (Windows):** Legacy foreground click/type/key/scroll and pixel capture remain Windows-specific. They are explicit tools only and are never an automatic fallback from shared-semantic control.
 - **Browser control, background auto-clicking, and enhanced canvas support:** Ten `browser_*` tools drive Chromium browsers through the Aevra MV3 browser extension or Chrome DevTools Protocol (CDP) under capability, risk, approval, DLP, and audit controls. It operates as a true background auto-clicker: CDP actions are target-pinned without activating another tab, and extension interactions work seamlessly in background tabs without stealing focus. **Enhanced canvas and WebGL handling:** drives HTML5 canvas viewports and web games with high-reliability vision coordinate mapping and native browser mouse clicks and drags (`Input.dispatchMouseEvent` via Chrome debugger or CDP) instead of brittle synthetic DOM events. Extension snapshot refs resolve through isolated-world opaque element identities rather than page-writable DOM attributes. `browser_execute_script` accepts a bounded Playwright-like action grammar for single-call multi-step interaction without exposing arbitrary JavaScript evaluation, and credential fields remain refused. The Web UI and `aevra status` report pairing state, with download and load-unpacked instructions via `aevra extension install`. See the [browser control guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/18-browser-control.md).
@@ -263,6 +268,7 @@ Aevra does not automatically replay a lost mutating request after reconnection. 
 - **[Installation & Development Guideline](https://github.com/the-long-ride/aevra/blob/main/GUIDELINE.md):** Building from source, development scripts, test suites, architecture boundaries, and troubleshooting.
 - **[Technical Specifications](https://github.com/the-long-ride/aevra/blob/main/docs/specs/README.md):** In-depth design documents for engineers and AI coding agents.
 - **[User Manual](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/README.md):** Modular guides for tunnels, connectors, workspaces, permissions, and service setups.
+- **[Token Usage & Tool Surface](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/21-token-usage-and-tool-surface.md):** Managing context tokens, result formats, and client tool groups.
 - **[Changelog](https://github.com/the-long-ride/aevra/blob/main/CHANGELOG.md):** Release history and version notes.
 
 ---

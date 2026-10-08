@@ -1,0 +1,280 @@
+.token-usage-stats {
+  margin-top: 16px;
+}
+.token-usage-heading {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.token-usage-heading abbr {
+  color: var(--mute);
+  text-decoration: none;
+  font-weight: 400;
+  font-size: 12px;
+}
+.token-usage-note {
+  color: var(--mute);
+  font-size: 13px;
+}
+.token-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.token-stat {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-width: 0;
+  padding: 12px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+}
+.token-stat-label {
+  color: var(--mute);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.token-stat-value {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.25;
+}
+.token-stat-detail {
+  color: var(--mute);
+  font-size: 11px;
+  line-height: 1.35;
+  min-height: 1em;
+  overflow-wrap: anywhere;
+}
+.token-usage-chart {
+  margin-top: 16px;
+}
+.token-usage-chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.token-usage-ranges {
+  display: flex;
+  gap: 4px;
+}
+.token-usage-range {
+  padding: 2px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--body);
+  cursor: pointer;
+  font-size: 12px;
+}
+.token-usage-range[aria-pressed='true'] {
+  background: var(--surface-soft);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.token-usage-svg {
+  width: 100%;
+  height: 160px;
+  display: block;
+  border-bottom: 1px solid var(--hairline);
+}
+.token-usage-svg g:focus {
+  outline: none;
+}
+.token-usage-svg g:focus .token-bar-hit,
+.token-usage-svg g:hover .token-bar-hit {
+  fill: var(--surface-soft);
+}
+.token-bar-hit {
+  fill: transparent;
+}
+.token-bar-out {
+  fill: var(--ink);
+}
+.token-bar-in {
+  fill: var(--mute);
+}
+.token-line-saved {
+  stroke: var(--body);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+.token-usage-chart-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+.token-usage-chart-footer .token-usage-legend {
+  margin-top: 0;
+}
+.token-usage-chart-footer .token-usage-note {
+  margin: 0;
+  font-size: 12px;
+}
+.token-usage-legend {
+  display: flex;
+  gap: 12px;
+  color: var(--mute);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.token-key::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border-radius: 2px;
+}
+.token-key-out::before {
+  background: var(--ink);
+}
+.token-key-in::before {
+  background: var(--mute);
+}
+.token-key-saved::before {
+  border-top: 2px dashed var(--body);
+  height: 0;
+  border-radius: 0;
+}
+.tool-surface {
+  margin-top: 16px;
+}
+.tool-surface-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+/* Treat token metrics as seamless cells of the Runtime overview table. */
+.runtime-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.runtime-grid > .token-usage-stats {
+  grid-column: span 5;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: var(--canvas);
+}
+
+.runtime-grid > .token-usage-stats > .token-usage-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.runtime-grid .token-usage-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  height: 100%;
+}
+
+.runtime-grid .token-stat {
+  border-top: 0;
+  border-left: 0;
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 0;
+  padding: 12px;
+  background: var(--canvas);
+}
+
+.runtime-grid > .token-usage-note {
+  grid-column: span 5;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 12px;
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--canvas);
+}
+
+.runtime-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.runtime-charts > * {
+  min-width: 0;
+}
+
+.runtime-charts > .runtime-request-chart,
+.runtime-charts > .token-usage-chart {
+  margin-top: 0;
+}
+
+.runtime-charts > .token-usage-chart {
+  border: 1px solid var(--hairline);
+  padding: 12px;
+  background: var(--canvas);
+}
+
+@media (max-width: 1199px) {
+  .runtime-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .runtime-grid > .token-usage-stats {
+    grid-column: 1 / -1;
+  }
+
+  .runtime-grid .token-usage-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 1023px) {
+  .runtime-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .runtime-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .runtime-grid > .runtime-stat:nth-child(9) {
+    grid-column: 1 / -1;
+  }
+
+  .runtime-grid .token-usage-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .runtime-grid .token-stat:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 420px) {
+  .runtime-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .runtime-grid .token-usage-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

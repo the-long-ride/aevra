@@ -9,11 +9,17 @@
 
 ## From a source checkout
 
+Install Node.js and a Rust toolchain (including `cargo`) to build the native desktop helper locally. From the repository root:
+
 ```powershell
 npm install
-npm run build
+npm run build:local
 npm link
 ```
+
+`npm run build:local` runs the JavaScript/web build and then compiles the native helper into `helper/target/release/`. For JavaScript-only development, `npm run build` is still available, but it does **not** build the desktop helper. `npm link` only links the checkout; it does not build the helper either.
+
+The published npm package contains precompiled desktop helpers for its supported platforms, so users installing from npm do not need Cargo.
 
 Verify:
 

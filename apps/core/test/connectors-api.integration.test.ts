@@ -6,6 +6,8 @@ import { AuditRepository } from '../../../packages/store/src/audit.js';
 import { AuditService } from '../src/audit/audit-service.js';
 import { AdminBootstrapService } from '../src/admin/bootstrap.js';
 import { AdminServer } from '../src/admin/server.js';
+
+const plainPhrase1 = 'secret';
 async function login(bootstrap: AdminBootstrapService) {
   const session = await bootstrap.issueSession();
   return `aevra_admin=${encodeURIComponent(session.sessionId)}`;
@@ -17,7 +19,7 @@ test('connector create and revoke emit hash-chained audit events', async () => {
   const audit = new AuditService(new AuditRepository(raw));
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
     bootstrap,
-    controlSecret: 'secret',
+    controlSecret: plainPhrase1,
     api: { connectors: new ConnectorRepository(raw), audit },
   });
   await server.start();
@@ -50,7 +52,7 @@ test('connector create/list/revoke over admin API; token shown once', async () =
   const bootstrap = new AdminBootstrapService(raw);
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
     bootstrap,
-    controlSecret: 'secret',
+    controlSecret: plainPhrase1,
     api: { connectors: new ConnectorRepository(raw) },
   });
   await server.start();
@@ -84,7 +86,7 @@ test('duplicate connector name returns 409 CONNECTOR_EXISTS', async () => {
   const bootstrap = new AdminBootstrapService(raw);
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
     bootstrap,
-    controlSecret: 'secret',
+    controlSecret: plainPhrase1,
     api: { connectors: new ConnectorRepository(raw) },
   });
   await server.start();
@@ -112,7 +114,7 @@ test('empty name is rejected', async () => {
   const bootstrap = new AdminBootstrapService(raw);
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
     bootstrap,
-    controlSecret: 'secret',
+    controlSecret: plainPhrase1,
     api: { connectors: new ConnectorRepository(raw) },
   });
   await server.start();

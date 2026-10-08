@@ -4,12 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { DialogProvider } from '../../components/Dialog';
 import { McpUpstreamsSettings, type UpstreamSummary } from './McpUpstreamsSettings';
 
+const plainPhrase1 = 'sr_github';
+
 const active: UpstreamSummary = {
   id: 'u1',
   name: 'github',
   transport: 'http',
   config: { url: 'https://mcp.example.com/mcp' },
-  auth: { kind: 'header', header: 'Authorization', secretRefId: 'sr_github' },
+  auth: { kind: 'header', header: 'Authorization', secretRefId: plainPhrase1 },
   risk: 'HIGH',
   enabled: true,
   state: 'active',

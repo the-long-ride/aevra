@@ -1,1 +1,1 @@
-export const AEVRA_VERSION = '1.1.4';
+export const AEVRA_VERSION = '1.2.0';

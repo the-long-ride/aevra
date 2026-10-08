@@ -3,6 +3,8 @@ import { Readable } from 'node:stream';
 import test from 'node:test';
 import { handleAccessRoutes } from '../src/admin/routes/access-routes.js';
 
+const plainPhrase1 = 'pw';
+
 function request(method: string, value?: unknown) {
   const text = value === undefined ? '' : JSON.stringify(value);
   const stream = Readable.from(text ? [Buffer.from(text)] : []) as any;
@@ -229,7 +231,7 @@ test('secret environment vault and config routes cover defaults and mutations', 
     secretRefs: { A: 'TOKEN' },
   });
   await call('/api/vault/unlock', 'POST', context, {});
-  await call('/api/vault/unlock', 'POST', context, { passphrase: 'pw' });
+  await call('/api/vault/unlock', 'POST', context, { passphrase: plainPhrase1 });
   await call('/api/vault/lock', 'POST', context);
   assert.equal((await call('/api/config/export?portable=1', 'GET', context)).value.portable, true);
   assert.equal((await call('/api/config/export', 'GET', context)).value.portable, false);

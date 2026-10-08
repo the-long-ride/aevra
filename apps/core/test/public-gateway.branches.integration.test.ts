@@ -8,6 +8,8 @@ import {
   PublicGateway,
 } from '../src/gateway/public-gateway.js';
 
+const plainPhrase1 = 'sample words';
+
 type Seen = { url?: string; headers: IncomingHttpHeaders };
 
 async function upstream(
@@ -87,7 +89,7 @@ test('admin paths get trust headers; connection-listed and forwarded headers are
   });
   const subject = await gateway(t, {
     targets: { adminUrl: admin.url, mcpUrl: 'http://127.0.0.1:9' },
-    gatewayTrustSecret: 'sample words',
+    gatewayTrustSecret: plainPhrase1,
     adminProxyEnabled: () => true,
   });
   const response = await send(`${subject.url()}/settings?tab=one`, {
@@ -119,7 +121,7 @@ test('mcp paths skip trust headers and keep client-ip hints when trusted', async
   });
   const subject = await gateway(t, {
     targets: { adminUrl: 'http://127.0.0.1:9', mcpUrl: mcp.url },
-    gatewayTrustSecret: 'sample words',
+    gatewayTrustSecret: plainPhrase1,
     trustForwardedClientIp: () => true,
   });
   for (const pathname of [

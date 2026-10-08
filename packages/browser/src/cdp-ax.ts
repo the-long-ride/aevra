@@ -81,3 +81,25 @@ export function markCredentialFields(
     if (node && isCredentialField(attributesToElement(attributes))) node.credentialField = true;
   }
 }
+
+/**
+ * Chrome can briefly detach a page while committing a navigation (observed
+ * on macOS Chromium). Retry only that specific CDP error.
+ */
+export async function snapshotDocumentWithRetry(
+  fetchUrl: () => Promise<string>,
+  fetchTree: () => Promise<{ nodes?: AxNode[] }>,
+): Promise<{ url: string; nodes: AxNode[] }> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const url = await fetchUrl();
+      const tree = await fetchTree();
+      return { url, nodes: tree.nodes ?? [] };
+    } catch (error) {
+      const detached =
+        error instanceof Error && /not attached to an active page/i.test(error.message);
+      if (!detached || attempt >= 4) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+    }
+  }
+}

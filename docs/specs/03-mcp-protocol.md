@@ -1,6 +1,6 @@
 # 03 — MCP Protocol
 
-**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.1.4`
+**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.2.0`
 
 ## Transport
 
@@ -10,16 +10,16 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 
 ## Session lifecycle
 
-1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.1.4"}`.
+1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.2.0"}`.
 2. Every subsequent `POST` carries that header; `DELETE` disconnects. The session's admission identity (actor + subject + durable OAuth connection when present) must match on every call.
 3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
 4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
 
-## Tool vocabulary (72 discoverable tools)
+## Tool vocabulary (74 discoverable tools)
 
 | Group      | Tools                                                                                                                                                                                                                                                                                                                |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | `aevra_status` (reports session, leases, capabilities, and `execution.system` host capability snapshot)                                                                                                                                                                                                              |
+| Status     | `aevra_status` (reports session, leases, capabilities, and `execution.system` host capability snapshot) `control_access_status` (reports host-control connection grants `browser.control` and `desktop.control`)                                                                                                     |
 | Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                                                                                                                                                                                                                              |
 | Files      | `file_list` `file_read_many` `file_search` `search` `file_write_many` `file_move` `file_delete`                                                                                                                                                                                                                      |
 | Command    | `command_run_many` `shell_run`                                                                                                                                                                                                                                                                                       |
@@ -42,6 +42,28 @@ The public MCP discovery surface exposes batch tools as the normal interface for
 The singular primitives `file_read`, `file_create`, `file_write`, `file_patch`, and `command_run` remain internal service operations used by batch delegation and backward-compatible direct calls. They are intentionally omitted from `tools/list` and are not part of model-facing tool selection.
 
 Stable public tools advertise closed `inputSchema` definitions and an `outputSchema`. Results retain text compatibility as `{content:[{type:'text'}]}` and also expose `structuredContent`; array results are represented as `{result:[...]}` in structured content. Tool errors arrive inside a normal result as `{error:{code,message,details}}` with `isError:true`.
+
+### Compact advertised schemas & tool groups
+
+- `tools/list` returns compact advertised definitions (stripping deprecated compatibility properties from host tools, default-false hints, bare `{type:'object'}` output schemas, and shortening repeated workspace descriptions). The full default tool catalog serializes to ≤ 54,000 characters.
+- Tools are organized into groups: `core` (always enabled), `files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, and `upstream`.
+- Connector profiles configure enabled groups and `resultFormat` (`both` [default], `text`, or `structured`) per client. Invoking a tool in a disabled group fails with `TOOL_GROUP_DISABLED`.
+
+### Result shaping
+
+Results are compacted once at the MCP edge before serialization:
+
+- Command results unwrap `{ok:true, value:X}` to `X`, drop `signal:null` and empty `stderr:""`, strip whole ANSI escape sequences, normalize CRLF to LF, collapse 3+ repeated lines, and enforce `maxOutputChars` budgets (default 16,000; 256–200,000; keeping first 25% and last 75% with `truncated:true`).
+- Batch results (`file_read_many`, `file_write_many`, `command_run_many`) drop array `index`, duplicate inner paths, and `sensitivity: NORMAL`, hoisting untrusted security notices to the top level. Batch summaries omit `failed: 0` and `skipped: 0`.
+- Approvals (`approval_status`, `approval_wait`) return concise summaries unless `detail: "full"`.
+- Underlying file content (`file_read*` `content`) is strictly preserved byte-for-byte.
+
+### Transport and speed optimizations
+
+- **Serialize once:** Responses are serialized once via `sendJsonBody`; the exact serialized string feeds the token usage meter.
+- **Cached tool lists:** Tool catalogs memoize serialized definitions per group set.
+- **Response compression:** JSON responses of 1,024 bytes or more are gzip-compressed when `Accept-Encoding: gzip` is present (`Vary: Accept-Encoding`). SSE streams remain uncompressed.
+- **Bounded activity detail:** In-memory activity log structures are depth- and length-bounded before serialization.
 
 ### Long-running command pattern
 
@@ -93,7 +115,7 @@ pending captures retain stage and close-cause diagnostics without page content.
 
 `desktop_connect` starts the packaged native helper for the current platform.
 Windows uses UI Automation (UIA); macOS uses Accessibility/AX; Linux uses AT-SPI2.
-Capability flags are literal: v1.1.4 retains shared semantic tree/action support,
+Capability flags are literal: v1.2.0 retains shared semantic tree/action support,
 first shipped in v1.1.1, on all three platforms, while legacy foreground
 mouse/keyboard injection and pixel capture remain Windows-only.
 Permission/provider failures are errors, not empty successful trees.
@@ -139,7 +161,7 @@ same owner/request/digest. `control_plan_status` and `control_plan_cancel` are
 owner checked.
 
 Mode `sharedSemantic` is implemented. Mode `isolated` is deliberately fail-closed
-in v1.1.4: unless a separately provisioned runner has verified containment, the
+in v1.2.0: unless a separately provisioned runner has verified containment, the
 adapter returns `CONTROL_ISOLATION_UNAVAILABLE` with
 `chooseIsolatedRunner`. A same-desktop worker is never relabeled as isolated.
 
@@ -164,16 +186,16 @@ tier. Temporary outages remain visible as degraded. A changed catalog enters
 Needs review and stops serving until the operator acknowledges the diff. A
 disconnect just before a call fails rather than replaying it; reconnect must
 validate the catalog first. These dynamic upstream entries are additional to
-the 72 discoverable built-in tools listed above.
+the 74 discoverable built-in tools listed above.
 
 ## Error codes
 
-`CAPABILITY_REQUIRED` · `SESSION_WORKSPACE_REQUIRED` · `CONTROL_ISOLATION_UNAVAILABLE` · `CONTROL_REQUEST_CONFLICT` · `WORKSPACE_ESCAPE` · `WRITE_CONFLICT` · `MERGE_CONFLICT` · `APPROVAL_PENDING` · `APPROVAL_DENIED` · `APPROVAL_TIMEOUT` · `APPROVAL_CONTEXT_CHANGED` · `EXECUTOR_UNAVAILABLE` · `RECOVERY_REQUIRED` · `EXECUTION_OUTCOME_UNKNOWN` · `INVALID_REQUEST` · `UNAUTHORIZED` · `NOT_FOUND` · `VAULT_LOCKED` · `SKILL_NOT_FOUND` · `SKILL_PATH_ESCAPE` · `SKILL_FILE_TOO_LARGE`
+`CAPABILITY_REQUIRED` · `SESSION_WORKSPACE_REQUIRED` · `TOOL_GROUP_DISABLED` · `CONTROL_ISOLATION_UNAVAILABLE` · `CONTROL_REQUEST_CONFLICT` · `WORKSPACE_ESCAPE` · `WRITE_CONFLICT` · `MERGE_CONFLICT` · `APPROVAL_PENDING` · `APPROVAL_DENIED` · `APPROVAL_TIMEOUT` · `APPROVAL_CONTEXT_CHANGED` · `EXECUTOR_UNAVAILABLE` · `RECOVERY_REQUIRED` · `EXECUTION_OUTCOME_UNKNOWN` · `INVALID_REQUEST` · `UNAUTHORIZED` · `NOT_FOUND` · `VAULT_LOCKED` · `SKILL_NOT_FOUND` · `SKILL_PATH_ESCAPE` · `SKILL_FILE_TOO_LARGE`
 
 HTTP-level: `401` admission failure · `405` bad method · `503` safe mode · `501` tools not wired.
 
 **Boundaries:** admission mechanics (`02`, `04`); what each tool _does_ (`06`, manual).
 
-**Related:** [`04-connectors`](04-connectors.md) · [`05-skills-instructions`](05-skills-instructions.md) · [`06-workspaces-execution`](06-workspaces-execution.md)
+**Related:** [`04-connectors`](04-connectors.md) · [`05-skills-instructions`](05-skills-instructions.md) · [`06-workspaces-execution`](06-workspaces-execution.md) · [`11-token-efficiency-and-usage`](11-token-efficiency-and-usage.md)
 
 **Next →** [`04-connectors`](04-connectors.md)

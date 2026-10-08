@@ -5,6 +5,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { main } from '../src/cli.js';
 
+const plainPhrase1 = 'sample words';
+
 const ENV_KEYS = [
   'AEVRA_STATE_DIR',
   'AEVRA_USERNAME',
@@ -27,7 +29,7 @@ async function runMain(argv: string[], env: Record<string, string> = {}) {
   for (const key of ENV_KEYS) delete process.env[key];
   process.env.AEVRA_STATE_DIR = stateDir;
   process.env.AEVRA_USERNAME = 'sample';
-  process.env.AEVRA_PASSWORD = 'sample words';
+  process.env.AEVRA_PASSWORD = plainPhrase1;
   process.env.AEVRA_ADMIN_PORT = '1';
   Object.assign(process.env, env);
   console.log = (...parts: unknown[]) => void logs.push(parts.join(' '));

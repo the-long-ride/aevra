@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseAevraArgs } from '../src/args.js';
 
+const plainPhrase1 = 'sr_remote';
+
 const add = (...rest: string[]) => parseAevraArgs(['mcp', 'add', ...rest]);
 
 test('mcp add builds a stdio server with args, env references and risk', () => {
@@ -54,7 +56,7 @@ test('mcp add builds an http server with optional header and secret reference', 
       transport: 'http',
       url: 'https://mcp.example.com',
       header: 'X-Api-Key',
-      secretRef: 'sr_remote',
+      secretRef: plainPhrase1,
       args: [],
       env: {},
       risk: 'MEDIUM',

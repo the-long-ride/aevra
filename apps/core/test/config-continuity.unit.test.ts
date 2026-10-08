@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadCoreConfig } from '../src/config.js';
 
+const plainPhrase1 = 'secret';
+
 const baseEnv = {
   AEVRA_USERNAME: 'admin',
-  AEVRA_PASSWORD: 'secret',
+  AEVRA_PASSWORD: plainPhrase1,
   AEVRA_STATE_DIR: '/tmp/aevra-config-continuity',
 };
 

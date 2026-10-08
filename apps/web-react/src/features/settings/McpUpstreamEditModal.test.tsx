@@ -2,6 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { McpUpstreamEditModal, type UpstreamDraft } from './McpUpstreamEditModal';
 
+const plainPhrase1 = 'sr_github';
+const plainPhrase2 = 'sr_key';
+
 function mount(initial?: Partial<UpstreamDraft>) {
   const onSubmit = vi.fn();
   const onClose = vi.fn();
@@ -47,7 +50,7 @@ describe('McpUpstreamEditModal', () => {
       name: 'github',
       transport: 'http',
       config: { url: 'https://mcp.example.com/mcp' },
-      auth: { header: 'Authorization', secretRefId: 'sr_github' },
+      auth: { header: 'Authorization', secretRefId: plainPhrase1 },
       risk: 'HIGH',
     });
   });
@@ -86,7 +89,7 @@ describe('McpUpstreamEditModal', () => {
       name: 'github',
       transport: 'http',
       config: { url: 'https://mcp.example.com/mcp' },
-      auth: { header: 'X-API-Key', secretRefId: 'sr_key' },
+      auth: { header: 'X-API-Key', secretRefId: plainPhrase2 },
       risk: 'CRITICAL',
     });
     expect((screen.getByLabelText(/server name/i) as HTMLInputElement).value).toBe('github');

@@ -1,6 +1,6 @@
 # 07 — State & Schema
 
-**Audience:** engineers & AI agents · **Scope:** on-disk state and schema evolution · **Verified against:** `1.1.4`
+**Audience:** engineers & AI agents · **Scope:** on-disk state and schema evolution · **Verified against:** `1.2.0`
 
 ## State directory
 
@@ -34,8 +34,24 @@
 - **v16 `016_command_rule_v2_predicates`** - typed command rule predicates (`version`, `predicate_json`, `status`) on `permission_rules`.
 - **v17 `017_control_plan_journal`** - owner/request-bound control plans and redacted per-step dispatch-state journal.
 - **v18 `018_control_plan_terminal_results`** - sanitized terminal control-plan summaries for restart-safe idempotent reattachment.
+- **v19 `019_desktop_access_requests`** - desktop app grants (`desktop_app_grants`) and access requests (`desktop_access_requests`).
+- **v20 `020_desktop_custom_apps`** - custom desktop applications catalog (`desktop_custom_apps`).
+- **v21 `021_desktop_access_request_host_binding`** - desktop access requests host process and session binding.
+- **v22 `022_host_control_grants`** - persistent host-level control grants (`host_control_grants`) for browser/desktop capabilities keyed by identity.
+- **v23 `023_host_control_approvals`** - host-scoped pending approvals table migration (`pending_approvals_new` -> `pending_approvals`).
+- **v24 `024_host_desktop_access_requests`** - host-scoped desktop access requests (`desktop_access_requests_new` -> `desktop_access_requests`).
+- **v25 `025_token_usage`** - token usage accounting table (`token_usage`, `WITHOUT ROWID`, PK `(granularity, bucket, connector, tool)`).
 
 Migrations are applied transactionally and recorded in `schema_migrations`. Existing Aevra databases advance in version order; new databases receive the complete schema.
+
+## Token usage storage
+
+Migration 25 introduces `token_usage` for lightweight, privacy-preserving token accounting:
+
+- **Schema:** `token_usage(granularity, bucket, connector, tool, calls, errors, input_tokens, output_tokens, saved_tokens, duration_ms)` with composite primary key `(granularity, bucket, connector, tool) WITHOUT ROWID`.
+- **Bucketing:** `granularity = 'hour'` uses UTC `YYYY-MM-DDTHH`; `granularity = 'day'` uses host-local `YYYY-MM-DD`.
+- **Accumulator & Flush:** In-memory counters accumulate live requests and flush to SQLite every 30 seconds and upon shutdown.
+- **Roll-up:** Hourly records older than 7 days are automatically aggregated into local day rows and purged, keeping storage footprint bounded (~1.5 MB/year) while preserving lifetime historical trends. No arguments, file contents, or paths are ever persisted.
 
 ## Startup state behavior
 
@@ -43,6 +59,6 @@ Aevra creates its configured state and recovery directories when needed, then op
 
 **Boundaries:** backups and crash recovery are covered in `08`; runtime configuration is covered in `09`.
 
-**Related:** [`08-audit-recovery`](08-audit-recovery.md) · [`09-configuration`](09-configuration.md)
+**Related:** [`08-audit-recovery`](08-audit-recovery.md) · [`09-configuration`](09-configuration.md) · [`11-token-efficiency-and-usage`](11-token-efficiency-and-usage.md)
 
 **Next →** [`08-audit-recovery`](08-audit-recovery.md)

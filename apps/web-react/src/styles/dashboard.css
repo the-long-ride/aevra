@@ -84,7 +84,7 @@
   outline-offset: -1px;
 }
 
-.runtime-grid span,
+.runtime-grid > .runtime-stat span,
 .recent-grid span,
 .details-grid span {
   color: var(--mute);
@@ -92,7 +92,7 @@
   text-transform: uppercase;
 }
 
-.runtime-grid strong,
+.runtime-grid > .runtime-stat strong,
 .recent-grid strong,
 .details-grid strong {
   overflow-wrap: anywhere;

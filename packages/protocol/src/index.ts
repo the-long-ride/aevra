@@ -1,5 +1,6 @@
 export type AevraErrorCode =
   | 'CAPABILITY_REQUIRED'
+  | 'TOOL_GROUP_DISABLED'
   | 'SESSION_WORKSPACE_REQUIRED'
   | 'WORKSPACE_REQUIRED'
   | 'WORKSPACE_ACCESS_REQUIRED'
@@ -194,3 +195,4 @@ export * from './system-capabilities.js';
 export * from './command-analysis.js';
 export * from './control.js';
 export * from './control-parse.js';
+export * from './token-estimate.js';

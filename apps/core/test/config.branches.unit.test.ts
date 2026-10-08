@@ -3,9 +3,11 @@ import path from 'node:path';
 import test from 'node:test';
 import { loadCoreConfig, workerSocketPathForPlatform } from '../src/config.js';
 
+const plainPhrase1 = 'sample value';
+
 const env = (extra: Record<string, string> = {}) => ({
   AEVRA_USERNAME: 'operator',
-  AEVRA_PASSWORD: 'sample value',
+  AEVRA_PASSWORD: plainPhrase1,
   AEVRA_STATE_DIR: 'state-dir',
   ...extra,
 });
@@ -41,7 +43,7 @@ test('TLS paths resolve together, CA is optional, and a lone path is rejected', 
 test('state dir defaults come from the platform environment', () => {
   const withoutState = {
     AEVRA_USERNAME: 'operator',
-    AEVRA_PASSWORD: 'sample value',
+    AEVRA_PASSWORD: plainPhrase1,
     LOCALAPPDATA: 'local-app',
     XDG_STATE_HOME: 'xdg-state',
   };

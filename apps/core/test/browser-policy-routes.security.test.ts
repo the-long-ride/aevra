@@ -10,6 +10,8 @@ import { AdminBootstrapService } from '../src/admin/bootstrap.js';
 import { AdminServer } from '../src/admin/server.js';
 import { ensureLocalTls } from '../src/tls/local-tls.js';
 
+const plainPhrase1 = 'local-control';
+
 function request(
   server: AdminServer,
   pathname: string,
@@ -41,7 +43,7 @@ async function admin() {
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
     bootstrap: new AdminBootstrapService(db.raw()),
     credentialVerifier: await AdminCredentialVerifier.create('operator', 'a whole phrase of words'),
-    controlSecret: 'local-control',
+    controlSecret: plainPhrase1,
     tls: tls.serverOptions,
     advertisedHost: '127.0.0.1',
   });

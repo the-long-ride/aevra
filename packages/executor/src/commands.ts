@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { CommandInput, CommandResult } from '../../protocol/src/index.js';
 import { redactText } from '../../security/src/dlp.js';
-import { stripControlCharacters } from '../../security/src/untrusted.js';
+import { stripAnsiSequences, stripControlCharacters } from '../../security/src/untrusted.js';
 import { buildChildEnvironment } from './environment.js';
 import { resolveExecutable, windowsShimCommand } from './spawn-target.js';
 export const COMMAND_OUTPUT_LIMIT = 1024 * 1024;
@@ -20,7 +20,9 @@ export function sanitizeCommandOutput(
   // Command output is untrusted data that flows straight into an AI context and,
   // through approval previews, onto a human's screen. Terminal control sequences
   // and bidi overrides let it render as something other than what it says.
-  const text = stripControlCharacters(redactText(value, knownSecrets).text);
+  // Strip ANSI before redaction so a colour code cannot split a secret and hide it
+  // from the matcher, then drop the remaining control and bidi characters.
+  const text = stripControlCharacters(redactText(stripAnsiSequences(value), knownSecrets).text);
   return truncated ? `${text}${TRUNCATED}` : text;
 }
 export async function runCommand(input: CommandInput, cwd?: string): Promise<CommandResult> {

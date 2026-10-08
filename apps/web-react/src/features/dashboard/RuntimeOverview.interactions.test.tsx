@@ -1,7 +1,17 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
+import { tokenUsageReport } from '../../test/token-usage-fixture';
 import type { DashboardData } from './dashboard-service';
 import { RuntimeOverview } from './RuntimeOverview';
+
+vi.mock('../../hooks/use-token-usage', () => ({
+  useTokenUsage: () => ({
+    data: tokenUsageReport(),
+    error: null,
+    loading: false,
+    refresh: async () => undefined,
+  }),
+}));
 
 function dashboardDataAt(generatedAt = '2026-08-28T12:10:00.000Z'): DashboardData {
   return {
@@ -130,4 +140,26 @@ test('request activity displays request count scale on the right side Y-axis', (
     (t) => t.textContent,
   );
   expect(mainSvgLabels).not.toContain('0');
+});
+
+test('token usage cards fill the runtime metrics grid without duplicating the cards below', () => {
+  const { container } = renderRuntime();
+  const metrics = container.querySelector('.runtime-grid');
+  const tokenCards = metrics?.querySelector('.token-usage-stats');
+
+  expect(tokenCards).not.toBeNull();
+  expect(tokenCards?.querySelectorAll('.token-stat')).toHaveLength(5);
+  expect(tokenCards).toContainElement(screen.getByText('Tokens out today'));
+  expect(tokenCards).toContainElement(screen.getByText('Top tool today'));
+  expect(container.querySelectorAll('.token-usage-stats')).toHaveLength(1);
+  expect(metrics?.lastElementChild).toBe(tokenCards);
+});
+
+test('both runtime charts share a responsive layout container', () => {
+  const { container } = renderRuntime();
+  const charts = container.querySelector('.runtime-charts');
+
+  expect(charts?.children).toHaveLength(2);
+  expect(charts?.children[0]).toHaveClass('runtime-request-chart');
+  expect(charts?.children[1]).toHaveClass('token-usage-chart');
 });

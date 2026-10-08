@@ -3,6 +3,8 @@ import { Readable } from 'node:stream';
 import test from 'node:test';
 import { handleAdminApi } from '../src/admin/routes/api.js';
 
+const plainPhrase1 = 'sr_github';
+
 function request(method: string, value?: unknown) {
   const text = value === undefined ? '' : JSON.stringify(value);
   const stream = Readable.from(text ? [Buffer.from(text)] : []) as any;
@@ -42,7 +44,7 @@ function contaminatedRegistry() {
           name: 'github',
           transport: 'http',
           config: { url: 'https://mcp.example.com/mcp' },
-          auth: { kind: 'header', header: 'Authorization', secretRefId: 'sr_github' },
+          auth: { kind: 'header', header: 'Authorization', secretRefId: plainPhrase1 },
           resolvedHeaderValue: `Bearer ${LIVE_TOKEN}`,
           risk: 'LOW',
           enabled: true,

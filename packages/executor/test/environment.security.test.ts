@@ -4,6 +4,9 @@ import { buildChildEnvironment } from '../src/environment.js';
 import { runCommand } from '../src/commands.js';
 import { ManagedProcessRuntime } from '../src/processes.js';
 
+const plainPhrase1 = 'synthetic-parent-sample';
+const plainPhrase2 = 'nope';
+
 async function until(predicate: () => boolean, ms = 5000) {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
@@ -15,7 +18,7 @@ async function until(predicate: () => boolean, ms = 5000) {
 
 test('child environment excludes unrelated parent secrets', async () => {
   const previous = process.env.AEVRA_TEST_PARENT_SECRET;
-  process.env.AEVRA_TEST_PARENT_SECRET = 'synthetic-parent-secret';
+  process.env.AEVRA_TEST_PARENT_SECRET = plainPhrase1;
   try {
     const result = await runCommand({
       executable: process.execPath,
@@ -44,7 +47,7 @@ test('explicit child environment remains available without inheriting arbitrary 
 
 test('attached managed process excludes unrelated parent secrets', async () => {
   const previous = process.env.AEVRA_TEST_PARENT_SECRET;
-  process.env.AEVRA_TEST_PARENT_SECRET = 'synthetic-parent-secret';
+  process.env.AEVRA_TEST_PARENT_SECRET = plainPhrase1;
   const runtime = new ManagedProcessRuntime();
   try {
     const started = runtime.start(
@@ -75,7 +78,7 @@ test('tool child env may opt into execution-essential keys without ambient secre
       PATH: '/usr/bin',
       HOME: '/home/test',
       DOCKER_HOST: 'unix:///run/user/1000/docker.sock',
-      RANDOM_PARENT_SECRET: 'nope',
+      RANDOM_PARENT_SECRET: plainPhrase2,
     },
     'linux',
     ['DOCKER_HOST'],

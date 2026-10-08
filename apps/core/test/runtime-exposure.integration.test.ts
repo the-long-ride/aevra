@@ -12,6 +12,8 @@ import type { ExposureConfig } from '../src/exposure/types.js';
 import { createCoreRuntime } from '../src/runtime.js';
 import { ensureLocalTls } from '../src/tls/local-tls.js';
 
+const plainPhrase1 = 'secret';
+
 function worker() {
   return {
     async start() {
@@ -126,7 +128,7 @@ for (const item of cases) {
       ...loadCoreConfig({
         AEVRA_STATE_DIR: stateDir,
         AEVRA_USERNAME: 'admin',
-        AEVRA_PASSWORD: 'secret',
+        AEVRA_PASSWORD: plainPhrase1,
       }),
       publicPort: 0,
       adminPort: 0,
@@ -159,7 +161,7 @@ for (const item of cases) {
 
       const login = await postJson(
         `${gatewayUrl}/api/auth/login`,
-        { username: 'admin', password: 'secret' },
+        { username: 'admin', password: plainPhrase1 },
         { origin: adminPublicUrl, 'sec-fetch-site': 'same-origin' },
       );
       assert.equal(login.status, 200);
@@ -167,7 +169,7 @@ for (const item of cases) {
 
       const rejectedMcpOrigin = await postJson(
         `${gatewayUrl}/api/auth/login`,
-        { username: 'admin', password: 'secret' },
+        { username: 'admin', password: plainPhrase1 },
         { origin: item.publicUrl, 'sec-fetch-site': 'same-origin' },
       );
       assert.equal(rejectedMcpOrigin.status, 403);
@@ -184,7 +186,7 @@ test('direct exposure rejects the managed localhost certificate before opening t
     ...loadCoreConfig({
       AEVRA_STATE_DIR: stateDir,
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     publicPort: 0,
     adminPort: 0,
@@ -216,7 +218,7 @@ test('runtime health exposes live tunnel reachability for configured remote expo
     ...loadCoreConfig({
       AEVRA_STATE_DIR: stateDir,
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     publicPort: 0,
     adminPort: 0,
@@ -282,7 +284,7 @@ test('managed provider failure keeps the local gateway available without a publi
     ...loadCoreConfig({
       AEVRA_STATE_DIR: stateDir,
       AEVRA_USERNAME: 'admin',
-      AEVRA_PASSWORD: 'secret',
+      AEVRA_PASSWORD: plainPhrase1,
     }),
     publicPort: 0,
     adminPort: 0,

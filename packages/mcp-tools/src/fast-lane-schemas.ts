@@ -1,4 +1,5 @@
 import type { JsonSchema } from './registry-input-schemas.js';
+import { maxOutputCharsSchema } from './registry-schema-parts.js';
 
 export type FastLaneToolName = 'file_read_many' | 'file_write_many' | 'command_run_many';
 
@@ -192,6 +193,7 @@ export const fastLaneInputSchemas: Record<FastLaneToolName, JsonSchema> = {
         maximum: 4,
         description: 'Maximum concurrent command calls. Defaults to 4.',
       },
+      maxOutputChars: maxOutputCharsSchema,
     },
     required: ['commands'],
     additionalProperties: false,

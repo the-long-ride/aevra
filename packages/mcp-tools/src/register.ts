@@ -1,6 +1,13 @@
-import { toolDefinitions } from './registry.js';
+import { advertisedToolDefinitions } from './registry-advertised.js';
 import { asToolError } from './errors.js';
+import { shapeToolResult } from './result-shaper/shape.js';
 import type { McpToolService } from './service.js';
+import {
+  assertToolGroupEnabled,
+  isGroupEnabled,
+  type ConnectorProfile,
+  type ResultFormat,
+} from './tool-groups.js';
 
 function structuredContent(value: any, protocolVersion?: string) {
   if (protocolVersion === '2026-07-28') return value;
@@ -9,25 +16,47 @@ function structuredContent(value: any, protocolVersion?: string) {
     : { result: value };
 }
 
+function toolEnvelope(
+  data: unknown,
+  protocolVersion: string | undefined,
+  format: ResultFormat | undefined,
+) {
+  const structured = format === 'text' ? undefined : structuredContent(data, protocolVersion);
+  const text =
+    format === 'structured' && structured !== undefined
+      ? 'See structuredContent.'
+      : JSON.stringify(data);
+  return {
+    content: [{ type: 'text', text }],
+    ...(structured !== undefined ? { structuredContent: structured } : {}),
+  };
+}
+
+interface RpcOptions {
+  profile?: ConnectorProfile | undefined;
+  onSaved?: ((savedChars: number, savedTokens: number) => void) | undefined;
+}
+
 export async function handleJsonRpc(
   service: McpToolService,
   sessionId: string,
   body: any,
   protocolVersion?: string,
+  options: RpcOptions = {},
 ) {
   const id = body?.id ?? null;
   try {
-    if (body?.method === 'tools/list')
+    if (body?.method === 'tools/list') {
+      const groups = options.profile?.toolGroups;
+      const upstream = isGroupEnabled('upstream', groups)
+        ? ((await (service as any).upstreamToolDefinitions?.()) ?? [])
+        : [];
       return {
         jsonrpc: '2.0',
         id,
-        result: {
-          tools: [
-            ...toolDefinitions(),
-            ...((await (service as any).upstreamToolDefinitions?.()) ?? []),
-          ],
-        },
+        result: { tools: [...advertisedToolDefinitions(groups), ...upstream] },
       };
+    }
     if (body?.method === 'resources/list')
       return {
         jsonrpc: '2.0',
@@ -106,15 +135,19 @@ export async function handleJsonRpc(
     }
     if (body?.method === 'tools/call') {
       const name = String(body.params?.name ?? ''),
-        args = body.params?.arguments ?? {},
-        data = await service.call(sessionId, name, args);
+        args = body.params?.arguments ?? {};
+      assertToolGroupEnabled(name, options.profile?.toolGroups);
+      const shaped = shapeToolResult(
+        name,
+        args,
+        await service.call(sessionId, name, args, options.profile),
+      );
+      if (shaped.savedChars || shaped.savedTokens)
+        options.onSaved?.(shaped.savedChars, shaped.savedTokens);
       return {
         jsonrpc: '2.0',
         id,
-        result: {
-          content: [{ type: 'text', text: JSON.stringify(data) }],
-          structuredContent: structuredContent(data, protocolVersion),
-        },
+        result: toolEnvelope(shaped.data, protocolVersion, options.profile?.resultFormat),
       };
     }
     return { jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } };

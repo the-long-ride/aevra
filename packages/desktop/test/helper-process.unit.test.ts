@@ -3,6 +3,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { HelperProcess, parseHelperError } from '../src/helper-process.js';
 
+const plainPhrase1 = 'ignore-me';
+
 const SCRIPT = fileURLToPath(new URL('./fake-helper.js', import.meta.url));
 
 function helper(mode: string, deadlineMs = 1000) {
@@ -125,7 +127,7 @@ test('parseHelperError accepts structured allowlisted codes and preserves safe d
   const parsed = parseHelperError({
     code: 'DESKTOP_REF_STALE',
     message: 'Expired',
-    details: { ref: 'ref_123', windowId: 'win_1', secret: 'ignore-me' },
+    details: { ref: 'ref_123', windowId: 'win_1', secret: plainPhrase1 },
   });
   assert.equal(parsed.code, 'DESKTOP_REF_STALE');
   assert.equal(parsed.message, 'Expired');

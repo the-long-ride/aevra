@@ -1,9 +1,11 @@
 import {
   approvalIdSchema,
+  approvalReadSchema,
   changeSetIdSchema,
   commandProperties,
   emptySchema,
   executionMode,
+  maxOutputCharsSchema,
   nonNegativeInteger,
   processIdSchema,
   skillSource,
@@ -135,6 +137,7 @@ export const inputSchemas: Record<string, JsonSchema> = {
         description: 'Nested command form accepted for compatibility.',
       },
       executionMode,
+      maxOutputChars: maxOutputCharsSchema,
       networkDestinations: stringArray('Network destinations requested by the command.'),
     },
     anyOf: [{ required: ['executable'] }, { required: ['command'] }],
@@ -155,6 +158,7 @@ export const inputSchemas: Record<string, JsonSchema> = {
       timeoutMs: commandProperties.timeoutMs,
       env: commandProperties.env,
       cwdLogical: commandProperties.cwdLogical,
+      maxOutputChars: maxOutputCharsSchema,
       networkDestinations: stringArray(
         'Optional network destinations subject to Aevra network capability and approval policy.',
       ),
@@ -283,8 +287,8 @@ export const inputSchemas: Record<string, JsonSchema> = {
   change_status: changeSetIdSchema,
   change_commit: changeSetIdSchema,
   change_rollback: changeSetIdSchema,
-  approval_status: approvalIdSchema,
-  approval_wait: approvalIdSchema,
+  approval_status: approvalReadSchema,
+  approval_wait: approvalReadSchema,
   approval_cancel: approvalIdSchema,
   skills_list: {
     type: 'object',

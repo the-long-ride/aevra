@@ -1,6 +1,6 @@
 {
   "name": "@the-long-ride/aevra",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "type": "module",
   "workspaces": [
     "apps/web-react"
@@ -11,6 +11,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json --noCheck && npm --prefix apps/web-react run build && node scripts/copy-manual.mjs",
     "build:extension": "node scripts/pack-extension.mjs",
+    "build:helper": "cargo build --release --manifest-path helper/Cargo.toml",
+    "build:local": "npm run build && npm run build:helper",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "npm run lint:source && npm run lint:loc && npm run lint:dead",

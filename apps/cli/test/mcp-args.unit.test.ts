@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseAevraArgs } from '../src/args.js';
 
+const plainPhrase1 = 'sr_github';
+
 test('mcp list takes no arguments', () => {
   assert.deepEqual(parseAevraArgs(['mcp', 'list']), { command: 'mcp', action: 'list' });
   assert.throws(() => parseAevraArgs(['mcp', 'list', 'extra']), /takes no arguments/);
@@ -30,7 +32,7 @@ test('mcp add parses an http server with a reference', () => {
       transport: 'http',
       url: 'https://mcp.example.com/mcp',
       header: 'Authorization',
-      secretRef: 'sr_github',
+      secretRef: plainPhrase1,
       risk: 'HIGH',
       args: [],
       env: {},

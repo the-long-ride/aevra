@@ -55,6 +55,6 @@ describe('AboutPage', () => {
       },
     });
     render(<AboutPage />);
-    expect(await screen.findByText('v1.1.4')).toBeInTheDocument();
+    expect(await screen.findByText('v1.2.0')).toBeInTheDocument();
   });
 });

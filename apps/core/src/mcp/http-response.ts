@@ -1,4 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { promisify } from 'node:util';
+import { gzip } from 'node:zlib';
+
+const gzipAsync = promisify(gzip);
+const GZIP_MIN_BYTES = 1024;
 
 async function readText(req: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -49,6 +54,40 @@ export function sendJson(res: ServerResponse, status: number, value: unknown) {
   res.statusCode = status;
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify(value));
+}
+
+type HeaderSource = { headers: Record<string, string | string[] | undefined> };
+
+export function acceptsGzip(req: HeaderSource): boolean {
+  const raw = req.headers['accept-encoding'];
+  const value = Array.isArray(raw) ? raw.join(',') : (raw ?? '');
+  return value.split(',').some((part) => {
+    const [name, ...params] = part.trim().split(';');
+    if (name?.trim().toLowerCase() !== 'gzip') return false;
+    const q = params.map((p) => p.trim()).find((p) => p.startsWith('q='));
+    return q === undefined || Number(q.slice(2)) > 0;
+  });
+}
+
+/**
+ * Sends an already-serialized JSON body. Large bodies are gzipped when the
+ * client asks for it; the body is compressed off the event loop. Never use
+ * this for SSE streams.
+ */
+export async function sendJsonBody(
+  res: ServerResponse,
+  status: number,
+  body: string,
+  req?: HeaderSource,
+): Promise<void> {
+  const compress =
+    req !== undefined && Buffer.byteLength(body) >= GZIP_MIN_BYTES && acceptsGzip(req);
+  const payload = compress ? await gzipAsync(body) : body;
+  res.statusCode = status;
+  res.setHeader('content-type', 'application/json');
+  if (req) res.setHeader('vary', 'accept-encoding');
+  if (compress) res.setHeader('content-encoding', 'gzip');
+  res.end(payload);
 }
 
 export function sendHtml(res: ServerResponse, status: number, html: string) {

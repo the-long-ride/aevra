@@ -4,6 +4,7 @@ import { useDialog } from '../../components/Dialog';
 import { Dropdown } from '../../components/Dropdown';
 import { requestJson } from '../../services/api-client';
 import { ConnectionControlGrantsPanel } from './ConnectionControlGrants';
+import { ConnectionToolSurface } from './ConnectionToolSurface';
 import { ConnectionDetails, dateTime } from './ConnectionDetails';
 
 export interface ActiveConnection {
@@ -216,6 +217,7 @@ export function ConnectionDetailModal({
               onChanged={onChanged}
             />
           ) : null}
+          {connection.actor ? <ConnectionToolSurface actor={connection.actor} /> : null}
           <div className="connection-workspaces">
             <h3>Workspaces</h3>
             {granted.length ? (

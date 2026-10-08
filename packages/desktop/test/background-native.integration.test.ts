@@ -103,7 +103,7 @@ test(
       // Verify password field does not expose secrets or setValue action
       const passwordNode = desc.nodes.find((n) => n.name === 'Password Text:' && n.role === 'edit');
       if (passwordNode) {
-        assert.notEqual(passwordNode.value, 'Secret123', 'Password value must not leak in tree');
+        assert.notEqual(passwordNode.value, 'Sample123', 'Password value must not leak in tree');
         assert.ok(
           !passwordNode.supportedActions?.includes('setValue'),
           'Password field must not support setValue',
