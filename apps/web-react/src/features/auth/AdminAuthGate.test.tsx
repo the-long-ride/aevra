@@ -4,6 +4,8 @@ import { expect, test } from 'vitest';
 import { installApiFixtures } from '../../test/api-fixtures';
 import { AdminAuthGate } from './AdminAuthGate';
 
+const plainPhrase1 = 'garden2';
+
 function renderGate() {
   return render(
     <AdminAuthGate>
@@ -12,7 +14,7 @@ function renderGate() {
   );
 }
 
-async function submitCredentials(username = 'admin', password = 'hunter2') {
+async function submitCredentials(username = 'admin', password = plainPhrase1) {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Username'), username);
   await user.type(screen.getByLabelText('Password'), password);

@@ -3,16 +3,18 @@ import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { LoginPanel } from './LoginPanel';
 
+const plainPhrase1 = 'garden2';
+
 test('submits the entered credentials to the onSubmit handler', async () => {
   const user = userEvent.setup();
   const onSubmit = vi.fn(async () => undefined);
   render(<LoginPanel busy={false} error={null} onSubmit={onSubmit} />);
 
   await user.type(screen.getByLabelText('Username'), 'admin');
-  await user.type(screen.getByLabelText('Password'), 'hunter2');
+  await user.type(screen.getByLabelText('Password'), 'garden2');
   await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
-  expect(onSubmit).toHaveBeenCalledWith({ username: 'admin', password: 'hunter2' });
+  expect(onSubmit).toHaveBeenCalledWith({ username: 'admin', password: plainPhrase1 });
 });
 
 test('busy state disables the form and relabels the submit button', () => {

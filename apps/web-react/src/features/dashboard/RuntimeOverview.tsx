@@ -1,6 +1,11 @@
+import type { TokenUsageRange } from '@aevra/admin-contracts';
+import { useState } from 'react';
+import { useTokenUsage } from '../../hooks/use-token-usage';
 import type { DashboardData } from './dashboard-service';
 import { McpDiagnosticsNotice } from './McpDiagnosticsNotice';
 import { RequestActivityChart } from './RequestActivityChart';
+import { TokenUsageChart } from './TokenUsageChart';
+import { TokenUsageStats } from './TokenUsageStats';
 
 export type RuntimeModalKind = 'processes' | 'changes' | 'tools' | 'connectors';
 
@@ -15,6 +20,8 @@ export function RuntimeOverview({
   onOpenPending(): void;
   onOpenTransport(): void;
 }) {
+  const [range, setRange] = useState<TokenUsageRange>('24h');
+  const usage = useTokenUsage(range);
   const snapshot = data.snapshot;
   const power = snapshot.power;
   const transport = snapshot.transport;
@@ -105,8 +112,15 @@ export function RuntimeOverview({
             </div>
           );
         })}
+        <TokenUsageStats
+          report={usage.data}
+          error={usage.error ? usage.error.message : undefined}
+        />
       </div>
-      <RequestActivityChart data={data} />
+      <div className="runtime-charts" aria-label="Runtime charts">
+        <RequestActivityChart data={data} />
+        <TokenUsageChart report={usage.data} range={range} onRangeChange={setRange} />
+      </div>
     </>
   );
 }
