@@ -1,5 +1,26 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { ADMIN_SURFACES, installAdminApi } from './fixtures';
+
+// Read related cells in one browser task so polling or reflow cannot mix
+// rectangles from different layout states.
+async function runtimeGeometry(metrics: Locator) {
+  return metrics.evaluate((element) => {
+    const rect = (node: Element) => {
+      const { x, y, width, height } = node.getBoundingClientRect();
+      return { x, y, width, height };
+    };
+    const connectors = element.querySelectorAll(':scope > .runtime-stat');
+    const tokens = element.querySelector(':scope > .token-usage-stats')!;
+    const cells = tokens.querySelectorAll('.token-stat');
+    return {
+      metrics: rect(element),
+      connector: rect(connectors[connectors.length - 1]!),
+      tokens: rect(tokens),
+      first: rect(cells[0]!),
+      last: rect(cells[cells.length - 1]!),
+    };
+  });
+}
 
 for (const surface of ADMIN_SURFACES) {
   test(`${surface.name} keeps dashboard section and collapse behavior`, async ({ page }) => {
@@ -60,22 +81,17 @@ test('runtime metrics and charts adapt from desktop to tablet and mobile', async
   await expect(tokens.getByText('Tokens out today')).toBeVisible();
   await expect(charts.locator(':scope > section')).toHaveCount(2);
 
-  const connectorBox = await metrics.locator(':scope > .runtime-stat').last().boundingBox();
-  const tokenBox = await tokens.boundingBox();
-  expect(connectorBox).not.toBeNull();
-  expect(tokenBox).not.toBeNull();
-  expect(Math.abs(tokenBox!.y - connectorBox!.y)).toBeLessThan(2);
-  expect(tokenBox!.x).toBeGreaterThan(connectorBox!.x);
-
   // The token metrics must share borders with Connectors, not float inside a padded card group.
-  const firstCell = await tokens.locator('.token-stat').first().boundingBox();
-  const lastCell = await tokens.locator('.token-stat').last().boundingBox();
-  expect(firstCell).not.toBeNull();
-  expect(lastCell).not.toBeNull();
-  expect(Math.abs(firstCell!.x - (connectorBox!.x + connectorBox!.width))).toBeLessThan(2);
-  expect(Math.abs(firstCell!.y - connectorBox!.y)).toBeLessThan(2);
-  expect(Math.abs(firstCell!.height - connectorBox!.height)).toBeLessThan(2);
-  expect(Math.abs(lastCell!.x + lastCell!.width - (tokenBox!.x + tokenBox!.width))).toBeLessThan(2);
+  await expect(async () => {
+    const { connector, tokens: tokenBox, first, last } = await runtimeGeometry(metrics);
+    expect(Math.abs(tokenBox.y - connector.y)).toBeLessThan(2);
+    expect(tokenBox.x).toBeGreaterThan(connector.x);
+    expect(Math.abs(first.x - (connector.x + connector.width))).toBeLessThan(2);
+    expect(Math.abs(first.y - connector.y)).toBeLessThan(2);
+    expect(Math.abs(first.height - connector.height)).toBeLessThan(2);
+    expect(Math.abs(last.x + last.width - (tokenBox.x + tokenBox.width))).toBeLessThan(2);
+  }).toPass({ timeout: 5000 });
+
   expect(
     await tokens.evaluate((element) => {
       const grid = element.querySelector('.token-usage-grid')!;
@@ -123,22 +139,21 @@ test('runtime metrics and charts adapt from desktop to tablet and mobile', async
     expect(await columns()).toBe(1);
     await expect(tokens.getByText('Tokens out today')).toBeVisible();
 
-    const connector = await metrics.locator(':scope > .runtime-stat').last().boundingBox();
-    const tokenSection = await tokens.boundingBox();
-    const first = await tokens.locator('.token-stat').first().boundingBox();
-    expect(connector).not.toBeNull();
-    expect(tokenSection).not.toBeNull();
-    expect(first).not.toBeNull();
-    const metricsBox = await metrics.boundingBox();
-    expect(metricsBox).not.toBeNull();
-    expect(Math.abs(tokenSection!.x - (metricsBox!.x + 1))).toBeLessThan(2);
-    expect(Math.abs(first!.x - tokenSection!.x)).toBeLessThan(2);
-    expect(Math.abs(first!.y - (connector!.y + connector!.height))).toBeLessThan(2);
+    await expect(async () => {
+      const {
+        connector,
+        tokens: tokenSection,
+        first,
+        last,
+        metrics: metricsBox,
+      } = await runtimeGeometry(metrics);
+      expect(Math.abs(tokenSection.x - (metricsBox.x + 1))).toBeLessThan(2);
+      expect(Math.abs(first.x - tokenSection.x)).toBeLessThan(2);
+      expect(Math.abs(first.y - (connector.y + connector.height))).toBeLessThan(2);
 
-    if (width === 390) {
-      const finalCell = await tokens.locator('.token-stat').last().boundingBox();
-      expect(finalCell).not.toBeNull();
-      expect(Math.abs(finalCell!.width - tokenSection!.width)).toBeLessThan(2);
-    }
+      if (width === 390) {
+        expect(Math.abs(last.width - tokenSection.width)).toBeLessThan(2);
+      }
+    }).toPass({ timeout: 5000 });
   }
 });
