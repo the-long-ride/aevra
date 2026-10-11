@@ -5,6 +5,7 @@ import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { ManagementModal } from '../../components/ManagementModal';
 import { PageState } from '../../components/PageState';
+import { useToast } from '../../components/Toast';
 import { SearchableMultiSelect } from '../../components/SearchableMultiSelect';
 import { Switch } from '../../components/Switch';
 import { useApiResource } from '../../hooks/use-api-resource';
@@ -22,27 +23,24 @@ export function PermissionsPage() {
   const dialog = useDialog();
   const [adding, setAdding] = useState(false);
   const [commandEnabled, setCommandEnabled] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const { toast, error } = useToast();
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
   const [v2ModalOpen, setV2ModalOpen] = useState(false);
   const [editingV2Row, setEditingV2Row] = useState<any | null>(null);
   const [v2WorkspaceId, setV2WorkspaceId] = useState<string>('');
-  const [v2Error, setV2Error] = useState<string | null>(null);
 
   const closeAddRules = () => {
     setAdding(false);
     setCommandEnabled(false);
-    setSubmitError(null);
     setSelectedWorkspaceIds([]);
     setSelectedSessionIds([]);
   };
 
   const saveV2Rule = async (rule: CommandRuleV2) => {
-    setV2Error(null);
     const targetWs = v2WorkspaceId || editingV2Row?.workspaceId || editingV2Row?.workspace_id;
     if (!targetWs && (!editingV2Row || editingV2Row.scope === 'workspace')) {
-      setV2Error('Workspace is required for this rule');
+      error('Workspace is required for this rule');
       return;
     }
     try {
@@ -72,7 +70,7 @@ export function PermissionsPage() {
       setEditingV2Row(null);
       await resource.refresh();
     } catch (cause) {
-      setV2Error(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     }
   };
 
@@ -84,15 +82,18 @@ export function PermissionsPage() {
       confirmTone: 'danger',
     });
     if (!confirmed) return;
-    await requestJson(`/api/permissions/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    });
-    await resource.refresh();
+    try {
+      await requestJson(`/api/permissions/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const createRules = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitError(null);
     const form = new FormData(event.currentTarget);
     const capabilities = form.getAll('capability').map(String);
     const matchers = String(form.get('commandMatchers') ?? '')
@@ -124,7 +125,7 @@ export function PermissionsPage() {
       closeAddRules();
       await resource.refresh();
     } catch (cause) {
-      setSubmitError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     }
   };
 
@@ -146,7 +147,6 @@ export function PermissionsPage() {
             onClick={() => {
               setEditingV2Row(null);
               setV2WorkspaceId(resource.data?.workspaces?.[0]?.id ?? '');
-              setV2Error(null);
               setV2ModalOpen(true);
             }}
           >
@@ -157,7 +157,6 @@ export function PermissionsPage() {
             className="primary"
             data-surface-id="permissions:add"
             onClick={() => {
-              setSubmitError(null);
               setAdding(true);
             }}
           >
@@ -259,11 +258,6 @@ export function PermissionsPage() {
               </label>
             ) : null}
           </section>
-          {submitError ? (
-            <p className="permission-modal-error" role="alert">
-              {submitError}
-            </p>
-          ) : null}
           <div className="modal-inline-foot permission-modal-actions">
             <button type="button" onClick={closeAddRules}>
               Cancel
@@ -279,14 +273,8 @@ export function PermissionsPage() {
         title={editingV2Row ? 'Edit typed command rule' : 'Add typed command rule'}
         onClose={() => {
           setV2ModalOpen(false);
-          setV2Error(null);
         }}
       >
-        {v2Error ? (
-          <p className="error" style={{ color: '#ef4444', marginBottom: '0.5rem' }}>
-            {v2Error}
-          </p>
-        ) : null}
         <div style={{ marginBottom: '0.75rem' }}>
           <label>
             <span
@@ -312,7 +300,6 @@ export function PermissionsPage() {
           onSave={saveV2Rule}
           onCancel={() => {
             setV2ModalOpen(false);
-            setV2Error(null);
           }}
         />
       </ManagementModal>
@@ -367,7 +354,6 @@ export function PermissionsPage() {
                             resource.data?.workspaces?.[0]?.id ??
                             '',
                         );
-                        setV2Error(null);
                         setV2ModalOpen(true);
                       }}
                     >
@@ -391,6 +377,7 @@ export function PermissionsPage() {
           rowKey={(row) => row.id}
         />
       </section>
+      {toast}
     </PageState>
   );
 }

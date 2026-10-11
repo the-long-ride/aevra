@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { Dropdown } from '../../components/Dropdown';
+import { useToast } from '../../components/Toast';
 import { patchJson } from './settings-service';
 import { SettingsFormModal } from './SettingsFormModal';
 
@@ -19,12 +20,9 @@ export function CommandPolicySettings({
   const dialog = useDialog();
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const { toast, error } = useToast();
 
-  const close = () => {
-    setError('');
-    setCreating(false);
-  };
+  const close = () => setCreating(false);
 
   const handleRemove = async (family: string) => {
     const confirmed = await dialog.confirm({
@@ -36,15 +34,18 @@ export function CommandPolicySettings({
     if (!confirmed) return;
     const next = { ...families };
     delete next[family];
-    await patchJson('/api/policy/command-families', next);
-    await onChanged();
+    try {
+      await patchJson('/api/policy/command-families', next);
+      await onChanged();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = Object.fromEntries(new FormData(event.currentTarget));
     setSubmitting(true);
-    setError('');
     try {
       await patchJson('/api/policy/command-families', {
         ...families,
@@ -53,7 +54,7 @@ export function CommandPolicySettings({
       close();
       await onChanged().catch(() => undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setSubmitting(false);
     }
@@ -121,14 +122,10 @@ export function CommandPolicySettings({
                 options={EFFECTS}
               />
             </label>
-            {error ? (
-              <p role="alert" className="inline-result warning-text">
-                {error}
-              </p>
-            ) : null}
           </div>
         </SettingsFormModal>
       ) : null}
+      {toast}
     </section>
   );
 }

@@ -13,13 +13,11 @@ export function BrowserPairingList({
   pairings,
   busy,
   unpairingId,
-  rowErrors,
   onUnpair,
 }: {
   pairings: BrowserPairingRow[];
   busy: boolean;
   unpairingId: string | null;
-  rowErrors: Record<string, string>;
   onUnpair(pairing: BrowserPairingRow): void;
 }) {
   return (
@@ -58,11 +56,6 @@ export function BrowserPairingList({
                   <dd>{pairedDate(pairing.pairedAt)}</dd>
                 </div>
               </dl>
-              {rowErrors[pairing.pairingId] ? (
-                <p role="alert" className="inline-result warning-text browser-pairing-row-error">
-                  {rowErrors[pairing.pairingId]}
-                </p>
-              ) : null}
             </div>
             <button
               type="button"

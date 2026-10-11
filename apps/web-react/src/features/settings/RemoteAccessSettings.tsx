@@ -6,7 +6,8 @@ import type {
 } from '@aevra/admin-contracts';
 import { useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
-import { AdminWebUiSettings, type AdminProbeState } from './AdminWebUiSettings';
+import { useToast } from '../../components/Toast';
+import { AdminWebUiSettings } from './AdminWebUiSettings';
 import { requestJson } from '../../services/api-client';
 import { RemoteAccessPanel } from '../dashboard/RemoteAccessPanel';
 
@@ -65,8 +66,7 @@ export function RemoteAccessSettings({
     ),
   ]);
   const [newTrustedAdminOrigin, setNewTrustedAdminOrigin] = useState('');
-  const [message, setMessage] = useState('');
-  const [adminProbe, setAdminProbe] = useState<AdminProbeState | null>(null);
+  const { toast, success, error } = useToast();
 
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -138,10 +138,10 @@ export function RemoteAccessSettings({
         method: 'POST',
         body: JSON.stringify(config),
       });
-      setMessage(`Exposure configured: ${provider}.`);
+      success(`Exposure configured: ${provider}.`);
       await onChanged();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+    } catch (cause) {
+      error(cause);
     }
   };
 
@@ -151,10 +151,10 @@ export function RemoteAccessSettings({
         method: 'POST',
         body: '{}',
       });
-      setMessage(result.message ?? 'Cloudflare authentication completed.');
+      success(result.message ?? 'Cloudflare authentication completed.');
       await onChanged();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+    } catch (cause) {
+      error(cause);
     }
   };
 
@@ -174,20 +174,14 @@ export function RemoteAccessSettings({
         }),
       });
       if (result.reachable && result.trusted) {
-        setAdminProbe({ tone: 'success', message: 'Reachable · Trusted' });
+        success('Admin URL: Reachable · Trusted');
       } else if (result.reachable) {
-        setAdminProbe({ tone: 'warning', message: 'Reachable · Not trusted' });
+        error('Admin URL: Reachable · Not trusted');
       } else {
-        setAdminProbe({
-          tone: 'error',
-          message: result.message ?? 'Admin endpoint is not reachable',
-        });
+        error(result.message ?? 'Admin endpoint is not reachable');
       }
-    } catch (error) {
-      setAdminProbe({
-        tone: 'error',
-        message: error instanceof Error ? error.message : String(error),
-      });
+    } catch (cause) {
+      error(cause);
     }
   };
 
@@ -364,13 +358,9 @@ export function RemoteAccessSettings({
 
         <AdminWebUiSettings
           adminPublicUrl={adminPublicUrl}
-          adminProbe={adminProbe}
           trustedAdminOrigins={trustedAdminOrigins}
           newTrustedAdminOrigin={newTrustedAdminOrigin}
-          onAdminPublicUrlChange={(value) => {
-            setAdminPublicUrl(value);
-            setAdminProbe(null);
-          }}
+          onAdminPublicUrlChange={setAdminPublicUrl}
           onTest={testAdminUrl}
           onNewTrustedOriginChange={setNewTrustedAdminOrigin}
           onAddTrustedOrigin={addTrustedOrigin}
@@ -382,7 +372,6 @@ export function RemoteAccessSettings({
         />
 
         <div className="remote-actions">
-          <p className="inline-result">{message}</p>
           <div className="actions">
             {provider === 'cloudflare' ? (
               <button type="button" onClick={authenticateCloudflare}>
@@ -393,6 +382,7 @@ export function RemoteAccessSettings({
           </div>
         </div>
       </form>
+      {toast}
     </section>
   );
 }

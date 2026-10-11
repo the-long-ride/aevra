@@ -1,6 +1,7 @@
 import type { ConnectorProfilesResponse, ResultFormat, ToolGroup } from '@aevra/admin-contracts';
 import { useEffect, useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
+import { useToast } from '../../components/Toast';
 import {
   fetchConnectorProfiles,
   saveConnectorProfile,
@@ -17,7 +18,8 @@ export function ConnectionToolSurface({ actor }: { actor: string }) {
   const [info, setInfo] = useState<ConnectorProfilesResponse>();
   const [groups, setGroups] = useState<ToolGroup[]>([]);
   const [format, setFormat] = useState<ResultFormat>('both');
-  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'saving' | 'error'>('idle');
+  const { toast, success, error } = useToast();
 
   useEffect(() => {
     let live = true;
@@ -49,7 +51,6 @@ export function ConnectionToolSurface({ actor }: { actor: string }) {
     .filter((group) => !groups.includes(group))
     .reduce((sum, group) => sum + info.groupTokens[group], 0);
   const toggle = (group: ToolGroup) => {
-    setState('idle');
     setGroups((current) =>
       current.includes(group) ? current.filter((item) => item !== group) : [...current, group],
     );
@@ -61,9 +62,11 @@ export function ConnectionToolSurface({ actor }: { actor: string }) {
         toolGroups: info.groups.filter((group) => groups.includes(group)),
         resultFormat: format,
       });
-      setState('saved');
+      success('Saved. Applies the next time this client lists tools.');
     } catch {
-      setState('error');
+      error('Could not save the tool surface.');
+    } finally {
+      setState('idle');
     }
   };
 
@@ -114,7 +117,6 @@ export function ConnectionToolSurface({ actor }: { actor: string }) {
         options={FORMAT_OPTIONS}
         onChange={(value) => {
           setFormat(value as ResultFormat);
-          setState('idle');
         }}
       />
       {format === 'structured' && (
@@ -130,10 +132,7 @@ export function ConnectionToolSurface({ actor }: { actor: string }) {
       >
         Save tool surface
       </button>
-      {state === 'saved' && (
-        <p className="token-usage-note">Saved. Applies the next time this client lists tools.</p>
-      )}
-      {state === 'error' && <p role="alert">Could not save the tool surface.</p>}
+      {toast}
     </section>
   );
 }

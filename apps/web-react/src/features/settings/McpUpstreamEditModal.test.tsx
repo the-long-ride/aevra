@@ -12,7 +12,6 @@ function mount(initial?: Partial<UpstreamDraft>) {
     <McpUpstreamEditModal
       initial={initial}
       submitting={false}
-      error=""
       onClose={onClose}
       onSubmit={onSubmit}
     />,

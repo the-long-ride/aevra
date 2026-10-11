@@ -262,7 +262,7 @@ test('mutation failures surface the server message inside the modal', async () =
   renderModal();
 
   await user.click(grantControls().confirm);
-  expect(await screen.findByText('Workspace is busy')).toHaveClass('warning');
+  expect(await screen.findByText('Workspace is busy')).toHaveClass('toast', 'error');
 });
 
 test('backdrop and close button dismiss the modal without mutations', async () => {

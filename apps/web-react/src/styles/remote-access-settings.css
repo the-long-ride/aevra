@@ -66,23 +66,13 @@
   font-weight: 600;
 }
 
-.remote-origin-badge,
-.remote-admin-probe {
+.remote-origin-badge {
   flex: none;
   border: 1px solid var(--hairline);
   padding: 2px 6px;
   font-size: 9px;
   line-height: 1.4;
   text-transform: uppercase;
-}
-
-.remote-admin-probe.success {
-  color: var(--success);
-}
-
-.remote-admin-probe.warning,
-.remote-admin-probe.error {
-  color: var(--warning);
 }
 
 .remote-admin-url-row,

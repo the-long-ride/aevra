@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, type Column, type FilterDefinition } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 import { DetailIcon } from '../workspaces/WorkspaceIcons';
 import {
@@ -93,19 +94,16 @@ export function McpUpstreamsSettings({
   const [upstreams, setUpstreams] = useState<UpstreamSummary[] | null>(null),
     [adding, setAdding] = useState(false),
     [editing, setEditing] = useState<UpstreamSummary | null>(null),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [formError, setFormError] = useState(''),
-    [results, setResults] = useState<Record<string, string>>({});
+    [busy, setBusy] = useState(false);
+  const { toast, success, error } = useToast();
   const dialog = useDialog();
   const refresh = useCallback(async () => {
     try {
       setUpstreams(await load());
-      setError('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     }
-  }, [load]);
+  }, [load, error]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -116,7 +114,7 @@ export function McpUpstreamsSettings({
       await work();
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setBusy(false);
     }
@@ -134,7 +132,6 @@ export function McpUpstreamsSettings({
   const submit = async (draft: UpstreamDraft) => {
     if (busy) return;
     setBusy(true);
-    setFormError('');
     try {
       if (editing) await update(editing.id, draft);
       else await create(draft);
@@ -142,7 +139,7 @@ export function McpUpstreamsSettings({
       setEditing(null);
       await refresh();
     } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setBusy(false);
     }
@@ -157,7 +154,6 @@ export function McpUpstreamsSettings({
         render: (row) => (
           <div>
             <strong>{row.name}</strong>
-            {results[row.id] ? <p className="inline-result">{results[row.id]}</p> : null}
             {row.state === 'needs-review' && row.pendingCatalogDiff ? (
               <div className="inline-result warning-text">
                 <p>
@@ -248,12 +244,13 @@ export function McpUpstreamsSettings({
               onClick={() =>
                 void run(async () => {
                   const result = await test(row.id);
-                  setResults((previous) => ({
-                    ...previous,
-                    [row.id]: result.ok
-                      ? `${result.serverName ?? 'unknown'} ${result.serverVersion ?? ''} — ${result.toolCount} tools`
-                      : (result.message ?? 'The connection failed'),
-                  }));
+                  if (result.ok) {
+                    success(
+                      `${row.name}: ${result.serverName ?? 'unknown'} ${result.serverVersion ?? ''} — ${result.toolCount} tools`,
+                    );
+                  } else {
+                    error(`${row.name}: ${result.message ?? 'The connection failed'}`);
+                  }
                 })
               }
             >
@@ -284,7 +281,7 @@ export function McpUpstreamsSettings({
         ),
       },
     ],
-    [busy, results],
+    [busy, success, error],
   );
 
   const filters: FilterDefinition<UpstreamSummary>[] = useMemo(
@@ -345,24 +342,18 @@ export function McpUpstreamsSettings({
           'aria-label': row.name,
         })}
       />
-      {error ? (
-        <p role="alert" className="inline-result warning-text">
-          {error}
-        </p>
-      ) : null}
       {adding || editing ? (
         <McpUpstreamEditModal
           initial={editing ?? undefined}
           submitting={busy}
-          error={formError}
           onClose={() => {
             setAdding(false);
             setEditing(null);
-            setFormError('');
           }}
           onSubmit={(draft) => void submit(draft)}
         />
       ) : null}
+      {toast}
     </section>
   );
 }

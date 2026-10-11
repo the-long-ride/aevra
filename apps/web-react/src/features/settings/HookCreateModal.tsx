@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
 import { Switch } from '../../components/Switch';
+import { useToast } from '../../components/Toast';
 import { postJson } from './settings-service';
 
 const EVENTS = [
@@ -30,7 +31,7 @@ export function HookCreateModal({
   onClose(): void;
   onCreated(): Promise<void>;
 }) {
-  const [error, setError] = useState('');
+  const { toast, error } = useToast();
   const [submitting, setSubmitting] = useState(false);
 
   const requestClose = () => {
@@ -54,7 +55,7 @@ export function HookCreateModal({
       args = JSON.parse(String(value.args || '[]'));
       env = JSON.parse(String(value.env || '{}'));
     } catch {
-      setError('Hook arguments/environment must be valid JSON');
+      error('Hook arguments/environment must be valid JSON');
       return;
     }
 
@@ -64,7 +65,6 @@ export function HookCreateModal({
     }
 
     setSubmitting(true);
-    setError('');
     try {
       await postJson('/api/hooks', {
         name: value.name,
@@ -82,7 +82,7 @@ export function HookCreateModal({
       onClose();
       await onCreated().catch(() => undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setSubmitting(false);
     }
@@ -187,8 +187,6 @@ export function HookCreateModal({
                 <Switch name="enabled" label="Enabled" defaultChecked />
               </div>
             </div>
-
-            {error ? <p className="inline-result warning-text">{error}</p> : null}
           </div>
         </div>
 
@@ -201,6 +199,7 @@ export function HookCreateModal({
           </button>
         </footer>
       </form>
+      {toast}
     </div>
   );
 }

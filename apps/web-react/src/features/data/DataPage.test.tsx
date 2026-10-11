@@ -109,7 +109,9 @@ describe('DataPage', () => {
 
     const toast = await screen.findByRole('status');
     expect(toast).toHaveTextContent('// Data imported successfully.');
-    expect(screen.getByText(/import complete/i)).toBeInTheDocument();
+    expect(toast).toHaveTextContent(
+      '1 workspace(s), 2 permission rule(s), 1 custom app(s) restored.',
+    );
   });
 
   it('canceling preview clears selected file', async () => {

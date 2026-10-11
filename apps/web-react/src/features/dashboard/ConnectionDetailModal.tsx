@@ -2,6 +2,7 @@ import type { WorkspaceSummary } from '@aevra/admin-contracts';
 import { useEffect, useState } from 'react';
 import { useDialog } from '../../components/Dialog';
 import { Dropdown } from '../../components/Dropdown';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 import { ConnectionControlGrantsPanel } from './ConnectionControlGrants';
 import { ConnectionToolSurface } from './ConnectionToolSurface';
@@ -55,12 +56,11 @@ export function ConnectionDetailModal({
   const dialog = useDialog();
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? '');
   const [grantProfile, setGrantProfile] = useState('read-only');
-  const [error, setError] = useState('');
+  const { toast, error } = useToast();
 
   useEffect(() => {
     setWorkspaceId(workspaces[0]?.id ?? '');
     setGrantProfile('read-only');
-    setError('');
   }, [connection, workspaces]);
 
   if (!connection?.id) return null;
@@ -75,11 +75,10 @@ export function ConnectionDetailModal({
 
   const run = async (action: () => Promise<void>) => {
     try {
-      setError('');
       await action();
       await onChanged();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     }
   };
 
@@ -291,7 +290,7 @@ export function ConnectionDetailModal({
               </ul>
             </div>
           ) : null}
-          {error ? <p className="warning">{error}</p> : null}
+          {toast}
           <div className="actions">
             {sessionId ? (
               <button

@@ -1,5 +1,5 @@
 import type { ExposureStatus } from '@aevra/admin-contracts';
-import { useEffect, useState } from 'react';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 
 const PROVIDER_LABELS: Record<ExposureStatus['provider'], string> = {
@@ -9,12 +9,6 @@ const PROVIDER_LABELS: Record<ExposureStatus['provider'], string> = {
   ngrok: 'ngrok',
   external: 'External / Custom',
 };
-
-interface Toast {
-  message: string;
-  ariaLabel: string;
-  tone: 'success' | 'error';
-}
 
 function RemoteEndpoint({
   label,
@@ -55,14 +49,7 @@ export function RemoteAccessPanel({
   status: ExposureStatus;
   onChanged(): Promise<void>;
 }) {
-  const [message, setMessage] = useState('');
-  const [toast, setToast] = useState<Toast | null>(null);
-
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+  const { toast, success, error } = useToast();
 
   const health = status.health;
   const healthRows = health
@@ -80,15 +67,9 @@ export function RemoteAccessPanel({
   const copyUrl = async (label: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      setMessage('');
-      setToast({ message: `Copied ${label}`, ariaLabel: 'Copy succeeded', tone: 'success' });
-    } catch (error) {
-      setMessage('');
-      setToast({
-        message: error instanceof Error ? error.message : String(error),
-        ariaLabel: 'Copy failed',
-        tone: 'error',
-      });
+      success(`Copied ${label}`, 'Copy succeeded');
+    } catch (cause) {
+      error(cause, 'Copy failed');
     }
   };
 
@@ -101,20 +82,16 @@ export function RemoteAccessPanel({
         message?: string;
       }>('/api/exposure/test', { method: 'POST', body: '{}' });
       if (result.reachable) {
-        setMessage('');
-        setToast({
-          message: `Endpoint reachable${result.publicUrl ? ` · ${result.publicUrl}` : ''}`,
-          ariaLabel: 'Endpoint test succeeded',
-          tone: 'success',
-        });
+        success(
+          `Endpoint reachable${result.publicUrl ? ` · ${result.publicUrl}` : ''}`,
+          'Endpoint test succeeded',
+        );
       } else {
-        setToast(null);
-        setMessage(`Not reachable: ${result.message ?? result.state ?? 'Unknown error'}`);
+        error(`Not reachable: ${result.message ?? result.state ?? 'Unknown error'}`);
       }
       await onChanged();
-    } catch (error) {
-      setToast(null);
-      setMessage(error instanceof Error ? error.message : String(error));
+    } catch (cause) {
+      error(cause);
     }
   };
 
@@ -180,18 +157,7 @@ export function RemoteAccessPanel({
           Restart required to apply the listener binding change.
         </p>
       ) : null}
-      {message ? <p className="inline-result">{message}</p> : null}
-      {toast ? (
-        <div className="toast-stack">
-          <div
-            className={`toast ${toast.tone}`}
-            role={toast.tone === 'error' ? 'alert' : 'status'}
-            aria-label={toast.ariaLabel}
-          >
-            {toast.message}
-          </div>
-        </div>
-      ) : null}
+      {toast}
     </div>
   );
 }

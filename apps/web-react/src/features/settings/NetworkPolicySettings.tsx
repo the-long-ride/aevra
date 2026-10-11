@@ -3,6 +3,7 @@ import type { WorkspaceSummary } from '@aevra/admin-contracts';
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { Dropdown } from '../../components/Dropdown';
+import { useToast } from '../../components/Toast';
 import { deleteResource, postJson } from './settings-service';
 import { SettingsFormModal } from './SettingsFormModal';
 
@@ -18,12 +19,9 @@ export function NetworkPolicySettings({
   const dialog = useDialog();
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const { toast, error } = useToast();
 
-  const close = () => {
-    setError('');
-    setCreating(false);
-  };
+  const close = () => setCreating(false);
 
   const handleRemove = async (id: string) => {
     const confirmed = await dialog.confirm({
@@ -33,15 +31,18 @@ export function NetworkPolicySettings({
       confirmTone: 'danger',
     });
     if (!confirmed) return;
-    await deleteResource(`/api/policy/network-rules/${id}`);
-    await onChanged();
+    try {
+      await deleteResource(`/api/policy/network-rules/${id}`);
+      await onChanged();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = Object.fromEntries(new FormData(event.currentTarget));
     setSubmitting(true);
-    setError('');
     try {
       await postJson('/api/policy/network-rules', {
         ...value,
@@ -51,7 +52,7 @@ export function NetworkPolicySettings({
       close();
       await onChanged().catch(() => undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setSubmitting(false);
     }
@@ -147,14 +148,10 @@ export function NetworkPolicySettings({
                 ]}
               />
             </label>
-            {error ? (
-              <p role="alert" className="inline-result warning-text settings-modal-wide">
-                {error}
-              </p>
-            ) : null}
           </div>
         </SettingsFormModal>
       ) : null}
+      {toast}
     </section>
   );
 }

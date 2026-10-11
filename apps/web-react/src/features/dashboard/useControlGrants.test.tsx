@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
 import { useControlGrants } from './useControlGrants';
 
@@ -45,8 +45,9 @@ test('a failed revoke and failed refresh show both errors and unlock retry', asy
   const { result } = renderHook(() => useControlGrants('/api/connections/one/control', onChanged));
   await waitFor(() => expect(result.current.grants?.browser).toBe(true));
   await act(async () => result.current.setGrant('browser.control', false));
-  expect(result.current.actionError).toContain('Worker invalidation failed');
-  expect(result.current.actionError).toContain('Refresh unavailable');
+  render(<>{result.current.toast}</>);
+  expect(screen.getByRole('alert')).toHaveTextContent('Worker invalidation failed');
+  expect(screen.getByRole('alert')).toHaveTextContent('Refresh unavailable');
   expect(result.current.busy).toBeNull();
   expect(onChanged).not.toHaveBeenCalled();
 });
@@ -93,6 +94,7 @@ test('a notification failure refreshes persisted state and remains visible', asy
   await waitFor(() => expect(result.current.grants?.browser).toBe(false));
   await act(async () => result.current.setGrant('browser.control', true));
   expect(result.current.grants?.browser).toBe(true);
-  expect(result.current.actionError).toBe('Dashboard refresh failed');
+  render(<>{result.current.toast}</>);
+  expect(screen.getByRole('alert')).toHaveTextContent('Dashboard refresh failed');
   expect(onChanged).toHaveBeenCalledTimes(2);
 });

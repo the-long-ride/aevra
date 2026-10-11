@@ -62,7 +62,7 @@ test.each([
   await user.click(within(dialog).getByRole('button', { name: 'Create profile' }));
 
   expect(
-    await within(dialog).findByText('Variables and secret references must be valid JSON objects.'),
+    await screen.findByText('Variables and secret references must be valid JSON objects.'),
   ).toBeInTheDocument();
   expect(postJson).not.toHaveBeenCalled();
 });
@@ -78,6 +78,6 @@ test('displays server error when creation fails', async () => {
   await user.type(within(dialog).getByLabelText('Name'), 'dup-profile');
   await user.click(within(dialog).getByRole('button', { name: 'Create profile' }));
 
-  expect(await within(dialog).findByText('Profile name duplicate')).toBeInTheDocument();
+  expect(await screen.findByText('Profile name duplicate')).toBeInTheDocument();
   expect(onClose).not.toHaveBeenCalled();
 });

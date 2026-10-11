@@ -35,7 +35,7 @@ function submit() {
 }
 
 function adminProbeText() {
-  return document.querySelector('.remote-admin-probe')?.textContent ?? '';
+  return document.querySelector('.toast')?.textContent ?? '';
 }
 
 beforeEach(() => {
@@ -141,7 +141,7 @@ describe('RemoteAccessSettings branches', () => {
     mockedRequest.mockRejectedValueOnce('probe offline');
     fireEvent.click(test);
     await waitFor(() => expect(adminProbeText()).toBe('probe offline'));
-    expect(document.querySelector('.remote-admin-probe')).toHaveClass('error');
+    expect(document.querySelector('.toast')).toHaveClass('error');
   });
 
   it('ignores blank, primary and duplicate trusted origins', () => {
