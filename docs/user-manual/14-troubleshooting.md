@@ -8,6 +8,10 @@ Set both `AEVRA_USERNAME` and `AEVRA_PASSWORD` in the environment of the process
 
 This is expected. Core startup revokes all persisted Admin sessions before listeners become available. Sign in again with the configured environment credentials.
 
+## Sign-in says "Too many login attempts"
+
+Five failed sign-ins for one username, or twenty from one address, lock the Admin login. Wait for the countdown on the sign-in page; the first lock is one minute and each repeat doubles up to one hour. Restarting Aevra clears the counters. If you are locked out from a tunnel while a local sign-in works, check that **trusted proxy client IP** is set so remote clients are told apart. Lockouts appear in **Audit** as `admin.login.lockout`.
+
 ## Managed Cloudflare login says cert.pem already exists
 
 Run `cloudflared tunnel list`. If it succeeds, the existing login is valid and Aevra should report it as authenticated. Do not delete the certificate merely to repeat the login flow.

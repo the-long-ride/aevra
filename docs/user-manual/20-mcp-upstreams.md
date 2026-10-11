@@ -6,7 +6,7 @@ Aevra can connect to other MCP servers and republish their tools, resources and 
 
 A server registered as `github` publishes tools as `github__tool`, prompts as `github__prompt`, and resources under `mcp+github://`. Names use lowercase letters, digits and dashes, up to 32 characters.
 
-Store credentials under **Settings → Secret references** first. The MCP server form and `aevra mcp` CLI accept only a secret reference id such as `sr_github`, never a token value. Aevra resolves the reference only when it connects.
+Store credentials under **Settings → Secret references** first. The MCP server form and `aevra mcp` CLI accept only a secret reference id such as `sr_github`, never a token value. Aevra resolves the reference only when it connects. Use **Edit** on a reference to replace its value.
 
 ## Register a server
 

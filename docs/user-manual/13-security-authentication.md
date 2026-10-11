@@ -10,6 +10,14 @@ The local bootstrap/control secret does not authenticate a browser session and c
 
 Remote Admin exposure is explicit. The browser origin must equal the local Admin origin, the configured `adminPublicUrl` origin, or an exact HTTPS origin in `trustedAdminOrigins`. The MCP/OAuth `publicUrl` does not automatically gain Admin trust. Wildcards, embedded credentials, and plaintext remote Admin origins are rejected, and forwarded host/proto headers never establish trust.
 
+### Sign-in lockout
+
+Repeated failed sign-ins lock the Admin login temporarily. Five failures for one address and username, or twenty from one address, lock that key for one minute; each further lockout doubles the wait, up to one hour, and the level resets after a quiet period. A locked sign-in returns `429` with `Retry-After`, the sign-in page shows a countdown, and the form re-enables when it ends. A successful sign-in clears the counter for that username. The lock is temporary on purpose, so someone who knows your username cannot lock you out for good.
+
+Every lockout is written to the audit log as a `security` event (`admin.login.lockout`) and raises a desktop notification, at most one a minute. Counters live in memory and reset when Aevra restarts.
+
+Behind a tunnel, enable **trusted proxy client IP** only when your proxy overwrites `cf-connecting-ip` (Cloudflare does). Otherwise every remote client shares the gateway's loopback address and one caller can lock the sign-in for everyone.
+
 ## OAuth
 
 Aevra's canonical MCP endpoint is `/mcp`. OAuth-capable clients discover Aevra's protected-resource and authorization-server metadata automatically from the effective public MCP HTTPS base URL.

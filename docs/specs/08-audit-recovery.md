@@ -1,6 +1,6 @@
 # 08 — Audit & Recovery
 
-**Audience:** engineers & AI agents · **Scope:** audit chain, change sets, safe mode, crash semantics · **Verified against:** `1.2.0`
+**Audience:** engineers & AI agents · **Scope:** audit chain, change sets, safe mode, crash semantics · **Verified against:** `1.2.1`
 
 ## Audit chain
 
