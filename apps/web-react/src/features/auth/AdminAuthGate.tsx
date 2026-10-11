@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCountdown } from '../../hooks/use-countdown';
 import type { Theme } from '../../hooks/theme-state';
 import { LoginPanel, type LoginCredentials } from './LoginPanel';
 
@@ -18,6 +19,11 @@ async function readSession(): Promise<boolean> {
   if (!response.ok) return false;
   const value = (await response.json()) as { authenticated?: unknown };
   return value.authenticated === true;
+}
+
+function lockoutDeadline(response: Response): number | null {
+  const seconds = Number(response.headers.get('retry-after'));
+  return Number.isFinite(seconds) && seconds > 0 ? Date.now() + seconds * 1000 : null;
 }
 
 async function loginErrorMessage(response: Response): Promise<string> {
@@ -50,6 +56,8 @@ export function AdminAuthGate({ children, theme, onToggleTheme }: AdminAuthGateP
   const [state, setState] = useState<AuthState>('checking');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const retryAfterSeconds = useCountdown(lockedUntil);
 
   const refresh = useCallback(async () => {
     setState((await readSession()) ? 'authenticated' : 'unauthenticated');
@@ -58,6 +66,12 @@ export function AdminAuthGate({ children, theme, onToggleTheme }: AdminAuthGateP
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (lockedUntil === null || retryAfterSeconds > 0) return;
+    setLockedUntil(null);
+    setError(null);
+  }, [lockedUntil, retryAfterSeconds]);
 
   const login = async (credentials: LoginCredentials) => {
     setBusy(true);
@@ -70,6 +84,7 @@ export function AdminAuthGate({ children, theme, onToggleTheme }: AdminAuthGateP
         body: JSON.stringify(credentials),
       });
       if (!response.ok) {
+        if (response.status === 429) setLockedUntil(lockoutDeadline(response));
         setError(await loginErrorMessage(response));
         return;
       }
@@ -100,6 +115,7 @@ export function AdminAuthGate({ children, theme, onToggleTheme }: AdminAuthGateP
       <LoginPanel
         busy={busy}
         error={error}
+        retryAfterSeconds={retryAfterSeconds}
         onSubmit={login}
         theme={theme}
         onToggleTheme={onToggleTheme}

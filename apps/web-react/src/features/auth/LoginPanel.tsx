@@ -1,3 +1,4 @@
+import { formatCountdown } from '../../hooks/use-countdown';
 import { nextTheme, type Theme } from '../../hooks/theme-state';
 
 export interface LoginCredentials {
@@ -8,13 +9,23 @@ export interface LoginCredentials {
 export interface LoginPanelProps {
   busy: boolean;
   error: string | null;
+  /** Seconds until sign-in unlocks after a lockout; sign-in is disabled while positive. */
+  retryAfterSeconds?: number;
   onSubmit(credentials: LoginCredentials): Promise<void>;
   theme?: Theme;
   onToggleTheme?: () => void;
 }
 
-export function LoginPanel({ busy, error, onSubmit, theme, onToggleTheme }: LoginPanelProps) {
+export function LoginPanel({
+  busy,
+  error,
+  retryAfterSeconds = 0,
+  onSubmit,
+  theme,
+  onToggleTheme,
+}: LoginPanelProps) {
   const targetTheme = theme ? nextTheme(theme) : 'dark';
+  const locked = retryAfterSeconds > 0;
 
   return (
     <main className="admin-login" data-testid="admin-login">
@@ -42,6 +53,7 @@ export function LoginPanel({ busy, error, onSubmit, theme, onToggleTheme }: Logi
           className="stack-form"
           onSubmit={(event) => {
             event.preventDefault();
+            if (locked) return;
             const form = new FormData(event.currentTarget);
             void onSubmit({
               username: String(form.get('username') ?? ''),
@@ -68,7 +80,12 @@ export function LoginPanel({ busy, error, onSubmit, theme, onToggleTheme }: Logi
               {error}
             </p>
           ) : null}
-          <button type="submit" className="primary" disabled={busy}>
+          {locked ? (
+            <p className="warning" role="timer">
+              Try again in {formatCountdown(retryAfterSeconds)}
+            </p>
+          ) : null}
+          <button type="submit" className="primary" disabled={busy || locked}>
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
