@@ -4,6 +4,7 @@ import { SkillsService } from '../skills/skills-service.js';
 import { ManifestService } from '../workspaces/manifest-service.js';
 import { ApprovalService } from '../approvals/approval-service.js';
 import type { CoreConfig } from '../config.js';
+import { createLoginLockoutReporter } from './login-lockout-report.js';
 import { AdminServer } from './server.js';
 
 export function createRuntimeApprovalService(
@@ -167,6 +168,8 @@ export function createRuntimeAdminServer(
     localHttpGatewayEnabled: () =>
       opts.exposureWiring?.currentConfig().provider === 'local' &&
       opts.exposureWiring.localProtocol() === 'http',
+    trustForwardedClientIp: () => opts.exposureWiring?.trustForwardedClientIp() === true,
+    onLoginLockout: createLoginLockoutReporter(opts.api?.audit),
     api: opts.api,
   });
 }

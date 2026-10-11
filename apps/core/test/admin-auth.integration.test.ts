@@ -8,8 +8,8 @@ import test from 'node:test';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { AdminCredentialVerifier } from '../src/admin/admin-credentials.js';
 import { AdminBootstrapService } from '../src/admin/bootstrap.js';
+import { LoginThrottle } from '../src/admin/login-throttle.js';
 import { AdminServer } from '../src/admin/server.js';
-import { IpRateLimiter } from '../src/mcp/rate-limit.js';
 import { ensureLocalTls } from '../src/tls/local-tls.js';
 
 const plainPhrase1 = 'local-control';
@@ -60,7 +60,7 @@ function firstCookie(response: ResponseResult) {
   return (value ?? '').split(';')[0];
 }
 
-async function createHttpsAdmin(loginLimiter?: IpRateLimiter, trustedOrigins?: () => string[]) {
+async function createHttpsAdmin(loginThrottle?: LoginThrottle, trustedOrigins?: () => string[]) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'aevra-admin-auth-'));
   const tls = await ensureLocalTls(dir, { trust: false });
   const db = AevraDatabase.open(':memory:');
@@ -69,7 +69,7 @@ async function createHttpsAdmin(loginLimiter?: IpRateLimiter, trustedOrigins?: (
   const server = new AdminServer('127.0.0.1', 0, () => ({ core: 'running' }), {
     bootstrap,
     credentialVerifier,
-    loginLimiter,
+    loginThrottle,
     controlSecret: plainPhrase1,
     tls: tls.serverOptions,
     advertisedHost: '127.0.0.1',
@@ -269,8 +269,8 @@ test('password login is the only browser session issuance path', async () => {
   }
 });
 
-test('successful admin logins do not exhaust the failed-login limiter', async () => {
-  const fixture = await createHttpsAdmin(new IpRateLimiter(1, 0));
+test('successful admin logins do not count toward the failed-login lockout', async () => {
+  const fixture = await createHttpsAdmin(new LoginThrottle({ pairThreshold: 1, ipThreshold: 1 }));
   const attempt = () =>
     request(fixture.server, '/api/auth/login', {
       method: 'POST',
@@ -289,8 +289,8 @@ test('successful admin logins do not exhaust the failed-login limiter', async ()
   }
 });
 
-test('admin login returns 429 when the dedicated IP limiter is exhausted', async () => {
-  const fixture = await createHttpsAdmin(new IpRateLimiter(1, 0));
+test('admin login returns 429 once failed logins lock the client', async () => {
+  const fixture = await createHttpsAdmin(new LoginThrottle({ pairThreshold: 1, ipThreshold: 1 }));
   const attempt = () =>
     request(fixture.server, '/api/auth/login', {
       method: 'POST',

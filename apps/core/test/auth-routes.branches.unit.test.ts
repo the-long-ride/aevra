@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import test from 'node:test';
 import { handleAuthRoutes } from '../src/admin/routes/auth-routes.js';
+import type { LoginLockoutEvent } from '../src/admin/login-throttle.js';
 
 const plainPhrase1 = 'sample value';
 
@@ -27,14 +28,22 @@ function response() {
   return result as any;
 }
 
-function limiter(allowed = true, retryAfter = 0) {
+function throttle(options: { retryAfter?: number; lockouts?: LoginLockoutEvent[] } = {}) {
   const events: string[] = [];
   return {
     events,
-    allow: (ip: string) => (events.push(`allow:${ip}`), allowed),
-    retryAfterSeconds: () => retryAfter,
-    recordFailure: (ip: string) => events.push(`fail:${ip}`),
-    refund: (ip: string) => events.push(`refund:${ip}`),
+    begin: (ip: string, username: string) => {
+      events.push(`begin:${ip}:${username}`);
+      if (options.retryAfter !== undefined) {
+        return { allowed: false, retryAfterSeconds: options.retryAfter };
+      }
+      return {
+        allowed: true,
+        failure: () => (events.push('failure'), options.lockouts ?? []),
+        success: () => events.push('success'),
+        abandon: () => events.push('abandon'),
+      };
+    },
   } as any;
 }
 
@@ -52,7 +61,7 @@ function context(overrides: Record<string, any> = {}) {
     credentialVerifier: {
       verify: async (user: string, pass: string) => (seen.push([user, pass]), user === 'admin'),
     } as any,
-    loginLimiter: limiter(),
+    loginThrottle: throttle(),
     secure: true,
     sameOrigin: true,
     clientIp: '127.0.0.1',
@@ -71,13 +80,13 @@ async function call(ctx: any, path: string, method: string, raw = '') {
   return { handled, res, value: res.body ? JSON.parse(res.body) : undefined };
 }
 
-test('login body problems map to 413 and 400 without touching the limiter', async () => {
+test('login body problems map to 413 and 400 without touching the throttle', async () => {
   const ctx = context();
   const big = await call(ctx, '/api/auth/login', 'POST', 'x'.repeat(8 * 1024 + 1));
   assert.deepEqual([big.res.statusCode, big.value], [413, { error: 'Invalid request' }]);
   const bad = await call(ctx, '/api/auth/login', 'POST', '{broken');
   assert.deepEqual([bad.res.statusCode, bad.value], [400, { error: 'Invalid request' }]);
-  assert.deepEqual(ctx.loginLimiter.events, []);
+  assert.deepEqual(ctx.loginThrottle.events, []);
 });
 
 test('an empty login body verifies blank credentials and records a failure', async () => {
@@ -85,25 +94,57 @@ test('an empty login body verifies blank credentials and records a failure', asy
   const result = await call(ctx, '/api/auth/login', 'POST');
   assert.equal(result.res.statusCode, 401);
   assert.deepEqual(ctx.seen, [['', '']]);
-  assert.deepEqual(ctx.loginLimiter.events, ['allow:127.0.0.1', 'fail:127.0.0.1']);
+  assert.deepEqual(ctx.loginThrottle.events, ['begin:127.0.0.1:', 'failure']);
   await call(ctx, '/api/auth/login', 'POST', JSON.stringify({ username: 5, password: ['p'] }));
   assert.deepEqual(ctx.seen[1], ['', '']);
 });
 
-test('rate-limited logins only send retry-after for a positive finite wait', async () => {
-  for (const [wait, header] of [
-    [30, '30'],
-    [0, undefined],
-    [Number.POSITIVE_INFINITY, undefined],
-  ] as const) {
-    const ctx = context({ loginLimiter: limiter(false, wait) });
-    const result = await call(ctx, '/api/auth/login', 'POST', '{}');
-    assert.equal(result.res.statusCode, 429);
-    assert.equal(result.res.headers['retry-after'], header);
-  }
+test('a locked login answers 429 with retry-after and never verifies credentials', async () => {
+  const ctx = context({ loginThrottle: throttle({ retryAfter: 30 }) });
+  const result = await call(
+    ctx,
+    '/api/auth/login',
+    'POST',
+    JSON.stringify({ username: 'admin', password: plainPhrase1 }),
+  );
+  assert.deepEqual(
+    [result.res.statusCode, result.value],
+    [429, { error: 'Too many login attempts' }],
+  );
+  assert.equal(result.res.headers['retry-after'], '30');
+  assert.deepEqual(ctx.seen, []);
 });
 
-test('successful login over plain local HTTP sets a non-Secure cookie and refunds', async () => {
+test('a failed login reports each lockout the throttle triggered', async () => {
+  const lockout: LoginLockoutEvent = {
+    scope: 'ip-username',
+    ip: '127.0.0.1',
+    lockSeconds: 60,
+    level: 1,
+  };
+  const reported: LoginLockoutEvent[] = [];
+  const ctx = context({
+    loginThrottle: throttle({ lockouts: [lockout] }),
+    onLoginLockout: (event: LoginLockoutEvent) => reported.push(event),
+  });
+  const result = await call(ctx, '/api/auth/login', 'POST', '{}');
+  assert.deepEqual([result.res.statusCode, result.value], [401, { error: 'Invalid credentials' }]);
+  assert.deepEqual(reported, [lockout]);
+});
+
+test('a credential check that throws releases the attempt', async () => {
+  const ctx = context({
+    credentialVerifier: {
+      verify: async () => {
+        throw new Error('verifier down');
+      },
+    },
+  });
+  await assert.rejects(call(ctx, '/api/auth/login', 'POST', '{}'), /verifier down/);
+  assert.deepEqual(ctx.loginThrottle.events, ['begin:127.0.0.1:', 'abandon']);
+});
+
+test('successful login over plain local HTTP sets a non-Secure cookie and clears the pair', async () => {
   const ctx = context({ secure: false, allowLocalHttpPassword: true });
   const result = await call(
     ctx,
@@ -116,7 +157,7 @@ test('successful login over plain local HTTP sets a non-Secure cookie and refund
     result.res.headers['set-cookie'],
     'aevra_admin=new%20session; HttpOnly; SameSite=Strict; Path=/',
   );
-  assert.deepEqual(ctx.loginLimiter.events, ['allow:127.0.0.1', 'refund:127.0.0.1']);
+  assert.deepEqual(ctx.loginThrottle.events, ['begin:127.0.0.1:admin', 'success']);
 });
 
 test('insecure login without a warning hook is still rejected', async () => {
