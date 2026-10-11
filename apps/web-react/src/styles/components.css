@@ -276,6 +276,8 @@ pre {
 }
 
 .modal {
+  display: flex;
+  flex-direction: column;
   width: min(920px, calc(100vw - 24px));
   max-height: min(90vh, 900px);
   overflow: hidden;
@@ -287,6 +289,7 @@ pre {
 .modal-head,
 .modal-foot {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -305,8 +308,9 @@ pre {
 }
 
 .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  max-height: calc(90vh - 120px);
   padding: 14px;
 }
 
