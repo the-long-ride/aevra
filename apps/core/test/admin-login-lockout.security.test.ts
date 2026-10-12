@@ -154,7 +154,7 @@ test('a locked response carries Retry-After and reveals nothing about the userna
     assert.deepEqual([known.status, known.body], [unknown.status, unknown.body]);
 
     for (let index = 0; index < 3; index++) await guess(admin.server, {}, 'admin');
-    assert.deepEqual(lockouts, []);
+    assert.equal(lockouts.length, 0);
     await guess(admin.server, {}, 'admin');
     assert.deepEqual(
       lockouts.map((event) => [event.scope, event.lockSeconds, event.level]),

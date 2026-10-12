@@ -50,11 +50,14 @@ test('sign-in unlocks and the lockout message clears when the countdown ends', a
   await submitCredentials();
   expect(await screen.findByRole('timer')).toHaveTextContent('Try again in 1s');
 
-  await waitFor(() => expect(screen.queryByRole('timer')).not.toBeInTheDocument(), {
-    timeout: 3000,
-  });
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  await waitFor(
+    () => {
+      expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+    },
+    { timeout: 3000 },
+  );
 });
 
 test('a lockout without a usable Retry-After shows the message but no countdown', async () => {
