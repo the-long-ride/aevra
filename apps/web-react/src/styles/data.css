@@ -96,11 +96,3 @@
   font-weight: 600;
   color: var(--ink);
 }
-
-.data-success-banner {
-  margin-top: 14px;
-  color: var(--success);
-  font-family: var(--mono);
-  font-size: 12px;
-  user-select: text;
-}

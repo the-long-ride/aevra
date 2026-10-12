@@ -340,7 +340,7 @@ test('Admin URL test probes the edited candidate and normalized trusted origins'
     publicUrl: 'https://candidate.example.com/control/',
     trustedOrigins: ['https://ops.example.com'],
   });
-  expect(await screen.findByText('Reachable · Trusted')).toBeInTheDocument();
+  expect(await screen.findByText('Admin URL: Reachable · Trusted')).toBeInTheDocument();
 });
 
 test('Admin URL is presented as the primary trusted origin instead of a removable duplicate', async () => {
@@ -373,7 +373,7 @@ test('Admin URL is presented as the primary trusted origin instead of a removabl
   ).toBeInTheDocument();
 });
 
-test('Admin probe status stays inside the Admin URL control instead of the global save result', async () => {
+test('Admin probe result is reported as a toast instead of the global save result', async () => {
   renderSettings({ adminPublicUrl: 'https://admin.example.com' });
   installApiFixtures({
     mutationResponses: {
@@ -386,14 +386,8 @@ test('Admin probe status stays inside the Admin URL control instead of the globa
     },
   });
   const user = userEvent.setup();
-  const adminUrl = screen.getByLabelText('Admin public URL');
-  const adminControl = adminUrl.closest('.remote-admin-url-control');
-  expect(adminControl).not.toBeNull();
-
   await user.click(screen.getByRole('button', { name: 'Test Admin URL' }));
 
-  expect(
-    await within(adminControl as HTMLElement).findByText('Reachable · Trusted'),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole('status')).toHaveTextContent('Admin URL: Reachable · Trusted');
   expect(screen.queryByText(/Admin endpoint reachable/)).not.toBeInTheDocument();
 });

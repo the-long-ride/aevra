@@ -80,8 +80,8 @@ describe('McpUpstreamsSettings default services', () => {
     renderSettings();
     fireEvent.click(await screen.findByRole('button', { name: 'Test alpha' }));
     await waitFor(() =>
-      expect(document.querySelector('.inline-result')?.textContent).toMatch(
-        /^unknown\s+\S 3 tools$/,
+      expect(document.querySelector('.toast.success')?.textContent).toMatch(
+        /^alpha: unknown\s+\S 3 tools$/,
       ),
     );
   });
@@ -90,7 +90,7 @@ describe('McpUpstreamsSettings default services', () => {
     responses['POST /api/mcp/upstreams/up%201/test'] = { ok: false, message: null, toolCount: 0 };
     renderSettings();
     fireEvent.click(await screen.findByRole('button', { name: 'Test alpha' }));
-    expect(await screen.findByText('The connection failed')).toBeInTheDocument();
+    expect(await screen.findByText('alpha: The connection failed')).toBeInTheDocument();
   });
 
   it('stringifies non-Error failures from load and actions', async () => {

@@ -170,7 +170,6 @@ describe('BrowserControlSettings default actions', () => {
     expect(
       await screen.findByText('Unpair request needs attention: sync pending'),
     ).toBeInTheDocument();
-    expect(screen.getByText('sync pending')).toBeInTheDocument();
     expect(onChanged).toHaveBeenCalledTimes(2);
   });
 });

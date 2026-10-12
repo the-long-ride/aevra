@@ -1,7 +1,7 @@
 # Aevra — Architecture & Usage Guide for AI Assistants (llm.txt)
 
 > **Specification & Operator Reference for Language Models**
-> Version: 1.2.0
+> Version: 1.2.1
 > Author: the-long-ride (made by <3)
 > Repository: https://github.com/the-long-ride/aevra
 > Issues: https://github.com/the-long-ride/aevra/issues

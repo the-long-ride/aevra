@@ -48,7 +48,7 @@ test.each([
   await user.type(within(dialog).getByLabelText('Secret value'), 'secret-value');
   await user.click(within(dialog).getByRole('button', { name: 'Store securely' }));
 
-  expect(await within(dialog).findByRole('alert')).toHaveTextContent(message);
+  expect(await screen.findByRole('alert')).toHaveTextContent(message);
   expect(onClose).not.toHaveBeenCalled();
   expect(onCreated).not.toHaveBeenCalled();
   expect(within(dialog).getByRole('button', { name: 'Store securely' })).toBeEnabled();

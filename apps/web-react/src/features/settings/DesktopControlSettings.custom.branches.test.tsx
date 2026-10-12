@@ -167,8 +167,9 @@ describe('DesktopControlSettings browser-local migration', () => {
     renderSettings();
     expect(await screen.findByText(/3 custom apps are saved/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Import to Aevra' }));
-    expect(await screen.findByText('// Imported 2 custom apps.')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent(/^1 app could not be imported/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /^Imported 2 custom apps\. 1 app could not be imported/,
+    );
     expect(screen.getByText(/1 custom app are saved/)).toBeInTheDocument();
   });
 
@@ -177,7 +178,7 @@ describe('DesktopControlSettings browser-local migration', () => {
     echoPut(['a', 'b']);
     renderSettings();
     fireEvent.click(await screen.findByRole('button', { name: 'Import to Aevra' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/^2 apps could not be imported/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/2 apps could not be imported/);
   });
 
   it.each([

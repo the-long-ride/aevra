@@ -485,3 +485,7 @@
 .connection-grant {
   align-items: stretch;
 }
+
+.remote-actions > .actions:only-child {
+  margin-left: auto;
+}

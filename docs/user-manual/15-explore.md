@@ -10,7 +10,7 @@ After onboarding, use the navigation to explore the control plane:
 - **Processes** for managed commands that outlive one request.
 - **Changes** for recovery and mutation history.
 - **Audit** for security events and integrity verification.
-- **Settings** for separate MCP/Admin exposure, Keep Awake, execution, command/network policy, environment profiles, secret references, and lifecycle hooks. Creation workflows use focused modals to keep the page compact.
+- **Settings** for separate MCP/Admin exposure, Keep Awake, execution, command/network policy, environment profiles, secret references, and lifecycle hooks. Creation workflows use focused modals to keep the page compact; their footer stays visible when the browser is zoomed in. Action results and validation errors appear as toasts, and each secret reference has an **Edit** button to replace its value.
 - **Guide** for this manual inside the Web UI.
 - **About** for version, system capabilities, author note, and project links.
 

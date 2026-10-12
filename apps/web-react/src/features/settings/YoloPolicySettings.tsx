@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useToast } from '../../components/Toast';
 import { patchJson } from './settings-service';
 
 export type YoloMode = 'workspace' | 'unrestricted';
@@ -11,13 +12,7 @@ export function YoloPolicySettings({
   onChanged(): Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(null), 3000);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+  const { toast, success, error } = useToast(3000);
 
   const handleModeChange = async (nextMode: YoloMode) => {
     if (busy || nextMode === mode) return;
@@ -25,9 +20,9 @@ export function YoloPolicySettings({
     try {
       await patchJson('/api/policy/yolo', { mode: nextMode });
       await onChanged();
-      setToast('// YOLO policy saved.');
-    } catch {
-      // ignore
+      success('// YOLO policy saved.');
+    } catch (cause) {
+      error(cause);
     } finally {
       setBusy(false);
     }
@@ -80,13 +75,7 @@ export function YoloPolicySettings({
           </label>
         </div>
       </div>
-      {toast ? (
-        <div className="toast-stack">
-          <div className="toast success" role="status">
-            {toast}
-          </div>
-        </div>
-      ) : null}
+      {toast}
     </section>
   );
 }

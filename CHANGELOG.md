@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.2.1] - 2026-10-12
+
+### Fixed - Web UI
+
+- **Modal footer hidden when zoomed in:** Create/Edit modals are now a flex column with a fixed head and foot and a scrolling body, so the footer actions stay reachable at high zoom.
+- **Secret reference names missing from the table:** The name resolves from `ref`, `id`, `keyRef`, or `key`, so newly created references show their name.
+
+### Added - Web UI
+
+- **Edit secret reference:** Each reference has an **Edit** button that opens the modal with the name read-only so its value can be replaced.
+
+### Changed - Web UI
+
+- **Toasts instead of inline hints:** Action results and validation errors across Settings, Data, Permissions, Remote access, workspace and connector modals, and the approval modal now use the shared toast through a new `useToast` hook over the existing `.toast-stack` markup. Login panel errors stay inline. Dead inline-hint CSS was removed.
+
+### Security - Admin login lockout
+
+- **Escalating lockout on failed Admin logins:** Failures are counted per client address and per (address, username) in a 15 minute sliding window. Five failures lock that pair and twenty lock the whole address, for 1 minute, doubling on each further lockout up to 1 hour. The level decays after a quiet window, the lock is temporary so a known username cannot be locked out permanently, and a successful login clears the pair counter. Locked requests return `429` with `Retry-After` and the same body for every username; attempts still in flight count toward the threshold so parallel guesses cannot slip past the check.
+- **Real client address behind the gateway:** The Admin plane now keys the throttle on the forwarded client address (`cf-connecting-ip`, `true-client-ip`, `x-real-ip`) only when the request came through the trusted gateway and the operator enabled `trustedProxyClientIp`, and only if the value parses as an IP. Otherwise it keeps using the peer address.
+- **Audit and notification:** Every lockout is written to the audit log as a `security` event (`admin.login.lockout`) and raises a desktop notification, at most one a minute.
+- **Login panel countdown:** A `429` shows an inline countdown from `Retry-After` and disables sign-in until it ends.
+
 ## [1.2.0] - 2026-10-08
 
 ### Added - Token Usage Accounting & Storage

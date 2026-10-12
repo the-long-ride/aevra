@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { KeepAwakeMode, KeepAwakeStatus } from '@aevra/admin-contracts';
 import { Dropdown } from '../../components/Dropdown';
+import { useToast } from '../../components/Toast';
 
 const OPTIONS = [
   { value: 'off', label: 'Off' },
@@ -18,7 +19,7 @@ export function KeepAwakeSettings({
 }) {
   const [mode, setMode] = useState<KeepAwakeMode>(status.mode);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const { toast, error } = useToast();
   const stateLabel = status.supported
     ? status.reason
     : `Unavailable${status.message ? ` · ${status.message}` : ''}`;
@@ -26,11 +27,10 @@ export function KeepAwakeSettings({
   const save = async () => {
     if (busy) return;
     setBusy(true);
-    setError('');
     try {
       await onSave(mode);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setBusy(false);
     }
@@ -82,11 +82,7 @@ export function KeepAwakeSettings({
         go offline once the display turns off. Screen lock still works; closing the lid or choosing
         Sleep still sleeps.
       </p>
-      {error ? (
-        <p role="alert" className="inline-result warning-text">
-          {error}
-        </p>
-      ) : null}
+      {toast}
     </section>
   );
 }

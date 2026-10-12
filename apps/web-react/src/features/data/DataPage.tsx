@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Switch } from '../../components/Switch';
+import { useToast } from '../../components/Toast';
 import {
   downloadBackupFile,
   fetchAllDataForBackup,
@@ -15,9 +16,7 @@ export function DataPage() {
   const [portable, setPortable] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const { toast, success, error } = useToast(3000);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [pendingBackup, setPendingBackup] = useState<AevraBackupData | null>(null);
@@ -32,32 +31,21 @@ export function DataPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(null), 3000);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
   const handleBackup = async () => {
     if (backingUp) return;
     setBackingUp(true);
-    setError('');
-    setSuccess('');
     try {
       const data = await fetchAllDataForBackup(portable);
       downloadBackupFile(data);
-      setToast('// Backup downloaded successfully.');
-      setSuccess('Backup file generated and downloaded successfully.');
+      success('// Backup downloaded successfully.');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setBackingUp(false);
     }
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    setError('');
-    setSuccess('');
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -70,24 +58,21 @@ export function DataPage() {
     } catch (cause) {
       setPendingBackup(null);
       setPreviewSummary(null);
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     }
   };
 
   const handleImport = async () => {
     if (!pendingBackup || importing) return;
     setImporting(true);
-    setError('');
-    setSuccess('');
     try {
       const result = await importAllData(pendingBackup);
-      setToast('// Data imported successfully.');
-      setSuccess(
-        `Import complete: ${result.workspaces} workspace(s), ${result.rules} permission rule(s), ${result.customApps} custom app(s) restored.`,
+      success(
+        `// Data imported successfully. ${result.workspaces} workspace(s), ${result.rules} permission rule(s), ${result.customApps} custom app(s) restored.`,
       );
       resetImport();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setImporting(false);
     }
@@ -231,20 +216,7 @@ export function DataPage() {
         </section>
       </div>
 
-      {success ? <p className="inline-result data-success-banner">{success}</p> : null}
-      {error ? (
-        <p role="alert" className="inline-result warning-text">
-          {error}
-        </p>
-      ) : null}
-
-      {toast ? (
-        <div className="toast-stack">
-          <div className="toast success" role="status">
-            {toast}
-          </div>
-        </div>
-      ) : null}
+      {toast}
     </>
   );
 }

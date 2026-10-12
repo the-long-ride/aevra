@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AdminCredentialVerifier } from '../admin-credentials.js';
 import type { AdminBootstrapService } from '../bootstrap.js';
-import type { IpRateLimiter } from '../../mcp/rate-limit.js';
+import type { LoginLockoutEvent, LoginThrottle } from '../login-throttle.js';
 import { sendAdminResponse } from './http.js';
 
 const LOGIN_BODY_LIMIT = 8 * 1024;
@@ -11,13 +11,14 @@ const COOKIE_ATTRIBUTES = 'HttpOnly; SameSite=Strict; Path=/';
 export interface AdminAuthRouteContext {
   sessions: AdminBootstrapService;
   credentialVerifier?: AdminCredentialVerifier;
-  loginLimiter: IpRateLimiter;
+  loginThrottle: LoginThrottle;
   sessionId?: string;
   secure: boolean;
   allowLocalHttpPassword?: boolean;
   sameOrigin: boolean;
   clientIp: string;
   onInsecureLoginBlocked?: () => void;
+  onLoginLockout?: (event: LoginLockoutEvent) => void;
 }
 
 async function readLoginBody(request: IncomingMessage): Promise<Record<string, unknown>> {
@@ -101,27 +102,32 @@ export async function handleAuthRoutes(
       sendAdminResponse(response, failure.status ?? 400, { error: 'Invalid request' });
       return true;
     }
-    if (!context.loginLimiter.allow(context.clientIp)) {
-      const retryAfter = context.loginLimiter.retryAfterSeconds(context.clientIp);
-      if (Number.isFinite(retryAfter) && retryAfter > 0) {
-        response.setHeader('retry-after', String(retryAfter));
-      }
+    const username = typeof body.username === 'string' ? body.username : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+
+    const attempt = context.loginThrottle.begin(context.clientIp, username);
+    if (!attempt.allowed) {
+      response.setHeader('retry-after', String(attempt.retryAfterSeconds));
       sendAdminResponse(response, 429, { error: 'Too many login attempts' });
       return true;
     }
 
-    const username = typeof body.username === 'string' ? body.username : '';
-    const password = typeof body.password === 'string' ? body.password : '';
-    const valid = await context.credentialVerifier.verify(username, password);
+    let valid: boolean;
+    try {
+      valid = await context.credentialVerifier.verify(username, password);
+    } catch (error) {
+      attempt.abandon();
+      throw error;
+    }
     if (!valid) {
-      context.loginLimiter.recordFailure(context.clientIp);
+      for (const event of attempt.failure()) context.onLoginLockout?.(event);
       sendAdminResponse(response, 401, { error: 'Invalid credentials' });
       return true;
     }
 
-    // The limiter protects failed credential attempts, not authenticated local
-    // CLI/UI traffic. Restore the reservation after a successful verification.
-    context.loginLimiter.refund(context.clientIp);
+    // A successful sign-in clears this (ip, username) pair so a typo streak cannot
+    // lock the owner out, while the address-wide count keeps its history.
+    attempt.success();
 
     const session = await context.sessions.issueSession();
     setSessionCookie(response, session.sessionId, context.secure);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 
 export type ControlCapability = 'browser.control' | 'desktop.control';
@@ -16,13 +17,12 @@ export function useControlGrants(base: string, onChanged: () => Promise<void>) {
   const [grants, setGrants] = useState<ControlGrants | null>(null);
   const [busy, setBusy] = useState<ControlCapability | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [actionError, setActionError] = useState('');
+  const { toast, error } = useToast();
 
   useEffect(() => {
     let current = true;
     setGrants(null);
     setLoadError('');
-    setActionError('');
     void requestJson<ControlGrants>(base)
       .then((value) => {
         if (current) setGrants(value);
@@ -38,7 +38,6 @@ export function useControlGrants(base: string, onChanged: () => Promise<void>) {
   const setGrant = async (capability: ControlCapability, enabled: boolean) => {
     if (busy) return;
     setBusy(capability);
-    setActionError('');
     try {
       await requestJson(enabled ? base : `${base}/${encodeURIComponent(capability)}`, {
         method: enabled ? 'POST' : 'DELETE',
@@ -52,14 +51,14 @@ export function useControlGrants(base: string, onChanged: () => Promise<void>) {
         // A revoke may be persisted before worker invalidation reports failure.
         setGrants(await requestJson<ControlGrants>(base));
         await onChanged();
-        setActionError(failure);
+        error(failure);
       } catch (refreshCause) {
-        setActionError(`${failure}. Could not refresh grants: ${message(refreshCause)}`);
+        error(`${failure}. Could not refresh grants: ${message(refreshCause)}`);
       }
     } finally {
       setBusy(null);
     }
   };
 
-  return { grants, busy, loadError, actionError, setGrant };
+  return { grants, busy, loadError, toast, setGrant };
 }

@@ -1,14 +1,8 @@
 import { useState } from 'react';
 import { ManagementModal } from '../../components/ManagementModal';
 
-export interface AdminProbeState {
-  tone: 'success' | 'warning' | 'error';
-  message: string;
-}
-
 export function AdminWebUiSettings({
   adminPublicUrl,
-  adminProbe,
   trustedAdminOrigins,
   newTrustedAdminOrigin,
   onAdminPublicUrlChange,
@@ -18,7 +12,6 @@ export function AdminWebUiSettings({
   onRemoveTrustedOrigin,
 }: {
   adminPublicUrl: string;
-  adminProbe: AdminProbeState | null;
   trustedAdminOrigins: string[];
   newTrustedAdminOrigin: string;
   onAdminPublicUrlChange(value: string): void;
@@ -66,9 +59,6 @@ export function AdminWebUiSettings({
             <span className="field-help">
               Canonical URL used to open the Administration Web UI.
             </span>
-            {adminProbe ? (
-              <span className={`remote-admin-probe ${adminProbe.tone}`}>{adminProbe.message}</span>
-            ) : null}
           </div>
         </div>
 

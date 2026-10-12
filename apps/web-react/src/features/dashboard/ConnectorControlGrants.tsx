@@ -8,7 +8,7 @@ export function ConnectorControlGrants({
   onChanged(): Promise<void>;
 }) {
   const base = `/api/connectors/${encodeURIComponent(connectorId)}/control`;
-  const { grants, busy, loadError, actionError, setGrant } = useControlGrants(base, onChanged);
+  const { grants, busy, loadError, toast, setGrant } = useControlGrants(base, onChanged);
 
   if (loadError)
     return (
@@ -33,11 +33,7 @@ export function ConnectorControlGrants({
           </button>
         );
       })}
-      {actionError ? (
-        <p role="alert" className="warning">
-          {actionError}
-        </p>
-      ) : null}
+      {toast}
     </div>
   );
 }

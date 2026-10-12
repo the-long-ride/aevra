@@ -15,13 +15,11 @@ export interface UpstreamDraft {
 export function McpUpstreamEditModal({
   initial,
   submitting,
-  error,
   onClose,
   onSubmit,
 }: {
   initial?: Partial<UpstreamDraft>;
   submitting: boolean;
-  error: string;
   onClose(): void;
   onSubmit(draft: UpstreamDraft): void;
 }) {
@@ -183,11 +181,6 @@ export function McpUpstreamEditModal({
             </option>
           ))}
         </select>
-        {error ? (
-          <p role="alert" className="inline-result warning-text">
-            {error}
-          </p>
-        ) : null}
       </div>
     </SettingsFormModal>
   );

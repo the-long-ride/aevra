@@ -108,6 +108,5 @@ describe('DataPage failure paths', () => {
       await vi.advanceTimersByTimeAsync(3100);
     });
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    expect(screen.getByText(/backup file generated/i)).toBeInTheDocument();
   });
 });

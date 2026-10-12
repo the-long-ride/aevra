@@ -19,6 +19,7 @@ import type {
   DesktopPolicySnapshot,
   DetectedApp,
 } from './desktop-control-types';
+import { useToast } from '../../components/Toast';
 import { DesktopAppPicker } from './DesktopAppPicker';
 import { migrateLocalCustomApps } from './custom-app-migration';
 
@@ -45,8 +46,7 @@ export function DesktopControlSettings({
   const [grants, setGrants] = useState<DesktopAppGrantRow[]>([]);
   const [appWarnings, setAppWarnings] = useState<string[]>([]);
   const [busyTarget, setBusyTarget] = useState<'mode' | 'apps' | 'path' | null>(null);
-  const [error, setError] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, success, error, clear } = useToast(3000);
 
   const policyRef = useRef(policy);
   policyRef.current = policy;
@@ -68,19 +68,13 @@ export function DesktopControlSettings({
   }, [loadApps]);
 
   useEffect(() => {
-    if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(null), 3000);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  useEffect(() => {
     let cancelled = false;
     void load()
       .then((next) => {
         if (!cancelled) setPolicy(next);
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+        if (!cancelled) error(cause);
       });
     void refreshCatalog().catch(() => {
       if (!cancelled) setAppWarnings(['Some app sources could not be read.']);
@@ -95,14 +89,13 @@ export function DesktopControlSettings({
       if (busyTargetRef.current !== null) return;
       busyTargetRef.current = target;
       setBusyTarget(target);
-      setError('');
-      setToast(null);
+      clear();
       try {
         const updated = await save(next);
         setPolicy(updated);
-        setToast('// Desktop policy saved.');
+        success('// Desktop policy saved.');
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        error(cause);
       } finally {
         busyTargetRef.current = null;
         setBusyTarget(null);
@@ -135,7 +128,6 @@ export function DesktopControlSettings({
       if (busyTargetRef.current !== null) return;
       busyTargetRef.current = 'apps';
       setBusyTarget('apps');
-      setError('');
       try {
         if (row?.exeBasename.toLowerCase() === 'msedgewebview2.exe') {
           // WebView2 is a shared runtime. Its catalog toggle is deliberately
@@ -153,7 +145,7 @@ export function DesktopControlSettings({
               );
           setPolicy(await save({ applications }));
           await refreshCatalog();
-          setToast(checked ? '// Broad WebView2 access enabled.' : '// WebView2 access revoked.');
+          success(checked ? '// Broad WebView2 access enabled.' : '// WebView2 access revoked.');
           return;
         }
         if (row?.executablePath) {
@@ -171,7 +163,7 @@ export function DesktopControlSettings({
               setPolicy(await save({ applications }));
           }
           await refreshCatalog();
-          setToast(checked ? '// App access granted.' : '// App access revoked.');
+          success(checked ? '// App access granted.' : '// App access revoked.');
         } else {
           const applications = checked
             ? [...current.applications, exeBasename]
@@ -179,10 +171,10 @@ export function DesktopControlSettings({
                 (entry) => entry.toLowerCase() !== exeBasename.toLowerCase(),
               );
           setPolicy(await save({ applications }));
-          setToast('// Desktop policy saved.');
+          success('// Desktop policy saved.');
         }
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        error(cause);
       } finally {
         busyTargetRef.current = null;
         setBusyTarget(null);
@@ -205,9 +197,9 @@ export function DesktopControlSettings({
       try {
         await saveCustomApp(app, customAppId);
         await refreshCatalog();
-        setToast(customAppId ? '// Custom application updated.' : '// Custom application added.');
+        success(customAppId ? '// Custom application updated.' : '// Custom application added.');
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        error(cause);
       }
     },
     [refreshCatalog],
@@ -219,9 +211,9 @@ export function DesktopControlSettings({
       try {
         await deleteCustomApp(customAppId);
         await refreshCatalog();
-        setToast('// Custom application removed.');
+        success('// Custom application removed.');
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        error(cause);
       }
     },
     [refreshCatalog],
@@ -231,7 +223,6 @@ export function DesktopControlSettings({
     if (localCustomApps.length === 0 || busyTargetRef.current !== null) return;
     busyTargetRef.current = 'apps';
     setBusyTarget('apps');
-    setError('');
     try {
       const result = await migrateLocalCustomApps(localCustomApps, (app) =>
         saveCustomApp(app).then((saved) => saved.app),
@@ -239,13 +230,14 @@ export function DesktopControlSettings({
       saveStoredCustomApps(result.remaining);
       setLocalCustomApps(result.remaining);
       await refreshCatalog();
-      setToast(`// Imported ${result.imported} custom app${result.imported === 1 ? '' : 's'}.`);
+      const imported = `Imported ${result.imported} custom app${result.imported === 1 ? '' : 's'}.`;
       if (result.failed > 0)
-        setError(
-          `${result.failed} app${result.failed === 1 ? '' : 's'} could not be imported. They remain saved in this browser so you can retry.`,
+        error(
+          `${imported} ${result.failed} app${result.failed === 1 ? '' : 's'} could not be imported. They remain saved in this browser so you can retry.`,
         );
+      else success(`// ${imported}`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       busyTargetRef.current = null;
       setBusyTarget(null);
@@ -271,11 +263,7 @@ export function DesktopControlSettings({
         <div className="compact-settings-copy">
           <h3>Desktop control</h3>
         </div>
-        {error ? (
-          <p role="alert" className="inline-result warning-text">
-            {error}
-          </p>
-        ) : null}
+        {toast}
       </section>
     );
   }
@@ -343,10 +331,8 @@ export function DesktopControlSettings({
                 onClick={() =>
                   void revokeDesktopAppGrant(grant.id)
                     .then(refreshCatalog)
-                    .then(() => setToast('// App grant revoked.'))
-                    .catch((cause: unknown) =>
-                      setError(cause instanceof Error ? cause.message : String(cause)),
-                    )
+                    .then(() => success('// App grant revoked.'))
+                    .catch((cause: unknown) => error(cause))
                 }
               >
                 Revoke
@@ -365,18 +351,7 @@ export function DesktopControlSettings({
         disabled={busyTarget === 'path'}
         onChange={onPathExposureChange}
       />
-      {toast ? (
-        <div className="toast-stack">
-          <div className="toast success" role="status">
-            {toast}
-          </div>
-        </div>
-      ) : null}
-      {error ? (
-        <p role="alert" className="inline-result warning-text">
-          {error}
-        </p>
-      ) : null}
+      {toast}
     </section>
   );
 }

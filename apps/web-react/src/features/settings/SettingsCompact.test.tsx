@@ -66,7 +66,7 @@ test('environment profile modal validates JSON and posts parsed values', async (
     target: { value: '{bad' },
   });
   await user.click(within(dialog).getByRole('button', { name: 'Create profile' }));
-  expect(within(dialog).getByRole('alert')).toHaveTextContent('valid JSON');
+  expect(screen.getByText(/valid JSON/)).toHaveAttribute('role', 'alert');
   expect(mutationCall(fetchMock, '/api/environment-profiles', 'POST')).toBeUndefined();
 
   fireEvent.change(within(dialog).getByLabelText('Variables JSON'), {
@@ -141,7 +141,7 @@ test('handles command-family override submission, error, and removal', async () 
   let dialog = screen.getByRole('dialog', { name: 'Add command-family override' });
   await user.type(within(dialog).getByLabelText('Family'), 'bad:cmd');
   await user.click(within(dialog).getByRole('button', { name: 'Set override' }));
-  expect(await within(dialog).findByText('Invalid family pattern')).toBeInTheDocument();
+  expect(await screen.findByText('Invalid family pattern')).toBeInTheDocument();
 
   // 2. Submit success
   installApiFixtures({
@@ -212,7 +212,7 @@ test('handles network rule submission, error, and removal', async () => {
 
   const submitBtn = within(dialog).getByRole('button', { name: 'Add rule' });
   await user.click(submitBtn);
-  expect(await within(dialog).findByText('Rule host invalid')).toBeInTheDocument();
+  expect(await screen.findByText('Rule host invalid')).toBeInTheDocument();
 
   // 2. Submit success
   installApiFixtures({

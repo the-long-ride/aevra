@@ -152,7 +152,7 @@ test('non-Error mutation failures are shown as text', async () => {
     </DialogProvider>,
   );
   await user.click(screen.getByRole('button', { name: 'Disable YOLO' }));
-  expect(await screen.findByText('refresh unavailable')).toHaveClass('warning');
+  expect(await screen.findByText('refresh unavailable')).toHaveClass('toast', 'error');
 });
 
 test('hides workspace granting when every workspace is already granted', () => {

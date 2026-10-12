@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 
 export type LoopbackClass = 'BLOCKED' | 'SENSITIVE' | 'NORMAL';
@@ -47,14 +48,7 @@ export function BrowserOriginPolicy({
   const [blocked, setBlocked] = useState('');
   const [sensitive, setSensitive] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(null), 3000);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+  const { toast, success, error, clear } = useToast(3000);
 
   const adopt = (next: OriginPolicySnapshot) => {
     setPolicy(next);
@@ -69,18 +63,17 @@ export function BrowserOriginPolicy({
         if (!cancelled) adopt(next);
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+        if (!cancelled) error(cause);
       });
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, error]);
 
   const submit = async (loopbackClass: LoopbackClass) => {
     if (busy) return;
     setBusy(true);
-    setError('');
-    setToast(null);
+    clear();
     try {
       adopt(
         await save({
@@ -89,21 +82,15 @@ export function BrowserOriginPolicy({
           sensitiveHosts: parseHosts(sensitive),
         }),
       );
-      setToast('// Origin policy saved.');
+      success('// Origin policy saved.');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setBusy(false);
     }
   };
 
-  if (!policy) {
-    return error ? (
-      <p role="alert" className="inline-result warning-text">
-        {error}
-      </p>
-    ) : null;
-  }
+  if (!policy) return <>{toast}</>;
 
   return (
     <div className="browser-origin-policy">
@@ -167,18 +154,7 @@ export function BrowserOriginPolicy({
           Save host lists
         </button>
       </div>
-      {toast ? (
-        <div className="toast-stack">
-          <div className="toast success" role="status">
-            {toast}
-          </div>
-        </div>
-      ) : null}
-      {error ? (
-        <p role="alert" className="inline-result warning-text">
-          {error}
-        </p>
-      ) : null}
+      {toast}
     </div>
   );
 }

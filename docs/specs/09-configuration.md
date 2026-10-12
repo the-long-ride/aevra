@@ -1,6 +1,6 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.2.0`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.2.1`
 
 ## Ports and listeners (fixed hosts)
 
@@ -81,7 +81,7 @@ Aevra never advertises a plaintext localhost endpoint. With no TLS override it p
 
 Lease idle `30 min` · reconnect grace `15 min` · approval fast-wait `20 s` · ticket lifetime `5 min` (HIGH `2 min`, CRITICAL `60 s`) · OAuth access token `1 h` · OAuth refresh family `30 d` · JWKS cache `5 min` · connector `last_used_at` write throttle `1/min` · keep-awake reevaluation `5 s` · token usage flush `30 s` · token hourly rollup threshold `7 d`.
 
-Admin password login uses a dedicated per-IP token bucket. Failed credential attempts consume capacity; successful verification refunds the reservation, so ordinary CLI/UI administration does not self-throttle. Exhaustion returns `429` with `Retry-After`.
+Admin password login is throttled by failure: 5 failures per (client address, username) or 20 per client address inside a 15 minute sliding window lock that key for `1 min`, doubling on each further lockout up to `1 h`, with the level decaying after a quiet window. A successful login clears the (address, username) counter, so ordinary CLI/UI administration does not self-throttle. A locked login returns `429` with `Retry-After`. The client address is the peer address unless `exposure.trustedProxyClientIp` is on and the request came through the trusted gateway. The thresholds are fixed defaults, not settings.
 
 ## Background service
 

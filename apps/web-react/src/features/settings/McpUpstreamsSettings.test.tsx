@@ -102,7 +102,7 @@ describe('McpUpstreamsSettings', () => {
       message: 'Connection timed out',
     });
     fireEvent.click(screen.getByRole('button', { name: /test github/i }));
-    expect(await screen.findByText('Connection timed out')).toBeInTheDocument();
+    expect(await screen.findByText(/Connection timed out/)).toBeInTheDocument();
   });
 
   it('removes a server with cancel and confirm', async () => {

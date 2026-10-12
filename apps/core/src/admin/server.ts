@@ -1,13 +1,15 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https, { type ServerOptions as HttpsServerOptions } from 'node:https';
-import { IpRateLimiter } from '../mcp/rate-limit.js';
+import { isIP } from 'node:net';
+import { remoteIp } from '../mcp/http-response.js';
 import type { AdminCredentialVerifier } from './admin-credentials.js';
 import type { AdminBootstrapService } from './bootstrap.js';
 import { secretEquals } from './bootstrap.js';
 import { GATEWAY_TRUST_HEADER, ORIGINAL_TRANSPORT_HEADER } from '../gateway/public-gateway.js';
 import { handleBulkAdminAction } from './bulk-actions.js';
 import { buildDashboardRuntimeSnapshot } from './dashboard-runtime.js';
+import { LoginThrottle, type LoginLockoutEvent } from './login-throttle.js';
 import { handleAdminApi, type AdminApiContext } from './routes/api.js';
 import { handleAuthRoutes } from './routes/auth-routes.js';
 import { resolveStaticAsset } from './static-files.js';
@@ -38,6 +40,19 @@ function isLoopback(address: string | undefined) {
 function headerValue(req: IncomingMessage, name: string) {
   const value = req.headers[name];
   return Array.isArray(value) ? value[0] : value;
+}
+
+/**
+ * Behind the public gateway every Admin request arrives from loopback, so the peer
+ * address cannot tell clients apart. The forwarded client address is believed only
+ * when the request came through the trusted gateway AND the operator declared a proxy
+ * that overwrites it, and only if it parses as an address.
+ */
+function loginClientIp(req: IncomingMessage, trustForwarded: boolean) {
+  const peer = req.socket.remoteAddress ?? 'unknown';
+  if (!trustForwarded) return peer;
+  const forwarded = remoteIp(req, true);
+  return isIP(forwarded) ? forwarded : peer;
 }
 
 export function sameOrigin(
@@ -83,7 +98,7 @@ function staticContentType(file: string) {
 export interface AdminServerOptions {
   bootstrap?: AdminBootstrapService;
   credentialVerifier?: AdminCredentialVerifier;
-  loginLimiter?: IpRateLimiter;
+  loginThrottle?: LoginThrottle;
   controlSecret?: string;
   staticDir?: string;
   api?: AdminApiContext;
@@ -92,13 +107,15 @@ export interface AdminServerOptions {
   trustedOrigins?: () => string[];
   gatewayTrustSecret?: string;
   localHttpGatewayEnabled?: () => boolean;
+  trustForwardedClientIp?: () => boolean;
+  onLoginLockout?: (event: LoginLockoutEvent) => void;
   onSecurityWarning?: (line: string) => void;
 }
 
 export class AdminServer {
   private server?: http.Server | https.Server;
   private readonly startedAt = new Date().toISOString();
-  private readonly loginLimiter: IpRateLimiter;
+  private readonly loginThrottle: LoginThrottle;
   private lastInsecureLoginWarningAt = 0;
 
   constructor(
@@ -107,7 +124,7 @@ export class AdminServer {
     private health: () => unknown,
     private options: AdminServerOptions = {},
   ) {
-    this.loginLimiter = options.loginLimiter ?? new IpRateLimiter(5, 1 / 60);
+    this.loginThrottle = options.loginThrottle ?? new LoginThrottle();
   }
 
   async start() {
@@ -184,13 +201,17 @@ export class AdminServer {
       const handled = await handleAuthRoutes(req, res, url, {
         sessions: this.options.bootstrap,
         credentialVerifier: this.options.credentialVerifier,
-        loginLimiter: this.loginLimiter,
+        loginThrottle: this.loginThrottle,
         sessionId: this.adminSession(req),
         secure: browserSecure,
         allowLocalHttpPassword: localHttpGateway,
         sameOrigin: sameOrigin(req, url, trustedOrigins, localHttpGateway),
-        clientIp: req.socket.remoteAddress ?? 'unknown',
+        clientIp: loginClientIp(
+          req,
+          trustedGateway && this.options.trustForwardedClientIp?.() === true,
+        ),
         onInsecureLoginBlocked: () => this.warnInsecureLogin(),
+        onLoginLockout: this.options.onLoginLockout,
       });
       if (handled) return;
     }

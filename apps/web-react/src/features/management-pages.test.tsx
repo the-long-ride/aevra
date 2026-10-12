@@ -227,7 +227,7 @@ test('Add Workspace keeps inline browsing available when the native picker is un
   const dialog = screen.getByRole('dialog', { name: 'Add workspace' });
   await user.click(within(dialog).getByRole('button', { name: 'Browse on server' }));
   expect(
-    await within(dialog).findByText(
+    await screen.findByText(
       /native folder picker is unavailable.*enter or browse the server path below/i,
     ),
   ).toBeInTheDocument();

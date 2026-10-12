@@ -2,6 +2,7 @@ import type { ApprovalItem, OauthRequestItem } from '@aevra/admin-contracts';
 import { useEffect, useRef, useState } from 'react';
 import { useDialog } from '../../components/Dialog';
 import { Switch } from '../../components/Switch';
+import { useToast } from '../../components/Toast';
 import { CommandExplanation } from '../permissions/CommandExplanation';
 import { ApprovalPayloadPanel, hasApprovalDetails } from './ApprovalPayloadPanel';
 import { actionsForApproval } from './request-actions';
@@ -55,12 +56,11 @@ function ApprovalModalCard({
   // POST to an endpoint that rejects a second decision on the same request, so an
   // unguarded double click turned a successful approval into a visible error.
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const { toast, error: showError } = useToast();
 
   const decide = async (act: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
-    setFailure(null);
     try {
       await act();
       await onActioned();
@@ -77,7 +77,7 @@ function ApprovalModalCard({
         await onActioned();
         return;
       }
-      setFailure(message);
+      showError(message);
       setBusy(false);
     }
   };
@@ -158,11 +158,7 @@ function ApprovalModalCard({
             </button>
           ) : null}
         </div>
-        {failure ? (
-          <p className="approval-modal-failure" role="alert">
-            {failure}
-          </p>
-        ) : null}
+        {toast}
       </div>
     </div>
   );
@@ -176,13 +172,12 @@ function OauthModalCard({
   onActioned(): Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const { toast, error: showError } = useToast();
   const [keepSignedIn, setKeepSignedIn] = useState(true);
 
   const decide = async (allow: boolean) => {
     if (busy) return;
     setBusy(true);
-    setFailure(null);
     try {
       await decideOauth(item.id, allow, { renewable: keepSignedIn });
       await onActioned();
@@ -194,7 +189,7 @@ function OauthModalCard({
         await onActioned();
         return;
       }
-      setFailure(message);
+      showError(message);
       setBusy(false);
     }
   };
@@ -246,11 +241,7 @@ function OauthModalCard({
           Allow
         </button>
       </div>
-      {failure ? (
-        <p className="approval-modal-failure" role="alert">
-          {failure}
-        </p>
-      ) : null}
+      {toast}
     </>
   );
 }

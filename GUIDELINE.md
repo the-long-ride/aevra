@@ -2,7 +2,7 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current source version is **1.2.0**. It includes command understanding,
+The current source version is **1.2.1**. It includes command understanding,
 workspace containment, typed command rules, efficient browser/control plans,
 cross-platform shared-semantic desktop control, MCP upstream servers, and
 workspace manifests. Version 1.1.2 fixed missing compiled modules in npm

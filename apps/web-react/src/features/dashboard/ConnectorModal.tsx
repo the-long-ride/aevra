@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 
 export function ConnectorModal({
@@ -12,7 +13,7 @@ export function ConnectorModal({
 }) {
   const [name, setName] = useState('');
   const [token, setToken] = useState('');
-  const [error, setError] = useState('');
+  const { toast, error } = useToast();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -27,7 +28,6 @@ export function ConnectorModal({
     if (!open) {
       setName('');
       setToken('');
-      setError('');
     }
   }, [open]);
 
@@ -42,10 +42,9 @@ export function ConnectorModal({
         body: JSON.stringify({ name: name.trim() }),
       });
       setToken(created.token);
-      setError('');
       await onCreated();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     }
   };
 
@@ -89,7 +88,7 @@ export function ConnectorModal({
                   required
                 />
               </label>
-              {error ? <p className="warning">{error}</p> : null}
+              {toast}
               <button className="primary" data-surface-id="connections:create-connector">
                 Create token
               </button>

@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 
 interface DirectoryEntry {
@@ -58,7 +59,7 @@ export function AddWorkspaceModal({
   const [serverPath, setServerPath] = useState('');
   const [listing, setListing] = useState<DirectoryListing | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { toast, error, clear } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const crumbs = useMemo(
     () => breadcrumbs(listing?.path ?? serverPath),
@@ -94,13 +95,13 @@ export function AddWorkspaceModal({
         .then((next) => {
           if (controller.signal.aborted) return;
           setListing(next);
-          setError('');
+          clear();
           if (next.path !== serverPath) setServerPath(next.path);
         })
         .catch((failure) => {
           if (controller.signal.aborted) return;
           setListing(null);
-          setError(failure instanceof Error ? failure.message : String(failure));
+          error(failure);
         })
         .finally(() => {
           if (!controller.signal.aborted) setLoading(false);
@@ -110,7 +111,7 @@ export function AddWorkspaceModal({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [serverPath]);
+  }, [serverPath, clear, error]);
 
   const browseOnServer = async () => {
     try {
@@ -119,10 +120,10 @@ export function AddWorkspaceModal({
         body: '{}',
       });
       setServerPath(selected.path);
-      setError('');
+      clear();
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : String(failure);
-      setError(`${message}. Enter or browse the server path below.`);
+      error(`${message}. Enter or browse the server path below.`);
     }
   };
 
@@ -140,7 +141,7 @@ export function AddWorkspaceModal({
       await onCreated();
       onClose();
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      error(failure);
     } finally {
       setSubmitting(false);
     }
@@ -239,8 +240,6 @@ export function AddWorkspaceModal({
               </p>
             )}
           </div>
-
-          {error ? <p className="inline-result warning-text">{error}</p> : null}
         </div>
         <div className="modal-foot add-workspace-actions">
           <button type="button" onClick={onClose}>
@@ -251,6 +250,7 @@ export function AddWorkspaceModal({
           </button>
         </div>
       </form>
+      {toast}
     </div>
   );
 }

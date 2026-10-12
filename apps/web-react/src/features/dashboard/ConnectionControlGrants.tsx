@@ -10,7 +10,7 @@ export function ConnectionControlGrantsPanel({
   onChanged(): Promise<void>;
 }) {
   const base = `/api/connections/${encodeURIComponent(connectionId)}/control`;
-  const { grants, busy, loadError, actionError, setGrant } = useControlGrants(base, onChanged);
+  const { grants, busy, loadError, toast, setGrant } = useControlGrants(base, onChanged);
 
   return (
     <section className="connection-workspaces" aria-label="Device control grants">
@@ -43,11 +43,12 @@ export function ConnectionControlGrantsPanel({
       ) : (
         <p className="muted">Loading device grants�</p>
       )}
-      {loadError || actionError ? (
+      {loadError ? (
         <p role="alert" className="warning">
-          {loadError || actionError}
+          {loadError}
         </p>
       ) : null}
+      {toast}
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import { BROWSER_EXTENSION_DOWNLOAD_URL, browserExtensionZipUrl } from '@aevra/admin-contracts';
 import { useEffect, useRef, useState } from 'react';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 import { useBrowserExtensionInfo } from './use-browser-extension';
 
@@ -29,7 +30,7 @@ export function BrowserSetupModal({
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [generatingCode, setGeneratingCode] = useState(false);
-  const [pairingError, setPairingError] = useState<string | null>(null);
+  const { toast, error } = useToast();
 
   useEffect(() => {
     panel.current?.focus();
@@ -50,12 +51,11 @@ export function BrowserSetupModal({
   const handleGeneratePairingCode = async () => {
     if (generatingCode) return;
     setGeneratingCode(true);
-    setPairingError(null);
     try {
       const res = await createCode();
       setPairingCode(res.code);
     } catch (err) {
-      setPairingError(err instanceof Error ? err.message : String(err));
+      error(err);
     } finally {
       setGeneratingCode(false);
     }
@@ -171,11 +171,7 @@ export function BrowserSetupModal({
             </div>
           )}
 
-          {pairingError ? (
-            <p role="alert" className="browser-pairing-error">
-              {pairingError}
-            </p>
-          ) : null}
+          {toast}
         </section>
 
         <div className="actions browser-setup-actions">

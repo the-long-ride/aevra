@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { BrowserControlSnapshot, BrowserPairingRecord } from '@aevra/admin-contracts';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 import {
   BrowserOriginPolicy,
@@ -48,20 +49,18 @@ export function BrowserControlSettings({
   const [code, setCode] = useState<PairingCode | null>(null);
   const [busy, setBusy] = useState(false);
   const [unpairingId, setUnpairingId] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const { toast, error } = useToast();
   const pairings = status.pairings ?? [];
   const mutating = busy || unpairingId !== null;
 
   const run = async (action: () => Promise<unknown>) => {
     if (mutating) return;
     setBusy(true);
-    setError('');
     try {
       await action();
       await onChanged();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      error(cause);
     } finally {
       setBusy(false);
     }
@@ -70,21 +69,12 @@ export function BrowserControlSettings({
   const removePairing = async (pairing: BrowserPairingRow) => {
     if (mutating) return;
     setUnpairingId(pairing.pairingId);
-    setRowErrors((current) => {
-      const next = { ...current };
-      delete next[pairing.pairingId];
-      return next;
-    });
     try {
       await unpair(pairing.pairingId);
       await onChanged();
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
-      setRowErrors((current) => ({
-        ...current,
-        [pairing.pairingId]: message,
-      }));
-      setError(`Unpair request needs attention: ${message}`);
+      error(`Unpair request needs attention: ${message}`);
       // Core persists unpair before worker synchronization. Refresh even on a
       // pending-sync response so the visible list reflects that source of truth.
       try {
@@ -141,7 +131,6 @@ export function BrowserControlSettings({
           pairings={pairings}
           busy={mutating}
           unpairingId={unpairingId}
-          rowErrors={rowErrors}
           onUnpair={(pairing) => void removePairing(pairing)}
         />
       ) : (
@@ -177,11 +166,7 @@ export function BrowserControlSettings({
       <p className="section-note compact-settings-note">
         Disconnecting revokes every issued extension token and drops both transports immediately.
       </p>
-      {error ? (
-        <p role="alert" className="inline-result warning-text">
-          {error}
-        </p>
-      ) : null}
+      {toast}
       <BrowserOriginPolicy load={loadPolicy} save={savePolicy} />
     </section>
   );
