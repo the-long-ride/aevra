@@ -110,7 +110,11 @@ test('a real Chromium completes a multi-step task through the CDP driver', async
     });
     assert.equal(refused[0]!.error?.code, 'BROWSER_CREDENTIAL_FIELD_REFUSED');
 
-    const shot = await driver.snapshot({ mode: 'vision', maxNodes: 200 });
+    const shot = await driver.snapshot({
+      mode: 'vision',
+      maxNodes: 200,
+      originPolicy: { loopbackClass: 'NORMAL' },
+    });
     assert.ok(String(shot.imageDataUri).startsWith('data:image/'));
 
     // Action kinds the conformance suite does not reach, against a real page.

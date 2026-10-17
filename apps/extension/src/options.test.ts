@@ -62,6 +62,9 @@ describe('options pairing form', () => {
       profileName: 'TLR',
     });
     expect(stored).toEqual({
+      pairingOrigin: 'https://127.0.0.1:47831',
+      pairingPort: 47831,
+      serverName: 'Aevra',
       token: 'issued',
       wsUrl: 'ws://127.0.0.1:47833',
       pairedProfileId: '11111111-1111-4111-8111-111111111111',
@@ -73,7 +76,7 @@ describe('options pairing form', () => {
     const urls: string[] = [];
     (globalThis as any).fetch = async (url: string) => {
       urls.push(url);
-      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://x' }) };
+      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://127.0.0.1:47833' }) };
     };
     await import('./options');
     await submit('abcdefgh');
@@ -85,7 +88,7 @@ describe('options pairing form', () => {
     (globalThis as any).fetch = async (url: string) => {
       urls.push(url);
       if (url.startsWith('https:')) throw new TypeError('failed to fetch');
-      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://x' }) };
+      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://127.0.0.1:47833' }) };
     };
     await import('./options');
     await submit('abcdefgh');
@@ -113,7 +116,7 @@ describe('options pairing form', () => {
     const urls: string[] = [];
     (globalThis as any).fetch = async (url: string) => {
       urls.push(url);
-      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://x' }) };
+      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://127.0.0.1:47833' }) };
     };
     await import('./options');
     await submit('abcdefgh');
@@ -123,7 +126,7 @@ describe('options pairing form', () => {
   it('tells the service worker to connect once pairing succeeds', async () => {
     (globalThis as any).fetch = async () => ({
       ok: true,
-      json: async () => ({ token: 'issued', wsUrl: 'ws://x' }),
+      json: async () => ({ token: 'issued', wsUrl: 'ws://127.0.0.1:47833' }),
     });
     await import('./options');
     await submit('abcdefgh');
@@ -133,7 +136,7 @@ describe('options pairing form', () => {
   it('never renders the token it received', async () => {
     (globalThis as any).fetch = async () => ({
       ok: true,
-      json: async () => ({ token: 'must-not-be-rendered', wsUrl: 'ws://x' }),
+      json: async () => ({ token: 'must-not-be-rendered', wsUrl: 'ws://127.0.0.1:47833' }),
     });
     await import('./options');
     await submit('abcdefgh');
@@ -168,7 +171,7 @@ describe('options pairing form', () => {
     const urls: string[] = [];
     (globalThis as any).fetch = async (url: string) => {
       urls.push(url);
-      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://x' }) };
+      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://127.0.0.1:47833' }) };
     };
     (document.getElementById('port') as HTMLInputElement).value = '70000';
     await import('./options');

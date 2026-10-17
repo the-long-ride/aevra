@@ -32,10 +32,11 @@ describe('TokenUsageStats', () => {
     expect(within(box('Tokens out today')).getByText('3.4k')).toBeInTheDocument();
     expect(within(box('Tokens in today')).getByText('1.2k')).toBeInTheDocument();
     expect(within(box('Saved today')).getByText('600')).toBeInTheDocument();
-    expect(within(box('Saved today')).getByText('15% less than raw')).toBeInTheDocument();
+    expect(box('Saved today').querySelector('strong')).toHaveTextContent('600 ~ 15%');
+    expect(box('Saved today').querySelector('.token-stat-detail')).toBeNull();
     expect(within(box('Avg tokens per call')).getByText('1.2k')).toBeInTheDocument();
     expect(within(box('Top tool today')).getByText('file_read_many')).toBeInTheDocument();
-    expect(within(box('Top tool today')).getByText('2.1k out')).toBeInTheDocument();
+    expect(box('Top tool today').children).toHaveLength(2);
   });
 
   it('shows a status line while loading and when the request failed', () => {

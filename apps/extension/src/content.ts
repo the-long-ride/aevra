@@ -8,6 +8,7 @@
 // jsdom in this package's own vitest project rather than being untestable.
 
 export interface SerializedElement {
+  documentId?: string;
   elementId: string;
   tagName: string;
   attributes: Record<string, string>;
@@ -96,7 +97,7 @@ export function serializePage(): SerializedElement {
   if (!root) {
     return { elementId: '', tagName: 'document', attributes: {}, children: [], textContent: '' };
   }
-  return walk(root);
+  return { ...walk(root), documentId: String(performance.timeOrigin) };
 }
 
 /**
@@ -181,7 +182,16 @@ export function installConsoleRelay(): boolean {
 export function applyPageAction(
   action: Record<string, any>,
   elementId: string | null,
+  expectedOrigin?: string,
+  expectedUrl?: string,
+  expectedDocumentId?: string,
 ): ApplyOutcome | Promise<ApplyOutcome> {
+  if (
+    (expectedDocumentId && String(performance.timeOrigin) !== expectedDocumentId) ||
+    (expectedUrl && location.href !== expectedUrl) ||
+    (expectedOrigin && location.origin !== expectedOrigin)
+  )
+    return { ok: false, code: 'BROWSER_ORIGIN_BLOCKED' };
   // Inlined rather than shared: a module-scope constant would not survive
   // function serialization into the page.
   const CREDENTIAL_AUTOCOMPLETE = /^(one-time-code|current-password|new-password|cc-[a-z-]+)$/i;
