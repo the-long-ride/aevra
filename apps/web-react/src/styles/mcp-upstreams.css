@@ -1,0 +1,111 @@
+.mcp-upstream-toggle {
+  min-height: 28px;
+}
+
+.mcp-upstream-disabled-badge {
+  color: var(--mute);
+}
+
+tr.is-disabled > td:not([data-label='']) {
+  opacity: 0.6;
+}
+
+.mcp-upstream-status {
+  white-space: nowrap;
+  gap: 6px;
+}
+.mcp-upstream-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.mcp-upstream-hints {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.mcp-upstream-hints li {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  overflow-wrap: anywhere;
+}
+.mcp-upstream-hints li span {
+  color: var(--mute);
+  font-size: 12px;
+}
+
+.mcp-upstream-hints-content {
+  min-height: 0;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+
+.mcp-upstream-tool-search {
+  display: grid;
+  gap: 6px;
+}
+.mcp-upstream-tool-search input {
+  width: 100%;
+  min-width: 0;
+}
+.mcp-upstream-tool summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.mcp-upstream-tool-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  min-width: 0;
+}
+.mcp-upstream-tool-body h3,
+.mcp-upstream-tool-body p {
+  margin: 0;
+}
+.mcp-upstream-tool-instructions {
+  white-space: pre-wrap;
+}
+.mcp-upstream-tool-claims {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.mcp-upstream-tool-table-scroll {
+  overflow-x: auto;
+}
+.mcp-upstream-tool table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.mcp-upstream-tool th,
+.mcp-upstream-tool td {
+  border: 1px solid var(--hairline);
+  padding: 8px;
+  text-align: left;
+}
+.mcp-upstream-tool pre {
+  max-width: 100%;
+  overflow: auto;
+  padding: 12px;
+  margin: 0;
+  background: var(--surface-soft);
+  border: 1px solid var(--hairline);
+}
+
+.mcp-upstream-review-button {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 48%, transparent);
+}
+.mcp-upstream-review-notice {
+  margin: 0 0 12px;
+}
+.mcp-upstream-review-section h3 {
+  margin: 12px 0 8px;
+  font-size: 14px;
+}

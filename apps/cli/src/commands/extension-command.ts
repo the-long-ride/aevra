@@ -14,6 +14,7 @@ interface PlannedFile {
 }
 
 export interface ExtensionCommandDependencies {
+  onInstalled?(parent: string): void;
   version: string;
   download(url: string): Promise<Buffer>;
   /** Returns the answer, or the fallback when the user just presses enter. */
@@ -43,10 +44,7 @@ async function chooseDirectory(
 ): Promise<string> {
   if (command.dir) return path.resolve(command.dir);
   if (!dependencies.isInteractive()) {
-    throw Object.assign(
-      new Error('extension install needs --dir when there is no terminal to ask on'),
-      { code: 'EXTENSION_DIR_REQUIRED' },
-    );
+    return path.resolve(dependencies.defaultDirectory());
   }
   const fallback = dependencies.defaultDirectory();
   const answer = await dependencies.ask(
@@ -105,6 +103,7 @@ export async function runExtensionCommand(
       dependencies.remove(destination);
     }
     for (const item of planned) dependencies.writeEntry(item.file, item.data);
+    dependencies.onInstalled?.(parent);
 
     dependencies.log(`[aevra] Unzipped ${planned.length} files into ${destination}`);
     explain(destination, dependencies);

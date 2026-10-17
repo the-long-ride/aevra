@@ -173,7 +173,14 @@ export interface BackgroundSnapshot {
   truncated: boolean;
 }
 
+/** Private worker evidence, stripped before model output. */
+export interface DesktopReadPolicy {
+  scope: 'window' | 'screen';
+  targets: DesktopTargetIdentity[];
+}
+
 export interface DesktopDescribeResult {
+  readPolicy?: DesktopReadPolicy;
   window: DesktopWindowIdentity;
   nodes: DesktopNode[];
   truncated: boolean;
@@ -183,6 +190,7 @@ export interface DesktopDescribeResult {
 }
 
 export interface DesktopCaptureResult {
+  readPolicy?: DesktopReadPolicy;
   imageDataUri: string;
   devicePixelRatio: number;
   window: DesktopWindowIdentity | null;

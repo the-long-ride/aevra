@@ -1,0 +1,57 @@
+.agent-connections-scroll {
+  overflow-x: auto;
+}
+
+.agent-connections-table {
+  min-width: 720px;
+}
+
+.agent-config-cell {
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.agent-modal-form {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-modal-group {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+
+.agent-modal-group legend {
+  padding: 0 4px;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.agent-modal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.agent-modal-hint {
+  margin: 0;
+  color: var(--mute);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.agent-modal-anyway {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.agent-modal-results {
+  margin: 0;
+  padding-left: 18px;
+}

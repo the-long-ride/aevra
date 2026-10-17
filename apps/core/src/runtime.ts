@@ -21,6 +21,7 @@ import { buildRuntimeHealth } from './admin/runtime-health.js';
 import { McpIngressServer } from './mcp/server.js';
 import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
 import * as adminRuntime from './admin/admin-api-context.js';
+import { agentAdminContext } from './admin/agent-integration.js';
 import { LocalFilesystemService } from './admin/local-filesystem.js';
 import type { WorkerClient } from '../../../packages/ipc/src/client.js';
 import { ReadVersionCache } from './operations/read-version-cache.js';
@@ -260,6 +261,7 @@ export async function createCoreRuntime(
             trustedAdminOrigins: config.trustedAdminOrigins,
             gatewayTrustSecret,
             api: adminRuntime.buildAdminApiContext({
+              ...agentAdminContext(config, connectorRepo, sessions, cleanup),
               workspaces,
               approvals,
               permissions: permissionRepo,

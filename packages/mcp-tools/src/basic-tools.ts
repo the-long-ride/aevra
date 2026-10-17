@@ -252,17 +252,8 @@ export async function handleBasicTool(
     return context.approvals.cancel(String(args.requestId)) ?? { status: 'not_found' };
   }
   if (name === 'approval_wait') {
-    const { resumeApproval } = await import('./approval-resume.js');
-    try {
-      return await resumeApproval(context, sessionId, String(args.requestId));
-    } catch (e: any) {
-      const isUnauth =
-        e?.code === 'APPROVAL_UNAUTHORIZED' ||
-        e?.message === 'OAuth connection changed' ||
-        e?.message === 'session changed';
-      if (isUnauth) return null;
-      throw e;
-    }
+    const { handleApprovalWait } = await import('./approval-resume.js');
+    return handleApprovalWait(context, sessionId, String(args.requestId));
   }
 
   if (name === 'workspace_list') {

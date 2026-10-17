@@ -292,3 +292,42 @@ test('F6: runtime approval callback only creates durable grant for connection sc
     f.cleanup();
   }
 });
+
+test('once ticket still executes at most once under two parallel approval_wait calls', async () => {
+  const f = fixture();
+  try {
+    const filePath = join(f.dir, 'race-target.txt');
+    writeFileSync(filePath, 'hello');
+    const sessionA = f.sessions.create(oauthIdentity('shared_race', 'conn_race'));
+    f.sessions.grantConnectionWorkspace(sessionA.id, f.ws1.id, 'full-workspace');
+
+    const req = await f.approvals.request({
+      actor: sessionA.actor,
+      sessionId: sessionA.id,
+      workspaceId: f.ws1.id,
+      operation: {
+        family: 'files:delete',
+        capability: 'files.delete',
+        risk: 'HIGH',
+        argsHash: 'rh',
+      },
+      payload: { tool: 'file_delete', args: { path: '/race-target.txt' } },
+      expectedState: {},
+      risk: 'HIGH',
+    });
+    f.approvals.approve(req.requestId, 'once');
+
+    const sessionB = f.sessions.create(oauthIdentity('shared_race', 'conn_race'));
+    f.sessions.grantConnectionWorkspace(sessionB.id, f.ws1.id, 'full-workspace');
+
+    const [res1, res2] = await Promise.all([
+      f.tools.call(sessionA.id, 'approval_wait', { requestId: req.requestId }),
+      f.tools.call(sessionB.id, 'approval_wait', { requestId: req.requestId }),
+    ]);
+    assert.equal(f.getDeleteCalls(), 1);
+    assert.equal(existsSync(filePath), false);
+    assert.ok(res1 && res2);
+  } finally {
+    f.cleanup();
+  }
+});

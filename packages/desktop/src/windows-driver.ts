@@ -79,8 +79,11 @@ export class WindowsDesktopDriver implements DesktopDriver {
     };
   }
 
-  capture(windowId?: string): Promise<DesktopCaptureResult> {
-    return this.helper.call<DesktopCaptureResult>('capture', { windowId });
+  capture(
+    windowId?: string,
+    expectedTarget?: DesktopTargetIdentity,
+  ): Promise<DesktopCaptureResult> {
+    return this.helper.call<DesktopCaptureResult>('capture', { windowId, expectedTarget });
   }
 
   async act(request: ActRequest): Promise<ActResult> {

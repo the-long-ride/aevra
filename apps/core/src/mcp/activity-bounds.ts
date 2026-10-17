@@ -13,13 +13,17 @@ function cutString(text: string): string {
       break;
     }
   }
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
   return `${text.slice(0, end)}… [${text.length - end} more chars]`;
 }
 
 /**
  * Copies a value for the activity log with hard size limits, so logging a huge
- * result stays cheap. Cutting at whitespace keeps a secret from being split into
- * a fragment the redactor would no longer recognise.
+ * result stays cheap. Cutting at whitespace when one is near keeps a token from
+ * being split into a fragment the redactor would no longer recognise, so callers
+ * redact before bounding. Values JSON would serialise through `toJSON` (dates,
+ * buffers) or flatten (maps, sets) keep that shape instead of becoming `{}`.
  */
 export function boundedClone(value: unknown, depth = 0): unknown {
   if (value === null) return null;
@@ -37,6 +41,15 @@ export function boundedClone(value: unknown, depth = 0): unknown {
       return null;
   }
   if (depth >= MAX_DEPTH) return '[depth limit]';
+  if (value instanceof Map || value instanceof Set) return boundedClone(Array.from(value), depth);
+  const toJSON = (value as { toJSON?: unknown }).toJSON;
+  if (typeof toJSON === 'function') {
+    try {
+      return boundedClone(toJSON.call(value), depth + 1);
+    } catch {
+      return '[unserializable]';
+    }
+  }
   if (Array.isArray(value)) {
     const items = value.slice(0, MAX_ITEMS).map((item) => boundedClone(item, depth + 1));
     if (value.length > MAX_ITEMS) items.push(`… ${value.length - MAX_ITEMS} more items`);
@@ -44,7 +57,10 @@ export function boundedClone(value: unknown, depth = 0): unknown {
   }
   const entries = Object.entries(value as Record<string, unknown>);
   const out: Record<string, unknown> = {};
-  for (const [key, item] of entries.slice(0, MAX_KEYS)) out[key] = boundedClone(item, depth + 1);
+  for (const [key, item] of entries.slice(0, MAX_KEYS)) {
+    if (item === undefined || typeof item === 'function' || typeof item === 'symbol') continue;
+    out[key] = boundedClone(item, depth + 1);
+  }
   if (entries.length > MAX_KEYS) out['…'] = `${entries.length - MAX_KEYS} more keys`;
   return out;
 }

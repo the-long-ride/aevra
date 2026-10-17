@@ -123,9 +123,21 @@ describe('service worker wiring', () => {
     const rpc = startServiceWorker();
     const connect = vi.spyOn(rpc, 'connect').mockResolvedValue(undefined);
 
-    registered.message![0]!({ type: 'aevra:console', text: 'page said something' });
+    (globalThis as any).chrome.scripting = {
+      executeScript: async () => [{ documentId: 'fixture-document' }],
+    };
+    registered.message![0]!(
+      { type: 'aevra:console', text: 'page said something' },
+      { tab: { id: 1 }, frameId: 0, documentId: 'fixture-document' },
+    );
+    registered.message![0]!({ type: 'aevra:console', text: 'untrusted source' }, {});
+    registered.message![0]!(
+      { type: 'aevra:console', text: 'subframe source' },
+      { tab: { id: 1 }, frameId: 2, documentId: 'fixture-document' },
+    );
     expect(connect).not.toHaveBeenCalled();
-    const entries = await createChromeBridge().logs('console', 10);
+    const entries = await createChromeBridge().logs('console', 10, '1');
+    expect(entries).toHaveLength(1);
     expect(entries.at(-1)!.text).toBe('page said something');
   });
 
@@ -147,7 +159,9 @@ describe('service worker wiring', () => {
     const rpc = startServiceWorker();
     const connect = vi.spyOn(rpc, 'connect').mockResolvedValue(undefined);
 
+    (globalThis as any).chrome.storage.local.get = async () => paired;
     registered.updated![0]!(1, { url: 'https://127.0.0.1:47831/#dashboard' }, {});
+    await vi.waitFor(() => expect(connect).toHaveBeenCalledWith(true));
     expect(connect).toHaveBeenCalledWith(true);
 
     registered.updated![0]!(2, { url: 'https://google.com' }, {});

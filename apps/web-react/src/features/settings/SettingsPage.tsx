@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AgentIntegrationsSettings } from './AgentIntegrationsSettings';
 import { PageState } from '../../components/PageState';
 import { BrowserControlSettings } from './BrowserControlSettings';
 import { CommandPolicySettings } from './CommandPolicySettings';
@@ -56,6 +57,7 @@ export function SettingsPage() {
         <BrowserControlSettings status={data.browser} onChanged={refresh} />
         <DesktopControlSettings />
         <McpUpstreamsSettings />
+        <AgentIntegrationsSettings />
         <section className="panel settings-compact-panel configuration-panel">
           <div className="panel-head compact-panel-head">
             <div>

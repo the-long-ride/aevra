@@ -2,6 +2,14 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https, { type ServerOptions as HttpsServerOptions } from 'node:https';
 import { isIP } from 'node:net';
+import {
+  guardListener,
+  parseRequestTarget,
+  rejectBadRequestTarget,
+  applyFrameDenyHeaders,
+} from '../mcp/listener-guards.js';
+import { cookie, isLoopback, adminHostAllowed } from './request-guards.js';
+import { KnownDevices, DEVICE_COOKIE } from './known-devices.js';
 import { remoteIp } from '../mcp/http-response.js';
 import type { AdminCredentialVerifier } from './admin-credentials.js';
 import type { AdminBootstrapService } from './bootstrap.js';
@@ -20,21 +28,8 @@ function json(res: ServerResponse, status: number, value: unknown) {
   res.end(JSON.stringify(value));
 }
 
-function cookie(req: IncomingMessage, name: string) {
-  const raw = req.headers.cookie ?? '';
-  for (const part of raw.split(';')) {
-    const [key, ...value] = part.trim().split('=');
-    if (key === name) return decodeURIComponent(value.join('='));
-  }
-  return undefined;
-}
-
 function isMutation(req: IncomingMessage) {
   return !['GET', 'HEAD', 'OPTIONS'].includes(req.method ?? 'GET');
-}
-
-function isLoopback(address: string | undefined) {
-  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
 }
 
 function headerValue(req: IncomingMessage, name: string) {
@@ -60,6 +55,7 @@ export function sameOrigin(
   url: URL,
   trustedOrigins: string[] = [],
   allowLoopbackHttpOrigin = false,
+  localPeer = isLoopback(req.socket.remoteAddress),
 ) {
   if (!isMutation(req)) return true;
   const fetchSite = req.headers['sec-fetch-site'];
@@ -72,7 +68,7 @@ export function sameOrigin(
     // presenting neither header is a non-browser client such as the Aevra CLI.
     // Require positive evidence rather than failing open: accept it only from a
     // loopback peer, where a cross-site attacker cannot reach us.
-    return typeof fetchSite === 'string' ? true : isLoopback(req.socket.remoteAddress);
+    return typeof fetchSite === 'string' ? true : localPeer;
   }
   let requestOrigin: string;
   try {
@@ -117,6 +113,7 @@ export class AdminServer {
   private readonly startedAt = new Date().toISOString();
   private readonly loginThrottle: LoginThrottle;
   private lastInsecureLoginWarningAt = 0;
+  private readonly devices = new KnownDevices();
 
   constructor(
     private host: string,
@@ -128,7 +125,7 @@ export class AdminServer {
   }
 
   async start() {
-    const handler = (req: IncomingMessage, res: ServerResponse) => void this.handle(req, res);
+    const handler = guardListener((req, res) => this.handle(req, res));
     this.server = this.options.tls
       ? https.createServer(this.options.tls, handler)
       : http.createServer(handler);
@@ -163,11 +160,28 @@ export class AdminServer {
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse) {
-    const url = new URL(req.url ?? '/', this.url());
+    applyFrameDenyHeaders(res);
+    const url = parseRequestTarget(req.url, this.url());
+    if (!url) {
+      rejectBadRequestTarget(res);
+      return;
+    }
     const trustedOrigins = this.options.trustedOrigins?.() ?? [];
+    if (
+      !adminHostAllowed(req.headers.host, this.host, this.options.advertisedHost, trustedOrigins)
+    ) {
+      json(res, 421, { error: 'Unrecognized Host' });
+      return;
+    }
+    const trustedGateway =
+      isLoopback(req.socket.remoteAddress) &&
+      secretEquals(headerValue(req, GATEWAY_TRUST_HEADER), this.options.gatewayTrustSecret ?? '');
+    const localPeer = isLoopback(req.socket.remoteAddress) && !trustedGateway;
+    const configuredUrl = new URL(this.url());
 
     if (url.pathname === '/api/health') {
-      json(res, 200, this.health());
+      const health = this.health() as { core?: unknown; version?: unknown };
+      json(res, 200, { core: health.core, version: health.version });
       return;
     }
 
@@ -187,9 +201,6 @@ export class AdminServer {
     }
 
     if (url.pathname.startsWith('/api/auth/') && this.options.bootstrap) {
-      const trustedGateway =
-        isLoopback(req.socket.remoteAddress) &&
-        secretEquals(headerValue(req, GATEWAY_TRUST_HEADER), this.options.gatewayTrustSecret ?? '');
       const originalTransport = headerValue(req, ORIGINAL_TRANSPORT_HEADER);
       const localHttpGateway =
         trustedGateway &&
@@ -202,10 +213,12 @@ export class AdminServer {
         sessions: this.options.bootstrap,
         credentialVerifier: this.options.credentialVerifier,
         loginThrottle: this.loginThrottle,
+        devices: this.devices,
+        deviceId: cookie(req, DEVICE_COOKIE),
         sessionId: this.adminSession(req),
         secure: browserSecure,
         allowLocalHttpPassword: localHttpGateway,
-        sameOrigin: sameOrigin(req, url, trustedOrigins, localHttpGateway),
+        sameOrigin: sameOrigin(req, configuredUrl, trustedOrigins, localHttpGateway, localPeer),
         clientIp: loginClientIp(
           req,
           trustedGateway && this.options.trustForwardedClientIp?.() === true,
@@ -220,9 +233,7 @@ export class AdminServer {
     // is reachable unauthenticated. It stays safe because it is loopback-only
     // and still requires the single-use pairing code shown in the web UI.
     const extensionPairing =
-      url.pathname === '/api/browser/pair' &&
-      req.method === 'POST' &&
-      isLoopback(req.socket.remoteAddress);
+      url.pathname === '/api/browser/pair' && req.method === 'POST' && localPeer;
 
     if (url.pathname.startsWith('/api/') && !extensionPairing && !this.isAdmin(req)) {
       json(res, 401, { error: 'admin session required' });
@@ -234,7 +245,7 @@ export class AdminServer {
     if (
       url.pathname.startsWith('/api/') &&
       !extensionPairing &&
-      !sameOrigin(req, url, trustedOrigins)
+      !sameOrigin(req, configuredUrl, trustedOrigins, false, localPeer)
     ) {
       json(res, 403, {
         error: {

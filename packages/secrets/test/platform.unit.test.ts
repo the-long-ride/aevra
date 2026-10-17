@@ -39,7 +39,7 @@ test('CommandSecretStore set get delete on darwin linux and win32', async () => 
   const adapter = {
     async run(file: string, args: string[], input?: string) {
       calls.push([file, args, input]);
-      return { code: 0, stdout: 'secret-val\n' };
+      return { code: 0, stdout: input ? JSON.stringify('ordinary private words') : 'secret-val\n' };
     },
   };
 
@@ -61,7 +61,7 @@ test('CommandSecretStore set get delete on darwin linux and win32', async () => 
   const win = new CommandSecretStore('win32', adapter);
   await win.set('k3', 'v3');
   assert.equal(calls.at(-1)![0], 'powershell.exe');
-  assert.equal(await win.get('k3'), null);
+  assert.equal(await win.get('k3'), 'ordinary private words');
   await win.delete('k3');
 
   // Unsupported platform
@@ -85,7 +85,7 @@ test('CommandSecretStore set get delete on darwin linux and win32', async () => 
   );
   await assert.rejects(
     () => new CommandSecretStore('win32', errorAdapter).set('k', 'v'),
-    /Credential Manager store failed/,
+    /Windows credential operation failed/,
   );
   assert.equal(await new CommandSecretStore('darwin', errorAdapter).get('k'), null);
   assert.equal(await new CommandSecretStore('linux', errorAdapter).get('k'), null);

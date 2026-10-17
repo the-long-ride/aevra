@@ -1,6 +1,6 @@
 # Token Efficiency and Usage
 
-**Audience:** engineers & AI agents · **Scope:** result shaping, tool surface, token statistics · **Verified against:** `1.2.1`
+**Audience:** engineers & AI agents · **Scope:** result shaping, tool surface, token statistics · **Verified against:** `1.3.0`
 
 ## Result shaping
 
@@ -36,6 +36,10 @@ Stored in `token_usage` (migration 25) per connector, tool and UTC hour. Every 3
 `GET /api/usage/tokens?range=24h|7d|30d|90d|all` returns a zero-filled series, totals, today's totals, the top tool today and per-tool and per-connector breakdowns.
 
 The Web UI integrates the 5 token stat cards directly into the 14-cell Runtime Overview table (7×2 grid on desktop), sharing identical styling, borders, and 1-column spans with core runtime statistics, accompanied by an interactive history chart with range selectors.
+
+The **All-time statistics** trigger beside **All** opens recorded-history totals and
+per-tool/per-connector breakdowns without changing the chart range. The dialog includes calls,
+failures, token estimates and savings, plus loading, retry and empty states.
 
 ## Transport
 

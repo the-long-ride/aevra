@@ -29,7 +29,7 @@ describe('GuideAiPrompt', () => {
     expect(withoutV).toContain('I am using Aevra v1.1.0.');
 
     const undefinedVersion = buildAiGuidePrompt(undefined);
-    expect(undefinedVersion).toContain('I am using Aevra v1.2.1.');
+    expect(undefinedVersion).toContain('I am using Aevra v1.3.0.');
   });
 
   test('renders prompt with version and github links', () => {

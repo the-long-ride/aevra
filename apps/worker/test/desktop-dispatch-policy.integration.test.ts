@@ -215,6 +215,11 @@ test('session app grant uses MCP session ID while desktop lease keeps connection
     window,
     windowInstance: { windowId: 'w1', processId: 1234, processStartedAt: '2026-09-18T00:00:00Z' },
   });
+  const describeBackground = driver.describeBackground!.bind(driver);
+  driver.describeBackground = async (request) => ({
+    ...(await describeBackground(request)),
+    window,
+  });
   const policy = {
     mode: 'allowlist' as const,
     applications: [],

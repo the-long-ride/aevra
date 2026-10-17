@@ -3,7 +3,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { useToast } from '../../components/Toast';
-import { actionsForApproval } from './request-actions';
+import { ApprovalScopeHint } from './ApprovalScopeHint';
+import { actionsForApproval, savedMatcher } from './request-actions';
 import { announceNewRequests } from './request-notifications';
 import {
   approveRequest,
@@ -17,17 +18,13 @@ import {
   type RequestsData,
 } from './requests-service';
 
-function savedMatcher(item: ApprovalItem) {
-  if (item.operation.capability !== 'commands.run') return '';
-  const payload = item.payload ?? {};
-  const original =
-    typeof payload.original === 'object' && payload.original !== null
-      ? (payload.original as Record<string, unknown>)
-      : {};
-  return String(
-    payload.permissionMatcher ?? original.permissionMatcher ?? item.operation.family ?? '',
-  );
-}
+const isWebView2 = (p: string) => p.split(/[\\/]/).pop()?.toLowerCase() === 'msedgewebview2.exe';
+
+const NOTIFICATION_LABELS: Record<string, string> = {
+  granted: 'Browser notifications enabled',
+  denied: 'Browser notifications blocked',
+  unsupported: 'Browser notifications unavailable',
+};
 
 function ApprovalCard({
   item,
@@ -86,6 +83,10 @@ function ApprovalCard({
           </span>
         ) : null}
       </div>
+      <ApprovalScopeHint
+        item={item}
+        connectionHasMultipleSessions={presentation.connectionHasMultipleSessions}
+      />
       <div className="request-actions">
         {actionsForApproval(item).map((action) => (
           <button
@@ -230,13 +231,7 @@ export function RequestDrawer({
               disabled={notifications === 'granted' || notifications === 'denied'}
               onClick={() => void requestNotifications()}
             >
-              {notifications === 'granted'
-                ? 'Browser notifications enabled'
-                : notifications === 'denied'
-                  ? 'Browser notifications blocked'
-                  : notifications === 'unsupported'
-                    ? 'Browser notifications unavailable'
-                    : 'Enable browser notifications'}
+              {NOTIFICATION_LABELS[notifications] ?? 'Enable browser notifications'}
             </button>
             <button type="button" aria-label="Close" onClick={onClose}>
               ×
@@ -280,14 +275,12 @@ export function RequestDrawer({
                     </div>
                     <div className="request-detail">
                       <b>
-                        {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() ===
-                        'msedgewebview2.exe'
+                        {isWebView2(item.targetExecutablePath)
                           ? 'Verified host app'
                           : 'Application'}
                         : {item.hostExecutablePath}
                       </b>
-                      {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() ===
-                      'msedgewebview2.exe' ? (
+                      {isWebView2(item.targetExecutablePath) ? (
                         <span>WebView2 process: {item.targetExecutablePath}</span>
                       ) : null}
                       <span>

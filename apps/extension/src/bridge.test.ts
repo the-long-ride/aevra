@@ -258,22 +258,24 @@ describe('navigate', () => {
 
 describe('logs', () => {
   it('returns console entries newest-last and honours the limit', async () => {
-    installChrome([]);
-    for (const text of ['one', 'two', 'three']) recordConsoleLog(text);
+    installChrome([{ id: 1, active: true }]);
+    for (const text of ['one', 'two', 'three'])
+      recordConsoleLog(text, undefined, { tabId: 1, documentId: 'fixture-document' });
     const entries = await createChromeBridge().logs('console', 2);
     expect(entries.map((entry) => entry.text)).toEqual(['two', 'three']);
   });
 
   it('bounds the buffer instead of growing without limit', async () => {
-    installChrome([]);
-    for (let index = 0; index < 600; index += 1) recordConsoleLog(`line ${index}`);
+    installChrome([{ id: 1, active: true }]);
+    for (let index = 0; index < 600; index += 1)
+      recordConsoleLog(`line ${index}`, undefined, { tabId: 1, documentId: 'fixture-document' });
     const entries = await createChromeBridge().logs('console', 1000);
     expect(entries).toHaveLength(500);
     expect(entries.at(-1)!.text).toBe('line 599');
   });
 
   it('returns nothing for network, which only the CDP transport supplies', async () => {
-    installChrome([]);
+    installChrome([{ id: 1, active: true }]);
     expect(await createChromeBridge().logs('network', 10)).toEqual([]);
   });
 });

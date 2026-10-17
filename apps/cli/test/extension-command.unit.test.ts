@@ -151,14 +151,14 @@ test('surrounding whitespace in the answer is trimmed', async () => {
   assert.ok(state.written.every(([file]) => file.startsWith(path.resolve('/elsewhere'))));
 });
 
-test('with no terminal to ask on it refuses rather than picking for the user', async () => {
+test('without a terminal it uses the shared stable default directory', async () => {
   const state = harness({ isInteractive: () => false });
   const code = await runExtensionCommand(INSTALL, state.dependencies);
 
-  assert.equal(code, 1);
-  assert.match(state.errors[0]!, /needs --dir/);
-  assert.deepEqual(state.downloaded, [], 'nothing should be downloaded before a target is known');
-  assert.deepEqual(state.written, []);
+  assert.equal(code, 0);
+  assert.equal(state.errors.length, 0);
+  assert.equal(state.downloaded.length, 1);
+  assert.ok(state.written.every(([file]) => file.startsWith(path.resolve('/state/browser'))));
 });
 
 test('an occupied target is left alone unless replacing it was asked for', async () => {

@@ -118,14 +118,34 @@ describe('McpUpstreamsSettings default services', () => {
     rows = [
       upstream({
         state: 'needs-review',
-        pendingCatalogDiff: { added: ['new_tool'], removed: [], changed: [] },
+        pendingCatalogFingerprint: 'reviewed fingerprint',
+        pendingCatalogDiff: { added: ['tool:new_tool'], removed: [], changed: [] },
       }),
     ];
     renderSettings();
-    fireEvent.click(await screen.findByRole('button', { name: 'Acknowledge alpha' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Review catalog changes for alpha' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Accept changes' }));
     await waitFor(() =>
       expect(calls('POST', '/api/mcp/upstreams/up%201/acknowledge')).toHaveLength(1),
     );
+    expect(
+      JSON.parse(String(calls('POST', '/api/mcp/upstreams/up%201/acknowledge')[0][1]?.body)),
+    ).toEqual({ expectedFingerprint: 'reviewed fingerprint' });
+  });
+
+  it('disables through the default disable endpoint', async () => {
+    renderSettings();
+    fireEvent.click(await screen.findByRole('switch', { name: 'Enable alpha' }));
+    await waitFor(() => expect(calls('POST', '/api/mcp/upstreams/up%201/disable')).toHaveLength(1));
+  });
+
+  it('enables through the default enable endpoint', async () => {
+    rows = [upstream({ enabled: false })];
+    renderSettings();
+    fireEvent.click(await screen.findByRole('switch', { name: 'Enable alpha' }));
+    await waitFor(() => expect(calls('POST', '/api/mcp/upstreams/up%201/enable')).toHaveLength(1));
   });
 
   it('updates an edited server through the default endpoint', async () => {
@@ -170,8 +190,12 @@ describe('McpUpstreamsSettings table values', () => {
     expect(within(alpha).getByText('mystery')).toBeInTheDocument();
     expect(screen.getByText('node server.js --quiet')).toBeInTheDocument();
     expect(screen.getByText('serve')).toBeInTheDocument();
-    expect(screen.getByText(/read_docs: claims read-only/)).toBeInTheDocument();
-    expect(screen.getByText(/write_docs: no read-only claim/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Detail for bravo' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('read_docs');
+    expect(screen.getByRole('dialog')).toHaveTextContent('claims read-only');
+    expect(screen.getByRole('dialog')).toHaveTextContent('write_docs');
+    expect(screen.getByRole('dialog')).toHaveTextContent('no read-only claim');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     const search = within(
       document.querySelector('[data-table-id="react-mcp-upstreams"]') as HTMLElement,

@@ -56,6 +56,9 @@ describe('requestJson', () => {
       [{ error: { message: 'nested message' } }, 'nested message'],
       [{ error: 'string error' }, 'string error'],
       [{ message: 'top level' }, 'top level'],
+      [{ error: { code: 'AGENT_INTEGRATION_UNAVAILABLE' } }, 'AGENT_INTEGRATION_UNAVAILABLE'],
+      [{ error: { message: 'with message', code: 'SOME_CODE' } }, 'with message'],
+      [{ error: {} }, 'HTTP 503'],
       ['not-json-object', 'HTTP 503'],
     ];
     for (const [body, expected] of cases) {

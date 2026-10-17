@@ -27,7 +27,10 @@ pub struct HandleTable<T> {
 
 impl<T> HandleTable<T> {
     pub fn new() -> Self {
-        HandleTable { generation: 0, elements: Vec::new() }
+        HandleTable {
+            generation: 0,
+            elements: Vec::new(),
+        }
     }
 
     /// Starts a fresh generation, discarding whatever the previous `describe`

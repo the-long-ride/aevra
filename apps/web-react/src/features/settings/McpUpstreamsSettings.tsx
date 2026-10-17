@@ -1,15 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import type {
+  McpUpstreamToolDocumentation,
+  McpUpstreamDocumentationSource,
+} from '@aevra/admin-contracts';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DataTable, type Column, type FilterDefinition } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
-import { DetailIcon } from '../workspaces/WorkspaceIcons';
 import {
   McpUpstreamEditModal,
   type UpstreamDraft,
   type UpstreamRiskTier,
   type UpstreamTransport,
 } from './McpUpstreamEditModal';
+import {
+  McpUpstreamHintsModal,
+  McpUpstreamStatus,
+  upstreamStatusLabel,
+} from './McpUpstreamDetails';
+import { McpUpstreamRowActions } from './McpUpstreamRowActions';
+import { McpUpstreamReviewModal } from './McpUpstreamReviewModal';
+import { McpUpstreamReviewNotice, reviewColumn } from './McpUpstreamReviewColumn';
+import { CATALOG_CHANGED_MESSAGE, isCatalogChangedError } from './mcp-upstream-review';
 
 export type UpstreamState = 'active' | 'degraded' | 'needs-review';
 export interface UpstreamSummary {
@@ -24,7 +36,10 @@ export interface UpstreamSummary {
   toolCount: number;
   resourceCount: number;
   promptCount: number;
+  pendingCatalogFingerprint?: string | null;
   pendingCatalogDiff: { added: string[]; removed: string[]; changed: string[] } | null;
+  tools?: McpUpstreamToolDocumentation[];
+  documentationSource?: McpUpstreamDocumentationSource;
   advisory: Array<{ tool: string; readOnlyHint?: boolean; destructiveHint?: boolean }>;
   createdAt: string;
   updatedAt: string;
@@ -39,6 +54,7 @@ export interface UpstreamTestResult {
   state: UpstreamState;
   message: string | null;
 }
+export const MCP_UPSTREAM_REFRESH_MS = 30_000;
 const BASE = '/api/mcp/upstreams';
 const item = (id: string) => `${BASE}/${encodeURIComponent(id)}`;
 const loadUpstreams = () =>
@@ -50,31 +66,15 @@ const updateUpstream = (id: string, draft: UpstreamDraft) =>
 const removeUpstream = (id: string) => requestJson<{ ok: boolean }>(item(id), { method: 'DELETE' });
 const testUpstream = (id: string) =>
   requestJson<UpstreamTestResult>(`${item(id)}/test`, { method: 'POST' });
-const acknowledgeUpstream = (id: string) =>
-  requestJson<UpstreamSummary>(`${item(id)}/acknowledge`, { method: 'POST' });
-const labels: Record<UpstreamState, string> = {
-  active: 'Active',
-  degraded: 'Degraded',
-  'needs-review': 'Needs review',
-};
-
-function McpTestIcon() {
-  return (
-    <svg
-      viewBox="0 -0.5 17 17"
-      fill="currentColor"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      className="workspace-action-icon"
-    >
-      <path
-        d="M12,1 L12,0.023 L6,0.023 C6,0.023 6,0.013 6,1 L7.012,1 L7.012,7 L3,15 C3,15 3,15.962 4,15.962 L14,15.962 C15,15.962 15,15 15,15 L10.958,7 L10.938,1 L12,1 L12,1 Z M14,15.031 L4,15.031 L8,7 L8,1 L10,1 L10,7 L14,15.031 L14,15.031 Z"
-        fill="currentColor"
-        className="si-glyph-fill"
-      />
-    </svg>
-  );
-}
+const acknowledgeUpstream = (id: string, expectedFingerprint?: string | null) =>
+  requestJson<UpstreamSummary>(`${item(id)}/acknowledge`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedFingerprint }),
+  });
+const toggleUpstream = (id: string, enabled: boolean) =>
+  requestJson<UpstreamSummary>(`${item(id)}/${enabled ? 'enable' : 'disable'}`, {
+    method: 'POST',
+  });
 
 export function McpUpstreamsSettings({
   load = loadUpstreams,
@@ -83,17 +83,23 @@ export function McpUpstreamsSettings({
   remove = removeUpstream,
   test = testUpstream,
   acknowledge = acknowledgeUpstream,
+  setEnabled = toggleUpstream,
+  refreshMs = MCP_UPSTREAM_REFRESH_MS,
 }: {
   load?: () => Promise<UpstreamSummary[]>;
   create?: (draft: UpstreamDraft) => Promise<UpstreamSummary>;
   update?: (id: string, draft: UpstreamDraft) => Promise<UpstreamSummary>;
   remove?: (id: string) => Promise<{ ok: boolean }>;
   test?: (id: string) => Promise<UpstreamTestResult>;
-  acknowledge?: (id: string) => Promise<UpstreamSummary>;
+  acknowledge?: (id: string, expectedFingerprint?: string | null) => Promise<UpstreamSummary>;
+  setEnabled?: (id: string, enabled: boolean) => Promise<unknown>;
+  refreshMs?: number;
 }) {
   const [upstreams, setUpstreams] = useState<UpstreamSummary[] | null>(null),
     [adding, setAdding] = useState(false),
+    [hints, setHints] = useState<UpstreamSummary | null>(null),
     [editing, setEditing] = useState<UpstreamSummary | null>(null),
+    [reviewing, setReviewing] = useState<UpstreamSummary | null>(null),
     [busy, setBusy] = useState(false);
   const { toast, success, error } = useToast();
   const dialog = useDialog();
@@ -107,6 +113,24 @@ export function McpUpstreamsSettings({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  const refreshGuard = useRef({ refresh, skip: false });
+  refreshGuard.current = { refresh, skip: busy || adding || editing !== null };
+  useEffect(() => {
+    const tick = () => {
+      if (!refreshGuard.current.skip) void refreshGuard.current.refresh();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    const timer = setInterval(tick, refreshMs);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', tick);
+    };
+  }, [refreshMs]);
   const run = async (work: () => Promise<unknown>) => {
     if (busy) return;
     setBusy(true);
@@ -114,11 +138,26 @@ export function McpUpstreamsSettings({
       await work();
       await refresh();
     } catch (cause) {
-      error(cause);
+      if (isCatalogChangedError(cause)) {
+        setReviewing(null);
+        error(CATALOG_CHANGED_MESSAGE);
+        await refresh();
+      } else error(cause);
     } finally {
       setBusy(false);
     }
   };
+  const runTest = (row: UpstreamSummary) =>
+    run(async () => {
+      const result = await test(row.id);
+      if (result.ok) {
+        success(
+          `${row.name}: ${result.serverName ?? 'unknown'} ${result.serverVersion ?? ''} — ${result.toolCount} tools`,
+        );
+      } else {
+        error(`${row.name}: ${result.message ?? 'The connection failed'}`);
+      }
+    });
   const handleRemove = async (upstream: UpstreamSummary) => {
     const confirmed = await dialog.confirm({
       title: 'Remove MCP server',
@@ -147,60 +186,18 @@ export function McpUpstreamsSettings({
 
   const columns: Column<UpstreamSummary>[] = useMemo(
     () => [
+      reviewColumn(setReviewing),
       {
         key: 'name',
         label: 'Server',
         value: (row) => row.name,
-        render: (row) => (
-          <div>
-            <strong>{row.name}</strong>
-            {row.state === 'needs-review' && row.pendingCatalogDiff ? (
-              <div className="inline-result warning-text">
-                <p>
-                  This server changed its catalog. Its tools are not served until you accept the
-                  change.
-                </p>
-                <ul>
-                  {row.pendingCatalogDiff.added.map((name) => (
-                    <li key={`a-${name}`}>Added: {name}</li>
-                  ))}
-                  {row.pendingCatalogDiff.removed.map((name) => (
-                    <li key={`r-${name}`}>Removed: {name}</li>
-                  ))}
-                  {row.pendingCatalogDiff.changed.map((name) => (
-                    <li key={`c-${name}`}>Changed: {name}</li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void run(() => acknowledge(row.id))}
-                >
-                  Acknowledge {row.name}
-                </button>
-              </div>
-            ) : null}
-            {row.advisory.length ? (
-              <details>
-                <summary>Hints this server claims about itself (advisory only)</summary>
-                <p className="section-note">Shown for context; it does not affect the risk tier.</p>
-                <ul>
-                  {row.advisory.map((hint) => (
-                    <li key={hint.tool}>
-                      {hint.tool}: {hint.readOnlyHint ? 'claims read-only' : 'no read-only claim'}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-          </div>
-        ),
+        render: (row) => <strong>{row.name}</strong>,
       },
       {
         key: 'state',
         label: 'Status',
-        value: (row) => labels[row.state] ?? row.state,
-        render: (row) => <span className="status warning">{labels[row.state] ?? row.state}</span>,
+        value: upstreamStatusLabel,
+        render: (row) => <McpUpstreamStatus row={row} />,
       },
       {
         key: 'risk',
@@ -235,53 +232,22 @@ export function McpUpstreamsSettings({
         sortable: false,
         search: false,
         render: (row) => (
-          <div className="actions workspace-row-actions compact-settings-actions">
-            <button
-              type="button"
-              disabled={busy}
-              aria-label={`Test ${row.name}`}
-              title={`Test ${row.name}`}
-              onClick={() =>
-                void run(async () => {
-                  const result = await test(row.id);
-                  if (result.ok) {
-                    success(
-                      `${row.name}: ${result.serverName ?? 'unknown'} ${result.serverVersion ?? ''} — ${result.toolCount} tools`,
-                    );
-                  } else {
-                    error(`${row.name}: ${result.message ?? 'The connection failed'}`);
-                  }
-                })
-              }
-            >
-              <McpTestIcon />
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              aria-label={`Edit ${row.name}`}
-              title={`Edit ${row.name}`}
-              onClick={() => {
-                setAdding(false);
-                setEditing(row);
-              }}
-            >
-              <DetailIcon />
-            </button>
-            <button
-              type="button"
-              className="danger-button"
-              disabled={busy}
-              aria-label={`Remove ${row.name}`}
-              onClick={() => void handleRemove(row)}
-            >
-              [x]
-            </button>
-          </div>
+          <McpUpstreamRowActions
+            row={row}
+            busy={busy}
+            onHints={() => setHints(row)}
+            onToggle={(enabled) => void run(() => setEnabled(row.id, enabled))}
+            onTest={() => void runTest(row)}
+            onEdit={() => {
+              setAdding(false);
+              setEditing(row);
+            }}
+            onRemove={() => void handleRemove(row)}
+          />
         ),
       },
     ],
-    [busy, success, error],
+    [busy, success, error, setEnabled, test, run, runTest],
   );
 
   const filters: FilterDefinition<UpstreamSummary>[] = useMemo(
@@ -289,7 +255,12 @@ export function McpUpstreamsSettings({
       {
         key: 'state',
         label: 'Status',
-        value: (row) => labels[row.state] ?? row.state,
+        value: upstreamStatusLabel,
+      },
+      {
+        key: 'enabled',
+        label: 'Enabled',
+        value: (row) => (row.enabled ? 'Enabled' : 'Disabled'),
       },
       {
         key: 'transport',
@@ -328,6 +299,7 @@ export function McpUpstreamsSettings({
           Add server
         </button>
       </div>
+      <McpUpstreamReviewNotice rows={upstreams ?? []} />
       <DataTable
         id="react-mcp-upstreams"
         rows={upstreams ?? []}
@@ -340,6 +312,7 @@ export function McpUpstreamsSettings({
         rowKey={(row) => row.id}
         rowProps={(row) => ({
           'aria-label': row.name,
+          className: row.enabled ? undefined : 'is-disabled',
         })}
       />
       {adding || editing ? (
@@ -351,6 +324,21 @@ export function McpUpstreamsSettings({
             setEditing(null);
           }}
           onSubmit={(draft) => void submit(draft)}
+        />
+      ) : null}
+      {hints ? <McpUpstreamHintsModal row={hints} onClose={() => setHints(null)} /> : null}
+      {reviewing ? (
+        <McpUpstreamReviewModal
+          row={reviewing}
+          busy={busy}
+          onClose={() => setReviewing(null)}
+          onAccept={(fingerprint) =>
+            void run(async () => {
+              await acknowledge(reviewing.id, fingerprint);
+              setReviewing(null);
+            })
+          }
+          onTest={() => void runTest(reviewing).then(() => setReviewing(null))}
         />
       ) : null}
       {toast}

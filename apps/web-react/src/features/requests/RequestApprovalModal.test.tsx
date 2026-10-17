@@ -314,3 +314,69 @@ test('enabling YOLO on an expired request advances the modal rather than trappin
 
   await waitFor(() => expect(onActioned).toHaveBeenCalledTimes(1));
 });
+
+test('shows non-blocking recommendation note when connectionHasMultipleSessions is true without pre-selecting scope', () => {
+  installApiFixtures();
+  renderModal(
+    makeData({
+      approvals: [
+        {
+          ...commandApproval,
+          actor: 'oauth:Gemini',
+          operation: { family: 'workspace:select', capability: 'files.read' },
+          presentation: {
+            ...commandApproval.presentation,
+            connectionHasMultipleSessions: true,
+          },
+        } as any,
+      ],
+    }),
+  );
+
+  expect(screen.getByRole('note')).toHaveTextContent(/This client opens multiple sessions/i);
+  expect(screen.getByRole('note')).toHaveTextContent(/This connection/i);
+  expect(screen.getByRole('button', { name: 'Allow' })).toHaveClass('primary');
+  expect(screen.getByRole('button', { name: 'Allow this connection' })).not.toHaveClass('primary');
+});
+
+test('does not show recommendation note when item has no connection action', () => {
+  installApiFixtures();
+  renderModal(
+    makeData({
+      approvals: [
+        {
+          ...commandApproval,
+          actor: 'oauth:Gemini',
+          operation: { family: 'commands.run', capability: 'commands.run', risk: 'HIGH' },
+          presentation: {
+            ...commandApproval.presentation,
+            connectionHasMultipleSessions: true,
+          },
+        } as any,
+      ],
+    }),
+  );
+
+  expect(screen.queryByRole('note')).not.toBeInTheDocument();
+});
+
+test('does not show recommendation note for capability tickets like files.delete', () => {
+  installApiFixtures();
+  renderModal(
+    makeData({
+      approvals: [
+        {
+          ...commandApproval,
+          actor: 'oauth:Gemini',
+          operation: { family: 'files:delete', capability: 'files.delete', risk: 'HIGH' },
+          presentation: {
+            ...commandApproval.presentation,
+            connectionHasMultipleSessions: true,
+          },
+        } as any,
+      ],
+    }),
+  );
+
+  expect(screen.queryByRole('note')).not.toBeInTheDocument();
+});

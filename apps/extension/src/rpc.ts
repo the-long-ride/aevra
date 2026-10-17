@@ -1,10 +1,6 @@
 import { RefRegistry } from '../../../packages/browser/src/dom-snapshot.js';
-import { MAX_FRAME_BYTES } from '../../../packages/browser/src/frame-limits.js';
-import {
-  handleExtensionCommand,
-  type CaptureProgress,
-  type ExtensionBridge,
-} from '../../../packages/browser/src/extension-bridge.js';
+import type { ExtensionBridge } from '../../../packages/browser/src/extension-bridge.js';
+import { receiveCommand } from './rpc-command.js';
 import { probeListener, type ListenerProbe } from './listener-probe.js';
 
 export const MIN_BACKOFF_MS = 1000;
@@ -56,7 +52,8 @@ export class ExtensionRpc {
   private socket: WebSocket | null = null;
   private backoff = MIN_BACKOFF_MS;
   private readonly cancelled = new Set<string>();
-  private readonly registry = new RefRegistry();
+  private registry = new RefRegistry();
+  private generation = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private manualDisconnect = false;
@@ -94,6 +91,12 @@ export class ExtensionRpc {
   }
 
   newPairing(): void {
+    this.generation++;
+    this.probing = false;
+    this.registry = new RefRegistry();
+    this.cancelled.clear();
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
     this.stopKeepalive();
     if (this.socket) {
       const previous = this.socket;
@@ -107,6 +110,7 @@ export class ExtensionRpc {
   }
 
   disconnect(): void {
+    this.generation++;
     this.manualDisconnect = true;
     this.authenticated = false;
     this.stopKeepalive();
@@ -138,12 +142,18 @@ export class ExtensionRpc {
     // below would otherwise each probe and each dial.
     if (this.socket || this.probing) return;
     this.probing = true;
+    const generation = this.generation;
     let pairing: Pairing | null;
     let probe: ListenerProbe;
     try {
       const read = await readPairing();
       pairing = read.pairing;
-      if (this.manualDisconnect || this.status().state === 'pair-again') return;
+      if (
+        generation !== this.generation ||
+        this.manualDisconnect ||
+        this.status().state === 'pair-again'
+      )
+        return;
       if (!pairing) {
         this.setState(read.paused ? 'paused' : 'unpaired');
         return;
@@ -153,9 +163,15 @@ export class ExtensionRpc {
       // let us catch, so an Aevra that is simply not running is probed first.
       probe = await probeListener(pairing.wsUrl);
     } finally {
-      this.probing = false;
+      if (generation === this.generation) this.probing = false;
     }
-    if (this.socket || this.manualDisconnect || this.status().state === 'pair-again') return;
+    if (
+      generation !== this.generation ||
+      this.socket ||
+      this.manualDisconnect ||
+      this.status().state === 'pair-again'
+    )
+      return;
     if (probe === 'down') {
       if (!this.warnedUnreachable) {
         this.warnedUnreachable = true;
@@ -248,82 +264,13 @@ export class ExtensionRpc {
     }
     if (message?.type !== 'cmd') return;
 
-    const id = String(message.id);
-    const commandSocket = this.socket;
-    const vision = message.op === 'snapshot' && message.params?.mode === 'vision';
-    const started = performance.now();
-    const sendProgress = (progress: CaptureProgress) => {
-      if (
-        !vision ||
-        !commandSocket ||
-        this.socket !== commandSocket ||
-        commandSocket.readyState !== WebSocket.OPEN ||
-        this.cancelled.has(id)
-      )
-        return;
-      try {
-        commandSocket.send(JSON.stringify({ type: 'capture_progress', id, ...progress }));
-      } catch {
-        // Diagnostics must never turn a capture into a failure.
-      }
-    };
-    const beforeReply = () =>
-      sendProgress({
-        stage: 'reply_send_attempt',
-        elapsedMs: Math.max(0, Math.round(performance.now() - started)),
-      });
-    try {
-      const payload = await handleExtensionCommand(
-        this.registry,
-        this.bridge,
-        {
-          op: message.op,
-          params: message.params ?? {},
-        },
-        sendProgress,
-        () =>
-          this.cancelled.has(id) ||
-          this.socket !== commandSocket ||
-          commandSocket?.readyState !== WebSocket.OPEN,
-      );
-      if (vision) beforeReply();
-      this.reply(id, { id, type: 'result', payload }, commandSocket);
-    } catch (error) {
-      if (vision) beforeReply();
-      this.reply(
-        id,
-        {
-          id,
-          type: 'error',
-          payload: {
-            code: (error as { code?: string }).code ?? 'BROWSER_UNAVAILABLE',
-            message: error instanceof Error ? error.message : String(error),
-          },
-        },
-        commandSocket,
-      );
-    }
+    await receiveCommand(message, {
+      registry: this.registry,
+      bridge: this.bridge,
+      cancelled: this.cancelled,
+      currentSocket: () => this.socket,
+    });
   }
-
-  private reply(id: string, payload: unknown, socket: WebSocket | null): void {
-    if (this.cancelled.delete(id)) return;
-    if (!socket || this.socket !== socket || socket.readyState !== WebSocket.OPEN) return;
-    let frame = JSON.stringify(payload);
-    // The worker refuses an oversized frame on its header and drops the socket,
-    // so sending one anyway loses the reply and the connection together.
-    if (new TextEncoder().encode(frame).length > MAX_FRAME_BYTES) {
-      frame = JSON.stringify({
-        id,
-        type: 'error',
-        payload: {
-          code: 'BROWSER_REPLY_TOO_LARGE',
-          message: `The reply exceeded the ${MAX_FRAME_BYTES}-byte frame limit`,
-        },
-      });
-    }
-    socket.send(frame);
-  }
-
   private startKeepalive(socket: WebSocket): void {
     this.stopKeepalive();
     // Keep the MV3 worker active during browser capture.

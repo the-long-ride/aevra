@@ -30,12 +30,14 @@ import {
 } from './process-change-tools.js';
 import { searchTool } from './search-tool.js';
 import { evaluateRuntimeCommand } from './command-evaluation.js';
+import { claimCapabilityProof } from './capability-approval-proof.js';
 import { resolveWorkspaceLease } from './service-helpers.js';
 import type {
   McpProxyOperation,
   McpRuntimeContext,
   McpToolDependencies,
   HostApprovalProof,
+  CapabilityApprovalProof,
   WorkerGateway,
 } from './service-types.js';
 import {
@@ -108,7 +110,6 @@ export type {
 } from './service-types.js';
 
 export class McpToolService {
-  private readonly oneTimeCapabilities = new Set<string>();
   readonly hooks?: HookService;
 
   constructor(
@@ -157,7 +158,10 @@ export class McpToolService {
     }
   }
 
-  private context(workspaceId?: string, proof?: HostApprovalProof): McpRuntimeContext {
+  private context(
+    workspaceId?: string,
+    proof?: HostApprovalProof | CapabilityApprovalProof,
+  ): McpRuntimeContext {
     return {
       sessions: this.sessions,
       workspaces: this.workspaces,
@@ -166,16 +170,26 @@ export class McpToolService {
       reads: this.reads,
       approvals: this.approvals,
       deps: this.deps,
-      oneTimeCapabilities: this.oneTimeCapabilities,
-      ...(proof ? { hostApprovalProof: proof } : {}),
+      ...(proof
+        ? 'kind' in proof
+          ? { capabilityApprovalProof: proof }
+          : { hostApprovalProof: proof }
+        : {}),
       callInner: (sessionId, name, args, approvedProof) =>
         this.callInner(sessionId, name, args, approvedProof),
-      proxyOperation: (sessionId, operation: McpProxyOperation) => {
+      proxyOperation: async (sessionId, operation: McpProxyOperation, approvedProof) => {
+        const original = {
+          tool: operation.kind === 'resource' ? operation.uri : operation.name,
+          args: operation.kind === 'resource' ? { uri: operation.uri } : operation.args,
+          proxy: operation,
+        };
+        if (approvedProof) claimCapabilityProof(approvedProof, sessionId, original);
+        const invocation = this.context(workspaceId, approvedProof);
         if (operation.kind === 'tool')
-          return callUpstreamTool(this.context(), sessionId, operation.name, operation.args);
+          return callUpstreamTool(invocation, sessionId, operation.name, operation.args);
         if (operation.kind === 'resource')
-          return readUpstreamResource(this.context(), sessionId, operation.uri);
-        return getUpstreamPrompt(this.context(), sessionId, operation.name, operation.args);
+          return readUpstreamResource(invocation, sessionId, operation.uri);
+        return getUpstreamPrompt(invocation, sessionId, operation.name, operation.args);
       },
       processStart: (sessionId, args) => processStart(this.context(workspaceId), sessionId, args),
     };
@@ -185,10 +199,11 @@ export class McpToolService {
     sessionId: string,
     name: string,
     args: any = {},
-    proof?: HostApprovalProof,
+    proof?: HostApprovalProof | CapabilityApprovalProof,
   ) {
     const session = this.sessions.get(sessionId);
     if (!session) throw new AevraToolError('UNAUTHORIZED', 'Unknown Aevra session');
+    if (proof && 'kind' in proof) claimCapabilityProof(proof, sessionId, { tool: name, args });
     const baseContext = this.context();
     const workspaceLease = needsWorkspaceTarget(name, args)
       ? resolveWorkspaceLease(baseContext, sessionId, args)

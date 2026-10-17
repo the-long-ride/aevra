@@ -25,7 +25,11 @@ export function sanitizeCommandOutput(
   const text = stripControlCharacters(redactText(stripAnsiSequences(value), knownSecrets).text);
   return truncated ? `${text}${TRUNCATED}` : text;
 }
-export async function runCommand(input: CommandInput, cwd?: string): Promise<CommandResult> {
+export async function runCommand(
+  input: CommandInput,
+  cwd?: string,
+  internal?: { environment?: Record<string, string>; rawOutput?: boolean },
+): Promise<CommandResult> {
   const started = Date.now();
   return await new Promise((resolve, reject) => {
     let settled = false;
@@ -36,7 +40,7 @@ export async function runCommand(input: CommandInput, cwd?: string): Promise<Com
       stderrTruncated = false;
     // Resolve on 'close', never on 'exit': 'exit' can fire before the stdio
     // pipes have flushed, which silently truncated command output.
-    const childEnv = buildChildEnvironment(input.env);
+    const childEnv = internal?.environment ?? buildChildEnvironment(input.env);
     const resolved = resolveExecutable(input.executable, childEnv);
     const shim = windowsShimCommand(resolved, input.args);
     const child = spawn(shim?.executable ?? resolved, shim?.args ?? input.args, {
@@ -74,10 +78,20 @@ export async function runCommand(input: CommandInput, cwd?: string): Promise<Com
       if (timer) clearTimeout(timer);
       if (settled) return;
       settled = true;
+      if (internal?.rawOutput && (stdoutTruncated || stderrTruncated)) {
+        reject(
+          Object.assign(new Error('Cannot inspect incomplete command output'), {
+            code: 'SECURITY_VIOLATION',
+          }),
+        );
+        return;
+      }
       resolve({
         exitCode: code,
         signal: signal ?? (timedOut ? 'SIGTERM' : null),
-        stdout: sanitizeCommandOutput(stdout, Object.values(input.env), stdoutTruncated),
+        stdout: internal?.rawOutput
+          ? stdout
+          : sanitizeCommandOutput(stdout, Object.values(input.env), stdoutTruncated),
         stderr: sanitizeCommandOutput(stderr, Object.values(input.env), stderrTruncated),
         durationMs: Date.now() - started,
       });

@@ -231,3 +231,61 @@ test('F3: foreign connection cannot inspect tickets across all lifecycle states'
     f.db.close();
   }
 });
+
+test('foreign connection approval_wait still returns null and reveals nothing', async () => {
+  const f = fixture();
+  try {
+    const sessionAlice = f.sessions.create(oauthId('alice_sub', 'conn_alice'));
+    const selectResult = (await f.tools.call(sessionAlice.id, 'workspace_select', {
+      workspace: 'Workspace1',
+    })) as any;
+    assert.equal(selectResult.status, 'approval_pending');
+    f.approvals.approve(selectResult.requestId, 'once');
+
+    const sessionEve = f.sessions.create(oauthId('eve_sub', 'conn_eve'));
+    const waitResult = await f.tools.call(sessionEve.id, 'approval_wait', {
+      requestId: selectResult.requestId,
+    });
+    assert.equal(waitResult, null);
+  } finally {
+    f.db.close();
+  }
+});
+
+test('non-OAuth actors do not reuse tickets across requests', async () => {
+  const f = fixture();
+  try {
+    const session = f.sessions.create({ actor: 'connector:local', subject: 'local' } as any);
+    const req1 = await f.approvals.request({
+      actor: 'connector:local',
+      sessionId: session.id,
+      workspaceId: f.ws1.id,
+      operation: {
+        family: 'workspace:select',
+        capability: 'files.read',
+        risk: 'LOW',
+        argsHash: 'h',
+      },
+      payload: { tool: 'workspace_select', workspaceId: f.ws1.id },
+      expectedState: {},
+      risk: 'LOW',
+    });
+    const req2 = await f.approvals.request({
+      actor: 'connector:local',
+      sessionId: session.id,
+      workspaceId: f.ws1.id,
+      operation: {
+        family: 'workspace:select',
+        capability: 'files.read',
+        risk: 'LOW',
+        argsHash: 'h',
+      },
+      payload: { tool: 'workspace_select', workspaceId: f.ws1.id },
+      expectedState: {},
+      risk: 'LOW',
+    });
+    assert.notEqual(req1.requestId, req2.requestId);
+  } finally {
+    f.db.close();
+  }
+});

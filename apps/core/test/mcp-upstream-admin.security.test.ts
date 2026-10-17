@@ -83,6 +83,9 @@ function contaminatedRegistry() {
     async acknowledge() {
       return (await this.list())[0];
     },
+    async setEnabled(_id: string, enabled: boolean) {
+      return { record: { ...(await this.list())[0], enabled }, changed: true };
+    },
   };
 }
 
@@ -168,4 +171,31 @@ test('advisory hints remain display-only', async () => {
     { tool: 'delete_repo', readOnlyHint: true, destructiveHint: false },
   ]);
   assert.equal(result.body.upstreams[0].risk, 'LOW');
+});
+test('enable and disable responses never carry a credential value', async () => {
+  for (const action of ['enable', 'disable']) {
+    const result = await call('POST', `/api/mcp/upstreams/u1/${action}`, undefined, {
+      mcpUpstreams: contaminatedRegistry(),
+    });
+    assert.equal(result.status, 200);
+    assert.equal(result.raw.includes(LIVE_TOKEN), false);
+    assert.equal(result.raw.includes('resolvedHeaderValue'), false);
+    assert.equal(result.body.auth.secretRefId, 'sr_github');
+  }
+});
+test('enable and disable are blocked in safe mode', async () => {
+  let toggled = 0;
+  for (const action of ['enable', 'disable']) {
+    const result = await call('POST', `/api/mcp/upstreams/u1/${action}`, undefined, {
+      safeMode: () => true,
+      mcpUpstreams: {
+        async setEnabled() {
+          toggled += 1;
+        },
+      },
+    });
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error.code, 'SAFE_MODE');
+  }
+  assert.equal(toggled, 0);
 });

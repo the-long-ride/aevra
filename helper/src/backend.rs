@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 /// defeat that gate. A title is never a substitute for attribution -- titles
 /// are attacker-influenceable -- which is why it stays a separate, optional
 /// field.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowIdentity {
     #[serde(rename = "windowId")]
     pub window_id: String,
@@ -92,6 +92,8 @@ pub struct DescribeResult {
 /// protocol-level error, not a silently-assumed default.
 #[derive(Debug, Clone, Deserialize)]
 pub struct DescribeRequest {
+    #[serde(rename = "expectedTarget", default)]
+    pub expected_target: Option<TargetIdentityResult>,
     #[serde(rename = "windowId")]
     pub window_id: Option<String>,
     #[serde(rename = "maxNodes")]
@@ -112,6 +114,8 @@ pub struct DescribeRequest {
 /// at; it is just not coordinate-mappable, and the user manual says so.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CaptureRequest {
+    #[serde(rename = "expectedTarget", default)]
+    pub expected_target: Option<TargetIdentityResult>,
     #[serde(rename = "windowId")]
     pub window_id: Option<String>,
 }
@@ -146,6 +150,8 @@ pub struct CaptureResult {
 /// only thing that names an element.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ActRequest {
+    #[serde(rename = "expectedTarget", default)]
+    pub expected_target: Option<TargetIdentityResult>,
     pub op: String,
     pub handle: Option<String>,
     pub x: Option<i32>,
@@ -169,13 +175,33 @@ pub struct VerifiedWindowHost {
     pub instance: crate::target_guard::WindowInstance,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetIdentityResult {
     pub window: WindowIdentity,
     #[serde(rename = "windowInstance")]
     pub window_instance: crate::target_guard::WindowInstance,
     #[serde(rename = "hostApplication", skip_serializing_if = "Option::is_none")]
     pub host_application: Option<VerifiedWindowHost>,
+}
+
+/// Compare the native target with the identity authorized by the host. Titles
+/// are deliberately excluded: they are mutable, untrusted presentation data.
+pub fn require_authorized_target(
+    expected: Option<&TargetIdentityResult>,
+    actual: &TargetIdentityResult,
+) -> Result<(), String> {
+    let expected =
+        expected.ok_or("DESKTOP_INPUT_REFUSED: authorized target identity is required")?;
+    if expected.window_instance != actual.window_instance
+        || expected.window.window_id != actual.window.window_id
+        || expected.window.executable_path.is_none()
+        || expected.window.executable_path != actual.window.executable_path
+        || expected.window.process_name != actual.window.process_name
+        || expected.host_application != actual.host_application
+    {
+        return Err("DESKTOP_TARGET_CHANGED: foreground identity differs from the authorized target; observe again".into());
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -289,6 +315,28 @@ pub trait DesktopBackend {
     }
 }
 
+/// Host-authorized reads bind their data source before and after native traversal.
+pub fn verify_read_target(
+    backend: &impl DesktopBackend,
+    expected: Option<&TargetIdentityResult>,
+    window_id: Option<&str>,
+) -> Result<(), String> {
+    if let Some(expected) = expected {
+        let id = window_id.ok_or("DESKTOP_TARGET_CHANGED: an authorized read requires a window")?;
+        if id != expected.window_instance.window_id {
+            return Err("DESKTOP_TARGET_CHANGED: read window differs from authorization".into());
+        }
+        let actual = backend.target_identity(TargetIdentityRequest {
+            window_id: id.into(),
+        })?;
+        require_authorized_target(Some(expected), &actual)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "authorized_target_tests.rs"]
+mod authorized_target_tests;
 #[cfg(test)]
 mod tests {
     use super::*;

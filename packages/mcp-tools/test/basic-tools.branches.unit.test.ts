@@ -1,3 +1,4 @@
+import { onceProof } from './once-proof-fixture.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleBasicTool } from '../src/basic-tools.js';
@@ -38,7 +39,7 @@ function fixture(o: any = {}) {
           }),
       ...(o.manifests ? { manifests: o.manifests } : {}),
     },
-    oneTimeCapabilities: new Set<string>(o.oneTime ?? []),
+    capabilityApprovalProof: onceProof(o.oneTime?.[0]),
   };
   return { context, requests, writes };
 }

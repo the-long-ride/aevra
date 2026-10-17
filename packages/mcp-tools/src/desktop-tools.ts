@@ -1,35 +1,22 @@
-import { createHash } from 'node:crypto';
+import { handleDescribe, handleCapture } from './desktop-read-tools.js';
 import type {
-  DesktopCaptureResult,
-  DesktopDescribeResult,
   DesktopWindowIdentity,
   DesktopTargetIdentity,
   DetectedApp,
   DesktopCatalogApp,
 } from '../../protocol/src/desktop.js';
 import type { RiskTier } from '../../protocol/src/index.js';
-import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { markUntrusted } from '../../security/src/untrusted.js';
 import {
   basename,
   canonicalExecutablePath,
   evaluateDesktopTargetGate,
-  evaluateWindowGate,
   isProtectedDesktopTitle,
 } from '../../security/src/window-gate.js';
 import { authorizeHostControl } from './host-control-gate.js';
 import { handleAct, sanitizeArgsForAuthorization } from './desktop-act.js';
 import { BACKGROUND_ACT_OP, handleBackgroundAction } from './desktop-background.js';
-import {
-  audit,
-  policyFor,
-  redact,
-  redactNode,
-  redactWindow,
-  run,
-  sanitizeDesktopToolError,
-  targetOf,
-} from './desktop-support.js';
+import { audit, policyFor, redact, redactWindow, run } from './desktop-support.js';
 import { AevraToolError } from './errors.js';
 import type { McpRuntimeContext } from './service-types.js';
 import { DESKTOP_TOOL_NAMES, riskFor } from './desktop-tool-catalog.js';
@@ -146,93 +133,6 @@ async function handleApps(context: McpRuntimeContext, sessionId: string, risk: R
   return markUntrusted({ apps });
 }
 
-async function handleDescribe(
-  context: McpRuntimeContext,
-  sessionId: string,
-  args: any,
-  risk: RiskTier,
-) {
-  const mode = args.mode === 'background' ? 'background' : 'foreground';
-  const policy = policyFor(context, sessionId);
-  const operation: WorkerOperation = {
-    kind: 'desktop.describe',
-    ...(args.windowId !== undefined ? { windowId: String(args.windowId) } : {}),
-    maxNodes: Number(args.maxNodes ?? 500),
-    interactiveOnly: Boolean(args.interactiveOnly ?? false),
-    mode,
-    policy,
-  };
-  let value: DesktopDescribeResult;
-  try {
-    value = (await run(context, sessionId, operation)) as DesktopDescribeResult;
-  } catch (error) {
-    throw sanitizeDesktopToolError(context, sessionId, error);
-  }
-  const tally = { count: 0 };
-  const window = redactWindow(value.window, tally, policy);
-  const nodes = value.nodes.map((node) => redactNode(node, tally));
-  // The worker never gates reads, so without this call the gate's capture
-  // branch is unreachable and every screenshot/describe would be missing
-  // from the audit trail - see the brief's requirement 4.
-  const verdict = evaluateWindowGate(
-    value.window,
-    policy,
-    mode === 'background' ? 'background' : 'capture',
-  );
-  audit(context, sessionId, 'desktop_describe', targetOf(window), risk, 'SUCCEEDED', {
-    redactionCount: tally.count,
-    gateVerdict: verdict.allowed ? 'allow' : 'deny',
-    gateRule: verdict.reason,
-  });
-  return markUntrusted({
-    window,
-    nodes,
-    truncated: value.truncated,
-    ...(value.snapshotId ? { snapshotId: value.snapshotId } : {}),
-    ...(value.windowLeaseId ? { windowLeaseId: value.windowLeaseId } : {}),
-    ...(value.leaseExpiresAt ? { leaseExpiresAt: value.leaseExpiresAt } : {}),
-  });
-}
-
-async function handleCapture(
-  context: McpRuntimeContext,
-  sessionId: string,
-  args: any,
-  risk: RiskTier,
-) {
-  const operation: WorkerOperation = {
-    kind: 'desktop.capture',
-    ...(args.windowId !== undefined ? { windowId: String(args.windowId) } : {}),
-  };
-  const value = (await run(context, sessionId, operation)) as DesktopCaptureResult;
-  const policy = policyFor(context, sessionId);
-  const tally = { count: 0 };
-  const window = value.window ? redactWindow(value.window, tally, policy) : null;
-  // An unattributable window (null here) is the one interesting read
-  // verdict - capture is always allowed regardless of attribution, but that
-  // is itself a gate decision worth an audit row, not a reason to skip the
-  // gate call entirely. A synthetic identity with no processName/
-  // executablePath is exactly what `evaluateWindowGate` already treats as
-  // "unattributable", so no special-casing is needed beyond supplying one.
-  const gateIdentity: DesktopWindowIdentity = window ?? { windowId: 'unattributable' };
-  const verdict = evaluateWindowGate(gateIdentity, policy, 'capture');
-  // Screenshots are pixels and cannot be DLP-redacted, so the audit log
-  // records a content hash of the image, never `imageDataUri` itself.
-  const evidence = `${targetOf(window)} sha256:${createHash('sha256')
-    .update(String(value.imageDataUri))
-    .digest('hex')}`;
-  audit(context, sessionId, 'desktop_capture', evidence, risk, 'SUCCEEDED', {
-    redactionCount: tally.count,
-    gateVerdict: verdict.allowed ? 'allow' : 'deny',
-    gateRule: verdict.reason,
-  });
-  return markUntrusted({
-    imageDataUri: value.imageDataUri,
-    devicePixelRatio: value.devicePixelRatio,
-    window,
-  });
-}
-
 export async function handleDesktopTool(
   context: McpRuntimeContext,
   sessionId: string,
@@ -242,7 +142,7 @@ export async function handleDesktopTool(
   if (!DESKTOP_TOOL_NAMES.has(name)) {
     throw new AevraToolError('CAPABILITY_REQUIRED', `Tool ${name} is not enabled`);
   }
-  const risk = riskFor(name);
+  const risk = name === 'desktop_capture' && !args.windowId ? 'HIGH' : riskFor(name);
   const gate = await authorizeHostControl(
     context,
     sessionId,

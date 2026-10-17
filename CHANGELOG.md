@@ -1,5 +1,123 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.3.0] - 2026-10-17
+
+### Added - Local AI agents and browser packaging
+
+- Add shared port-selected browser extension packaging, local stdio MCP bridging, managed Codex/Claude Code/OpenCode/Antigravity registration, canonical skill links and ownership-aware removal. Add standalone Browser settings UI/CLI and durable per-agent HTTP credentials.
+
+- Add local AI agent management: `aevra agent list|status`; `aevra agent install` with no target acts on the detected agents after a `Proceed? [y/N]` confirmation (`--yes` skips it, a run without a terminal and without `--yes` prints the list and exits 1, `install all` with nothing detected exits 1); `--scope user|workspace`; `--workspace <name>` (implies workspace scope, resolved through registered Aevra workspaces); the `claude` alias; and `--json` (one JSON document on stdout; credential file paths and hashes are never printed). Workspace scope is stdio only, installs no skill and creates no skill links; the entry goes to `<root>/.codex/config.toml` (Codex, trusted projects only), `~/.claude.json` (or `$CLAUDE_CONFIG_DIR/.claude.json`) under `projects[<root>]` (Claude Code, nothing written into the project), `<root>/opencode.json` or an existing `.jsonc` (OpenCode) or `<root>/.agents/mcp_config.json` (Antigravity). The install refuses with `AGENT_PROJECT_FILE_TRACKED` when git tracks the target file and otherwise adds it to the repository `info/exclude`. It also refuses a symbolic link or junction on the way to the file inside the project (`AGENT_PATH_CONFLICT`), a workspace folder that is the home folder or a filesystem root, and a project file that is the agent's global file (`AGENT_OPTIONS_INVALID`); git runs only from an absolute `PATH` entry outside the project. Detection uses `PATH` names or config homes and never spawns a process. Settings now shows a connections table with Last used and an Add connection dialog (detect agents, global or one workspace, dry-run preview, per-agent results).
+
+- Breaking: `aevra agent serve --credential-file <file>` replaces `aevra mcp serve --stdio` with no alias. Configurations written by earlier local builds are refreshed by running `aevra agent install <agent>` again: an existing stdio connection whose entry differs is rewritten in place and keeps its credential.
+
+- Change: root `aevra uninstall` now prints a human summary instead of raw JSON (it has no `--json`) and runs product cleanup only after agent removal succeeded: a managed entry or skill modified since install refuses the uninstall, and cleanup and `--purge` are then skipped. A hand-written `aevra` entry of an agent Aevra never registered no longer blocks uninstall. `aevra agent uninstall all` without `--scope` removes every connection, including orphaned workspace ones.
+
+- Change: agent uninstall scopes are explicit. `POST /api/agents` forwards `scope` as sent; `scope: 'user'` removes global connections only, also for `target: 'all'`; new `scope: 'all'` (uninstall only) removes every connection; a single-call `target: 'all'` uninstall without a scope means `all`, runs agent by agent and reports per-agent results instead of failing as a whole. `aevra agent uninstall all` and `aevra uninstall` send `scope: 'all'` (an older core refuses it as an unknown scope: restart `aevra start`).
+
+- Add `aevra agent uninstall --id <id>` and `credentialId` on `POST /api/agents` (uninstall only): removes exactly one connection by its connection id, also when its workspace folder was deleted or is not a registered Aevra workspace; `agent list` prints the id of such connections and Settings now removes them with Remove (Update stays disabled).
+
+- Fix: `aevra agent install <agent>` again after an MCP port or TLS CA change rewrites the stdio credential file's endpoint and CA file (same credential) and an HTTP entry's endpoint with the stored credential, instead of reporting `no change`. A workspace install in a git repository whose git cannot be found outside the project now notes that tracking was not checked; device-path and 8.3 short-name `PATH` entries into the project are refused as git candidates. Claude project keys are matched case-insensitively only on Windows and macOS. `uninstall all` with only workspace connections no longer touches the user skill.
+
+- Change: admin audit records of agent dry runs carry `dryRun: true`; `aevra agent list` and `install` against an older core without `GET /api/agents/detect` print the version hint and exit 1.
+
+- Enlarge Web UI token summary values, remove card detail rows, and show the saved percentage inline with the saved count in daily and all-time statistics.
+
+- Fix macOS native build/test setup: explicitly select installed Xcode 26+ and verify Metal SDK declarations, persist its SDK path, and link Rust consumers with the system Swift runtime search path. Apply the same prerequisite to Desktop release builds and the root helper matrix.
+
+- Repair desktop security regression fixture types so the full Node coverage compiler checks authorized read arguments, nullable capture results and the current input gate direction without casts that hide interface drift.
+
+- Enforce Rust format and strict Clippy in root desktop-helper CI, and explicitly select Node.js 24 in native/helper and changed-area jobs. Limit Markdown text-file formatting to `llm.txt` so CMake and generated text caches retain their native syntax.
+
+- Fix GNOME 46 keyboard input refusal by distinguishing the stage fallback from Shell-owned focus; keep modal, overview and Shell actor guards, with a cross-version policy regression.
+- Fix strict Rust 1.99 Clippy failures across desktop platforms using fixed-size pixel chunks, platform-specific compilation and simpler native bindings. Regenerate the shared helper overlay without weakening CI checks.
+
+- Standardize current runtime/build CI on Node.js 24 and GitHub-maintained Actions `@v6`; add local `.node-version` files and keep independently versioned Rust cache support.
+
+### Desktop authorization and architecture
+
+- Bind window capture/describe to the authorized native identity and recheck read attribution/current policy before publishing; refuse native-ID reuse and mid-read allowlist revocation.
+- Invalidate connection generations on disconnect/reconnect; reject cancelled connect completions and prevent older reads from returning data or reinstalling foreground refs after session changes.
+- Refuse GNOME Shell keyboard/modal grabs, correct decorated frame/buffer capture and click geometry, preserve KDE fractional wheel coordinates, and invalidate stale native mappings/refs on explicit reconnect.
+- Extract the canonical native helper library and shared prepared-action executor, removing mirrored standalone module/dependency wiring and broad lint suppression. Add behavioral host/native regressions and library-boundary checks.
+
+- Add the KDE KWin 6.6 native plugin, explicit executable-path grants with persisted nonce consumption, pinned kernel/compositor identity, isolated window-item capture and guarded virtual input. Include reproducible source packaging and required KDE CI.
+- Add real held-button disconnect regression; flush KWin pointer teardown and avoid forced GNOME device disposal while queued release events still reference the devices.
+
+### Desktop capture and input
+
+- Implement native GNOME Wayland window capture and foreground input in the shared helper, with an explicit-install GNOME Shell companion, approved helper path, visible pause control, lock/peer revocation and compositor-native window/occlusion checks. Preserve independent AT-SPI semantic access.
+- Add required private GNOME/GTK target-and-sentinel acceptance for both hosts: actual button/wheel events, Unicode input, Ctrl+A replacement, protected fields, focus changes, isolated window pixels and paused-access refusal. Package the companion with Linux helper/desktop artifacts.
+- Document GNOME and KDE setup, the canonical helper library and shared input executor, authorized read publication and reconnect recovery. Keep runtime evidence separate from configured CI and remaining platform acceptance.
+
+- Bind every foreground request to the process/window/executable/host identity authorized by the worker or standalone host; refuse changed targets before new native effects and preserve held-key cleanup.
+- Prepare portable input once, refresh only bound process/field paths per effect, and stop after a 7.5-second native input budget with explicit partial-outcome errors. Add private X11 focus-switch and 280-character Unicode regressions.
+- Resolve macOS foreground windows through the active AX window rather than the active PID; cover two editors and a non-key palette in shared tests and the opt-in native fixture.
+- Reconcile canonical overlay reverts and file removals with drift protection and clean-apply regression tests, including empty files and missing final newlines.
+
+- Add macOS 13+ ScreenCaptureKit isolated-window capture and CoreGraphics text/key/mouse input, and Linux X11 Composite capture with XTest input. macOS native execution remains pending.
+- Preserve process-instance attribution, unique native window binding, fresh ref validation, protected-field checks, pointer occlusion/focus guards and held-key cleanup. Validate complete chords and inject Unicode through the text transport.
+- Add shared guard regressions, real private-X11 pixel/input tests, and an accessible GTK backend fixture proving exact Unicode text, Ctrl+A replacement, attributed capture and protected-field refusal. Include an explicit macOS fixture run.
+- Carry the same canonical helper into standalone desktop using a reproducible, hash-checked overlay, including clean CI/release preparation, independent capture/input readiness and permission recovery guidance.
+- Support Ubuntu X11 plus native GNOME Wayland and KDE KWin 6.6 companions. GNOME/KDE private-compositor acceptance runs in both consumers; native macOS, physical-GPU/OpenGL capture, actual lock-screen transitions and production grant workflows remain separate acceptance gates. Other Wayland compositors remain roadmap work.
+- Fix: agent uninstall now revokes a credential only after every configuration edit and the connection record are saved; a failed revoke fails with `AGENT_REVOKE_INCOMPLETE` naming the credential ids still valid and keeps the saved files, and git exclude or file cleanup failures after the save are notes that never undo it. Install checks its plan only inside the lock and removes empty lock folders it created. Engine results carry an optional `removed` list.
+- Change: Settings Remove asks for confirmation. A connection whose credential was deleted shows `Credential missing` (CLI `missing`, state `incomplete`) instead of `Never used`; a response without `results` no longer crashes the page.
+- Fix: the stdio bridge no longer leaves unhandled rejections on a broken stdout, and the stdio-http size check is linear.
+
+### Added - Management and usage documentation
+
+- Pressing Enter in an open dialog now activates its primary button (the last enabled one when several exist). Enter in a form field still submits natively, never acts from a focused button, link, select or textarea, and is ignored while composing text, on key repeat or with a modifier. Approval request dialogs opt out with `data-enter-default="off"` so a stray key press can never grant access.
+- Expose MCP server status, catalog details, tool documentation and parameter examples in searchable management views, while keeping upstream descriptions untrusted.
+- Add all-time token statistics beside the chart range controls, with totals, savings, calls, failures and tool/connector breakdowns independent of the selected chart range.
+
+### Documentation
+
+- Synchronize current specs, guides and runtime version surfaces with 1.3.0; preserve previous release history.
+- Record the separate 1.0.0 browser/desktop release targets. Their pinned Aevra 1.2.1 source snapshots are unchanged.
+- Keep full macOS/Linux pixel capture and raw input in a proposed cross-repository design; this release does not implement that parity.
+
+### Security - Execution and remote control
+
+- Harden Git execution against repository hooks, filters, external commands and unsafe read flags; exclude protected content from diffs/history and reject SECRET commit selections, including hard-link aliases.
+- Bind one-time approvals to their frozen invocation and remembered command rules to explicit environment values. Refuse loader overrides, ambiguous Windows paths and unresolved executables; recheck file mutation containment immediately before I/O. Windows credentials now use the native credential API with values sent over stdin.
+- Bind OAuth actors to redirect origins, migrate unambiguous authority, quarantine legacy namespace collisions, bound registration/authorization queues and isolate valid connector traffic from invalid path attempts.
+- Guard malformed HTTP input and Host headers, minimize public health responses, deny framing, preserve local-only pairing behind the gateway, and isolate a previously authenticated device's login throttle.
+- Recheck browser document/origin policy during reads and action batches, and restrict CDP to the operator's loopback port. Desktop reads honor app policies and exact-path grants; full-screen capture requires HIGH approval.
+- Forward only acknowledged upstream entries, bind Acknowledge to the catalog shown, fingerprint prompt/resource metadata, mark descriptions untrusted, and isolate stdio child environments. Hide reserved, unenforced mount sensitivity policy IDs from the workspace UI.
+
+### Added - MCP servers
+
+- **Enable and disable a server:** A registered MCP server can be turned off without removing it, from the switch in **Settings → MCP servers** or with `aevra mcp disable <id>` and `aevra mcp enable <id>`. A disabled server is hidden from tool, prompt and resource lists, its connection is closed, and calls, tests and refreshes are refused with `MCP_UPSTREAM_DISABLED`. Its configuration and credentials are kept, and re-enabling reconnects on first use. A server in **Needs review** still needs **Acknowledge**.
+- **Enabled column and filter:** `aevra mcp list` shows an Enabled column (`yes`/`no`). The Web UI table gains a separate **Enabled** filter, a **Disabled** badge, and a dimmed row for disabled servers.
+- **Admin routes and audit:** `POST /api/mcp/upstreams/{id}/enable` and `POST /api/mcp/upstreams/{id}/disable` return the updated record. Each real change is audited as `mcp.upstream.enable` or `mcp.upstream.disable`; repeating a toggle that is already in effect writes nothing.
+- **Catalog changes are visible on a normal list load:** Core reconciles upstream catalogs before `GET /api/mcp/upstreams` (single-flight, time-bounded, no retry), so a server whose catalog changed shows **Needs review** without a manual test or refresh.
+- **Review icon, dialog, notice and auto refresh (Web UI):** A leftmost warning icon in **Settings > MCP servers** opens a review dialog showing the added, removed and changed entries. Accept lives in the dialog and sends the fingerprint the dialog showed. A notice line counts pending servers, and the table refreshes automatically.
+- **`aevra mcp list` marks pending servers:** A `!` column marks servers that need review, followed by one next-step hint line per pending server.
+- **`aevra mcp review <id>` and `aevra mcp accept <id> --yes`:** `review` prints the pending catalog diff and the accept command; `accept` shows the same diff and, with `--yes`, acknowledges exactly the catalog shown. A catalog that changed again is refused with `MCP_UPSTREAM_CATALOG_CHANGED` and a prompt to review again.
+- **Audited acknowledge:** A successful acknowledge is audited as `mcp.upstream.acknowledge`; a failed one writes nothing.
+- **Known limit:** Aevra emits no `list_changed` notification for this change, so a connected client sees it on its next list request.
+
+### Fixed - MCP servers
+
+- **Editing a disabled server re-enabled it:** Saving an edit now keeps the server's enabled state, and the edit of a disabled server is stored without connecting to it.
+- **A failed edit reconnected a disabled server:** If an edit that enabled a server failed its handshake, Aevra restored the old connection even though the server stayed disabled. It now leaves a disabled server stopped.
+- **Disabling waited for in-flight work:** Disabling a server no longer waits for a running call or refresh to finish. Any connection that work reopens is closed when it ends.
+- **Hidden disconnect failures:** If Aevra cannot close a disabled server's connection, the toggle and edit responses now include a `warning`, the audit result is `warning`, and the CLI prints it.
+- **Edits to a disabled server were served unverified:** A connection edit made while disabled marks the server **Degraded**, and enabling it reconnects and checks the catalog before it is served.
+- **Wrong status codes:** `MCP_UPSTREAM_DISABLED` now returns 409 instead of 400, and adding a server with `enabled: false` is refused with `UPSTREAM_ENABLED_INVALID` instead of being silently enabled.
+- **Edit audit raced with toggles:** The edit route now decides whether `enabled` changed under the same lock as the edit, so a concurrent toggle cannot produce a missing or duplicate audit record.
+
+### Added - Permissions & Approvals
+
+- **`APPROVAL_SCOPE_MISMATCH` protocol error:** An MCP session that tries to resume a workspace-access approval granted `once` for a different session on the same OAuth connection receives `APPROVAL_SCOPE_MISMATCH` instead of an empty result. This stops rotating clients from looping on an approval they can never resume.
+- **Connection-wide workspace access:** OAuth workspace-access requests can now be approved with "Allow this connection", which grants the workspace to every session of that connection. Connectors and local sessions remain one-time only.
+- **Operator guidance for rotating clients:** When an OAuth connection opens three or more sessions within 15 minutes, a pending workspace-access request shows a non-blocking hint recommending "Allow this connection".
+
+### Fixed - Permissions & Approvals
+
+- **Scope-correct ticket reuse on rotating sessions:** A new session no longer reuses a workspace-access approval it cannot resume (one granted `once` for another session, or for different arguments). One-time capability approvals still resume from any session on the same OAuth connection.
+
 ## [1.2.1] - 2026-10-12
 
 ### Fixed - Web UI

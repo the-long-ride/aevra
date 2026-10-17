@@ -1,56 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { AevraDatabase } from '../../../packages/store/src/database.js';
-import { OAuthRepository } from '../../../packages/store/src/oauth.js';
-import { AevraOAuthService } from '../src/auth/oauth.js';
-
-const b64url = (value: Buffer) => value.toString('base64url');
-const challenge = (verifier: string) => b64url(createHash('sha256').update(verifier).digest());
-
-function fixture() {
-  let now = Date.parse('2026-08-17T12:00:00.000Z');
-  const db = AevraDatabase.open(':memory:');
-  const repo = new OAuthRepository(db.raw(), () => new Date(now));
-  const service = new AevraOAuthService(repo, {
-    issuer: 'https://mcp.example.com',
-    resource: 'https://mcp.example.com/mcp',
-    now: () => new Date(now),
-  });
-  return {
-    db,
-    repo,
-    service,
-    advance: (ms: number) => {
-      now += ms;
-    },
-  };
-}
-
-function issueGrant(service: AevraOAuthService, client: any, verifier: string) {
-  const pending = service.beginAuthorization(
-    {
-      client_id: client.client_id,
-      redirect_uri: client.redirect_uris[0]!,
-      response_type: 'code',
-      scope: 'mcp offline_access',
-      resource: 'https://mcp.example.com/mcp',
-      code_challenge: challenge(verifier),
-      code_challenge_method: 'S256',
-    },
-    '203.0.113.4',
-  );
-  service.approveAuthorization(pending.id);
-  const { code } = service.continueAuthorization(pending.id);
-  return service.exchangeAuthorizationCode({
-    grant_type: 'authorization_code',
-    client_id: client.client_id,
-    code,
-    redirect_uri: client.redirect_uris[0]!,
-    code_verifier: verifier,
-    resource: 'https://mcp.example.com/mcp',
-  });
-}
+import { fixture, issueGrant, challenge } from './oauth-service-fixture.js';
 
 test('OAuth discovery advertises MCP resource, DCR, PKCE S256, and offline access', () => {
   const { db, service } = fixture();
@@ -257,7 +207,10 @@ test('authorization code exchange validates PKCE and issues rotating refresh tok
   assert.equal(tokens.token_type, 'Bearer');
   assert.ok(tokens.access_token);
   assert.ok(tokens.refresh_token);
-  assert.equal(service.verifyAccessToken(tokens.access_token).actor, 'oauth:ChatGPT');
+  assert.equal(
+    service.verifyAccessToken(tokens.access_token).actor,
+    'oauth:ChatGPT@https://chatgpt.com',
+  );
   assert.throws(
     () =>
       service.exchangeAuthorizationCode({
@@ -324,8 +277,8 @@ test('separate authorizations for the same client receive different OAuth connec
   const firstIdentity = service.verifyAccessToken(first.access_token);
   const secondIdentity = service.verifyAccessToken(second.access_token);
   assert.notEqual(firstIdentity.subject, secondIdentity.subject);
-  assert.equal(firstIdentity.actor, 'oauth:ChatGPT');
-  assert.equal(secondIdentity.actor, 'oauth:ChatGPT');
+  assert.equal(firstIdentity.actor, 'oauth:ChatGPT@https://chatgpt.com');
+  assert.equal(secondIdentity.actor, 'oauth:ChatGPT@https://chatgpt.com');
   db.close();
 });
 

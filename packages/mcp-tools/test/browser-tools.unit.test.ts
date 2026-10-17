@@ -159,10 +159,10 @@ test('browser_disconnect tears the session down without touching pairing state',
 
 test('browser_connect omits epoch and extensionId when nothing is paired', async () => {
   const ctx = context();
-  await handleBrowserTool(ctx.value, 's1', 'browser_connect', { transport: 'cdp', cdpPort: 9333 });
+  await handleBrowserTool(ctx.value, 's1', 'browser_connect', { transport: 'cdp', cdpPort: 9222 });
   const sent = ctx.worker.calls.at(-1).operation;
   assert.equal(sent.transport, 'cdp');
-  assert.equal(sent.cdpPort, 9333);
+  assert.equal(sent.cdpPort, 9222);
   assert.equal('epoch' in sent, false);
   assert.equal('extensionId' in sent, false);
 });

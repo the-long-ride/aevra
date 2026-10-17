@@ -11,6 +11,8 @@ const KEPT = [
   'scope',
   'workspaceId',
   'expiresAt',
+  'decisionScope',
+  'cancellationReason',
 ] as const;
 const SUMMARY_KEYS = ['summary', 'description', 'title', 'command', 'path'] as const;
 
@@ -31,6 +33,14 @@ function describe(operation: Json): string {
   return '';
 }
 
+function capSummary(text: string): string {
+  if (text.length <= SUMMARY_MAX) return text;
+  let end = SUMMARY_MAX - 1;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}…`;
+}
+
 /** Decision-relevant fields only; the full ticket stays available via `detail: "full"`. */
 export function summariseTicket(ticket: Json): Json {
   const operation = ticket.operation as Json;
@@ -40,6 +50,6 @@ export function summariseTicket(ticket: Json): Json {
     if (value !== undefined && value !== null) out[key] = value;
   }
   const text = describe(operation);
-  if (text) out.summary = text.length > SUMMARY_MAX ? `${text.slice(0, SUMMARY_MAX - 1)}…` : text;
+  if (text) out.summary = capSummary(text);
   return out;
 }

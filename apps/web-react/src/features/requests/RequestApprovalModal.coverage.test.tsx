@@ -169,7 +169,7 @@ describe('RequestApprovalModal coverage', () => {
     );
 
     // Fallback labels
-    expect(screen.getByText('custom-client-id')).toBeInTheDocument();
+    expect(screen.getAllByText('custom-client-id')).toHaveLength(2);
     expect(screen.getByText(/Remote client/)).toBeInTheDocument();
 
     // Toggle keep signed in

@@ -3,7 +3,7 @@ name = "aevra-desktop-helper"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Windows desktop-control helper: stdio JSON-RPC protocol loop, window identity, accessibility tree, and input synthesis."
+description = "Native desktop-control helper: stdio JSON-RPC protocol loop, window identity, accessibility tree, and input synthesis."
 
 [[bin]]
 name = "aevra-desktop-helper"
@@ -19,6 +19,19 @@ jpeg-encoder = "0.6.1"
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
 xa11y = { version = "=0.15.0", default-features = false }
 sysinfo = { version = "=0.37.2", default-features = false, features = ["system"] }
+enigo = { version = "=0.6.1", default-features = false, features = ["x11rb"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "=0.2.189"
+zbus = { version = "=5.19.0", default-features = false, features = ["blocking-api", "async-io"] }
+png = "=0.18.1"
+x11rb = { version = "=0.13.2", features = ["image", "randr", "xtest", "composite"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+screencapturekit = { version = "=11.0.0", features = ["macos_13_0"] }
+xcap = { version = "=0.9.8", default-features = false }
+core-graphics = "=0.25.0"
+core-foundation = "=0.10.1"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58.0", features = [

@@ -18,3 +18,11 @@ A command rule limits a remembered `commands.run` permission to an application, 
 ## Recommendations
 
 Prefer the narrowest rule that covers the operation you actually need. Modifiers like `--force`, `--hard`, or destructive branch deletion (`-D`) are tracked separately and never inherited from an ordinary command rule.
+
+## Environment and Git boundaries
+
+Command and process requests validate explicit environment overrides before approval. Interpreter/loader injection variables are refused. Overrides that change command resolution or runtime configuration require HIGH review. Ordinary explicit values appear in approval previews, with credential fields redacted. Remembered typed rules bind the exact override set and values; POSIX names retain case, while Windows names compare without case.
+
+Read-only Git tools accept a bounded set of read flags. They disable hooks, fsmonitor, external diff/textconv, conversion filters, global/system configuration and unrequested protocols. Diff and patch history omit built-in sensitive files and manifest-protected paths, including existing hard-link aliases. Commit checks cover staged files, bundled all flags and explicit paths, and refuse SECRET selections even in YOLO mode.
+
+Windows paths with alternate streams, trailing dots or trailing spaces are refused. File mutations revalidate canonical containment immediately before I/O and use exclusive temporary files for replacement. This narrows rename/junction races; eliminating every filesystem race would require native parent-directory handle operations.

@@ -93,7 +93,7 @@ test('background describe requires an owner, a window id and driver support', as
   await assert.rejects(dispatch(background(), registry), code('DESKTOP_BACKGROUND_UNSUPPORTED'));
 });
 
-test('background describe without a policy skips the gate and strips node handles', async () => {
+test('background describe without a policy uses safe defaults and strips node handles', async () => {
   const { registry, driver } = await connected();
   const original = driver.describeBackground.bind(driver);
   driver.describeBackground = async (request: any) => {

@@ -1,3 +1,9 @@
+import {
+  LEGACY_PROTOCOL_VERSIONS,
+  requestedProtocol,
+  legacyProtocol,
+  unsupportedProtocol,
+} from './protocol-negotiation.js';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https, { type ServerOptions as HttpsServerOptions } from 'node:https';
 import type { RemoteIdentityVerifier, VerifiedRemoteIdentity } from '../auth/cloudflare.js';
@@ -15,9 +21,11 @@ import {
 } from './identity-resolver.js';
 import { runLegacyRpc } from './legacy-dispatch.js';
 import { handleModernRuntimeRequest, type McpHookEmitter } from './modern-runtime.js';
-import { MODERN_PROTOCOL_VERSION, isModernRequest } from './modern-protocol.js';
+import { isModernRequest } from './modern-protocol.js';
 import { handleOAuthRoute } from './oauth-routes.js';
 import { extractRequestProvenance, withRequestProvenance } from './request-provenance.js';
+import { guardListener, parseRequestTarget, rejectBadRequestTarget } from './listener-guards.js';
+import { adminHostAllowed } from '../admin/request-guards.js';
 import { aevraServerInfo } from './server-info.js';
 
 export type McpRequestHandler = (
@@ -45,38 +53,6 @@ export interface McpIngressServerOptions {
   connectorProfile?: ((actor: string) => ConnectorProfile | undefined) | undefined;
 }
 
-const LEGACY_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] as const;
-
-function protocolHeader(req: IncomingMessage) {
-  const value = req.headers['mcp-protocol-version'];
-  return typeof value === 'string' ? value.trim() : undefined;
-}
-
-function requestedProtocol(req: IncomingMessage, body: any) {
-  const meta = body?.params?._meta?.['io.modelcontextprotocol/protocolVersion'];
-  return protocolHeader(req) ?? (typeof meta === 'string' ? meta.trim() : undefined);
-}
-
-function legacyProtocol(requested: unknown) {
-  const value = typeof requested === 'string' ? requested : '';
-  return LEGACY_PROTOCOL_VERSIONS.includes(value as any) ? value : LEGACY_PROTOCOL_VERSIONS[0];
-}
-
-function unsupportedProtocol(res: ServerResponse, id: unknown, requested: string) {
-  sendJson(res, 400, {
-    jsonrpc: '2.0',
-    id: id ?? null,
-    error: {
-      code: -32022,
-      message: 'Unsupported protocol version',
-      data: {
-        supported: [MODERN_PROTOCOL_VERSION, ...LEGACY_PROTOCOL_VERSIONS],
-        requested,
-      },
-    },
-  });
-}
-
 export class McpIngressServer {
   private server?: http.Server | https.Server;
   private readonly diagnostics = new McpDiagnostics();
@@ -96,7 +72,7 @@ export class McpIngressServer {
   }
 
   async start() {
-    const handler = (req: IncomingMessage, res: ServerResponse) => void this.handle(req, res);
+    const handler = guardListener((req, res) => this.handle(req, res));
     this.server = this.options.tls
       ? https.createServer(this.options.tls, handler)
       : http.createServer(handler);
@@ -150,7 +126,22 @@ export class McpIngressServer {
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse) {
-    const url = new URL(req.url ?? '/', this.url());
+    const url = parseRequestTarget(req.url, this.url());
+    if (!url) {
+      rejectBadRequestTarget(res);
+      return;
+    }
+    if (
+      !adminHostAllowed(
+        req.headers.host,
+        this.host,
+        this.options.advertisedHost,
+        this.options.oauth?.issuer ? [this.options.oauth.issuer] : [],
+      )
+    ) {
+      sendJson(res, 421, { error: 'Unrecognized Host' });
+      return;
+    }
     const path = url.pathname;
     if (path === '/health') {
       res.setHeader('content-type', 'application/json');

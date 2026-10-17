@@ -17,5 +17,6 @@ export function buildSuggestedRule(node: CommandNode): CommandRuleV2 {
     executableFingerprint: node.executable?.fingerprint ?? '*',
     wrapperFingerprints: (node.wrappers ?? []).map((w) => w.identity.fingerprint),
     scriptFingerprint: node.scriptFingerprint,
+    ...(node.explicitEnvFingerprint ? { explicitEnvFingerprint: node.explicitEnvFingerprint } : {}),
   };
 }

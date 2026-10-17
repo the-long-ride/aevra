@@ -144,6 +144,7 @@ describe('dispatchNativeClick', () => {
     expect(calls).toEqual([
       ['get', 9],
       ['attach', { tabId: 9 }, '1.3'],
+      ['get', 9],
       [
         'send',
         { tabId: 9 },
@@ -156,6 +157,7 @@ describe('dispatchNativeClick', () => {
           clickCount: 1,
         },
       ],
+      ['get', 9],
       [
         'send',
         { tabId: 9 },

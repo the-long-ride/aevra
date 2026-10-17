@@ -2,21 +2,22 @@ import type { FrozenOperationTicket } from '../../../apps/core/src/approvals/app
 import { consumeCommandApproval } from '../../../apps/core/src/approvals/command-binding.js';
 import type { CommandAnalysis } from '../../protocol/src/index.js';
 import { freshCommandAnalysis } from './approval-command-freshness.js';
+import { protectedGlobsFor } from './protected-paths.js';
 import { rememberOutputBudget } from './result-shaper/common.js';
 import { AevraToolError } from './errors.js';
 import { resumeHostApproval } from './approval-resume-host.js';
 import { repoState } from './git-state.js';
 import {
+  argsHash,
   authorizationContext,
   isTicketAuthorizedForSession,
   oneTimeAllowed,
-  oneTimeKey,
   requiredLease,
-  sameConnection,
   verifyTicketAuthority,
   workspaceResult,
   workspaceRoot,
 } from './service-helpers.js';
+import { validateAdmissionAuthority, validateCapabilityAuthority } from './approval-scope.js';
 import type { McpRuntimeContext } from './service-types.js';
 
 export async function resumeApproval(
@@ -97,25 +98,7 @@ async function resumeWorkspaceAdmission(
 ) {
   return context.approvals!.resume(
     requestId,
-    async (ticket) => {
-      const session = context.sessions.get(sessionId);
-      if (!session) return { ok: false, reason: 'session changed' };
-      if (ticket.actor.startsWith('oauth:')) {
-        if (ticket.decisionScope === 'connection') {
-          if (!sameConnection(context, sessionId, ticket)) {
-            return { ok: false, reason: 'OAuth connection changed' };
-          }
-        } else if (session.id !== ticket.sessionId || session.actor !== ticket.actor) {
-          return { ok: false, reason: 'session changed' };
-        }
-      } else if (session.id !== ticket.sessionId || session.actor !== ticket.actor) {
-        return { ok: false, reason: 'session changed' };
-      }
-      if (!context.workspaces.getLocal(ticket.workspaceId)) {
-        return { ok: false, reason: 'workspace no longer exists' };
-      }
-      return { ok: true };
-    },
+    async (ticket) => validateAdmissionAuthority(context, sessionId, ticket),
     async (ticket) => executeFrozen(context, sessionId, ticket),
   );
 }
@@ -128,18 +111,8 @@ async function resumeCapabilityRequest(
   return context.approvals!.resume(
     requestId,
     async (ticket) => {
-      const session = context.sessions.get(sessionId);
-      if (!session) return { ok: false, reason: 'session changed' };
-      if (ticket.actor.startsWith('oauth:')) {
-        if (!sameConnection(context, sessionId, ticket)) {
-          return { ok: false, reason: 'OAuth connection changed' };
-        }
-      } else if (session.id !== ticket.sessionId || session.actor !== ticket.actor) {
-        return { ok: false, reason: 'session changed' };
-      }
-      if (!context.workspaces.getLocal(ticket.workspaceId)) {
-        return { ok: false, reason: 'workspace no longer exists' };
-      }
+      const auth = validateCapabilityAuthority(context, sessionId, ticket);
+      if (!auth.ok) return auth;
       const lease =
         context.sessions.leaseForWorkspace?.(sessionId, ticket.workspaceId) ??
         (context.sessions.activeLease(sessionId)?.workspaceId === ticket.workspaceId
@@ -156,20 +129,22 @@ async function resumeCapabilityRequest(
       if (!original?.tool) {
         throw new AevraToolError('INVALID_REQUEST', 'Capability approval has no frozen operation');
       }
-      const key = oneTimeKey(
-        sessionId,
-        ticket.operation.capability,
-        String(payload.permissionMatcher ?? '*'),
-      );
-      const once = ticket.decisionScope === 'once';
-      if (once) context.oneTimeCapabilities.add(key);
-      try {
-        if (original.proxy && context.proxyOperation)
-          return await context.proxyOperation(sessionId, original.proxy);
-        return await context.callInner(sessionId, String(original.tool), original.args ?? {});
-      } finally {
-        if (once) context.oneTimeCapabilities.delete(key);
-      }
+      const proof =
+        ticket.decisionScope === 'once'
+          ? {
+              kind: 'capability' as const,
+              requestId: ticket.id,
+              sessionId,
+              capability: ticket.operation.capability,
+              matcher: String(payload.permissionMatcher ?? '*'),
+              risk: ticket.operation.risk,
+              binding: argsHash(original),
+              consumed: false,
+            }
+          : undefined;
+      if (original.proxy && context.proxyOperation)
+        return context.proxyOperation(sessionId, original.proxy, proof);
+      return context.callInner(sessionId, String(original.tool), original.args ?? {}, proof);
     },
     (ticket) => {
       const lease =
@@ -259,6 +234,9 @@ async function executeFrozen(
       payload.tool === 'git_commit'
         ? {
             kind: 'git.commit',
+            ...(protectedGlobsFor(context, lease.workspaceId)
+              ? { protectedGlobs: protectedGlobsFor(context, lease.workspaceId) }
+              : {}),
             message: String(payload.args.message),
             args: payload.args.args ?? [],
           }
@@ -343,4 +321,27 @@ async function executeFrozen(
   }
 
   throw new AevraToolError('INVALID_REQUEST', 'Unsupported frozen operation');
+}
+
+export async function handleApprovalWait(
+  context: McpRuntimeContext,
+  sessionId: string,
+  requestId: string,
+) {
+  try {
+    return await resumeApproval(context, sessionId, requestId);
+  } catch (e: any) {
+    if (e?.code === 'APPROVAL_SCOPE_MISMATCH') {
+      throw new AevraToolError(
+        'APPROVAL_SCOPE_MISMATCH',
+        'This approval was limited to another MCP session. Call workspace_select again; the operator can approve for this connection to cover all your sessions.',
+      );
+    }
+    const isUnauth =
+      e?.code === 'APPROVAL_UNAUTHORIZED' ||
+      e?.message === 'OAuth connection changed' ||
+      e?.message === 'session changed';
+    if (isUnauth) return null;
+    throw e;
+  }
 }

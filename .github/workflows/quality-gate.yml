@@ -28,9 +28,12 @@ jobs:
       extension: ${{ steps.areas.outputs.extension }}
       helper: ${{ steps.areas.outputs.helper }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
       - id: areas
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -41,8 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -59,8 +62,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -87,8 +90,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -102,8 +105,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -112,7 +115,7 @@ jobs:
       # The archive is plain compiled JavaScript, so this artifact is also how a
       # reviewer loads the branch's extension without building it themselves.
       - run: npm run build:extension
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v6
         with:
           name: aevra-extension
           path: apps/extension/build/aevra-extension.zip
@@ -125,8 +128,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -154,8 +157,8 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -187,16 +190,41 @@ jobs:
       run:
         working-directory: helper
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Select compatible macOS SDK
+        if: runner.os == 'macOS'
+        run: node setup-macos.mjs
+      - name: macOS SDK selection contracts
+        run: node --test tests/macos-build.test.mjs
       - name: Install Linux accessibility build prerequisites
         if: runner.os == 'Linux'
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libwayland-dev libxkbcommon-dev
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libwayland-dev libxkbcommon-dev xvfb x11-xkb-utils python3-gi gir1.2-gtk-3.0 at-spi2-core dbus-x11
+      - name: Install Rust validation tools
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustup default stable
+          rustc --version
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: helper
+      - name: Rust format
+        run: cargo fmt --check
+      - name: Strict Rust lint
+        run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo build --locked --release
       # Same profile as the build above, so the tests reuse its compiled crates.
       - run: cargo test --locked --release
+      - name: Canonical helper overlay lifecycle
+        run: python -B -m unittest discover -s tests -p test_overlay_export.py
+      - name: Native X11 capture and input
+        if: runner.os == 'Linux'
+        env:
+          AEVRA_GTK_FIXTURE: ${{ github.workspace }}/helper/tests/fixtures/portable_gtk_fixture.py
+        run: dbus-run-session -- cargo test --locked --release native_x11_ -- --ignored --nocapture --test-threads=1
       - id: package
         name: Stage native helper artifact
         shell: bash
@@ -210,9 +238,10 @@ jobs:
           const destination = path.join('artifact', slug);
           fs.mkdirSync(destination, { recursive: true });
           fs.copyFileSync(source, path.join(destination, binary));
+          if (process.platform === 'linux') require('node:child_process').execFileSync('python3', ['wayland/package-companion.py', destination], {stdio: 'inherit'});
           fs.appendFileSync(process.env.GITHUB_OUTPUT, 'slug=' + slug + '\n');
           NODE
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v6
         with:
           name: desktop-helper-${{ steps.package.outputs.slug }}
           path: helper/artifact/${{ steps.package.outputs.slug }}/
@@ -220,6 +249,43 @@ jobs:
 
   # One stable check for branch protection. Jobs skipped because their area did
   # not change pass; a failed or cancelled job fails this one.
+  wayland-gnome:
+    name: Native GNOME Wayland
+    needs: changes
+    if: needs.changes.outputs.helper == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: helper
+      - name: Install native compositor prerequisites
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends gnome-shell python3-gi python3-gi-cairo gir1.2-gtk-3.0 at-spi2-core dbus-x11 libwayland-dev libxkbcommon-dev
+      - name: Companion permission contracts
+        run: node --test helper/wayland/gnome/policy.test.mjs
+      - name: Required compositor and accessible backend acceptance
+        run: bash helper/tests/run-wayland-gnome.sh
+
+  wayland-kde:
+    name: Native KDE Wayland
+    needs: changes
+    if: needs.changes.outputs.helper == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: helper
+      - name: Install native compositor prerequisites
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends kwin-dev kwin-wayland cmake ninja-build extra-cmake-modules libdrm-dev libxcb-composite0-dev libxcb-damage0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev libxcb-sync-dev libxcb-xkb-dev libxcb-res0-dev python3-gi python3-gi-cairo gir1.2-gtk-3.0 at-spi2-core dbus-x11 libwayland-dev libxkbcommon-dev
+      - name: Required compositor and accessible backend acceptance
+        run: bash helper/tests/run-wayland-kde.sh
+
   gate:
     name: Quality gate result
     if: always()
@@ -232,6 +298,8 @@ jobs:
       - browser-parity
       - portability
       - desktop-helper
+      - wayland-gnome
+      - wayland-kde
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

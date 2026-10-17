@@ -69,6 +69,9 @@ const adminCommands: string[][] = [
   ['sessions', 'list'],
   ['audit', 'clear', '--yes'],
   ['status'],
+  ['agent', 'list'],
+  ['agent', 'install', 'codex', '--dry-run'],
+  ['uninstall', '--dry-run'],
 ];
 
 for (const argv of adminCommands) {
@@ -80,6 +83,43 @@ for (const argv of adminCommands) {
     assert.match(result.errors.join('\n'), /failed: .*Is aevra start\/service running\?$/);
   });
 }
+
+test('agent usage errors print the agent help and no core-start suffix', async () => {
+  for (const argv of [
+    ['agent', 'install', '--scope', 'workspace'],
+    ['agent', 'install', '--wat'],
+    ['agent', 'serve'],
+  ]) {
+    const result = await runMain(argv);
+    assert.equal(result.code, 1);
+    assert.equal(result.logs.length, 0);
+    const text = result.errors.join('\n');
+    assert.match(text, /^\[aevra\] /);
+    assert.doesNotMatch(text, /Start core|aevra start if unavailable/);
+  }
+  const parse = await runMain(['agent', 'install', '--wat']);
+  assert.match(parse.errors[0]!, /Unknown option: --wat\n\nUsage: aevra agent <command>/);
+});
+
+test('agent --help prints the agent help without loading configuration', async () => {
+  const result = await runMain(['agent', '--help'], { AEVRA_TLS_CERT: 'cert.pem' });
+  assert.equal(result.code, 0);
+  assert.equal(result.errors.length, 0);
+  assert.match(result.logs.join('\n'), /^Usage: aevra agent <command>/);
+});
+
+test('mcp serve is an unknown mcp action and never starts the bridge', async () => {
+  for (const argv of [
+    ['mcp', 'serve', '--stdio', '--credential-file', 'absent.json'],
+    ['mcp', 'serve'],
+  ]) {
+    const result = await runMain(argv);
+    assert.equal(result.code, 1);
+    const text = result.errors.join('\n');
+    assert.match(text, /^\[aevra\] mcp requires list\|add/);
+    assert.doesNotMatch(text, /Start core|ENOENT|credential/);
+  }
+});
 
 test('main routes backup verify through the sqlite inspector', async () => {
   const result = await runMain([

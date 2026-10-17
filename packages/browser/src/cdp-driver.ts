@@ -1,3 +1,6 @@
+import { guardedInputClient } from './cdp-input-guard.js';
+import { snapshotCdp } from './cdp-snapshot.js';
+import { guardCdpRead } from './cdp-read-policy.js';
 import type {
   BrowserActionInput,
   BrowserActionResult,
@@ -8,13 +11,6 @@ import type {
   BrowserTransport,
 } from '../../protocol/src/browser.js';
 import {
-  axTreeToNodes,
-  markCredentialFields,
-  snapshotDocumentWithRetry,
-  type AxNode,
-} from './cdp-ax.js';
-import {
-  cdpBoxForBackend,
   cdpCenterForBackend,
   clearFocusedCdpField,
   clickCdpPoint,
@@ -27,8 +23,9 @@ import {
   type CdpTargetState,
 } from './cdp-target-session.js';
 import { readDocument } from './cdp-read.js';
-import { captureViewport, cssDragPoints, cssPoint, scaledBoxes } from './cdp-vision.js';
+import { cssDragPoints, cssPoint } from './cdp-vision.js';
 import { parseRef } from './dom-snapshot.js';
+import { assertActionOrigin } from './action-origin.js';
 import { classifyOrigin } from './origin-policy.js';
 import {
   BrowserDriverError,
@@ -67,7 +64,7 @@ export class CdpDriver implements BrowserDriver {
     await this.disconnect();
     this.port = options.cdpPort ?? 9222;
     this.snapshotSequence = 0;
-    this.sessions = new CdpTargetSessionRegistry(() => this.targets());
+    this.sessions = new CdpTargetSessionRegistry(() => this.targets(), this.port);
     const initial = await this.sessions.connectInitial(options.tabId);
     return {
       sessionId: initial.id,
@@ -138,50 +135,7 @@ export class CdpDriver implements BrowserDriver {
 
   async snapshot(request: SnapshotRequest): Promise<BrowserSnapshotResult> {
     const state = await this.registry().target(request.tabId);
-    state.version = ++this.snapshotSequence;
-    const { url, nodes } = await snapshotDocumentWithRetry(
-      () => this.currentUrl(state),
-      () => state.client.send<{ nodes: AxNode[] }>('Accessibility.getFullAXTree'),
-    );
-    const mapping = axTreeToNodes(nodes, state.version, request.maxNodes);
-    state.backendIds = mapping.backendIds;
-
-    const attributesByIndex = new Map<number, string[]>();
-    for (let index = 0; index < mapping.backendIds.length; index += 1) {
-      try {
-        const described = await state.client.send<{ node: { attributes?: string[] } }>(
-          'DOM.describeNode',
-          { backendNodeId: mapping.backendIds[index] },
-        );
-        attributesByIndex.set(index, described.node.attributes ?? []);
-      } catch {
-        attributesByIndex.set(index, []);
-      }
-    }
-    markCredentialFields(mapping.nodes, attributesByIndex);
-    state.credentialRefs = new Set(
-      mapping.nodes.filter((node) => node.credentialField).map((node) => node.ref),
-    );
-
-    const base = {
-      tabId: state.id,
-      url,
-      originClass: classifyOrigin(url),
-      snapshotVersion: state.version,
-      mode: request.mode,
-      nodes: mapping.nodes,
-      truncated: mapping.truncated,
-    };
-    if (request.mode === 'a11y') return base;
-    const capture = await captureViewport(state.client);
-    // Kept so the coordinate clicks that follow can be put back in CSS pixels.
-    state.visionScale = capture.devicePixelRatio;
-    const boxes = await scaledBoxes(
-      mapping.nodes,
-      (index) => cdpBoxForBackend(state.client, Number(state.backendIds[index])),
-      capture.devicePixelRatio,
-    );
-    return { ...base, ...capture, boxes };
+    return snapshotCdp(state, request, ++this.snapshotSequence, () => this.currentUrl(state));
   }
 
   private resolveIndex(state: CdpTargetState, ref: string): number {
@@ -197,7 +151,10 @@ export class CdpDriver implements BrowserDriver {
 
   async read(request: ReadRequest): Promise<ReadResult> {
     const state = await this.registry().target(request.tabId);
-    return this.readState(state, request);
+    const finishRead = await guardCdpRead(state, () => this.currentUrl(state), request);
+    const result = await this.readState(state, request);
+    await finishRead();
+    return result;
   }
 
   private async readState(state: CdpTargetState, request: Omit<ReadRequest, 'tabId'>) {
@@ -211,8 +168,20 @@ export class CdpDriver implements BrowserDriver {
   async act(actions: BrowserActionInput[], options: ActOptions): Promise<BrowserActionResult[]> {
     const state = await this.registry().target(options.tabId);
     const results: BrowserActionResult[] = [];
+    const version = state.client.documentVersion;
+    const expectedUrl = options.expectedUrl ?? (await this.currentUrl(state));
+    const check = async () => {
+      assertActionOrigin(await this.currentUrl(state), expectedUrl, options.originPolicy);
+      if (state.client.documentVersion !== version)
+        throw new BrowserDriverError(
+          'BROWSER_ORIGIN_BLOCKED',
+          'Document navigated during browser input',
+        );
+    };
+    const client = guardedInputClient(state.client, check);
     for (const action of actions) {
-      const result = await this.perform(state, action);
+      await check();
+      const result = await this.perform(state, action, client);
       results.push(result);
       if (options.stopOnError && !result.ok) break;
     }
@@ -234,8 +203,8 @@ export class CdpDriver implements BrowserDriver {
   private async perform(
     state: CdpTargetState,
     action: BrowserActionInput,
+    client: CdpTargetState['client'],
   ): Promise<BrowserActionResult> {
-    const client = state.client;
     try {
       if (action.op === 'click') {
         const point =
@@ -335,7 +304,10 @@ export class CdpDriver implements BrowserDriver {
 
   async logs(request: LogsRequest): Promise<BrowserLogEntry[]> {
     const state = await this.registry().target(request.tabId);
-    return state.client.drain(request.logKind, request.limit);
+    const finishRead = await guardCdpRead(state, () => this.currentUrl(state), request);
+    const result = state.client.drain(request.logKind, request.limit);
+    await finishRead();
+    return result;
   }
 
   async disconnect(): Promise<void> {

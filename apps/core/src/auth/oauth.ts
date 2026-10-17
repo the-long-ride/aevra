@@ -1,3 +1,4 @@
+import { issueGrantTokens } from './oauth-token-issuance.js';
 import type {
   OAuthAuthorizationRequestRecord,
   OAuthRepository,
@@ -5,6 +6,7 @@ import type {
 import type { VerifiedRemoteIdentity } from './cloudflare.js';
 import {
   listOAuthClients,
+  listPendingOAuthAuthorizations,
   registerOAuthClient,
   type DynamicClientRegistrationInput,
 } from './oauth-clients.js';
@@ -82,6 +84,10 @@ export class AevraOAuthService {
     return listOAuthClients(this.repo);
   }
 
+  deleteClient(id: string) {
+    return this.repo.deleteClient(id);
+  }
+
   beginAuthorization(
     input: AuthorizationRequestInput,
     remoteIp?: string,
@@ -97,6 +103,9 @@ export class AevraOAuthService {
     if (!input.code_challenge || input.code_challenge.length < 43)
       throw new Error('PKCE code_challenge is required');
     const scope = normalizeScope(input.scope);
+    const hadPending = this.repo
+      .listPendingAuthorizationRequests()
+      .some((request) => request.clientId === client.clientId);
     const pending = this.repo.createAuthorizationRequest(
       {
         clientId: client.clientId,
@@ -111,19 +120,21 @@ export class AevraOAuthService {
       },
       this.requestTtlMs,
     );
-    this.audit?.append({
-      actor: `client:${client.clientId}`,
-      operation: 'oauth.authorize.request',
-      target: pending.id,
-      result: 'ok',
-      redactionCount: 0,
-      class: 'security',
-      metadata: {
-        clientId: client.clientId,
-        requestedScope: pending.scope,
-        remoteIp,
-      },
-    });
+    this.repo.trimPendingAuthorizationRequests(client.clientId, 5);
+    if (!hadPending)
+      this.audit?.append({
+        actor: `client:${client.clientId}`,
+        operation: 'oauth.authorize.request',
+        target: pending.id,
+        result: 'ok',
+        redactionCount: 0,
+        class: 'security',
+        metadata: {
+          clientId: client.clientId,
+          requestedScope: pending.scope,
+          remoteIp,
+        },
+      });
     return pending;
   }
 
@@ -133,11 +144,7 @@ export class AevraOAuthService {
   }
 
   listPendingAuthorizations() {
-    return this.repo.listPendingAuthorizationRequests().map((request) => ({
-      ...request,
-      clientName: this.repo.getClient(request.clientId)?.clientName ?? request.clientId,
-      requestedScopes: request.scope.split(/\s+/).filter(Boolean),
-    }));
+    return listPendingOAuthAuthorizations(this.repo);
   }
 
   approveAuthorization(id: string, options?: { renewable?: boolean }) {
@@ -179,7 +186,7 @@ export class AevraOAuthService {
       throw new Error('PKCE code_verifier is invalid');
     if (!safeEqualText(base64urlSha256(input.code_verifier), code.codeChallenge))
       throw new Error('PKCE verification failed');
-    const tokens = this.issueGrantTokens(code);
+    const tokens = issueGrantTokens(this.repo, this.accessTtlMs, this.refreshTtlMs, code);
     this.audit?.append({
       actor: code.actor,
       operation: 'oauth.token.code_exchange',
@@ -310,38 +317,5 @@ export class AevraOAuthService {
 
   getLatestRefreshFamily(subject: string) {
     return this.repo.getLatestRefreshFamily(subject);
-  }
-
-  private issueGrantTokens(grant: {
-    clientId: string;
-    actor: string;
-    subject: string;
-    scope: string;
-    resource: string;
-    renewable?: boolean;
-  }): OAuthTokenResponse {
-    this.repo.ensureConnection(grant);
-    const access = this.repo.issueAccessToken(grant, this.accessTtlMs);
-    const grantedScope =
-      grant.renewable === false
-        ? grant.scope
-            .split(/\s+/)
-            .filter((s) => s !== 'offline_access')
-            .join(' ')
-        : grant.scope;
-    const response: OAuthTokenResponse = {
-      access_token: access.token,
-      token_type: 'Bearer',
-      expires_in: Math.floor(this.accessTtlMs / 1000),
-      scope: grantedScope,
-    };
-    const shouldIssueRefresh =
-      grant.renewable !== undefined
-        ? grant.renewable
-        : grant.scope.split(/\s+/).includes('offline_access');
-    if (shouldIssueRefresh) {
-      response.refresh_token = this.repo.issueRefreshToken(grant, this.refreshTtlMs).token;
-    }
-    return response;
   }
 }

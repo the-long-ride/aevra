@@ -1,3 +1,4 @@
+import type { OriginPolicyConfig } from '../../browser/src/origin-policy.js';
 import type {
   CapabilityRoot,
   CommandInput,
@@ -52,6 +53,11 @@ export interface ProtectedGlob {
   class: 'SENSITIVE' | 'SECRET';
 }
 
+interface BrowserReadGuard {
+  expectedUrl?: string;
+  originPolicy?: Partial<OriginPolicyConfig>;
+}
+
 export type WorkerOperation =
   | { kind: 'file.list'; path: string }
   | {
@@ -87,10 +93,10 @@ export type WorkerOperation =
   | { kind: 'file.delete'; path: string; recursive: boolean }
   | { kind: 'git.status' }
   | { kind: 'git.add'; args: string[] }
-  | { kind: 'git.diff'; args: string[] }
-  | { kind: 'git.log'; args: string[] }
+  | { kind: 'git.diff'; args: string[]; protectedGlobs?: ProtectedGlob[] }
+  | { kind: 'git.log'; args: string[]; protectedGlobs?: ProtectedGlob[] }
   | { kind: 'git.branch'; args: string[] }
-  | { kind: 'git.commit'; message: string; args: string[] }
+  | { kind: 'git.commit'; message: string; args: string[]; protectedGlobs?: ProtectedGlob[] }
   | { kind: 'git.push'; remote?: string; branch?: string; args: string[] }
   | {
       kind: 'command.run';
@@ -119,16 +125,36 @@ export type WorkerOperation =
     }
   | { kind: 'browser.tabs'; action: BrowserTabAction; url?: string; tabId?: string }
   | { kind: 'browser.navigate'; tabId?: string; url: string; waitUntil: 'load' | 'idle' }
-  | { kind: 'browser.snapshot'; tabId?: string; mode: BrowserSnapshotMode; maxNodes: number }
+  | ({
+      kind: 'browser.snapshot';
+      tabId?: string;
+      mode: BrowserSnapshotMode;
+      maxNodes: number;
+    } & BrowserReadGuard)
   | {
       kind: 'browser.read';
+      expectedUrl?: string;
+      originPolicy?: Partial<OriginPolicyConfig>;
       tabId?: string;
       ref?: string;
       selector?: string;
       format: BrowserReadFormat;
     }
-  | { kind: 'browser.act'; tabId?: string; actions: BrowserActionInput[]; stopOnError: boolean }
-  | { kind: 'browser.logs'; tabId?: string; logKind: BrowserLogKind; limit: number; since?: string }
+  | {
+      kind: 'browser.act';
+      tabId?: string;
+      actions: BrowserActionInput[];
+      stopOnError: boolean;
+      expectedUrl?: string;
+      originPolicy?: Partial<OriginPolicyConfig>;
+    }
+  | ({
+      kind: 'browser.logs';
+      tabId?: string;
+      logKind: BrowserLogKind;
+      limit: number;
+      since?: string;
+    } & BrowserReadGuard)
   | {
       kind: 'browser.disconnect';
       epoch?: number;
@@ -155,7 +181,7 @@ export type WorkerOperation =
       mode?: 'foreground' | 'background';
       policy?: DesktopPolicy;
     }
-  | { kind: 'desktop.capture'; windowId?: string }
+  | { kind: 'desktop.capture'; windowId?: string; policy?: DesktopPolicy }
   | {
       kind: 'desktop.act';
       op: 'click' | 'type' | 'key' | 'scroll';

@@ -1,3 +1,4 @@
+import { onceProof } from './once-proof-fixture.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -35,7 +36,7 @@ function ctx(overrides: any = {}) {
       ...overrides.workspaces,
     },
     deps: overrides.deps ?? {},
-    oneTimeCapabilities: new Set<string>(overrides.oneTime ?? []),
+    capabilityApprovalProof: onceProof(overrides.oneTime?.[0]),
     workspaceId: overrides.workspaceId,
   } as any;
 }

@@ -61,7 +61,12 @@ export function installChrome(tabs: FakeTab[], overrides: Record<string, any> = 
     scripting: {
       async executeScript(input: Record<string, unknown>) {
         calls.executeScript!.push(input);
-        return [{ result: 'injected' in overrides ? overrides.injected : { ok: true } }];
+        return [
+          {
+            documentId: 'fixture-document',
+            result: 'injected' in overrides ? overrides.injected : { ok: true },
+          },
+        ];
       },
     },
     windows: {

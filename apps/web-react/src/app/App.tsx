@@ -2,6 +2,7 @@ import { ADMIN_SURFACE, type AdminPageId } from '@aevra/admin-contracts';
 import { useCallback, useRef, useState, type ComponentType } from 'react';
 import { AppShell } from '../components/AppShell';
 import { DialogProvider } from '../components/Dialog';
+import { useDialogEnterKey } from '../components/dialog-enter-key';
 import { AdminAuthGate } from '../features/auth/AdminAuthGate';
 import { AuditPage } from '../features/audit/AuditPage';
 import { AboutPage } from '../features/about/AboutPage';
@@ -41,6 +42,7 @@ function AuthenticatedApp({ theme, onToggleTheme }: { theme: Theme; onToggleThem
   const [approvalModalData, setApprovalModalData] = useState<RequestsData | null>(null);
   const drawerRefreshRef = useRef<(() => Promise<void>) | null>(null);
   const Page = pageRegistry[page];
+  useDialogEnterKey();
 
   const handleNewPending = useCallback((data: RequestsData) => {
     setApprovalModalData(data);

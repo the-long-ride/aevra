@@ -23,5 +23,17 @@ describe('savedShare', () => {
     expect(savedShare(25, 75)).toBe(25);
     expect(savedShare(0, 0)).toBe(0);
     expect(savedShare(0, 10)).toBe(0);
+    expect(savedShare(100, 0)).toBe(100);
+  });
+
+  it('never rounds up to 100 while output was still sent', () => {
+    expect(savedShare(999, 1)).toBe(99);
+  });
+
+  it('ignores negative and non-finite inputs', () => {
+    expect(savedShare(-5, 10)).toBe(0);
+    expect(savedShare(10, -5)).toBe(100);
+    expect(savedShare(Number.POSITIVE_INFINITY, 1)).toBe(0);
+    expect(savedShare(Number.NaN, 1)).toBe(0);
   });
 });

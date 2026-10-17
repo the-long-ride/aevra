@@ -1,43 +1,46 @@
 # Desktop control
 
-Aevra has two desktop-control paths in v1.2.0:
+Aevra has two desktop-control paths in v1.3.0:
 
 - **Shared semantic control** uses native accessibility providers and does not
   synthesize host mouse/keyboard input. It is available on Windows (UIA), macOS
   (Accessibility/AX), and Linux (AT-SPI2).
 - **Legacy foreground control** injects pointer/keyboard input and captures pixels.
-  That path remains Windows-only and is never an automatic fallback from semantic
-  control.
+  Native adapters exist on Windows, macOS 13+, Ubuntu X11, GNOME Wayland and KDE KWin 6.6. They are never an automatic fallback from semantic control. macOS native acceptance is still pending. GNOME Wayland uses an explicitly enabled compositor companion; see [Wayland setup](22-wayland-desktop.md).
 
 Desktop effects are external side effects: a button press cannot be rolled back by
 Aevra's file change-set machinery.
 
 ## Platform matrix
 
-| Platform          | Semantic tree/actions                      | Attribution                                | Pixel capture | Foreground input                         |
-| ----------------- | ------------------------------------------ | ------------------------------------------ | ------------- | ---------------------------------------- |
-| Windows 10/11     | UIA: invoke/value/select/toggle            | yes                                        | yes           | yes, subject to integrity/desktop checks |
-| macOS             | AX: supported provider actions/values      | yes                                        | no in v1.2.0  | no                                       |
-| Linux X11/Wayland | AT-SPI2: supported provider actions/values | yes when provider exposes process identity | no in v1.2.0  | no                                       |
+| Platform             | Semantic tree/actions | Attribution                         | Pixel capture                                       | Foreground input                               |
+| -------------------- | --------------------- | ----------------------------------- | --------------------------------------------------- | ---------------------------------------------- |
+| Windows 10/11        | UIA                   | native process identity             | yes                                                 | integrity/desktop checks                       |
+| macOS 13+            | AX                    | native process identity             | ScreenCaptureKit adapter; native acceptance pending | Accessibility grant; native acceptance pending |
+| Linux X11            | AT-SPI2               | native process identity             | Composite backing pixmap                            | XTest, verified foreground target              |
+| GNOME Wayland        | AT-SPI2               | compositor PID and stable window ID | isolated window actor through companion             | approved helper, verified focus and hit target |
+| KDE KWin 6.6 Wayland | AT-SPI2               | compositor window/PID               | companion; software renderer verified               | explicit grant and guarded virtual devices     |
+| Other Wayland        | AT-SPI2               | provider process identity           | pending                                             | pending                                        |
 
 The helper reports actual capability booleans. Missing macOS Accessibility
 permission, a missing Linux accessibility bus/provider, or an application with
 accessibility disabled is an explicit error, not an empty successful tree.
 
 Strict `isolated` execution is **not** advertised by the ordinary worker.
-v1.2.0 refuses that mode with `CONTROL_ISOLATION_UNAVAILABLE` until a separately
+v1.3.0 refuses that mode with `CONTROL_ISOLATION_UNAVAILABLE` until a separately
 provisioned runner has verified input/focus/clipboard containment. There is no
 silent downgrade to the host desktop.
+
+The [full parity design](../designs/2026-10-15-desktop-full-parity-design.md) is approved and partially implemented. Real isolated-X11 capture/input tests are included. A dedicated macOS fixture is included but needs a Mac with Screen Recording and Accessibility grants. Linux capture/input covers X11 and GNOME Wayland with its [companion setup](22-wayland-desktop.md). Native GNOME 50 acceptance passes; Ubuntu GNOME 46 has a required CI fixture. KWin 6.6 has a native companion with software-rendered acceptance. Native macOS acceptance remains outstanding.
 
 ## Before you start
 
 - Grant `desktop.control` to the exact AI connection in **Dashboard → Connections → connection details**. It is off by default, independent of browser control, and needs no workspace selection. Workspace profiles do not grant it.
 - Use an interactive desktop/session with the OS accessibility provider available.
-- macOS: grant Accessibility permission to the process running Aevra when macOS
-  requests it.
+- macOS 13+: grant Accessibility to the process running Aevra for control, and Screen Recording for capture, in System Settings > Privacy & Security. Permission changes require reconnecting; probes do not open consent dialogs.
 - Linux: run inside the user's graphical session with an accessible AT-SPI bus;
   applications that disable their accessibility bridge cannot be driven
-  semantically.
+  semantically. For pixel capture/input select an X11 session, enable a compositing window manager and XTest, and install runtime libxkbcommon. For GNOME Wayland, install and enable the companion, enable access, approve the actual helper executable path in its panel menu, and reconnect. KDE KWin 6.6 uses its native companion and private helper-path grant; other Wayland compositors remain unsupported; there is no XWayland or privileged `/dev/uinput` fallback.
 - Official packages stage the platform helper under
   `dist/helper/<platform>-<arch>/`. For source development, run
   `npm run build:local` from the repository root (requires Rust/Cargo); this
@@ -180,7 +183,7 @@ retried from that browser.
 the full installed-app inventory to the model. In denylist mode it does not enumerate
 apps because desktop control is not scoped to a selected app list.
 
-The approval dialog itself is outside the desktop action contract. In v1.2.0 long
+The approval dialog itself is outside the desktop action contract. In v1.3.0 long
 command previews are bounded with ellipsis, the dialog body scrolls within the
 viewport, and its action row remains reachable.
 
@@ -196,17 +199,57 @@ viewport, and its action row remains reachable.
 ## Turning it off
 
 Revoke `desktop.control` or call `desktop_disconnect`. Disconnecting invalidates
-live helper state and outstanding native refs. Cancelling a control plan prevents
+live helper state and outstanding native refs. Standalone also rejects late connect completions and pending read results from the invalidated session; reconnect and observe again before using refs. Cancelling a control plan prevents
 future plan steps but does not claim an already-dispatched external action was
 rolled back.
 
 ## Current limits
 
-- Strict isolated runner execution is fail-closed but not provisioned in v1.2.0.
+- Strict isolated runner execution is fail-closed but not provisioned in v1.3.0.
 - Native event/watch streams are not yet used by the public plan adapters; they
   report degraded watch health and perform bounded live refreshes between steps.
-- macOS/Linux shared mode is semantic-only in v1.2.0: no pixel capture and no host
-  input synthesis.
+- Shared semantic actions do not synthesize host input. Explicit capture/input tools have
+  separate native adapters and readiness checks on Windows, macOS 13+, Ubuntu X11,
+  GNOME Wayland and KDE KWin 6.6; see the platform table above. macOS native acceptance
+  and physical-GPU/production approval/lock acceptance remain outstanding.
 - Frames, shadow DOM, and native custom controls may
   require a checkpoint or a different supported interface rather than guessing.
 - Native helper binaries are not code-signed in this release.
+
+## Read and capture policy
+
+Accessibility reads and window captures apply the configured app policy before and after reading. Exact-path grants, including helper-verified WebView host grants, retain their session scope. Unattributed or denied targets return no accessibility content or pixels.
+
+Full-screen capture requires HIGH approval and checks every enumerated window against policy. A protected window appearing during capture causes the image to be discarded. A permitted capture can return `window: null` because it represents the screen rather than a single app.
+
+The Aevra title defense recognizes browser suffixes such as `Aevra - Google Chrome`. Titles remain attacker-controlled and show only the active tab; this check is defense in depth alongside app policy and approvals.
+
+Window screenshots on Windows require a nonuniform `PrintWindow` result. If rendering fails or returns a uniform frame, capture is refused; it never falls back to screen pixels that may include other applications. Screen capture remains a separate policy scope.
+
+## Native capture/input validation
+
+Foreground input carries the exact process/window instance, executable and verified host that passed authorization. The native backend rechecks that target before new effects. Portable typing refreshes the bound accessible field path rather than scanning the desktop per character; focus/field changes stop the operation. A 7.5-second native input budget leaves room within the worker's 10-second helper deadline. A partial action returns `DESKTOP_OUTCOME_UNKNOWN`; observe again before sending more input.
+
+The private X11 backend fixture also checks 280 Unicode characters within that budget, focus revocation before all four input operations, and revocation during typing with no new input delivered to the blocked window. The opt-in macOS fixture includes two editors and a non-key palette; actual macOS runtime acceptance still requires a granted local Mac session.
+
+Run `cargo test --manifest-path helper/Cargo.toml --locked` for helper contracts.
+On Linux, install Xvfb and x11-xkb-utils, then run:
+
+```sh
+cargo test --manifest-path helper/Cargo.toml --locked native_x11_capture_and_input -- --ignored --nocapture
+```
+
+This starts its own display and checks target pixels beneath an occluding sentinel plus actual click/key/wheel events. It never drives the user's open apps. A missing native prerequisite fails the explicit run.
+
+On macOS, compile `helper/tests/fixtures/PortableMacFixture.swift` with `swiftc -framework AppKit`, grant the test host Screen Recording and Accessibility, and set `AEVRA_MAC_FIXTURE` to the resulting executable. Run `cargo test --manifest-path helper/Cargo.toml --locked native_macos_capture_and_input -- --ignored --nocapture`. It verifies real fixture pixels, Unicode text, a Command chord, a click and scrolling. This run has not been performed on the Windows development host.
+
+Portable captures bind a unique native window by PID and exact bounds, recheck its process start time/native identity, and refuse ambiguity. Isolated window captures never substitute a full-screen crop. Images retain the existing capped JPEG wire format; `devicePixelRatio` reflects actual output pixels per logical coordinate. Ref clicks refresh the element and refuse stale, disabled or protected controls. Raw input never backs a failed semantic action.
+
+For the accessible backend fixture, also install python3-gi, gir1.2-gtk-3.0, at-spi2-core and dbus-x11, then run:
+
+```sh
+AEVRA_GTK_FIXTURE="$PWD/helper/tests/fixtures/portable_gtk_fixture.py" \
+dbus-run-session -- cargo test --manifest-path helper/Cargo.toml --locked native_x11_ -- --ignored --nocapture --test-threads=1
+```
+
+That path exercises the actual portable backend, rather than only the capture/input adapters, and checks exact Unicode entry text, selection/replacement with Ctrl+A, live ref clicks, protected-field refusal and window-attributed capture.
