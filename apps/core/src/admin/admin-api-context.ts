@@ -21,16 +21,23 @@ export function createRuntimeApprovalService(
   });
   if (!safeMode) approvals.cancelForRestart();
   approvals.setSessionIdentityResolver((sessionId) => sessions.connectionIdentity(sessionId));
+  approvals.setMultipleSessionsResolver(
+    (ticket) => sessions.hasMultipleSessionsForConnection?.(ticket) ?? false,
+  );
   approvals.setApprovedHandler((ticket) => {
     if (ticket.operation.family === 'workspace:select' && ticket.decisionScope === 'connection') {
       const profileId = String((ticket.payload as any)?.profileId ?? 'read-only');
-      sessions.grantConnectionWorkspace(ticket.sessionId, ticket.workspaceId, profileId);
+      // Pass the ticket, not its session id: a rotating client's requesting
+      // session may be gone by the time the operator approves.
+      sessions.grantConnectionWorkspace(ticket, ticket.workspaceId, profileId);
     }
   });
   return approvals;
 }
 
 export function buildAdminApiContext(input: {
+  agents?: (input: unknown) => Promise<unknown>;
+  stopCore?: () => void;
   workspaces: any;
   approvals: any;
   permissions: any;
@@ -67,6 +74,8 @@ export function buildAdminApiContext(input: {
   commandEvaluator?: (input: any) => Promise<any>;
 }) {
   return {
+    agents: input.agents,
+    stopCore: input.stopCore,
     workspaces: input.workspaces,
     approvals: input.approvals,
     permissions: input.permissions,

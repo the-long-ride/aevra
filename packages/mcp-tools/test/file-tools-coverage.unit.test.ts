@@ -1,3 +1,4 @@
+import { onceProof } from './once-proof-fixture.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleFileTool } from '../src/file-tools.js';
@@ -248,7 +249,7 @@ test('fallback sensitivity blocks secret paths and requires one-time approval fo
   );
 
   const sensitive = fixture({ yolo: true });
-  sensitive.context.oneTimeCapabilities.add(oneTimeKey('s1', 'files.write', '*'));
+  sensitive.context.capabilityApprovalProof = onceProof(oneTimeKey('s1', 'files.write', '*'));
   const result: any = await handleFileTool(sensitive.context, 's1', 'file_write', {
     path: '/.npmrc',
     content: 'registry=x',

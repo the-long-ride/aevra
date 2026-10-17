@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { RiskTier, NormalizedOperation } from '../../../../packages/protocol/src/index.js';
 import type { ApprovalRepository } from '../../../../packages/store/src/approvals.js';
-import type { HostControlIdentity } from '../../../../packages/store/src/host-control-grants.js';
 import type { AuditService } from '../audit/audit-service.js';
 import { notifySystem } from '../../../../packages/notifications/src/notify.js';
 import { recordTicketDecision } from './approval-audit.js';
@@ -14,53 +12,27 @@ import {
   type CallerApprovalIdentity,
 } from './approval-ownership.js';
 
-export type ApprovalState =
-  | 'PENDING'
-  | 'APPROVED'
-  | 'DENIED'
-  | 'EXPIRED'
-  | 'CANCELLED'
-  | 'EXECUTING'
-  | 'CONTEXT_CHANGED'
-  | 'SUCCEEDED'
-  | 'FAILED'
-  | 'INTERRUPTED';
-export interface FrozenOperationTicket {
-  id: string;
-  actor: string;
-  sessionId: string;
-  workspaceId: string;
-  scope?: 'workspace' | 'host';
-  identity?: HostControlIdentity;
-  operation: NormalizedOperation;
-  payload?: unknown;
-  expectedState: Record<string, string>;
-  risk: RiskTier;
-  state: ApprovalState;
-  expiresAt: string;
-  createdAt?: string;
-  cancellationReason?: string;
-  decisionScope?: string;
-  connectionId?: string;
-  connectionSubject?: string;
-}
-export interface ApprovalConfig {
-  fastWaitMs: number;
-  lifetimeMs: number;
-  lifetimeByRiskMs: Partial<Record<RiskTier, number>>;
-}
-export type ResumeRevalidator = (
-  ticket: FrozenOperationTicket,
-) => Promise<{ ok: true } | { ok: false; reason: string }>;
-export type ApprovedHandler = (ticket: FrozenOperationTicket) => void;
-export type SessionIdentityResolver = (
-  sessionId: string,
-) => { actor: string; subject: string; connectionId?: string } | null;
+export type {
+  ApprovalConfig,
+  ApprovalState,
+  ApprovedHandler,
+  FrozenOperationTicket,
+  ResumeRevalidator,
+  SessionIdentityResolver,
+} from './approval-types.js';
+import type {
+  ApprovalConfig,
+  ApprovedHandler,
+  FrozenOperationTicket,
+  ResumeRevalidator,
+  SessionIdentityResolver,
+} from './approval-types.js';
 
 export class ApprovalService {
   private approvedHandlers: ApprovedHandler[] = [];
   private beforeApprovedHandlers: ApprovedHandler[] = [];
   private sessionIdentityResolver?: SessionIdentityResolver;
+  private multipleSessionsResolver?: (ticket: FrozenOperationTicket) => boolean;
   private volatilePayloads = new Map<string, unknown>();
   constructor(
     private repo: ApprovalRepository,
@@ -79,6 +51,9 @@ export class ApprovalService {
   }
   setSessionIdentityResolver(resolver: SessionIdentityResolver) {
     this.sessionIdentityResolver = resolver;
+  }
+  setMultipleSessionsResolver(resolver: (ticket: FrozenOperationTicket) => boolean) {
+    this.multipleSessionsResolver = resolver;
   }
 
   private record(ticket: FrozenOperationTicket, decision: string, result: string) {
@@ -150,11 +125,23 @@ export class ApprovalService {
   }
 
   list() {
+    // The rotation hint only accompanies a pending admission, so the session
+    // scan is skipped for every other ticket, including decided history.
+    const memo = new Map<string, boolean>();
+    const resolveHasMultiple = (ticket: FrozenOperationTicket) => {
+      if (ticket.state !== 'PENDING' || ticket.operation.family !== 'workspace:select')
+        return false;
+      const key = `${ticket.connectionId}:${ticket.sessionId}`;
+      if (!memo.has(key)) memo.set(key, Boolean(this.multipleSessionsResolver?.(ticket)));
+      return memo.get(key)!;
+    };
     return (this.repo.list().filter(Boolean) as FrozenOperationTicket[]).map((ticket) => {
       const current = this.status(ticket.id) ?? ticket;
       return {
         ...current,
-        presentation: presentApproval(current),
+        presentation: presentApproval(current, {
+          connectionHasMultipleSessions: resolveHasMultiple(current),
+        }),
       };
     });
   }
@@ -276,6 +263,9 @@ export class ApprovalService {
     const t = this.withVolatilePayload(stored);
     const valid = await revalidate(t);
     if (!valid.ok) {
+      if (valid.code === 'APPROVAL_SCOPE_MISMATCH') {
+        throw Object.assign(new Error(valid.reason), { code: 'APPROVAL_SCOPE_MISMATCH' });
+      }
       if (
         valid.reason === 'OAuth connection changed' ||
         valid.reason === 'session changed' ||

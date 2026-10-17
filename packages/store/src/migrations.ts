@@ -1,3 +1,4 @@
+import { migrateOAuthActors } from './migrations/oauth-actor-origin.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { controlPlanDesktopMigrations } from './migrations/control-plan-desktop.js';
 import { gatewayFoundationMigrations } from './migrations/gateway-foundation.js';
@@ -5,12 +6,18 @@ import { hostControlMigrations } from './migrations/host-control.js';
 import { tokenUsageMigrations } from './migrations/token-usage.js';
 import { upstreamAuthPolicyMigrations } from './migrations/upstream-auth-policy.js';
 
-export const migrations = [
+export const migrations: Array<{
+  version: number;
+  name: string;
+  sql: string;
+  apply?: (db: DatabaseSync) => void;
+}> = [
   ...gatewayFoundationMigrations,
   ...upstreamAuthPolicyMigrations,
   ...controlPlanDesktopMigrations,
   ...hostControlMigrations,
   ...tokenUsageMigrations,
+  { version: 26, name: '026_oauth_actor_origin', sql: '', apply: migrateOAuthActors },
 ];
 export function applyMigrations(db: DatabaseSync) {
   db.exec(
@@ -21,7 +28,8 @@ export function applyMigrations(db: DatabaseSync) {
     if (row) continue;
     db.exec('BEGIN IMMEDIATE');
     try {
-      db.exec(m.sql);
+      if (m.sql) db.exec(m.sql);
+      m.apply?.(db);
       db.prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)').run(
         m.version,
         m.name,

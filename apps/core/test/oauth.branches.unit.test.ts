@@ -11,6 +11,8 @@ function fakeRepo(overrides: Record<string, any> = {}) {
   const calls: string[] = [];
   const repo: any = {
     calls,
+    listClients: () => [],
+    trimPendingAuthorizationRequests: () => 0,
     getClient: (id: string) =>
       id === 'c1'
         ? { clientId: 'c1', clientName: 'Client One', redirectUris: ['https://app/cb'] }
@@ -94,8 +96,8 @@ test('pending authorization listing falls back to the client id when the client 
   const oauth = service(
     fakeRepo({
       listPendingAuthorizationRequests: () => [
-        { id: 'r1', clientId: 'c1', scope: 'mcp  offline_access' },
-        { id: 'r2', clientId: 'ghost', scope: 'mcp' },
+        { id: 'r1', clientId: 'c1', redirectUri: 'https://app/cb', scope: 'mcp  offline_access' },
+        { id: 'r2', clientId: 'ghost', redirectUri: 'https://app/cb', scope: 'mcp' },
       ],
     }),
   );

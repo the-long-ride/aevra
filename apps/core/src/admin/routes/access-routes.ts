@@ -44,6 +44,17 @@ export const handleAccessRoutes: AdminRouteHandler = async (req, res, url, conte
     return true;
   }
 
+  const clientDelete = path.match(/^\/api\/oauth\/clients\/([^/]+)$/);
+  if (clientDelete && method === 'DELETE') {
+    const outcome = context.oauth?.deleteClient?.(decodeURIComponent(clientDelete[1]));
+    sendAdminResponse(
+      res,
+      outcome === 'deleted' ? 200 : outcome === 'active_connections' ? 409 : 404,
+      { outcome },
+    );
+    return true;
+  }
+
   if (path === '/api/oauth/requests' && method === 'GET') {
     sendAdminResponse(res, 200, context.oauth?.listPendingAuthorizations?.() ?? []);
     return true;

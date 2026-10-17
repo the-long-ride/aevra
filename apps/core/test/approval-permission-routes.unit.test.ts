@@ -33,10 +33,11 @@ function fixture() {
       const a = approvalsStore.get(id);
       return a ? { ...a } : null;
     },
-    approve: (id: string, _scope: string) => {
+    approve: (id: string, scope: string) => {
       const a = approvalsStore.get(id);
       if (!a) throw new Error('not found');
       a.state = 'APPROVED';
+      a.decisionScope = scope;
       return a;
     },
     deny: (id: string) => {
@@ -279,4 +280,46 @@ test('approval routes: approve and deny actions', async () => {
   assert.equal(networkRule?.scope, 'workspace');
   assert.equal(networkRule?.matcher, 'domain:registry.npmjs.org');
   assert.equal(networkRule?.version, undefined);
+});
+
+test('approval routes: workspace:select connection scope only accepted for oauth actors', async () => {
+  const { context, approvalsStore } = fixture();
+
+  // Connector actor requesting connection scope -> downgraded to once
+  approvalsStore.set('a_connector', {
+    id: 'a_connector',
+    state: 'PENDING',
+    actor: 'connector:slack',
+    sessionId: 's_conn',
+    workspaceId: 'w1',
+    operation: { family: 'workspace:select', capability: 'files.read', risk: 'LOW' },
+  });
+  const resConnector = response();
+  await handleApprovalPermissionRoutes(
+    request('POST', { scope: 'connection' }),
+    resConnector,
+    new URL('https://localhost/api/approvals/a_connector/approve'),
+    context,
+  );
+  assert.equal(resConnector.statusCode, 200);
+  assert.equal(approvalsStore.get('a_connector').decisionScope, 'once');
+
+  // OAuth actor requesting connection scope -> accepted as connection
+  approvalsStore.set('a_oauth', {
+    id: 'a_oauth',
+    state: 'PENDING',
+    actor: 'oauth:chatgpt',
+    sessionId: 's_oauth',
+    workspaceId: 'w1',
+    operation: { family: 'workspace:select', capability: 'files.read', risk: 'LOW' },
+  });
+  const resOauth = response();
+  await handleApprovalPermissionRoutes(
+    request('POST', { scope: 'connection' }),
+    resOauth,
+    new URL('https://localhost/api/approvals/a_oauth/approve'),
+    context,
+  );
+  assert.equal(resOauth.statusCode, 200);
+  assert.equal(approvalsStore.get('a_oauth').decisionScope, 'connection');
 });

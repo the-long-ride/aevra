@@ -1,6 +1,13 @@
 import { loadCoreConfig } from './config.js';
 import { createCoreRuntime } from './runtime.js';
 
+process.on('unhandledRejection', (error: unknown) => {
+  console.error(
+    '[aevra] Unhandled asynchronous failure',
+    error instanceof Error ? error.name : 'unknown',
+  );
+});
+
 try {
   const runtime = await createCoreRuntime(loadCoreConfig());
   await runtime.start();

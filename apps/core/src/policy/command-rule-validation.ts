@@ -79,6 +79,8 @@ export function validateCommandRuleV2(value: unknown): CommandRuleValidation {
     return { ok: false, message: 'scriptFingerprint must be a string' };
   }
 
+  if (rule.explicitEnvFingerprint !== undefined && typeof rule.explicitEnvFingerprint !== 'string')
+    return { ok: false, message: 'explicitEnvFingerprint must be a string' };
   return { ok: true, value: value as CommandRuleV2 };
 }
 

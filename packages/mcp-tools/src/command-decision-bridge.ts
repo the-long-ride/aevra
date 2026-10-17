@@ -1,3 +1,4 @@
+import { explicitEnvironmentFingerprint } from './command-environment-binding.js';
 import { createHash } from 'node:crypto';
 import type {
   AnalysisContext,
@@ -7,7 +8,7 @@ import type {
   CommandRequest,
 } from '../../protocol/src/command-analysis.js';
 import { analyzeCommand } from '../../command-analysis/src/analyze.js';
-import { buildChildEnvironment } from '../../security/src/environment.js';
+import { buildChildEnvironment, environmentNeedsApproval } from '../../security/src/environment.js';
 import { decideCommand } from '../../../apps/core/src/policy/command-decision.js';
 import { maxRisk, oneTimeAllowed, requiredLease } from './service-helpers.js';
 import { createAnalysisServices } from './command-analysis-services.js';
@@ -114,6 +115,16 @@ export async function evaluateAndDecideCommand(
     input.commandRequest.env ?? {},
   );
   const analysis = await analyzeCommand(input.commandRequest, analysisContext, services);
+  const explicitEnv = input.commandRequest.env ?? {};
+  const envKeys = Object.keys(explicitEnv).sort();
+  if (envKeys.length) {
+    const fingerprint = explicitEnvironmentFingerprint(explicitEnv, platform);
+    for (const node of analysis.nodes) {
+      node.explicitEnvFingerprint = fingerprint;
+      if (environmentNeedsApproval(explicitEnv))
+        node.risk = maxRisk(node.risk as import('../../protocol/src/index.js').RiskTier, 'HIGH');
+    }
+  }
   if (input.riskFloor) {
     for (const node of analysis.nodes) {
       node.risk = maxRisk(

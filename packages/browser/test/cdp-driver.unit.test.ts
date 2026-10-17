@@ -42,7 +42,7 @@ test('CdpDriver retries a transient ERR_ABORTED navigation', async () => {
             type: 'page',
             url: 'about:blank',
             title: '',
-            webSocketDebuggerUrl: socket.url,
+            webSocketDebuggerUrl: socket.via(control!),
           },
         ]),
       );
@@ -110,14 +110,14 @@ test('CdpDriver pins an explicit tabId to that target without activating the ini
             type: 'page',
             url: 'https://first.example/',
             title: 'First',
-            webSocketDebuggerUrl: first.url,
+            webSocketDebuggerUrl: first.via(control!),
           },
           {
             id: 'page-2',
             type: 'page',
             url: 'https://second.example/',
             title: 'Second',
-            webSocketDebuggerUrl: second.url,
+            webSocketDebuggerUrl: second.via(control!),
           },
         ]),
       );

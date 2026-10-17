@@ -1,3 +1,4 @@
+import { loginCookie } from './admin-session-fixture.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import https from 'node:https';
@@ -31,10 +32,10 @@ function worker() {
   };
 }
 
-function getJson(url: string): Promise<any> {
+function getJson(url: string, cookie?: string): Promise<any> {
   return new Promise((resolve, reject) => {
     https
-      .get(url, { rejectUnauthorized: false }, (response) => {
+      .get(url, { rejectUnauthorized: false, headers: cookie ? { cookie } : {} }, (response) => {
         const chunks: Buffer[] = [];
         response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
         response.on('end', () => {
@@ -263,9 +264,10 @@ test('runtime health exposes live tunnel reachability for configured remote expo
 
   try {
     await runtime.start();
+    const cookie = await loginCookie(runtime.adminUrl!, 'admin', plainPhrase1);
     let health: any;
     for (let attempt = 0; attempt < 10; attempt++) {
-      health = await getJson(`${runtime.adminUrl}/api/health`);
+      health = await getJson(`${runtime.adminUrl}/api/status`, cookie);
       if (health.tunnelReachable === true) break;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }

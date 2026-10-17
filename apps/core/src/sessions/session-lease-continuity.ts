@@ -203,33 +203,50 @@ export function findMatchingConnectionLeases(input: {
   );
 }
 
-export function disconnectSessionImmediate(input: {
-  sessionId: string;
-  rememberIdentity: boolean;
+export interface SessionContext {
   sessions: Map<string, SecuritySession>;
-  disconnectedIdentities: Map<string, { actor: string; subject: string; connectionId?: string }>;
+  disconnectedIdentities: Map<string, DisconnectedIdentity>;
   leaseRows: Map<string, WorkspaceLease>;
   yoloSessions: Set<string>;
   pendingRememberedRestore: Set<string>;
-  connections?: { forgetSession(sessionId: string): void };
-  revokeLease: (id: string) => void;
-}) {
-  const session = input.sessions.get(input.sessionId);
-  if (input.rememberIdentity && session) {
-    input.disconnectedIdentities.set(input.sessionId, {
+  connections?: ConnectionStateStore;
+  repo: SessionRepository;
+  reconnectGraceMs: number;
+  clock?: Clock;
+}
+
+export function disconnectSessionImmediate(
+  ctx: Pick<
+    SessionContext,
+    | 'sessions'
+    | 'disconnectedIdentities'
+    | 'leaseRows'
+    | 'yoloSessions'
+    | 'pendingRememberedRestore'
+    | 'connections'
+    | 'clock'
+  >,
+  sessionId: string,
+  rememberIdentity: boolean,
+  revokeLease: (id: string) => void,
+) {
+  const session = ctx.sessions.get(sessionId);
+  if (rememberIdentity && session) {
+    ctx.disconnectedIdentities.set(sessionId, {
       actor: session.actor,
       subject: session.subject,
       ...(session.connectionId ? { connectionId: session.connectionId } : {}),
+      disconnectedAt: (ctx.clock?.now() ?? new Date()).toISOString(),
     });
-  } else if (!input.rememberIdentity) {
-    input.disconnectedIdentities.delete(input.sessionId);
+  } else if (!rememberIdentity) {
+    ctx.disconnectedIdentities.delete(sessionId);
   }
-  const leases = [...input.leaseRows.values()].filter((l) => l.sessionId === input.sessionId);
-  for (const lease of leases) input.revokeLease(lease.id);
-  input.yoloSessions.delete(input.sessionId);
-  input.pendingRememberedRestore.delete(input.sessionId);
-  input.sessions.delete(input.sessionId);
-  input.connections?.forgetSession(input.sessionId);
+  const leases = [...ctx.leaseRows.values()].filter((l) => l.sessionId === sessionId);
+  for (const lease of leases) revokeLease(lease.id);
+  ctx.yoloSessions.delete(sessionId);
+  ctx.pendingRememberedRestore.delete(sessionId);
+  ctx.sessions.delete(sessionId);
+  ctx.connections?.forgetSession(sessionId);
 }
 
 export function invalidateWorkspaceAccess(input: {
@@ -245,46 +262,40 @@ export function invalidateWorkspaceAccess(input: {
   input.repo.forgetWorkspaceGrants?.(input.workspaceId);
 }
 
-export function detachSession(input: {
-  sessionId: string;
-  sessions: Map<string, SecuritySession>;
-  disconnectedIdentities: Map<string, DisconnectedIdentity>;
-  connections?: ConnectionStateStore;
-  repo: SessionRepository;
-  yoloSessions: Set<string>;
-  pendingRememberedRestore: Set<string>;
-  reconnectGraceMs: number;
-  disconnectImmediate: (sessionId: string, rememberIdentity: boolean) => void;
-}) {
-  const session = input.sessions.get(input.sessionId);
+export function detachSession(
+  ctx: SessionContext,
+  sessionId: string,
+  revokeLease: (id: string) => void,
+) {
+  const session = ctx.sessions.get(sessionId);
   if (!session) return;
-  if (session.actor.startsWith('oauth:') && session.connectionId && input.connections) {
-    input.disconnectedIdentities.set(input.sessionId, {
+  if (session.actor.startsWith('oauth:') && session.connectionId && ctx.connections) {
+    ctx.disconnectedIdentities.set(sessionId, {
       actor: session.actor,
       subject: session.subject,
       connectionId: session.connectionId,
+      disconnectedAt: (ctx.clock?.now() ?? new Date()).toISOString(),
     });
-    input.connections.detach(input.sessionId, input.reconnectGraceMs);
-    input.repo.detach(input.sessionId);
-    input.yoloSessions.delete(input.sessionId);
-    input.pendingRememberedRestore.delete(input.sessionId);
-    input.sessions.delete(input.sessionId);
+    ctx.connections.detach(sessionId, ctx.reconnectGraceMs);
+    ctx.repo.detach(sessionId);
+    ctx.yoloSessions.delete(sessionId);
+    ctx.pendingRememberedRestore.delete(sessionId);
+    ctx.sessions.delete(sessionId);
     return;
   }
-  input.disconnectImmediate(input.sessionId, session.actor.startsWith('oauth:'));
+  disconnectSessionImmediate(ctx, sessionId, session.actor.startsWith('oauth:'), revokeLease);
 }
 
-export function expireGraceSessionConnections(input: {
-  connections?: ConnectionStateStore;
-  disconnectedIdentities: Map<string, DisconnectedIdentity>;
-  disconnectImmediate: (sessionId: string, rememberIdentity: boolean) => void;
-}) {
-  if (!input.connections) return;
-  const expired = new Set(input.connections.expireGraceConnections());
+export function expireGraceSessionConnections(
+  ctx: Pick<SessionContext, 'connections' | 'disconnectedIdentities'>,
+  disconnectImmediate: (sessionId: string, rememberIdentity: boolean) => void,
+) {
+  if (!ctx.connections) return;
+  const expired = new Set(ctx.connections.expireGraceConnections());
   if (!expired.size) return;
-  for (const [sessionId, identity] of [...input.disconnectedIdentities]) {
+  for (const [sessionId, identity] of [...ctx.disconnectedIdentities]) {
     if (identity.connectionId && expired.has(identity.connectionId)) {
-      input.disconnectImmediate(sessionId, false);
+      disconnectImmediate(sessionId, false);
     }
   }
 }

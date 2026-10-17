@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AdminCredentialVerifier } from '../admin-credentials.js';
 import type { AdminBootstrapService } from '../bootstrap.js';
 import type { LoginLockoutEvent, LoginThrottle } from '../login-throttle.js';
+import { KnownDevices, DEVICE_COOKIE } from '../known-devices.js';
 import { sendAdminResponse } from './http.js';
 
 const LOGIN_BODY_LIMIT = 8 * 1024;
@@ -13,6 +14,8 @@ export interface AdminAuthRouteContext {
   credentialVerifier?: AdminCredentialVerifier;
   loginThrottle: LoginThrottle;
   sessionId?: string;
+  devices?: KnownDevices;
+  deviceId?: string;
   secure: boolean;
   allowLocalHttpPassword?: boolean;
   sameOrigin: boolean;
@@ -105,7 +108,8 @@ export async function handleAuthRoutes(
     const username = typeof body.username === 'string' ? body.username : '';
     const password = typeof body.password === 'string' ? body.password : '';
 
-    const attempt = context.loginThrottle.begin(context.clientIp, username);
+    const deviceBucket = context.devices?.bucket(context.deviceId);
+    const attempt = context.loginThrottle.begin(deviceBucket ?? context.clientIp, username);
     if (!attempt.allowed) {
       response.setHeader('retry-after', String(attempt.retryAfterSeconds));
       sendAdminResponse(response, 429, { error: 'Too many login attempts' });
@@ -131,6 +135,15 @@ export async function handleAuthRoutes(
 
     const session = await context.sessions.issueSession();
     setSessionCookie(response, session.sessionId, context.secure);
+    if (context.devices && !deviceBucket) {
+      const sessionCookie =
+        response.getHeader?.('set-cookie') ??
+        `${ADMIN_COOKIE}=${encodeURIComponent(session.sessionId)}; ${cookieAttributes(context.secure)}`;
+      response.setHeader('set-cookie', [
+        String(sessionCookie),
+        `${DEVICE_COOKIE}=${encodeURIComponent(context.devices.issue())}; ${cookieAttributes(context.secure).replace('Path=/', 'Path=/api/auth')}; Max-Age=${context.devices.maxAgeSeconds}`,
+      ]);
+    }
     sendAdminResponse(response, 200, { authenticated: true });
     return true;
   }

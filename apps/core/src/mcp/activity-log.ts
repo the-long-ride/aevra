@@ -5,7 +5,7 @@ import { boundedClone } from './activity-bounds.js';
 export type McpActivityKind = 'tool' | 'rpc' | 'session';
 export type McpActivityState = 'running' | 'success' | 'error';
 
-const MAX_ACTIVITY_DETAIL_CHARS = 12_000;
+const MAX_ACTIVITY_DETAIL_CHARS = 50_000;
 
 function activityDetail(value: unknown): string | undefined {
   if (value === undefined) return undefined;

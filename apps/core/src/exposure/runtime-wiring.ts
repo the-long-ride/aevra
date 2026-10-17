@@ -105,6 +105,10 @@ export class RuntimeExposureWiring {
       targets: { adminUrl, mcpUrl },
       upstreamCa: this.tls.certificatePem,
       gatewayTrustSecret: this.gatewayTrustSecret,
+      allowedOrigins: () =>
+        [this.publicUrl(), this.controller.currentConfig().publicUrl, this.adminPublicUrl()].filter(
+          (url): url is string => Boolean(url),
+        ),
       // Local-only keeps serving the Admin UI on the gateway as before. Once a
       // public exposure provider is active, Admin is reachable through the gateway
       // only if the operator deliberately published an adminPublicUrl.

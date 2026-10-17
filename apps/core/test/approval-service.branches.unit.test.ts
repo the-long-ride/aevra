@@ -61,6 +61,7 @@ test('workspace select requests reuse an approved or pending ticket from the sam
   const approved = seed(repo, {
     operation: selectOp,
     state: 'APPROVED',
+    decisionScope: 'connection',
     connectionSubject: 'sub-1',
   });
   const input = {

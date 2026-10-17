@@ -1,18 +1,19 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { readdir, readFile, stat, writeFile, mkdir, rename, rm } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { CapabilityRoot } from '../../protocol/src/index.js';
 import type { ProtectedGlob } from '../../protocol/src/worker.js';
 import { resolveCapabilityPath } from '../../security/src/path-policy.js';
+import { maskSensitiveFile, type Sensitivity } from '../../security/src/sensitive.js';
+import { compileProtectedGlobs } from './protected-globs.js';
+
 import {
-  classifySensitivity,
-  maskSensitiveFile,
-  maxSensitivity,
-  type Sensitivity,
-} from '../../security/src/sensitive.js';
-import { compileProtectedGlobs, type CompiledProtection } from './protected-globs.js';
+  denySecret,
+  effectiveSensitivity,
+  buildHardLinkSensitivityIndex,
+} from './file-sensitivity.js';
 
 const MAX_FULL_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_RANGE_READ_CHARACTERS = 1024 * 1024;
@@ -23,119 +24,6 @@ function sha256(data: Buffer | string) {
 
 function rangeHash(data: Buffer | string) {
   return createHash('sha256').update(data).digest('hex');
-}
-
-function denySecret(pathValue: string): never {
-  throw Object.assign(
-    new Error(`Protected secret resource cannot be accessed remotely: ${pathValue}`),
-    {
-      code: 'CAPABILITY_REQUIRED',
-    },
-  );
-}
-
-function inodeKey(info: { dev: number; ino: number }) {
-  return `${info.dev}:${info.ino}`;
-}
-
-function logicalForRoot(root: CapabilityRoot, fullPath: string) {
-  const relative = path.relative(root.hostRoot, fullPath).split(path.sep).join('/');
-  const prefix = ('/' + root.logicalPrefix.replaceAll('\\', '/'))
-    .replace(/\/+/g, '/')
-    .replace(/\/$/, '');
-  return `${prefix === '/' ? '' : prefix}/${relative}`.replace(/\/+/g, '/') || '/';
-}
-
-async function buildHardLinkSensitivityIndex(
-  roots: CapabilityRoot[],
-  userPatterns?: CompiledProtection,
-) {
-  const index = new Map<string, Sensitivity>();
-  for (const root of roots) {
-    const walk = async (dir: string) => {
-      let entries;
-      try {
-        entries = await readdir(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          await walk(full);
-          continue;
-        }
-        if (!entry.isFile()) continue;
-        let info;
-        try {
-          info = await stat(full);
-        } catch {
-          continue;
-        }
-        if (info.nlink <= 1) continue;
-        const key = inodeKey(info);
-        const sensitivity = classifySensitivity({
-          path: logicalForRoot(root, full),
-          ...(userPatterns ? { userPatterns } : {}),
-        });
-        index.set(key, maxSensitivity(index.get(key) ?? 'NORMAL', sensitivity));
-      }
-    };
-    await walk(root.hostRoot);
-  }
-  return index;
-}
-
-async function effectiveSensitivity(
-  logicalPath: string,
-  canonicalHostPath: string,
-  roots: CapabilityRoot[],
-  info?: { dev: number; ino: number; nlink: number } | null,
-  hardLinkIndex?: Map<string, Sensitivity>,
-  userPatterns?: CompiledProtection,
-) {
-  const extra = userPatterns ? { userPatterns } : {};
-  let sensitivity = maxSensitivity(
-    classifySensitivity({ path: logicalPath, ...extra }),
-    classifySensitivity({ path: canonicalHostPath, ...extra }),
-  );
-  if (info && info.nlink > 1) {
-    const index = hardLinkIndex ?? (await buildHardLinkSensitivityIndex(roots, userPatterns));
-    sensitivity = maxSensitivity(sensitivity, index.get(inodeKey(info)) ?? 'NORMAL');
-  }
-  return sensitivity;
-}
-
-async function existingInfo(file: string) {
-  try {
-    return await stat(file);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
-  }
-}
-
-// Mutations are authorized against the manifest by `SecurityGuard` on the core
-// side, which holds the compiled patterns already; this check stays on the
-// built-in rules deliberately, as the second opinion that does not depend on
-// anything the caller supplied.
-async function assertMutationAllowed(
-  logicalPath: string,
-  canonicalHostPath: string,
-  roots: CapabilityRoot[],
-) {
-  const requested = classifySensitivity({ path: logicalPath });
-  const info = await existingInfo(canonicalHostPath);
-  const effective = await effectiveSensitivity(logicalPath, canonicalHostPath, roots, info);
-  if (effective === 'SECRET') denySecret(logicalPath);
-  if (effective === 'SENSITIVE' && requested === 'NORMAL') {
-    throw Object.assign(
-      new Error(
-        `Sensitive alias requires its classified path and one-time approval: ${logicalPath}`,
-      ),
-      { code: 'CAPABILITY_REQUIRED' },
-    );
-  }
 }
 
 async function readUtf8Range(file: string, offset: number, requestedLength: number) {
@@ -281,53 +169,4 @@ export async function fileSearch(
   return { hits };
 }
 
-export async function fileCreate(
-  logicalPath: string,
-  content: string,
-  roots: CapabilityRoot[],
-  encoding: 'utf8' | 'base64' = 'utf8',
-) {
-  const r = await resolveCapabilityPath(logicalPath, roots, 'write');
-  await assertMutationAllowed(r.logicalPath, r.canonicalHostPath, roots);
-  await mkdir(path.dirname(r.canonicalHostPath), { recursive: true });
-  await writeFile(
-    r.canonicalHostPath,
-    encoding === 'base64' ? Buffer.from(content, 'base64') : content,
-    { flag: 'wx' },
-  );
-  const buffer = await readFile(r.canonicalHostPath);
-  return { path: r.logicalPath, hash: sha256(buffer) };
-}
-
-export async function fileWrite(
-  logicalPath: string,
-  content: string,
-  roots: CapabilityRoot[],
-  encoding: 'utf8' | 'base64' = 'utf8',
-) {
-  const r = await resolveCapabilityPath(logicalPath, roots, 'write');
-  await assertMutationAllowed(r.logicalPath, r.canonicalHostPath, roots);
-  await mkdir(path.dirname(r.canonicalHostPath), { recursive: true });
-  const temp = `${r.canonicalHostPath}.aevra-${process.pid}-${Date.now()}.tmp`;
-  await writeFile(temp, encoding === 'base64' ? Buffer.from(content, 'base64') : content);
-  await rename(temp, r.canonicalHostPath);
-  const buffer = await readFile(r.canonicalHostPath);
-  return { path: r.logicalPath, hash: sha256(buffer) };
-}
-
-export async function fileMove(from: string, to: string, roots: CapabilityRoot[]) {
-  const source = await resolveCapabilityPath(from, roots, 'write');
-  const target = await resolveCapabilityPath(to, roots, 'write');
-  await assertMutationAllowed(source.logicalPath, source.canonicalHostPath, roots);
-  await assertMutationAllowed(target.logicalPath, target.canonicalHostPath, roots);
-  await mkdir(path.dirname(target.canonicalHostPath), { recursive: true });
-  await rename(source.canonicalHostPath, target.canonicalHostPath);
-  return { from: source.logicalPath, to: target.logicalPath };
-}
-
-export async function fileDelete(logicalPath: string, recursive: boolean, roots: CapabilityRoot[]) {
-  const r = await resolveCapabilityPath(logicalPath, roots, 'write');
-  await assertMutationAllowed(r.logicalPath, r.canonicalHostPath, roots);
-  await rm(r.canonicalHostPath, { recursive, force: false });
-  return { path: r.logicalPath, deleted: true };
-}
+export { fileCreate, fileWrite, fileMove, fileDelete } from './file-mutations.js';

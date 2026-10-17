@@ -1,6 +1,7 @@
 import type { BrowserBox, BrowserSnapshotNode } from '../../protocol/src/browser.js';
 
 export interface SnapshotElementLike {
+  documentId?: string;
   elementId?: string;
   tagName: string;
   attributes: Record<string, string>;
@@ -121,6 +122,29 @@ export function buildSnapshot(
 }
 
 export class RefRegistry {
+  documentId?: string;
+  target?: { tabId: string; url: string };
+
+  fork(): RefRegistry {
+    const staged = new RefRegistry();
+    staged.currentVersion = this.currentVersion;
+    return staged;
+  }
+
+  adopt(staged: RefRegistry) {
+    this.currentVersion = staged.currentVersion;
+    this.elements = staged.elements;
+    this.credential = staged.credential;
+    this.documentId = staged.documentId;
+    this.target = staged.target;
+  }
+
+  invalidate() {
+    this.record({ version: this.currentVersion + 1, nodes: [], elements: [], truncated: false });
+    this.target = undefined;
+    this.documentId = undefined;
+  }
+
   private currentVersion = 0;
   private elements: SnapshotElementLike[] = [];
   private credential = new Set<string>();

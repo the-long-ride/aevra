@@ -327,7 +327,7 @@ test('logs drain the console and network events the page pushed', async () => {
     });
     fake.handlers['Page.getNavigationHistory'] = () => ({
       currentIndex: 0,
-      entries: [{ url: 'x' }],
+      entries: [{ url: 'https://example.com/' }],
     });
     // A request/response round trip orders the pushed events before the drain.
     await driver.read({ format: 'text' });

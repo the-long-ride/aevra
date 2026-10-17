@@ -1,3 +1,5 @@
+import type { BrowserReadGuard } from './action-origin.js';
+import type { OriginPolicyConfig } from './origin-policy.js';
 import type {
   BrowserActionInput,
   BrowserActionResult,
@@ -37,13 +39,13 @@ export interface NavigateResult {
   redirected: boolean;
 }
 
-export interface SnapshotRequest {
+export interface SnapshotRequest extends BrowserReadGuard {
   tabId?: string;
   mode: BrowserSnapshotMode;
   maxNodes: number;
 }
 
-export interface ReadRequest {
+export interface ReadRequest extends BrowserReadGuard {
   tabId?: string;
   ref?: string;
   selector?: string;
@@ -57,11 +59,14 @@ export interface ReadResult {
 }
 
 export interface ActOptions {
+  expectedDocumentId?: string;
+  expectedUrl?: string;
+  originPolicy?: Partial<OriginPolicyConfig>;
   tabId?: string;
   stopOnError: boolean;
 }
 
-export interface LogsRequest {
+export interface LogsRequest extends BrowserReadGuard {
   tabId?: string;
   logKind: BrowserLogKind;
   limit: number;

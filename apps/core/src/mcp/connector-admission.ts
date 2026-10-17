@@ -1,3 +1,4 @@
+import { IpRateLimiter } from './rate-limit.js';
 interface ConnectorRow {
   id: string;
   name: string;
@@ -16,16 +17,19 @@ interface RateLimiterLike {
 export function createConnectorAdmission(
   connectors: ConnectorRepositoryLike,
   limiter: RateLimiterLike,
+  admittedLimiter: Pick<RateLimiterLike, 'allow'> = new IpRateLimiter(60, 10),
 ) {
   return {
     lookup: (token: string) => Boolean(connectors.findByToken(token)),
     verify: async (token: string, ip: string) => {
-      if (!limiter.allow(ip)) return { kind: 'rate-limited' } as const;
       const row = connectors.findByToken(token);
       if (!row) {
+        if (!limiter.allow(ip)) return { kind: 'rate-limited' } as const;
         limiter.recordFailure(ip);
         return { kind: 'denied' } as const;
       }
+      if (admittedLimiter && !admittedLimiter.allow(row.id))
+        return { kind: 'rate-limited' } as const;
       connectors.recordUse(row.id);
       return {
         kind: 'admitted',

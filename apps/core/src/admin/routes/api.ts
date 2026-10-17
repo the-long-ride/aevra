@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { handleAgentRoutes } from './agent-routes.js';
 import { handleAccessRoutes } from './access-routes.js';
 import { handleActivityRoutes } from './activity-routes.js';
 import { handleApprovalPermissionRoutes } from './approval-permission-routes.js';
@@ -22,6 +23,7 @@ import { handleYoloPolicyRoutes } from './yolo-policy-routes.js';
 export type { AdminApiContext } from './types.js';
 
 const handlers: AdminRouteHandler[] = [
+  handleAgentRoutes,
   handleActivityRoutes,
   handleLocalFilesystemRoutes,
   handleWorkspaceRoutes,

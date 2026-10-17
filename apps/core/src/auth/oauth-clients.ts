@@ -1,4 +1,5 @@
 import type { OAuthClientRecord, OAuthRepository } from '../../../../packages/store/src/oauth.js';
+import { oauthActor, redirectOrigin } from '../../../../packages/store/src/oauth-actor.js';
 import { stripControlCharacters } from '../../../../packages/security/src/untrusted.js';
 import { validateRedirectUri } from './oauth-helpers.js';
 
@@ -49,7 +50,8 @@ export function registerOAuthClient(repo: OAuthRepository, input: DynamicClientR
   if (input.response_types?.some((value) => String(value) !== 'code')) {
     throw new Error('unsupported OAuth response type');
   }
-  if (repo.listClients().length >= MAX_CLIENTS) throw new Error('too_many_clients');
+  repo.pruneUnconnectedClients(24 * 3_600_000);
+  if (repo.countUnconnectedClients() >= MAX_CLIENTS) throw new Error('too_many_clients');
   const clientName =
     stripControlCharacters(String(input.client_name ?? 'MCP client'))
       .trim()
@@ -61,8 +63,25 @@ export function listOAuthClients(repo: OAuthRepository) {
   return repo.listClients().map((record) => ({
     clientId: record.clientId,
     clientName: record.clientName,
-    actor: `oauth:${record.clientName}`,
+    actor: record.redirectUris.length
+      ? oauthActor(record.clientName, record.redirectUris[0]!)
+      : undefined,
+    redirectOrigins: [...new Set(record.redirectUris.map(redirectOrigin))],
     redirectUris: [...record.redirectUris],
     createdAt: record.createdAt,
+  }));
+}
+
+export function listPendingOAuthAuthorizations(repo: OAuthRepository) {
+  return repo.listPendingAuthorizationRequests().map((request) => ({
+    ...request,
+    clientName: repo.getClient(request.clientId)?.clientName ?? request.clientId,
+    redirectOrigin: new URL(request.redirectUri).origin,
+    duplicateClientName:
+      repo
+        .listClients()
+        .filter((client) => client.clientName === repo.getClient(request.clientId)?.clientName)
+        .length > 1,
+    requestedScopes: request.scope.split(/\s+/).filter(Boolean),
   }));
 }

@@ -39,3 +39,10 @@ test('secret and sensitive paths classify conservatively', () => {
   assert.ok(maskedJson.includes('KEY=[REDACTED]'));
   assert.ok(maskedJson.includes('[REDACTED]'));
 });
+
+test('a lower manifest classification never weakens built-in secret protection', () => {
+  assert.equal(
+    classifySensitivity({ path: '/.env', userPatterns: [{ pattern: /.*/, class: 'SENSITIVE' }] }),
+    'SECRET',
+  );
+});

@@ -28,6 +28,10 @@ export class MacosServiceAdapter implements UserServiceAdapter {
     await this.stop();
     await this.start();
   }
+  async uninstall() {
+    await this.stop();
+    await this.io.remove(this.file);
+  }
   async status() {
     const r = await this.io.run('launchctl', ['print', `${this.domain}/${this.label}`]);
     if (r.code) return 'not-installed';

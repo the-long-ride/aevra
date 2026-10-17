@@ -116,25 +116,10 @@ test('DCR + local approval + PKCE token exchange authenticates canonical /mcp', 
   assert.ok(requestId);
   const pendingRequest = f.oauth.listPendingAuthorizations().find((item) => item.id === requestId);
   assert.ok(pendingRequest?.pairingCode);
-  const expectedCommand = `aevra oauth approve ${requestId} --code ${pendingRequest.pairingCode}`;
-  const pageReady =
-    html.includes(expectedCommand) &&
-    /id="copy-command"/.test(html) &&
-    /navigator\.clipboard\.writeText/.test(html) &&
-    /JetBrains Mono/.test(html) &&
-    /data-aevra-oauth/.test(html);
-  if (!pageReady) {
-    await f.server.close();
-    f.db.close();
-    assert.fail('OAuth authorization page is missing the Aevra CLI-copy approval UI');
-  }
   assert.match(html, /Approve this connection in the local Aevra UI/);
-  assert.ok(html.includes(expectedCommand));
-  assert.match(html, /id="copy-command"/);
-  assert.match(html, /navigator\.clipboard\.writeText/);
-  assert.match(html, /JetBrains Mono/);
+  assert.ok(html.includes(pendingRequest.pairingCode));
+  assert.equal(html.includes('aevra oauth approve'), false);
   assert.match(html, /data-aevra-oauth/);
-  assert.match(html, /\.panel\s*\{\s*width:\s*min\(650px,\s*100%\)/);
   f.oauth.approveAuthorization(requestId);
   const continued = await fetch(
     `${f.base}/oauth/authorize/continue?request_id=${encodeURIComponent(requestId)}`,
@@ -169,7 +154,7 @@ test('DCR + local approval + PKCE token exchange authenticates canonical /mcp', 
     body: '{}',
   });
   assert.equal(mcp.status, 200);
-  assert.equal(((await mcp.json()) as any).actor, 'oauth:ChatGPT');
+  assert.equal(((await mcp.json()) as any).actor, 'oauth:ChatGPT@https://chatgpt.com');
   await f.server.close();
   f.db.close();
 });

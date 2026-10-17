@@ -9,6 +9,8 @@ import type { UpstreamRegistryService } from '../../mcp-upstream/upstream-regist
 import type { ConnectorProfileStore } from '../../usage/connector-profiles.js';
 
 export interface AdminApiContext {
+  agents?: (input: unknown) => Promise<unknown>;
+  stopCore?: () => void;
   workspaces?: any;
   approvals?: any;
   permissions?: any;
