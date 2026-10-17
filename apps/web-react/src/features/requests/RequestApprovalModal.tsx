@@ -242,6 +242,7 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
         role="dialog"
         aria-modal="true"
         aria-label="Approval request"
+        data-enter-default="off"
         tabIndex={-1}
       >
         <div className="approval-modal-toolbar">

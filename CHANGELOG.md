@@ -67,6 +67,7 @@
 
 ### Added - Management and usage documentation
 
+- Pressing Enter in an open dialog now activates its primary button (the last enabled one when several exist). Enter in a form field still submits natively, never acts from a focused button, link, select or textarea, and is ignored while composing text, on key repeat or with a modifier. Approval request dialogs opt out with `data-enter-default="off"` so a stray key press can never grant access.
 - Expose MCP server status, catalog details, tool documentation and parameter examples in searchable management views, while keeping upstream descriptions untrusted.
 - Add all-time token statistics beside the chart range controls, with totals, savings, calls, failures and tool/connector breakdowns independent of the selected chart range.
 
