@@ -143,10 +143,10 @@ test('a disabled server keeps its row but stops being served', async () => {
   try {
     const record = await service.register(input);
     assert.equal(service.serving().length, 1);
-    assert.equal(service.setEnabled(record.id, false).enabled, false);
+    assert.equal((await service.setEnabled(record.id, false)).record.enabled, false);
     assert.deepEqual(service.serving(), []);
     assert.equal(service.list().length, 1);
-    assert.equal(service.setEnabled(record.id, true).enabled, true);
+    assert.equal((await service.setEnabled(record.id, true)).record.enabled, true);
     assert.equal(service.serving().length, 1);
   } finally {
     db.close();

@@ -23,6 +23,9 @@ export interface CliDispatchHandlers {
   extension: Handler<'extension'>;
   sessions: Handler<'sessions'>;
   completion: Handler<'completion'>;
+  agent: Handler<'agent'>;
+  'agent-help': Handler<'agent-help'>;
+  uninstall: Handler<'uninstall'>;
 }
 
 export async function dispatchCommand(
@@ -62,5 +65,11 @@ export async function dispatchCommand(
       return handlers.sessions(command);
     case 'completion':
       return handlers.completion(command);
+    case 'agent':
+      return handlers.agent(command);
+    case 'agent-help':
+      return handlers['agent-help'](command);
+    case 'uninstall':
+      return handlers.uninstall(command);
   }
 }

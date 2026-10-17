@@ -1,5 +1,7 @@
 import type { AdminRequestInit } from '../admin-session.js';
 import type { AevraCommand } from '../args.js';
+import { isPendingReview, reviewHint, type McpReviewRow } from './mcp-review-format.js';
+import { runMcpAccept, runMcpReview } from './mcp-review-command.js';
 
 type McpCommand = Extract<AevraCommand, { command: 'mcp' }>;
 interface ResponseLike {
@@ -41,22 +43,20 @@ function registrationBody(command: McpCommand): Record<string, unknown> {
     risk: command.risk ?? 'MEDIUM',
   };
 }
-function formatMcpTable(
-  upstreams: Array<{
-    id: string;
-    name: string;
-    transport: string;
-    state: string;
-    toolCount: number;
-    risk: string;
-  }>,
-): string[] {
-  const headers = ['ID', 'Name', 'Transport', 'State', 'Tools', 'Risk'];
+interface McpUpstreamRow extends McpReviewRow {
+  transport: string;
+  toolCount: number;
+  risk: string;
+}
+function formatMcpTable(upstreams: McpUpstreamRow[]): string[] {
+  const headers = ['!', 'ID', 'Name', 'Transport', 'State', 'Enabled', 'Tools', 'Risk'];
   const data = upstreams.map((u) => [
+    isPendingReview(u) ? '!' : '',
     u.id,
     u.name,
     u.transport,
     u.state,
+    u.enabled === false ? 'no' : 'yes',
     `${u.toolCount} tools`,
     u.risk,
   ]);
@@ -86,14 +86,7 @@ export async function runMcpCommand<Config>(
       const response = await dependencies.api(config, '/api/mcp/upstreams');
       if (!response.ok) throw new Error(await failureMessage(response));
       const value = (await response.json()) as {
-        upstreams?: Array<{
-          id: string;
-          name: string;
-          transport: string;
-          state: string;
-          toolCount: number;
-          risk: string;
-        }>;
+        upstreams?: McpUpstreamRow[];
       };
       const upstreams = value.upstreams ?? [];
       if (!upstreams.length) {
@@ -101,7 +94,14 @@ export async function runMcpCommand<Config>(
         return 0;
       }
       for (const line of formatMcpTable(upstreams)) dependencies.log(line);
+      for (const upstream of upstreams) {
+        if (isPendingReview(upstream)) dependencies.log(reviewHint(upstream));
+      }
       return 0;
+    }
+    if (command.action === 'review') return await runMcpReview(config, command.id!, dependencies);
+    if (command.action === 'accept') {
+      return await runMcpAccept(config, command.id!, command.yes === true, dependencies);
     }
     if (command.action === 'add') {
       const response = await dependencies.api(config, '/api/mcp/upstreams', {
@@ -137,6 +137,20 @@ export async function runMcpCommand<Config>(
         `[aevra] Connected to ${result.serverName ?? 'unknown'} ${result.serverVersion ?? ''}`.trim(),
       );
       dependencies.log(`[aevra] ${result.toolCount ?? 0} tools available`);
+      return 0;
+    }
+    if (command.action === 'enable' || command.action === 'disable') {
+      const response = await dependencies.api(
+        config,
+        `/api/mcp/upstreams/${encodeURIComponent(command.id!)}/${command.action}`,
+        { method: 'POST' },
+      );
+      if (!response.ok) throw new Error(await failureMessage(response));
+      dependencies.log(
+        `[aevra] ${command.action === 'enable' ? 'Enabled' : 'Disabled'} ${command.id}`,
+      );
+      const body = (await response.json().catch(() => ({}))) as { warning?: string };
+      if (body.warning) dependencies.log(`[aevra] Warning: ${body.warning}`);
       return 0;
     }
     const response = await dependencies.api(

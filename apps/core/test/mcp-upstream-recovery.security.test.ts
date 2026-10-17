@@ -1,3 +1,4 @@
+import { catalogFingerprint } from '../../../packages/mcp-upstream/src/fingerprint.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
@@ -15,8 +16,8 @@ for (const changed of [false, true]) {
       let statusReads = 0;
       const approved = {
         tools: [{ name: 'echo', description: 'approved' }],
-        resources: [],
-        prompts: [],
+        resources: [{ uri: 'file:///a' }],
+        prompts: [{ name: 'greet' }],
       };
       const first = new FakeUpstreamClient({ catalog: approved });
       const second = new FakeUpstreamClient({
@@ -73,7 +74,7 @@ for (const changed of [false, true]) {
           await assert.rejects(invoke(), /MCP_UPSTREAM_NEEDS_REVIEW/);
           assert.equal(service.get(row.id)?.state, 'needs-review');
           assert.equal(forwarded, 0);
-          service.acknowledge(row.id);
+          service.acknowledge(row.id, catalogFingerprint(service.get(row.id)!.pendingCatalog!));
         }
         assert.deepEqual(await invoke(), { ok: true });
         assert.equal(forwarded, 1);

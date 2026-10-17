@@ -35,9 +35,22 @@ export function harness() {
   let catalogStarted: (() => void) | null = null;
   let catalogGate: Promise<void> | null = null;
   let forwarded = 0;
+  let disconnectFailure: Error | null = null;
+  let secretWrites = 0;
+  const countingVault: SecretStore = {
+    set: async (...args) => {
+      secretWrites += 1;
+      return vault.set(...args);
+    },
+    get: (ref) => vault.get(ref),
+    delete: async (...args) => {
+      secretWrites += 1;
+      return vault.delete(...args);
+    },
+  };
   const service = new UpstreamRegistryService({
     repository: new UpstreamRepository(db.raw()),
-    secrets: vault,
+    secrets: countingVault,
     worker: {
       connect: async (upstreamId, config) => {
         calls.push(`connect:${upstreamId}`);
@@ -59,6 +72,7 @@ export function harness() {
       disconnect: async (upstreamId) => {
         calls.push(`disconnect:${upstreamId}`);
         connectedConfig = null;
+        if (disconnectFailure) throw disconnectFailure;
       },
       status: async () => ({
         upstreamId: 'mu_test',
@@ -104,6 +118,10 @@ export function harness() {
       return { started, release: () => release() };
     },
     forwarded: () => forwarded,
+    setDisconnectFailure: (next: Error | null) => {
+      disconnectFailure = next;
+    },
+    secretWrites: () => secretWrites,
   };
 }
 

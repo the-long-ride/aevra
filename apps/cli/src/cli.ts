@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, realpathSync } from 'node:fs';
-import path from 'node:path';
+import { mkdirSync, realpathSync } from 'node:fs';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { CloudflareManagerImpl } from '../../core/src/cloudflare/manager.js';
 import { validateExposureConfig } from '../../core/src/exposure/config.js';
 import type { ExposureConfig } from '../../core/src/exposure/types.js';
-import { loadAdminCredentials } from '../../core/src/admin/admin-credentials.js';
 import { loadCoreConfig } from '../../core/src/config.js';
 import { createCoreRuntime } from '../../core/src/runtime.js';
 import { resolveHelperBinaryPath } from '../../worker/src/desktop-runtime.js';
@@ -16,14 +14,10 @@ import { createUserServiceAdapter } from '../../core/src/service/service-manager
 import { AEVRA_VERSION } from '../../core/src/version.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { SettingsRepository } from '../../../packages/store/src/settings.js';
-import {
-  adminApi,
-  createAuthenticatedUiUrl,
-  revokeAllAdminSessions,
-  type AdminSessionDependencies,
-} from './admin-session.js';
+import { adminApi, createAuthenticatedUiUrl, revokeAllAdminSessions } from './admin-session.js';
 import { parseAevraArgs } from './args.js';
 import { runAboutCommand } from './commands/about-command.js';
+import { runAgentCommand, runRootUninstall } from './commands/agent-command.js';
 import { runBackupCommand } from './commands/backup-command.js';
 import { runConnectionsCommand } from './commands/connections-command.js';
 import { runExtensionCommand } from './commands/extension-command.js';
@@ -42,10 +36,15 @@ import {
   readyLines,
   usageText,
 } from './cli-support.js';
+import { agentHelpText } from './cli-usage.js';
 import { dispatchCommand } from './dispatch.js';
+import { agentDependencies, rootCleanup } from './agent-wiring.js';
 import { extensionInstallDependencies } from './extension-install.js';
-import { localAdminBase, localAdminFetch } from './local-client.js';
+import { localAdminFetch } from './local-client.js';
 import { runStart } from './run.js';
+import { AgentUsageError } from './local-agent-command.js';
+import { runRootAgentEntry } from './local-agent-entry.js';
+import { adminDependencies } from './admin-dependencies.js';
 
 function openBrowser(url: string) {
   const [command, args] =
@@ -55,21 +54,6 @@ function openBrowser(url: string) {
         ? ['open', [url]]
         : ['xdg-open', [url]];
   spawn(command, args, { detached: true, stdio: 'ignore' }).unref();
-}
-
-function adminDependencies(
-  config: ReturnType<typeof loadCoreConfig>,
-): AdminSessionDependencies<ReturnType<typeof loadCoreConfig>> {
-  return {
-    async controlSecret() {
-      return readFileSync(path.join(config.stateDir, 'local-control.secret'), 'utf8').trim();
-    },
-    async credentials() {
-      return loadAdminCredentials(process.env);
-    },
-    base: (currentConfig) => localAdminBase(currentConfig),
-    fetch: (currentConfig, apiPath, init) => localAdminFetch(currentConfig, apiPath, init),
-  };
 }
 
 function setupResources(config: ReturnType<typeof loadCoreConfig>) {
@@ -117,16 +101,34 @@ async function runBackup(
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
+  try {
+    const result = await runRootAgentEntry(argv);
+    if (result !== null) return result;
+  } catch (error) {
+    console.error(
+      error instanceof AgentUsageError
+        ? `[aevra] ${error.message}`
+        : `[aevra] ${formatCliError(error)}. Start core with aevra start if unavailable.`,
+    );
+    return 1;
+  }
   let command;
   try {
     command = parseAevraArgs(argv);
   } catch (error) {
-    console.error(`[aevra] ${formatCliError(error)}\n\n${usageText()}`);
+    console.error(
+      `[aevra] ${formatCliError(error)}\n\n${argv[0] === 'agent' ? agentHelpText() : usageText()}`,
+    );
     return 1;
   }
 
   if (command.command === 'help') {
     console.log(usageText());
+    return 0;
+  }
+
+  if (command.command === 'agent-help') {
+    console.log(agentHelpText());
     return 0;
   }
 
@@ -252,6 +254,12 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
           formatError: formatCliError,
         }),
       completion: async () => 0,
+      agent: (current) => runAgentCommand(current, agentDependencies(config, admin)),
+      'agent-help': async () => 0,
+      uninstall: (current) =>
+        runRootUninstall(current, agentDependencies(config, admin), {
+          cleanup: rootCleanup(config, admin),
+        }),
     });
   } catch (error) {
     console.error(`[aevra] ${formatCliError(error)}`);

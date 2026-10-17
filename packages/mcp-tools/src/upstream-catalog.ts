@@ -1,5 +1,6 @@
+import { sanitizeSchema } from './upstream-schema.js';
 import type { UpstreamTool } from '../../mcp-upstream/src/protocol.js';
-import { stripControlCharacters } from '../../security/src/untrusted.js';
+import { stripControlCharacters, stripAnsiSequences } from '../../security/src/untrusted.js';
 import { proxyName, proxyResourceUri } from './upstream-names.js';
 import { servableUpstreams, type UpstreamRegistryService } from './upstream-port.js';
 
@@ -26,7 +27,7 @@ const NAME_LIMIT = 256;
 const MIME_LIMIT = 128;
 
 function clip(value: string, limit: number): string {
-  return stripControlCharacters(value).slice(0, limit);
+  return stripControlCharacters(stripAnsiSequences(value)).slice(0, limit);
 }
 
 function proxiedDescription(server: string, raw: string | undefined): string {
@@ -37,13 +38,16 @@ function proxiedDescription(server: string, raw: string | undefined): string {
   return text ? `${banner} ${text}` : banner;
 }
 
-function proxiedSchema(tool: UpstreamTool): Record<string, unknown> {
+function proxiedSchema(tool: UpstreamTool, server: string): Record<string, unknown> {
   const schema = tool.inputSchema;
   const base =
     schema && typeof schema === 'object' && !Array.isArray(schema)
       ? (schema as Record<string, unknown>)
       : {};
-  return { ...base, type: 'object' };
+  return {
+    ...sanitizeSchema(base, (text) => proxiedDescription(server, text)),
+    type: 'object',
+  };
 }
 
 export function proxyToolDefinitions(port?: UpstreamRegistryService): ProxyToolDescriptor[] {
@@ -53,7 +57,7 @@ export function proxyToolDefinitions(port?: UpstreamRegistryService): ProxyToolD
       out.push({
         name: proxyName(server.name, tool.name),
         description: proxiedDescription(server.name, tool.description),
-        inputSchema: proxiedSchema(tool),
+        inputSchema: proxiedSchema(tool, server.name),
         annotations: { ...PROXY_ANNOTATIONS },
       });
     }
@@ -85,7 +89,19 @@ export function proxyPromptEntries(port?: UpstreamRegistryService) {
       out.push({
         name: proxyName(server.name, prompt.name),
         description: proxiedDescription(server.name, prompt.description),
-        arguments: Array.isArray(prompt.arguments) ? prompt.arguments : [],
+        arguments: Array.isArray(prompt.arguments)
+          ? prompt.arguments.map((argument) => {
+              if (!argument || typeof argument !== 'object' || Array.isArray(argument))
+                return argument;
+              const entry = argument as Record<string, unknown>;
+              return {
+                ...entry,
+                ...(typeof entry.description === 'string'
+                  ? { description: proxiedDescription(server.name, entry.description) }
+                  : {}),
+              };
+            })
+          : [],
       });
     }
   }

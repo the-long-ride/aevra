@@ -1,3 +1,4 @@
+import { catalogFingerprint } from '../../../packages/mcp-upstream/src/fingerprint.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { UpstreamCatalog } from '../../../packages/mcp-upstream/src/protocol.js';
@@ -120,11 +121,11 @@ test('re-enabling does not bypass review; only acknowledgement clears it', async
     const record = await service.register(input);
     serve({ ...BENIGN, tools: [{ name: 'echo', description: 'Changed' }] });
     await service.refresh(record.id);
-    service.setEnabled(record.id, false);
-    service.setEnabled(record.id, true);
+    await service.setEnabled(record.id, false);
+    await service.setEnabled(record.id, true);
     assert.equal(service.get(record.id)?.state, 'needs-review');
     assert.deepEqual(service.serving(), []);
-    service.acknowledge(record.id);
+    service.acknowledge(record.id, catalogFingerprint(service.get(record.id)!.pendingCatalog!));
     assert.equal(service.serving().length, 1);
   } finally {
     db.close();

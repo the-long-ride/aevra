@@ -18,6 +18,20 @@ const commands: Array<[keyof CliDispatchHandlers, AevraCommand]> = [
   ['audit', { command: 'audit', action: 'clear', yes: true }],
   ['sessions', { command: 'sessions', action: 'revoke-others', yes: true }],
   ['completion', { command: 'completion', shell: 'bash' }],
+  [
+    'agent',
+    {
+      command: 'agent',
+      action: 'install',
+      targets: ['codex'],
+      transport: 'stdio',
+      dryRun: false,
+      yes: true,
+      json: false,
+    },
+  ],
+  ['agent-help', { command: 'agent-help' }],
+  ['uninstall', { command: 'uninstall', purge: true, dryRun: false }],
 ];
 
 for (const [name, command] of commands) {
