@@ -36,5 +36,14 @@ for (const artifact of artifacts) {
   const releaseBinary = path.join(releaseRoot, releaseName);
   copyFileSync(path.join(sourceDir, binary), releaseBinary);
   if (extension !== '.exe') chmodSync(releaseBinary, 0o755);
+  for (const companion of [
+    'aevra-desktop@the-long-ride.shell-extension.zip',
+    'aevra-wayland-kde-source.zip',
+  ]) {
+    if (slug.startsWith('linux-') && existsSync(path.join(sourceDir, companion))) {
+      copyFileSync(path.join(sourceDir, companion), path.join(packageDir, companion));
+      copyFileSync(path.join(sourceDir, companion), path.join(releaseRoot, companion));
+    }
+  }
   process.stdout.write(`${slug}: ${binary}\n`);
 }

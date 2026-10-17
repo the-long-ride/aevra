@@ -14,7 +14,11 @@ pub struct WindowInstance {
 }
 
 impl WindowInstance {
-    pub fn new(window_id: impl Into<String>, process_id: u32, process_started_at: impl Into<String>) -> Self {
+    pub fn new(
+        window_id: impl Into<String>,
+        process_id: u32,
+        process_started_at: impl Into<String>,
+    ) -> Self {
         Self {
             window_id: window_id.into(),
             process_id,
@@ -23,7 +27,11 @@ impl WindowInstance {
     }
 
     #[cfg(test)]
-    pub fn fixture(window_id: impl Into<String>, process_id: u32, started_at: impl Into<String>) -> Self {
+    pub fn fixture(
+        window_id: impl Into<String>,
+        process_id: u32,
+        started_at: impl Into<String>,
+    ) -> Self {
         Self::new(window_id, process_id, started_at)
     }
 }
@@ -44,10 +52,16 @@ impl std::fmt::Display for TargetError {
         match self {
             Self::Changed => write!(f, "Target window instance changed"),
             Self::Elevated => write!(f, "Target process is elevated or helper is elevated"),
-            Self::NonDefaultDesktop => write!(f, "Target window is on a secure or non-default desktop"),
+            Self::NonDefaultDesktop => {
+                write!(f, "Target window is on a secure or non-default desktop")
+            }
             Self::IntegrityCheckFailed => write!(f, "Could not verify process integrity level"),
-            Self::IntegrityHigherThanHelper => write!(f, "Target process integrity level is higher than helper"),
-            Self::UnreadableState => write!(f, "Could not read target process security information"),
+            Self::IntegrityHigherThanHelper => {
+                write!(f, "Target process integrity level is higher than helper")
+            }
+            Self::UnreadableState => {
+                write!(f, "Could not read target process security information")
+            }
             Self::ProcessNotFound => write!(f, "Target process not found or exited"),
         }
     }
@@ -56,7 +70,10 @@ impl std::fmt::Display for TargetError {
 impl std::error::Error for TargetError {}
 
 #[allow(dead_code)]
-pub fn require_same_instance(expected: &WindowInstance, actual: &WindowInstance) -> Result<(), TargetError> {
+pub fn require_same_instance(
+    expected: &WindowInstance,
+    actual: &WindowInstance,
+) -> Result<(), TargetError> {
     if expected.window_id != actual.window_id
         || expected.process_id != actual.process_id
         || expected.process_started_at != actual.process_started_at
@@ -71,8 +88,8 @@ pub mod native {
     use super::*;
     use ::windows::Win32::Foundation::{CloseHandle, HANDLE, HWND};
     use ::windows::Win32::Security::{
-        GetTokenInformation, TokenElevation, TokenIntegrityLevel,
-        TOKEN_ELEVATION, TOKEN_MANDATORY_LABEL, TOKEN_QUERY,
+        GetTokenInformation, TokenElevation, TokenIntegrityLevel, TOKEN_ELEVATION,
+        TOKEN_MANDATORY_LABEL, TOKEN_QUERY,
     };
     use ::windows::Win32::System::StationsAndDesktops::{
         GetThreadDesktop, GetUserObjectInformationW, UOI_NAME,
@@ -81,8 +98,8 @@ pub mod native {
         GetCurrentProcess, GetCurrentThreadId, GetProcessTimes, OpenProcess, OpenProcessToken,
         PROCESS_QUERY_LIMITED_INFORMATION,
     };
-    use ::windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
     use ::windows::Win32::UI::Accessibility::{IUIAutomation, IUIAutomationElement};
+    use ::windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 
     pub fn get_process_creation_time(pid: u32) -> Result<String, TargetError> {
         unsafe {
@@ -97,7 +114,8 @@ pub mod native {
             if ok.is_err() {
                 return Err(TargetError::UnreadableState);
             }
-            let timestamp = ((creation.dwHighDateTime as u64) << 32) | (creation.dwLowDateTime as u64);
+            let timestamp =
+                ((creation.dwHighDateTime as u64) << 32) | (creation.dwLowDateTime as u64);
             Ok(format!("{timestamp}"))
         }
     }
@@ -111,7 +129,11 @@ pub mod native {
             return Err(TargetError::ProcessNotFound);
         }
         let creation_time = get_process_creation_time(pid)?;
-        Ok(WindowInstance::new(format!("{}", hwnd.0 as isize), pid, creation_time))
+        Ok(WindowInstance::new(
+            format!("{}", hwnd.0 as isize),
+            pid,
+            creation_time,
+        ))
     }
 
     pub fn check_desktop() -> Result<(), TargetError> {
@@ -136,7 +158,9 @@ pub mod native {
             if ok.is_err() {
                 return Err(TargetError::NonDefaultDesktop);
             }
-            let len = (0..buf.len()).position(|i| buf[i] == 0).unwrap_or(buf.len());
+            let len = (0..buf.len())
+                .position(|i| buf[i] == 0)
+                .unwrap_or(buf.len());
             let name = String::from_utf16_lossy(&buf[..len]);
             let lower = name.to_ascii_lowercase();
             if lower == "winlogon" || lower == "screen-saver" || lower == "disconnect" {
@@ -255,7 +279,11 @@ pub mod native {
 
             let mut current = element.clone();
             loop {
-                if automation.CompareElements(&current, expected_root).map(|b| b.as_bool()).unwrap_or(false) {
+                if automation
+                    .CompareElements(&current, expected_root)
+                    .map(|b| b.as_bool())
+                    .unwrap_or(false)
+                {
                     return Ok(());
                 }
 
@@ -276,7 +304,10 @@ mod tests {
     fn changed_process_instance_refuses_before_pattern_dispatch() {
         let expected = WindowInstance::fixture("42", 7, "100");
         let actual = WindowInstance::fixture("42", 7, "200");
-        assert_eq!(require_same_instance(&expected, &actual), Err(TargetError::Changed));
+        assert_eq!(
+            require_same_instance(&expected, &actual),
+            Err(TargetError::Changed)
+        );
     }
 
     #[test]
@@ -291,8 +322,14 @@ mod tests {
         let expected = WindowInstance::fixture("42", 7, "100");
         let diff_pid = WindowInstance::fixture("42", 8, "100");
         let diff_win = WindowInstance::fixture("43", 7, "100");
-        assert_eq!(require_same_instance(&expected, &diff_pid), Err(TargetError::Changed));
-        assert_eq!(require_same_instance(&expected, &diff_win), Err(TargetError::Changed));
+        assert_eq!(
+            require_same_instance(&expected, &diff_pid),
+            Err(TargetError::Changed)
+        );
+        assert_eq!(
+            require_same_instance(&expected, &diff_win),
+            Err(TargetError::Changed)
+        );
     }
 
     #[cfg(windows)]

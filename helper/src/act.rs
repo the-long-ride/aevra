@@ -28,15 +28,36 @@ pub struct ActContext<'a> {
     pub described_window: Option<isize>,
 }
 
+#[cfg(test)]
 pub fn perform(context: &ActContext, request: &ActRequest) -> Result<bool, String> {
+    perform_guarded(context, request, &|| Ok(()))
+}
+
+pub fn perform_guarded(
+    context: &ActContext,
+    request: &ActRequest,
+    guard: &dyn Fn() -> Result<(), String>,
+) -> Result<bool, String> {
+    guard()?;
+    input::guarded(guard, |sink, mover| {
+        perform_with(context, request, sink, mover)
+    })
+}
+
+fn perform_with(
+    context: &ActContext,
+    request: &ActRequest,
+    sink: input::Sink,
+    mover: input::Mover,
+) -> Result<bool, String> {
     match request.op.as_str() {
-        "click" => click(context, request),
+        "click" => click(context, request, sink, mover),
         "type" => {
             let text = request
                 .text
                 .as_deref()
                 .ok_or_else(|| "type requires text".to_string())?;
-            input::send_text(text)?;
+            input::send_text_with(text, sink)?;
             Ok(true)
         }
         "key" => {
@@ -47,23 +68,28 @@ pub fn perform(context: &ActContext, request: &ActRequest) -> Result<bool, Strin
             // Parsed in full BEFORE anything is sent, so a malformed chord
             // late in a sequence cannot leave the earlier chords applied.
             let chords = keys::parse_sequence(spec)?;
-            input::send_chords(&chords)?;
+            input::send_chords_with(&chords, sink)?;
             Ok(true)
         }
         "scroll" => {
             let delta = request
                 .delta_y
                 .ok_or_else(|| "scroll requires deltaY".to_string())?;
-            input::scroll(delta)?;
+            input::scroll_with(delta, sink)?;
             Ok(true)
         }
         other => Err(format!("unknown act op: {other}")),
     }
 }
 
-fn click(context: &ActContext, request: &ActRequest) -> Result<bool, String> {
+fn click(
+    context: &ActContext,
+    request: &ActRequest,
+    sink: input::Sink,
+    mover: input::Mover,
+) -> Result<bool, String> {
     match request.handle.as_deref() {
-        Some(handle) => click_element(context, handle),
+        Some(handle) => click_element(context, handle, sink, mover),
         None => match (request.x, request.y) {
             // A coordinate click is for canvas and game surfaces, which
             // expose no accessibility tree to name, so it carries none of
@@ -83,7 +109,7 @@ fn click(context: &ActContext, request: &ActRequest) -> Result<bool, String> {
             (Some(x), Some(y)) => {
                 require_point_within_virtual_desktop(x, y, "the point")?;
                 require_point_on_foreground_window(x, y)?;
-                input::click_at(x, y)?;
+                input::click_at_with(x, y, mover, sink)?;
                 Ok(true)
             }
             _ => Err("click requires either a handle or both x and y".to_string()),
@@ -91,7 +117,12 @@ fn click(context: &ActContext, request: &ActRequest) -> Result<bool, String> {
     }
 }
 
-fn click_element(context: &ActContext, handle: &str) -> Result<bool, String> {
+fn click_element(
+    context: &ActContext,
+    handle: &str,
+    sink: input::Sink,
+    mover: input::Mover,
+) -> Result<bool, String> {
     // 1. The handle must still name a live element. `HandleTable::resolve`
     //    compares the generation the handle was minted under, so a handle
     //    from an earlier `describe` fails here even when its index is in
@@ -125,7 +156,8 @@ fn click_element(context: &ActContext, handle: &str) -> Result<bool, String> {
         .map_err(|err| format!("could not read the element's bounding rectangle: {err:?}"))?;
     if rect.right <= rect.left || rect.bottom <= rect.top {
         return Err(
-            "the element has an empty bounding rectangle -- it is not visible on screen".to_string(),
+            "the element has an empty bounding rectangle -- it is not visible on screen"
+                .to_string(),
         );
     }
 
@@ -139,7 +171,8 @@ fn click_element(context: &ActContext, handle: &str) -> Result<bool, String> {
     //    means the click lands on some other surface entirely, which is the
     //    wrong-thing-clicked failure these checks exist to stop.
     require_point_within_virtual_desktop(x, y, "the element's centre")?;
-    input::click_at(x, y)?;
+    require_point_on_foreground_window(x, y)?;
+    input::click_at_with(x, y, mover, sink)?;
     Ok(true)
 }
 
@@ -205,6 +238,7 @@ mod tests {
 
     fn request(op: &str) -> ActRequest {
         ActRequest {
+            expected_target: None,
             op: op.to_string(),
             handle: None,
             x: None,
@@ -221,7 +255,10 @@ mod tests {
         // irrelevant.
         let table: &'static HandleTable<IUIAutomationElement> =
             Box::leak(Box::new(HandleTable::new()));
-        ActContext { table, described_window: None }
+        ActContext {
+            table,
+            described_window: None,
+        }
     }
 
     #[test]
@@ -233,7 +270,10 @@ mod tests {
     #[test]
     fn a_click_with_neither_handle_nor_coordinates_is_rejected() {
         let err = perform(&empty_context(), &request("click")).unwrap_err();
-        assert!(err.contains("handle"), "error should say what is missing: {err}");
+        assert!(
+            err.contains("handle"),
+            "error should say what is missing: {err}"
+        );
     }
 
     #[test]

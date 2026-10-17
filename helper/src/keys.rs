@@ -67,9 +67,13 @@ fn parse_chord(token: &str) -> Result<Chord, String> {
             other => return Err(format!("unknown modifier {other:?} in {token:?}")),
         });
     }
-    let key = parse_key(key_part)
-        .ok_or_else(|| format!("unknown key {key_part:?} in {token:?}"))?;
-    Ok(Chord { modifiers, key, extended: is_extended(key) })
+    let key =
+        parse_key(key_part).ok_or_else(|| format!("unknown key {key_part:?} in {token:?}"))?;
+    Ok(Chord {
+        modifiers,
+        key,
+        extended: is_extended(key),
+    })
 }
 
 fn is_extended(key: VIRTUAL_KEY) -> bool {
@@ -206,7 +210,10 @@ mod tests {
     #[test]
     fn an_unknown_modifier_is_rejected_rather_than_ignored() {
         let err = parse_sequence("hyper+a").unwrap_err();
-        assert!(err.contains("hyper"), "error should name the offending modifier: {err}");
+        assert!(
+            err.contains("hyper"),
+            "error should name the offending modifier: {err}"
+        );
     }
 
     #[test]

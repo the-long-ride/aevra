@@ -1,16 +1,14 @@
+import { defaultDesktopPolicy } from '../../../packages/security/src/desktop-policy-defaults.js';
+import { dispatchDesktopRead } from './desktop-read-dispatch.js';
+import { sameHostApplication, sameWindowInstance } from './desktop-target-identity.js';
 import { randomUUID } from 'node:crypto';
 import type { WorkerOperation } from '../../../packages/protocol/src/worker.js';
-import type {
-  DesktopOwner,
-  DesktopTargetIdentity,
-  VerifiedWindowHost,
-} from '../../../packages/protocol/src/desktop.js';
+import type { DesktopOwner } from '../../../packages/protocol/src/desktop.js';
 import { executeBackgroundAction } from '../../../packages/desktop/src/background-driver.js';
 import { DesktopDriverError } from '../../../packages/desktop/src/driver.js';
 import { detectInstalledApps } from '../../../packages/desktop/src/installed-apps.js';
 import type { DesktopSessionRegistry } from '../../../packages/desktop/src/registry.js';
 import {
-  canonicalExecutablePath,
   evaluateDesktopTargetGate,
   evaluateWindowGate,
 } from '../../../packages/security/src/window-gate.js';
@@ -24,27 +22,6 @@ type DesktopOperation = Extract<WorkerOperation, { kind: `desktop.${string}` }>;
  */
 export function isDesktopOperation(op: WorkerOperation): op is DesktopOperation {
   return op.kind.startsWith('desktop.');
-}
-
-function sameHostApplication(a?: VerifiedWindowHost, b?: VerifiedWindowHost): boolean {
-  if (!a || !b) return a === b;
-  return (
-    a.instance.windowId === b.instance.windowId &&
-    a.instance.processId === b.instance.processId &&
-    a.instance.processStartedAt === b.instance.processStartedAt &&
-    canonicalExecutablePath(a.executablePath) === canonicalExecutablePath(b.executablePath)
-  );
-}
-
-function sameWindowInstance(
-  a: DesktopTargetIdentity['windowInstance'],
-  b: DesktopTargetIdentity['windowInstance'],
-): boolean {
-  return (
-    a.windowId === b.windowId &&
-    a.processId === b.processId &&
-    a.processStartedAt === b.processStartedAt
-  );
 }
 
 export async function dispatchDesktopOperation(
@@ -154,6 +131,14 @@ export async function dispatchDesktopOperation(
           );
         }
 
+        const finalVerdict = evaluateDesktopTargetGate(
+          { ...target, window: describeResult.window },
+          operation.policy ?? defaultDesktopPolicy(),
+          'background',
+          sessionId,
+        );
+        if (!finalVerdict.allowed)
+          throw new DesktopDriverError('DESKTOP_INPUT_REFUSED', 'Background read target changed');
         const nodeBindings = describeResult.nodes.map((n) => ({
           ref: n.ref,
           handle: (n as any).handle ?? n.ref,
@@ -161,6 +146,7 @@ export async function dispatchDesktopOperation(
         registry.backgroundState.bind(owner, windowLeaseId, snapshotId, nodeBindings, epoch);
 
         return {
+          readPolicy: { scope: 'window', targets: [{ ...target, window: describeResult.window }] },
           window: describeResult.window,
           nodes: describeResult.nodes.map((node) => {
             const { handle: _handle, ...publicNode } = node;
@@ -173,15 +159,10 @@ export async function dispatchDesktopOperation(
         };
       }
 
-      return driver.describe({
-        windowId: operation.windowId,
-        maxNodes: operation.maxNodes,
-        interactiveOnly: operation.interactiveOnly,
-        mode: 'foreground',
-      });
+      return dispatchDesktopRead(operation, driver, sessionId);
     }
-
-    if (operation.kind === 'desktop.capture') return driver.capture(operation.windowId);
+    if (operation.kind === 'desktop.capture')
+      return dispatchDesktopRead(operation, driver, sessionId);
 
     if (operation.kind === 'desktop.releaseWindow') {
       if (!owner) {
@@ -318,7 +299,22 @@ export async function dispatchDesktopOperation(
         },
       );
     }
-    const result = await driver.act(operation);
-    return { ...result, window: identity, gateVerdict: 'allow' as const, gateRule: verdict.reason };
+    const attribution = {
+      window: identity,
+      gateVerdict: 'allow' as const,
+      gateRule: verdict.reason,
+    };
+    try {
+      const result = await driver.act({ ...operation, expectedTarget: targetIdentity });
+      return { ...result, ...attribution };
+    } catch (error) {
+      if (error instanceof DesktopDriverError) {
+        throw new DesktopDriverError(error.code, error.message, {
+          ...error.details,
+          ...attribution,
+        });
+      }
+      throw error;
+    }
   });
 }

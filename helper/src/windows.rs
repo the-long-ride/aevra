@@ -354,6 +354,11 @@ impl DesktopBackend for WindowsBackend {
     }
 
     fn describe(&self, request: DescribeRequest) -> Result<DescribeResult, String> {
+        crate::backend::verify_read_target(
+            self,
+            request.expected_target.as_ref(),
+            request.window_id.as_deref(),
+        )?;
         let hwnd = resolve_target_hwnd(request.window_id.as_deref())?;
         *self.described_window.borrow_mut() = Some(hwnd.0 as isize);
         let window = Self::identity_for(hwnd);
@@ -367,6 +372,11 @@ impl DesktopBackend for WindowsBackend {
             &mut table,
         )
         .map_err(|err| format!("failed to read the accessibility tree: {err:?}"))?;
+        crate::backend::verify_read_target(
+            self,
+            request.expected_target.as_ref(),
+            request.window_id.as_deref(),
+        )?;
         Ok(DescribeResult {
             window,
             nodes,
@@ -378,6 +388,11 @@ impl DesktopBackend for WindowsBackend {
     }
 
     fn capture(&self, request: CaptureRequest) -> Result<CaptureResult, String> {
+        crate::backend::verify_read_target(
+            self,
+            request.expected_target.as_ref(),
+            request.window_id.as_deref(),
+        )?;
         // A window capture reports that window's identity; a primary-monitor
         // capture reports none, because it is not one window and the tool
         // layer audits this field as the capture's target.
@@ -388,6 +403,11 @@ impl DesktopBackend for WindowsBackend {
             }
             None => (grab::grab_primary_screen()?, None),
         };
+        crate::backend::verify_read_target(
+            self,
+            request.expected_target.as_ref(),
+            request.window_id.as_deref(),
+        )?;
         let (image_data_uri, device_pixel_ratio) = capture::encode_frame(frame)?;
         Ok(CaptureResult {
             image_data_uri,
@@ -402,7 +422,14 @@ impl DesktopBackend for WindowsBackend {
             table: &table,
             described_window: *self.described_window.borrow(),
         };
-        act::perform(&context, &request)
+        let guard = || {
+            let focused = self.focused_window()?;
+            let actual = self.target_identity(crate::backend::TargetIdentityRequest {
+                window_id: focused.window_id,
+            })?;
+            crate::backend::require_authorized_target(request.expected_target.as_ref(), &actual)
+        };
+        act::perform_guarded(&context, &request, &guard)
     }
 
     fn target_identity(

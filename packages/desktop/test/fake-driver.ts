@@ -1,5 +1,10 @@
-import type { DesktopCapabilities } from '../../protocol/src/desktop.js';
-import { DesktopDriverError, type ActRequest, type DesktopDriver } from '../src/driver.js';
+import type { DesktopCapabilities, DesktopTargetIdentity } from '../../protocol/src/desktop.js';
+import {
+  DesktopDriverError,
+  type ActRequest,
+  type DescribeRequest,
+  type DesktopDriver,
+} from '../src/driver.js';
 
 // Not a real PNG. Nothing in the codebase decodes this value — the only
 // assertion anywhere is a prefix/length regex on the data URI — so a
@@ -25,7 +30,7 @@ export class FakeDesktopDriver implements DesktopDriver {
     return { windowId: 'w1', processName: 'notepad.exe', title: 'Untitled' };
   }
 
-  async describe() {
+  async describe(_request: DescribeRequest) {
     this.refs = new Set(['ref_1_1']);
     return {
       window: await this.focusedWindow(),
@@ -34,7 +39,7 @@ export class FakeDesktopDriver implements DesktopDriver {
     };
   }
 
-  async capture() {
+  async capture(_windowId?: string, _expectedTarget?: DesktopTargetIdentity) {
     return { imageDataUri: PIXEL, devicePixelRatio: 1, window: await this.focusedWindow() };
   }
 

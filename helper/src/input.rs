@@ -21,6 +21,8 @@
 //! module leaves a key or a button held.
 
 use crate::keys::Chord;
+#[path = "input_guard.rs"]
+mod guarded;
 use ::windows::Win32::Foundation::GetLastError;
 use ::windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
@@ -28,6 +30,7 @@ use ::windows::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEEVENTF_LEFTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY,
 };
 use ::windows::Win32::UI::WindowsAndMessaging::SetCursorPos;
+pub(crate) use guarded::run as guarded;
 
 /// Accepts a batch and returns how many events the sink took.
 pub type Sink<'a> = &'a dyn Fn(&[INPUT]) -> u32;
@@ -107,7 +110,13 @@ fn keyboard_event(key: VIRTUAL_KEY, extended: bool, up: bool) -> INPUT {
     INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
-            ki: KEYBDINPUT { wVk: key, wScan: 0, dwFlags: flags, time: 0, dwExtraInfo: 0 },
+            ki: KEYBDINPUT {
+                wVk: key,
+                wScan: 0,
+                dwFlags: flags,
+                time: 0,
+                dwExtraInfo: 0,
+            },
         },
     }
 }
@@ -164,7 +173,10 @@ struct ReleaseGuard<'a> {
 
 impl<'a> ReleaseGuard<'a> {
     fn new(sink: Sink<'a>) -> Self {
-        ReleaseGuard { sink, pending: Vec::new() }
+        ReleaseGuard {
+            sink,
+            pending: Vec::new(),
+        }
     }
 
     fn press_key(&mut self, key: VIRTUAL_KEY, extended: bool) -> Result<(), String> {
@@ -202,11 +214,7 @@ impl Drop for ReleaseGuard<'_> {
     }
 }
 
-pub fn send_chords(chords: &[Chord]) -> Result<(), String> {
-    send_chords_with(chords, &real_sink)
-}
-
-fn send_chords_with(chords: &[Chord], sink: Sink) -> Result<(), String> {
+pub(crate) fn send_chords_with(chords: &[Chord], sink: Sink) -> Result<(), String> {
     for chord in chords {
         let mut guard = ReleaseGuard::new(sink);
         for modifier in &chord.modifiers {
@@ -222,11 +230,7 @@ fn send_chords_with(chords: &[Chord], sink: Sink) -> Result<(), String> {
 /// characters outside the active keyboard layout still arrive. Sent per
 /// UTF-16 code unit, which keeps surrogate pairs intact, and in bounded
 /// batches so a refusal strands as little as possible.
-pub fn send_text(text: &str) -> Result<(), String> {
-    send_text_with(text, &real_sink)
-}
-
-fn send_text_with(text: &str, sink: Sink) -> Result<(), String> {
+pub(crate) fn send_text_with(text: &str, sink: Sink) -> Result<(), String> {
     let units: Vec<u16> = text.encode_utf16().collect();
     if units.len() > MAX_TEXT_UNITS {
         return Err(format!(
@@ -272,19 +276,15 @@ fn send_text_with(text: &str, sink: Sink) -> Result<(), String> {
 /// The cursor is left where it clicked, deliberately: restoring it would be
 /// a second visible jump, and a human watching needs to see where the agent
 /// actually clicked.
-pub fn click_at(x: i32, y: i32) -> Result<(), String> {
-    click_at_with(x, y, &real_mover, &real_sink)
-}
-
-fn click_at_with(x: i32, y: i32, mover: Mover, sink: Sink) -> Result<(), String> {
+pub(crate) fn click_at_with(x: i32, y: i32, mover: Mover, sink: Sink) -> Result<(), String> {
     mover(x, y)?;
     let mut guard = ReleaseGuard::new(sink);
     guard.press_left_button()?;
     guard.release()
 }
 
-pub fn scroll(delta_y: i32) -> Result<(), String> {
-    send_batch(&real_sink, &[mouse_event(MOUSEEVENTF_WHEEL, delta_y)])
+pub(crate) fn scroll_with(delta_y: i32, sink: Sink) -> Result<(), String> {
+    send_batch(sink, &[mouse_event(MOUSEEVENTF_WHEEL, delta_y)])
 }
 
 #[cfg(test)]
@@ -302,7 +302,10 @@ mod tests {
 
     impl Recorder {
         fn new(refuse_from: Option<usize>) -> Self {
-            Recorder { batches: RefCell::new(Vec::new()), refuse_from }
+            Recorder {
+                batches: RefCell::new(Vec::new()),
+                refuse_from,
+            }
         }
 
         fn sink(&self) -> impl Fn(&[INPUT]) -> u32 + '_ {
@@ -354,8 +357,16 @@ mod tests {
         let sink = recorder.sink();
         send_chords_with(&parse_sequence("ctrl+shift+a").unwrap(), &sink).unwrap();
         let events = recorder.keyboard_events();
-        let ups: Vec<u16> = events.iter().filter(|(_, up)| *up).map(|(vk, _)| *vk).collect();
-        let downs: Vec<u16> = events.iter().filter(|(_, up)| !*up).map(|(vk, _)| *vk).collect();
+        let ups: Vec<u16> = events
+            .iter()
+            .filter(|(_, up)| *up)
+            .map(|(vk, _)| *vk)
+            .collect();
+        let downs: Vec<u16> = events
+            .iter()
+            .filter(|(_, up)| !*up)
+            .map(|(vk, _)| *vk)
+            .collect();
         assert_eq!(downs.len(), 3, "ctrl, shift, then the key");
         // Reverse of the press order: key, then shift, then ctrl.
         assert_eq!(ups, vec![downs[2], downs[1], downs[0]]);
@@ -369,7 +380,10 @@ mod tests {
         let recorder = Recorder::new(Some(3));
         let sink = recorder.sink();
         let result = send_chords_with(&parse_sequence("ctrl+a").unwrap(), &sink);
-        assert!(result.is_err(), "a refused release must surface as an error");
+        assert!(
+            result.is_err(),
+            "a refused release must surface as an error"
+        );
         let events = recorder.keyboard_events();
         for (vk, _) in events.iter().filter(|(_, up)| !*up) {
             assert!(
@@ -385,7 +399,10 @@ mod tests {
         let sink = recorder.sink();
         assert!(send_chords_with(&parse_sequence("ctrl+a").unwrap(), &sink).is_err());
         let events = recorder.keyboard_events();
-        assert!(events.iter().any(|(_, up)| *up), "a refused press must still be released");
+        assert!(
+            events.iter().any(|(_, up)| *up),
+            "a refused press must still be released"
+        );
     }
 
     #[test]
@@ -396,7 +413,10 @@ mod tests {
         assert!(result.is_err());
         let flags = recorder.mouse_flags();
         assert!(flags.contains(&MOUSEEVENTF_LEFTDOWN.0));
-        assert!(flags.contains(&MOUSEEVENTF_LEFTUP.0), "a stuck button becomes a drag");
+        assert!(
+            flags.contains(&MOUSEEVENTF_LEFTUP.0),
+            "a stuck button becomes a drag"
+        );
     }
 
     #[test]
@@ -404,7 +424,10 @@ mod tests {
         let recorder = Recorder::new(None);
         let sink = recorder.sink();
         click_at_with(1, 2, &no_move, &sink).unwrap();
-        assert_eq!(recorder.mouse_flags(), vec![MOUSEEVENTF_LEFTDOWN.0, MOUSEEVENTF_LEFTUP.0]);
+        assert_eq!(
+            recorder.mouse_flags(),
+            vec![MOUSEEVENTF_LEFTDOWN.0, MOUSEEVENTF_LEFTUP.0]
+        );
     }
 
     #[test]
@@ -413,7 +436,10 @@ mod tests {
         let sink = recorder.sink();
         let failing_move = |_x: i32, _y: i32| Err("no".to_string());
         assert!(click_at_with(5, 5, &failing_move, &sink).is_err());
-        assert!(recorder.mouse_flags().is_empty(), "nothing should be clicked");
+        assert!(
+            recorder.mouse_flags().is_empty(),
+            "nothing should be clicked"
+        );
     }
 
     #[test]
@@ -441,7 +467,10 @@ mod tests {
         let sink = recorder.sink();
         let err = send_text_with(&"a".repeat(MAX_TEXT_UNITS + 1), &sink).unwrap_err();
         assert!(err.contains("limit"), "got: {err}");
-        assert!(recorder.batches.borrow().is_empty(), "nothing should be typed");
+        assert!(
+            recorder.batches.borrow().is_empty(),
+            "nothing should be typed"
+        );
     }
 
     #[test]
@@ -469,13 +498,24 @@ mod tests {
         assert!(err.contains("PARTIALLY"), "got: {err}");
 
         let batches = recorder.batches.borrow();
-        assert_eq!(batches.len(), 2, "the original batch, plus exactly one release retry");
+        assert_eq!(
+            batches.len(),
+            2,
+            "the original batch, plus exactly one release retry"
+        );
         let retry = &batches[1];
-        assert_eq!(retry.len(), 1, "the retry must contain only the stranded event");
+        assert_eq!(
+            retry.len(),
+            1,
+            "the retry must contain only the stranded event"
+        );
         // SAFETY: a keyboard event, as constructed by unicode_event.
         let ki = unsafe { retry[0].Anonymous.ki };
         assert_eq!(retry[0].r#type, INPUT_KEYBOARD);
-        assert!((ki.dwFlags & KEYEVENTF_KEYUP) == KEYEVENTF_KEYUP, "the retry must be a release, not another press");
+        assert!(
+            (ki.dwFlags & KEYEVENTF_KEYUP) == KEYEVENTF_KEYUP,
+            "the retry must be a release, not another press"
+        );
     }
 
     #[test]

@@ -10,6 +10,7 @@ import type {
 } from '../../protocol/src/desktop.js';
 
 export interface DescribeRequest {
+  expectedTarget?: DesktopTargetIdentity;
   windowId?: string;
   maxNodes: number;
   interactiveOnly: boolean;
@@ -17,6 +18,8 @@ export interface DescribeRequest {
 }
 
 export interface ActRequest {
+  /** Identity already authorized by the host; the native helper must revalidate it. */
+  expectedTarget?: DesktopTargetIdentity;
   op: 'click' | 'type' | 'key' | 'scroll';
   ref?: string;
   x?: number;
@@ -59,7 +62,7 @@ export interface DesktopDriver {
   /** Identity of the window an action would land on, resolved at action time. */
   focusedWindow(): Promise<DesktopWindowIdentity>;
   describe(request: DescribeRequest): Promise<DesktopDescribeResult>;
-  capture(windowId?: string): Promise<DesktopCaptureResult>;
+  capture(windowId?: string, expectedTarget?: DesktopTargetIdentity): Promise<DesktopCaptureResult>;
   act(request: ActRequest): Promise<ActResult>;
   disconnect(): Promise<void>;
 

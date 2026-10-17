@@ -38,19 +38,18 @@ test('a refused input action is audited as FAILED and the error propagates', asy
   assert.equal(entry.result, 'FAILED');
 });
 
-test('desktop_capture with no window still evaluates the gate and audits an allow verdict', async () => {
+test('desktop_capture refuses an unattributable target', async () => {
   const ctx = desktopContext();
-  const result: any = await handleDesktopTool(ctx.value, 's1', 'desktop_capture', {
-    windowId: 'no-window',
-  });
-  assert.equal(result.window, null);
-  const entry = ctx.auditEntries.find((e: any) => e.tool === 'desktop_capture');
-  // Capture is always allowed regardless of attribution - the point of this
-  // test is that the gate is still *evaluated* (and audited) for the
-  // unattributable case, not skipped, since an unattributable window is the
-  // one interesting read verdict.
-  assert.equal(entry.gateVerdict, 'allow');
-  assert.ok(entry.gateRule.length > 0);
+  await assert.rejects(
+    () => handleDesktopTool(ctx.value, 's1', 'desktop_capture', { windowId: 'no-window' }),
+    { code: 'DESKTOP_INPUT_REFUSED' },
+  );
+  assert.equal(
+    ctx.auditEntries.some(
+      (entry: any) => entry.tool === 'desktop_capture' && entry.result === 'SUCCEEDED',
+    ),
+    false,
+  );
 });
 
 test('desktop_describe redacts nested node value and children', async () => {
