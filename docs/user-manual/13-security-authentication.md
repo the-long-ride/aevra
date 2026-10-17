@@ -77,3 +77,19 @@ The Execution Worker is reached only over a Unix domain socket or a Windows name
 ## Secret handling
 
 Admin passwords stay in process environment and in-memory verifiers. Connector tokens, OAuth access tokens, active refresh tokens, and retained spent refresh-token material are stored as hashes rather than raw bearer credentials. Admin connection projections and MCP operation projections never return raw credentials, token hashes, PKCE verifier/challenge values, or refresh-family hash material. DLP redacts known secrets from remote command output before it leaves the Worker.
+
+## Listener and identity hardening
+
+The public `GET /api/health` probe returns only core state and version. Sign in and use `GET /api/status` for diagnostics. Admin and MCP listeners reject unexpected Host names and malformed request targets. Admin pages deny framing. Gateway traffic never receives local-process exemptions; browser pairing remains available only through the direct local listener.
+
+After a successful sign-in, a separate HttpOnly, SameSite=Strict known-device cookie gives that device its own throttle bucket for 30 days. The bounded device registry lives in memory, so a restart clears recognition. Unknown or forged device cookies use the ordinary address bucket. Trusted proxy IP handling remains opt-in.
+
+OAuth actors use `oauth:<client name>@<redirect origin>`. Review the redirect origin and client ID in the approval dialog; a display name alone does not establish identity. Existing name-only rules and profiles migrate only when the destination is unambiguous. Ambiguous redirect origins remain unmatched for review; legacy/new actor-name collisions discard ambiguous shared authority rather than transferring it to another client.
+
+Dynamic registration counts only clients that have never connected, prunes those older than 24 hours, and limits that pool to 50. Authenticated operators can delete clients with `DELETE /api/oauth/clients/{id}`; active connections must first be revoked. Authorization admission is rate limited and retains at most five pending requests per client. Approve pairing in the Admin UI; there is no CLI approval-by-code command.
+
+Windows secret storage uses Credential Manager's native read/write/delete API. Credential values travel over the helper's stdin, never its command-line arguments.
+
+The gateway checks the original Host against local/bind names and configured public/Admin origins before rewriting upstream headers. Managed tunnel host changes update that allowlist live. Normalized authority-like paths are rejected; request paths cannot replace the configured upstream destination.
+
+Protected Git operations fail closed if their internal file-name enumeration exceeds the 1 MiB command-output limit. A truncated inventory is never accepted as proof that the full commit or read excludes protected files.

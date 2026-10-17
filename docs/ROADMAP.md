@@ -1,6 +1,6 @@
 # Aevra Roadmap & Weak-Points Map
 
-**Date:** 2026-09-15 · **Baseline:** Aevra `1.0.5` · **Derived from:** shipped browser control, Windows desktop control, the workspace manifest, and the security review of all three.
+**Date:** 2026-10-15 · **Baseline:** Aevra `1.3.0` · **Derived from:** shipped browser control, Windows desktop control, the workspace manifest, and the security review of all three.
 
 This file tracks remaining product/architecture gaps only. Delivered work belongs in `CHANGELOG.md`.
 
@@ -15,6 +15,15 @@ This file tracks remaining product/architecture gaps only. Delivered work belong
 7. **Desktop control can reach what browser control refuses.** Input is approval-gated now, but an approved `desktop_type` into a browser's address bar still reaches a URL without passing `classifyOrigin` or the navigation DLP scan, and an approved click inside an editor still reaches its integrated terminal without passing command policy. The window gate works at process granularity, and a browser or an editor is exactly what a desktop agent needs to drive. Closing this needs cross-surface policy, not another denylist entry.
 8. **The manifest's protected paths do not bind `shell_run`.** They are enforced on file tools and on search hits. A command that reads the same file is governed by command policy alone. Either wire the manifest into command authorization or say plainly in the manifest docs that it is a file-tool boundary.
 
+## Current desktop validation
+
+- Linux capture/input: **Ubuntu X11** with XTest/Composite and **GNOME Wayland / KDE KWin 6.6** with explicitly enabled compositor companions and approved helper paths. Real private GNOME 50/Ubuntu 26.04 fixture evidence covers capture/input and authorization; GNOME 46 native CI is configured. See [setup and validation](user-manual/22-wayland-desktop.md). AT-SPI semantic actions remain independently available when the provider can identify the target.
+- macOS capture/input adapters are implemented; native Mac build/runtime acceptance is still required.
+
+## Planned desktop work
+
+- **Wayland acceptance and wider compositor support:** Physical-GPU/OpenGL capture acceptance and additional KWin versions remain follow-up work. Other compositors and a generic RemoteDesktop/ScreenCast/PipeWire/EIS adapter still need reliable source-to-app proof and native tests. GNOME currently uses its consented companion because opaque portal stream IDs do not establish app identity. See the [GNOME design](designs/2026-10-15-wayland-gnome-design.md).
+
 ## Not yet specified
 
 - Multi-actor / multi-user authority and storage isolation.
@@ -26,9 +35,7 @@ This file tracks remaining product/architecture gaps only. Delivered work belong
 - Progress notifications, request cancellation, and elicitation.
 - An HTTP request tool, a workspace manifest schema beyond commands/protected paths, and non-text file extraction (pdf/docx/xlsx/image).
 - File and workspace MCP resources, `subscribe`, and `listChanged`. Resources expose skills only today.
-- Per-profile `tools/list` filtering. Every tool is listed regardless of the active profile.
-- Desktop control on macOS (AX + CGEvent) and Linux (AT-SPI + XTest on X11; portal-only, read-only on Wayland). Only the Windows helper exists today.
-- Desktop helper distribution and Authenticode signing. The binary is built from source and unsigned, so SmartScreen warns.
+- Native helper artifacts are packaged by release CI. Authenticode signing remains future work; unsigned Windows downloads can trigger SmartScreen.
 - Human-takeover abort for desktop control: grabbing the mouse mid-action currently stops nothing. Needs a low-level input hook.
 - Multi-monitor screen capture. `DesktopCaptureResult` carries no origin, so only the primary monitor is coordinate-mappable.
 

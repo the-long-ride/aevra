@@ -1,6 +1,6 @@
 # 04 — Connectors
 
-**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `1.2.1`
+**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `1.3.0`
 
 A **connector** is a named admission credential for one AI client — the thing that makes "works with any web AI" true, because the client needs no auth capability at all: the credential _is_ the URL.
 
@@ -64,6 +64,14 @@ Operators can tailor the MCP tool surface and response encoding per client actor
 - **Enforcement:** Disabled groups are omitted from `tools/list`; invoking a tool in a disabled group fails with `TOOL_GROUP_DISABLED`.
 - **Result format:** `both` (default text plus `structuredContent`), `text` (content text only), or `structured` (`structuredContent` plus stub text).
 - **Settings & API:** Stored in setting `mcp.connectorProfiles`. Managed via `GET /api/connector-profiles` and `PUT /api/connector-profiles/:actor` (appends audit event `connector.profile.update`). Changes take effect on the client's next `tools/list`.
+
+## Local agent connections
+
+`aevra agent` (CLI) and Settings (Admin REST `/api/agents`) connect local coding agents (Codex, Claude Code, OpenCode, Antigravity) over stdio (`aevra agent serve --credential-file`) or global HTTP. Each connection has its own durable credential and a manifest record; `packages/agent-integration` owns config edits, rollback and revoke ordering.
+
+- **Commit boundary:** config edits and the manifest write are the only rollback-protected part. Credential revoke, git exclude and file cleanup run afterwards; a failed revoke raises `AGENT_REVOKE_INCOMPLETE` and keeps the saved state.
+- **Scope:** workspace scope is stdio only and never writes outside the project or the agent's user file; a tracked project file is refused (`AGENT_PROJECT_FILE_TRACKED`).
+- **State:** a connection whose credential is gone reports `incomplete` (`connectorMissing`), never "never used".
 
 ## Deployment rule
 
