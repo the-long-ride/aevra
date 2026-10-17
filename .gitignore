@@ -27,3 +27,6 @@ docs/research/
 .test-dist-cxb/
 .test-dist-core/
 /handoff.md
+
+.test-dist-security/
+.work-tracking/

@@ -25,12 +25,14 @@ function argument(name) {
  */
 function compile() {
   rmSync(DIST, { recursive: true, force: true });
-  const entry = path.join('node_modules', 'typescript', 'bin', 'tsc');
+  const entry = argument('--typescript') ?? path.join('node_modules', 'typescript', 'bin', 'tsc');
   if (!existsSync(entry)) {
     console.error(`[pack-extension] TypeScript is not installed at ${entry}`);
     process.exit(1);
   }
-  const result = spawnSync(process.execPath, [entry, '-p', SOURCE], { stdio: 'inherit' });
+  const args = [entry, '-p', SOURCE];
+  if (argument('--type-roots')) args.push('--typeRoots', argument('--type-roots'));
+  const result = spawnSync(process.execPath, args, { stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
