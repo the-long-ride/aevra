@@ -39,6 +39,7 @@ function mount(upstreams: UpstreamSummary[] = [active], overrides = {}) {
       message: null,
     }),
     acknowledge = vi.fn().mockResolvedValue({ ...active, state: 'active' }),
+    setEnabled = vi.fn().mockResolvedValue(undefined),
     load = vi.fn().mockResolvedValue(upstreams);
   render(
     <DialogProvider>
@@ -49,11 +50,12 @@ function mount(upstreams: UpstreamSummary[] = [active], overrides = {}) {
         remove={remove}
         test={test}
         acknowledge={acknowledge}
+        setEnabled={setEnabled}
         {...overrides}
       />
     </DialogProvider>,
   );
-  return { load, create, update, remove, test, acknowledge };
+  return { load, create, update, remove, test, acknowledge, setEnabled };
 }
 
 describe('McpUpstreamsSettings', () => {
@@ -61,6 +63,7 @@ describe('McpUpstreamsSettings', () => {
     mount();
     const row = await screen.findByRole('row', { name: /github/i });
     expect(row.textContent).toMatch(/active/i);
+    expect(within(row).getByText('Active')).toHaveClass('success');
     expect(row.textContent).toMatch(/12 tools/i);
     expect(row.textContent).toMatch(/HIGH/);
   });
@@ -186,23 +189,31 @@ describe('McpUpstreamsSettings', () => {
     expect(await screen.findByText('Server name already exists')).toBeInTheDocument();
   });
 
-  it('shows review diff and acknowledge', async () => {
+  it('shows the review diff in the dialog and accepts through it', async () => {
     const { acknowledge } = mount([
       {
         ...active,
         state: 'needs-review',
+        pendingCatalogFingerprint: 'reviewed fingerprint',
         pendingCatalogDiff: {
-          added: ['new_tool'],
-          removed: ['old_tool'],
-          changed: ['create_issue'],
+          added: ['tool:new_tool'],
+          removed: ['tool:old_tool'],
+          changed: ['tool:create_issue'],
         },
       },
     ]);
     const row = await screen.findByRole('row', { name: /github/i });
-    expect(row.textContent).toMatch(/new_tool/);
-    expect(row.textContent).toMatch(/old_tool/);
-    fireEvent.click(screen.getByRole('button', { name: /acknowledge github/i }));
-    await waitFor(() => expect(acknowledge).toHaveBeenCalledWith('u1'));
+    expect(row.textContent).not.toMatch(/new_tool/);
+    expect(row.textContent).not.toMatch(/old_tool/);
+    fireEvent.click(
+      within(row).getByRole('button', { name: /review catalog changes for github/i }),
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Review changes — github' });
+    expect(dialog.textContent).toMatch(/new_tool/);
+    expect(dialog.textContent).toMatch(/old_tool/);
+    expect(dialog.textContent).toMatch(/create_issue/);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Accept changes' }));
+    await waitFor(() => expect(acknowledge).toHaveBeenCalledWith('u1', 'reviewed fingerprint'));
   });
 
   it('labels hints advisory and handles non-read-only claims', async () => {
@@ -217,11 +228,104 @@ describe('McpUpstreamsSettings', () => {
       },
     ]);
     const row = await screen.findByRole('row', { name: /github/i });
-    expect(row.textContent).toMatch(/advisory only/i);
-    expect(row.textContent).toMatch(/does not affect the risk tier/i);
-    expect(row.textContent).toMatch(/delete_repo/);
-    expect(row.textContent).toMatch(/claims read-only/);
-    expect(row.textContent).toMatch(/no read-only claim/);
+    expect(row.querySelector('details')).toBeNull();
+    const user = userEvent.setup();
+    const trigger = within(row).getByRole('button', { name: 'Detail for github' });
+    await user.click(trigger);
+    const modal = screen.getByRole('dialog', { name: 'Detail — github' });
+    expect(modal).toHaveTextContent(/advisory only/i);
+    expect(modal).toHaveTextContent(/does not affect the risk tier/i);
+    expect(modal).toHaveTextContent('delete_repo');
+    expect(modal).toHaveTextContent('claims read-only');
+    expect(modal).toHaveTextContent('no read-only claim');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(trigger).toHaveFocus();
     expect(row.textContent).toMatch(/CRITICAL/);
   });
+
+  it('toggles a server through the switch and refreshes', async () => {
+    const { setEnabled, load } = mount();
+    fireEvent.click(await screen.findByRole('switch', { name: 'Enable github' }));
+    await waitFor(() => expect(setEnabled).toHaveBeenCalledWith('u1', false));
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+  });
+
+  it('enables a disabled server and marks the row as disabled', async () => {
+    const { setEnabled } = mount([{ ...active, enabled: false }]);
+    const row = await screen.findByRole('row', { name: /github/i });
+    expect(within(row).getByText('Disabled')).toBeInTheDocument();
+    expect(row.className).toMatch(/is-disabled/);
+    expect(within(row).queryByText('Active')).toBeNull();
+    expect(row.querySelectorAll('.status')).toHaveLength(1);
+    fireEvent.click(within(row).getByRole('switch', { name: 'Enable github' }));
+    await waitFor(() => expect(setEnabled).toHaveBeenCalledWith('u1', true));
+  });
+
+  it('does not badge or dim an enabled server', async () => {
+    mount();
+    const row = await screen.findByRole('row', { name: /github/i });
+    expect(within(row).queryByText('Disabled')).toBeNull();
+    expect(row.className).not.toMatch(/is-disabled/);
+  });
+
+  it('ignores a second toggle while the first is in flight', async () => {
+    let release: () => void = () => {};
+    const setEnabled = vi.fn(() => new Promise<void>((resolve) => (release = resolve)));
+    mount([active], { setEnabled });
+    const toggle = await screen.findByRole('switch', { name: 'Enable github' });
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeDisabled());
+    fireEvent.click(toggle);
+    expect(setEnabled).toHaveBeenCalledTimes(1);
+    release();
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+  });
+
+  it('shows the error toast when toggling fails', async () => {
+    const setEnabled = vi.fn().mockRejectedValue(new Error('Toggle refused'));
+    mount([active], { setEnabled });
+    fireEvent.click(await screen.findByRole('switch', { name: 'Enable github' }));
+    expect(await screen.findByText('Toggle refused')).toBeInTheDocument();
+  });
+
+  it('filters rows by Enabled and Disabled', async () => {
+    const user = userEvent.setup();
+    mount([active, { ...active, id: 'u2', name: 'gitlab', enabled: false }]);
+    await screen.findByRole('row', { name: /github/i });
+    await user.click(screen.getByRole('button', { name: 'Enabled' }));
+    await user.click(screen.getByRole('option', { name: 'Disabled' }));
+    expect(screen.queryByRole('row', { name: /github/i })).toBeNull();
+    expect(screen.getByRole('row', { name: /gitlab/i })).toBeInTheDocument();
+  });
+
+  it('edits a disabled server without sending enabled', async () => {
+    const { update } = mount([{ ...active, enabled: false }]);
+    fireEvent.click(await screen.findByRole('button', { name: /edit github/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save server/i }));
+    await waitFor(() => expect(update).toHaveBeenCalled());
+    expect(update.mock.calls[0]![1]).not.toHaveProperty('enabled');
+  });
+});
+
+it('filters by the displayed status of disabled servers', async () => {
+  const user = userEvent.setup();
+  mount([active, { ...active, id: 'u2', name: 'gitlab', enabled: false }]);
+  await screen.findByRole('row', { name: 'gitlab' });
+  await user.click(
+    screen
+      .getAllByRole('button', { name: 'Status' })
+      .find((button) => button.getAttribute('aria-haspopup') === 'listbox')!,
+  );
+  await user.click(screen.getByRole('option', { name: 'Active' }));
+  expect(screen.queryByRole('row', { name: 'gitlab' })).toBeNull();
+  expect(screen.getByRole('row', { name: 'github' })).toBeInTheDocument();
+  await user.click(
+    screen
+      .getAllByRole('button', { name: 'Status' })
+      .find((button) => button.getAttribute('aria-haspopup') === 'listbox')!,
+  );
+  await user.click(screen.getByRole('option', { name: 'Disabled' }));
+  expect(screen.getByRole('row', { name: 'gitlab' })).toBeInTheDocument();
+  expect(screen.queryByRole('row', { name: 'github' })).toBeNull();
 });

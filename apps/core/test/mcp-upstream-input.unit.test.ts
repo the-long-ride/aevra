@@ -60,7 +60,13 @@ test('a well-formed http registration parses into a create input', () => {
     secretRefId: plainPhrase1,
   });
   assert.equal(input.risk, 'HIGH');
-  assert.equal(input.enabled, true);
+  assert.equal(input.enabled, undefined);
+});
+
+test('an explicit enabled flag passes through and an omitted one stays undefined', () => {
+  assert.equal(parseUpstreamInput({ ...httpBody, enabled: true }).enabled, true);
+  assert.equal(parseUpstreamInput({ ...httpBody, enabled: false }).enabled, false);
+  assert.equal(parseUpstreamInput({ ...httpBody }).enabled, undefined);
 });
 
 test('a well-formed stdio registration parses its command and env references', () => {

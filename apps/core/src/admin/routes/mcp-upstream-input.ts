@@ -1,3 +1,8 @@
+import type {
+  McpUpstreamToolDocumentation,
+  McpUpstreamDocumentationSource,
+} from '../../../../../packages/admin-contracts/src/mcp-upstream.js';
+import { catalogFingerprint } from '../../../../../packages/mcp-upstream/src/fingerprint.js';
 import type { RiskTier } from '../../../../../packages/protocol/src/index.js';
 import type {
   UpstreamRecord,
@@ -102,7 +107,7 @@ export function parseUpstreamInput(body: Record<string, any>) {
     config: parseConfig(transport, body.config),
     auth: parseAuth(transport, body.auth),
     risk,
-    enabled: body.enabled === undefined ? true : body.enabled === true,
+    enabled: body.enabled === undefined ? undefined : body.enabled === true,
   };
 }
 
@@ -118,7 +123,10 @@ export interface PublicUpstream {
   toolCount: number;
   resourceCount: number;
   promptCount: number;
+  pendingCatalogFingerprint?: string | null;
   pendingCatalogDiff: { added: string[]; removed: string[]; changed: string[] } | null;
+  tools: McpUpstreamToolDocumentation[];
+  documentationSource: McpUpstreamDocumentationSource;
   advisory: Array<{ tool: string; readOnlyHint?: boolean; destructiveHint?: boolean }>;
   createdAt: string;
   updatedAt: string;
@@ -160,7 +168,32 @@ export function publicUpstream(record: ProjectableUpstream): PublicUpstream {
     resourceCount: Number(record.resourceCount ?? catalog?.resources.length ?? 0),
     promptCount: Number(record.promptCount ?? catalog?.prompts.length ?? 0),
     pendingCatalogDiff: record.pendingCatalogDiff ?? null,
+    pendingCatalogFingerprint: record.pendingCatalog
+      ? catalogFingerprint(record.pendingCatalog)
+      : null,
     advisory,
+    documentationSource: record.pendingCatalog
+      ? 'pending'
+      : record.catalog
+        ? 'accepted'
+        : 'unavailable',
+    tools: tools.map((tool) => ({
+      name: tool.name,
+      ...(typeof tool.description === 'string' ? { description: tool.description } : {}),
+      ...(tool.inputSchema === undefined ? {} : { inputSchema: tool.inputSchema }),
+      ...(tool.annotations
+        ? {
+            annotations: {
+              ...(typeof tool.annotations.readOnlyHint === 'boolean'
+                ? { readOnlyHint: tool.annotations.readOnlyHint }
+                : {}),
+              ...(typeof tool.annotations.destructiveHint === 'boolean'
+                ? { destructiveHint: tool.annotations.destructiveHint }
+                : {}),
+            },
+          }
+        : {}),
+    })),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

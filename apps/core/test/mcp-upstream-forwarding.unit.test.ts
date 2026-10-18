@@ -121,7 +121,7 @@ test('a needs-review server forwards nothing', async () => {
 test('a disabled server forwards nothing', async () => {
   const { service, forwarded, record, db } = await registered();
   try {
-    service.setEnabled(record.id, false);
+    await service.setEnabled(record.id, false);
     await assert.rejects(service.callTool('github', 'create_issue', {}), /MCP_UPSTREAM_DISABLED/);
     assert.deepEqual(forwarded, []);
   } finally {
@@ -138,15 +138,13 @@ test('a degraded server fails fast', async () => {
     db.close();
   }
 });
-test('an unknown tool name is still forwarded because the upstream is authoritative', async () => {
+test('an unreviewed tool name is refused before reaching the upstream', async () => {
   const { service, forwarded, db } = await registered();
   try {
-    await service.callTool('github', 'not_in_the_cached_catalog', {});
-    assert.equal(forwarded.length, 1);
-    assert.equal(
-      forwarded[0]!.call.method === 'tool' ? forwarded[0]!.call.name : '',
-      'not_in_the_cached_catalog',
-    );
+    await assert.rejects(service.callTool('github', 'not_in_the_cached_catalog', {}), {
+      code: 'MCP_UPSTREAM_ENTRY_NOT_REVIEWED',
+    });
+    assert.equal(forwarded.length, 0);
   } finally {
     db.close();
   }

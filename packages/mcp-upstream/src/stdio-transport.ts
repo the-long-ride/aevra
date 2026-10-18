@@ -1,3 +1,4 @@
+import { buildChildEnvironment } from '../../security/src/environment.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PendingCalls } from './pending-calls.js';
 import {
@@ -86,7 +87,8 @@ export class StdioTransport implements UpstreamTransport {
       child = spawn(this.options.command, this.options.args, {
         stdio: 'pipe',
         cwd: this.options.cwd,
-        env: { ...process.env, ...this.options.env },
+        env: buildChildEnvironment(this.options.env ?? {}),
+        windowsHide: true,
       });
     } catch (error) {
       throw new UpstreamError(
