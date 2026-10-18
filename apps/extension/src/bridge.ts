@@ -1,3 +1,6 @@
+import { readConsoleLogs } from './console-logs.js';
+export { recordConsoleLog, clearConsoleLogs } from './console-logs.js';
+import { assertActionOrigin } from '../../../packages/browser/src/action-origin.js';
 import type {
   BrowserActionInput,
   BrowserLogEntry,
@@ -18,7 +21,6 @@ import {
 import { fitVisibleCapture } from './vision-capture.js';
 import { dispatchNativeClick, dispatchNativeDrag, withDebuggerViewport } from './native-click.js';
 
-const MAX_LOGS = 500;
 const NAVIGATE_TIMEOUT_MS = 30_000;
 const IDLE_SETTLE_MS = 500;
 /**
@@ -33,18 +35,6 @@ function activeTabRequired(): Error {
     new Error('Extension vision capture requires the target tab to be active in its window'),
     { code: 'BROWSER_CAPTURE_REQUIRES_ACTIVE_TAB' },
   );
-}
-
-const consoleLogs: BrowserLogEntry[] = [];
-
-export function recordConsoleLog(text: string, level = 'log'): void {
-  consoleLogs.push({ at: new Date().toISOString(), kind: 'console', level, text });
-  if (consoleLogs.length > MAX_LOGS) consoleLogs.splice(0, consoleLogs.length - MAX_LOGS);
-}
-
-/** Test seam: the buffer is module state that survives between cases. */
-export function clearConsoleLogs(): void {
-  consoleLogs.length = 0;
 }
 
 async function activeTabId(tabId?: string): Promise<number> {
@@ -114,6 +104,34 @@ function whenLoaded(id: number, timeoutMs = NAVIGATE_TIMEOUT_MS): Promise<boolea
 
 export function createChromeBridge(): ExtensionBridge {
   return {
+    async guardRead(tabId, expectedUrl, operation) {
+      const id = Number(tabId);
+      let changed = false;
+      const listener = (updatedId: number, info: { status?: string; url?: string }) => {
+        if (updatedId === id && (info.url !== undefined || info.status === 'loading'))
+          changed = true;
+      };
+      const check = async () => {
+        const tab = await chrome.tabs.get(id);
+        if (
+          changed ||
+          tab.url !== expectedUrl ||
+          (tab.pendingUrl && tab.pendingUrl !== expectedUrl)
+        )
+          throw Object.assign(new Error('Document changed during browser read'), {
+            code: 'BROWSER_ORIGIN_BLOCKED',
+          });
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+      try {
+        await check();
+        const result = await operation();
+        await check();
+        return result;
+      } finally {
+        chrome.tabs.onUpdated.removeListener(listener);
+      }
+    },
     async listTabs(): Promise<BrowserTabInfo[]> {
       const [tabs, [selected]] = await Promise.all([
         chrome.tabs.query({}),
@@ -152,8 +170,17 @@ export function createChromeBridge(): ExtensionBridge {
       elementId: string | null,
       tabId?: string,
       isCancelled?: () => boolean,
+      guard?: import('../../../packages/browser/src/driver.js').ActOptions,
     ) {
       const id = await activeTabId(tabId);
+      const liveUrl = (await chrome.tabs.get(id)).url ?? '';
+      assertActionOrigin(liveUrl, guard?.expectedUrl, guard?.originPolicy);
+      const expectedOrigin = guard?.expectedUrl ? new URL(guard.expectedUrl).origin : undefined;
+      if (
+        expectedOrigin &&
+        new URL((await chrome.tabs.get(id)).url ?? '').origin !== expectedOrigin
+      )
+        return { ok: false, code: 'BROWSER_ORIGIN_BLOCKED' };
       if (action.op === 'drag') {
         if (![action.x, action.y, action.toX, action.toY].every(Number.isFinite)) {
           return { ok: false, code: 'INVALID_REQUEST' };
@@ -164,6 +191,8 @@ export function createChromeBridge(): ExtensionBridge {
             { x: action.x, y: action.y },
             { x: action.toX, y: action.toY },
             isCancelled,
+            expectedOrigin,
+            liveUrl,
           );
           return { ok: true };
         } catch (error) {
@@ -189,7 +218,13 @@ export function createChromeBridge(): ExtensionBridge {
           return { ok: false, code: 'INVALID_REQUEST' };
         }
         try {
-          await dispatchNativeClick(id, { x: action.x, y: action.y }, isCancelled);
+          await dispatchNativeClick(
+            id,
+            { x: action.x, y: action.y },
+            isCancelled,
+            expectedOrigin,
+            liveUrl,
+          );
           return { ok: true };
         } catch (error) {
           return {
@@ -198,7 +233,12 @@ export function createChromeBridge(): ExtensionBridge {
           };
         }
       }
-      const outcome = await inject(id, applyPageAction, [action, elementId], 'ISOLATED');
+      const outcome = await inject(
+        id,
+        applyPageAction,
+        [action, elementId, expectedOrigin, liveUrl, guard?.expectedDocumentId],
+        'ISOLATED',
+      );
       return outcome?.ok === true
         ? { ok: true }
         : { ok: false, code: String(outcome?.code ?? 'BROWSER_UNAVAILABLE') };
@@ -282,11 +322,16 @@ export function createChromeBridge(): ExtensionBridge {
       };
     },
 
-    async logs(kind: 'console' | 'network', limit: number): Promise<BrowserLogEntry[]> {
+    async logs(
+      kind: 'console' | 'network',
+      limit: number,
+      tabId?: string,
+    ): Promise<BrowserLogEntry[]> {
       // Network logs come from the CDP transport; the conformance suite tolerates
       // an empty list here rather than pretending this transport has them.
       if (kind === 'network') return [];
-      return consoleLogs.slice(-Math.max(1, limit));
+      const id = await activeTabId(tabId);
+      return readConsoleLogs(id, limit);
     },
   };
 }

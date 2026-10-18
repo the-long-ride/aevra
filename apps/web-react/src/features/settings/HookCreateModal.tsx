@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
 import { Switch } from '../../components/Switch';
+import { useModalLayer } from '../../components/modal-layer';
 import { useToast } from '../../components/Toast';
 import { postJson } from './settings-service';
 
@@ -33,6 +34,7 @@ export function HookCreateModal({
 }) {
   const { toast, error } = useToast();
   const [submitting, setSubmitting] = useState(false);
+  const { ref: layerRef, isTop } = useModalLayer();
 
   const requestClose = () => {
     if (!submitting) onClose();
@@ -40,11 +42,11 @@ export function HookCreateModal({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !submitting) onClose();
+      if (event.key === 'Escape' && !submitting && isTop()) onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, submitting]);
+  }, [isTop, onClose, submitting]);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -89,7 +91,7 @@ export function HookCreateModal({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={requestClose}>
+    <div ref={layerRef} className="modal-backdrop" role="presentation" onMouseDown={requestClose}>
       <form
         className="modal hook-create-modal"
         role="dialog"

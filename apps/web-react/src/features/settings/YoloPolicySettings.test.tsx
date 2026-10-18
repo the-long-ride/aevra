@@ -39,6 +39,6 @@ describe('YoloPolicySettings', () => {
       expect(onChanged).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.getByText('// YOLO policy saved.')).toBeInTheDocument();
+    expect(screen.getByText('YOLO policy saved.')).toBeInTheDocument();
   });
 });

@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  completeOnboarding,
-  loadDashboard,
-  registerWorkspace,
-  revokeActiveConnection,
-} from './dashboard-service';
+import { loadDashboard, revokeActiveConnection } from './dashboard-service';
 
 const requestJson = vi.fn();
 
@@ -16,11 +11,10 @@ describe('dashboard-service', () => {
   beforeEach(() => {
     requestJson.mockReset();
   });
-  it('loads runtime onboarding exposure and workspaces with the abort signal', async () => {
+  it('loads runtime exposure and workspaces with the abort signal', async () => {
     const controller = new AbortController();
     requestJson.mockImplementation(async (path: string) => {
       if (path === '/api/dashboard/runtime') return { status: 'ready' };
-      if (path === '/api/onboarding') return { completedSections: [] };
       if (path === '/api/exposure/status') return { provider: 'local' };
       if (path === '/api/workspaces') return [{ id: 'w1' }];
       throw new Error(`unexpected path ${path}`);
@@ -30,7 +24,6 @@ describe('dashboard-service', () => {
 
     expect(data).toEqual({
       snapshot: { status: 'ready' },
-      onboarding: { completedSections: [] },
       exposure: { provider: 'local' },
       workspaces: [{ id: 'w1' }],
     });
@@ -45,37 +38,6 @@ describe('dashboard-service', () => {
     for (const [, init] of requestJson.mock.calls) {
       expect(init).toEqual({});
     }
-  });
-
-  it('completes every onboarding section through PATCH', async () => {
-    requestJson.mockResolvedValue(undefined);
-    await completeOnboarding();
-
-    expect(requestJson.mock.calls[0][0]).toBe('/api/onboarding');
-    expect(requestJson.mock.calls[0][1]).toEqual({
-      method: 'PATCH',
-      body: JSON.stringify({
-        completed: true,
-        completedSections: ['remote-access', 'connect-ai', 'workspace', 'try-aevra', 'explore'],
-      }),
-    });
-  });
-
-  it('registers a workspace from form fields as JSON', async () => {
-    requestJson.mockResolvedValue(undefined);
-    const form = new FormData();
-    form.set('name', 'main');
-    form.set('hostRoot', 'F:/ws/main');
-
-    await registerWorkspace(form);
-
-    expect(requestJson.mock.calls[0]).toEqual([
-      '/api/workspaces',
-      {
-        method: 'POST',
-        body: JSON.stringify({ name: 'main', hostRoot: 'F:/ws/main' }),
-      },
-    ]);
   });
 
   it('revokes durable connections by connection id', async () => {

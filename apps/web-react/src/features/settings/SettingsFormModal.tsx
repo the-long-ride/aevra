@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { useModalLayer } from '../../components/modal-layer';
 
 export function SettingsFormModal({
   title,
@@ -21,21 +22,22 @@ export function SettingsFormModal({
   onSubmit(event: React.FormEvent<HTMLFormElement>): void;
   children: ReactNode;
 }) {
+  const { ref: layerRef, isTop } = useModalLayer();
   const requestClose = () => {
     if (!submitting) onClose();
   };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !submitting) onClose();
+      if (event.key === 'Escape' && !submitting && isTop()) onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, submitting]);
+  }, [isTop, onClose, submitting]);
 
   const titleId = `settings-modal-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={requestClose}>
+    <div ref={layerRef} className="modal-backdrop" role="presentation" onMouseDown={requestClose}>
       <form
         className={`modal settings-form-modal${halfWidth ? ' settings-form-modal-half' : ''}`}
         role="dialog"

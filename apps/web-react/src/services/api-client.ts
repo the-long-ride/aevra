@@ -18,7 +18,12 @@ export async function requestJson<T>(path: string, init: RequestInit = {}): Prom
       typeof record.error === 'object' && record.error !== null
         ? (record.error as Record<string, unknown>)
         : {};
-    const message = error.message ?? record.error ?? record.message ?? `HTTP ${response.status}`;
+    const message =
+      error.message ??
+      error.code ??
+      (typeof record.error === 'string' ? record.error : undefined) ??
+      record.message ??
+      `HTTP ${response.status}`;
     throw new Error(String(message));
   }
   return value as T;

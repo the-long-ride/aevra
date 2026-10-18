@@ -1,6 +1,11 @@
 import { expect, test } from 'vitest';
 import { dashboardOrder } from './dashboard-order';
 
-test('system capabilities stays final after onboarding completes', () => {
-  expect(dashboardOrder(true).at(-1)).toBe('system-capabilities');
+test('dashboard sections run from runtime overview to system capabilities', () => {
+  expect(dashboardOrder()).toEqual([
+    'runtime-overview',
+    'live-mcp-activity',
+    'active-connections',
+    'system-capabilities',
+  ]);
 });

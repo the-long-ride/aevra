@@ -37,7 +37,7 @@ export function DataPage() {
     try {
       const data = await fetchAllDataForBackup(portable);
       downloadBackupFile(data);
-      success('// Backup downloaded successfully.');
+      success('Backup downloaded successfully.');
     } catch (cause) {
       error(cause);
     } finally {

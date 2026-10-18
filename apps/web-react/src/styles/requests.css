@@ -395,3 +395,10 @@
     padding-top: max(60px, 10vh);
   }
 }
+
+.approval-connection-hint {
+  font-size: 11px;
+  color: var(--accent, #3b82f6);
+  margin-top: 4px;
+  line-height: 1.4;
+}

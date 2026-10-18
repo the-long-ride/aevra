@@ -1,63 +1,23 @@
-import type { WorkspaceSummary } from '@aevra/admin-contracts';
+import { useWorkspaceRows, useCopiedWorkspaceId, type WorkspaceRow } from './workspace-data';
 import { useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
+import { useModalLayer } from '../../components/modal-layer';
 import { PageState } from '../../components/PageState';
-import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
 import { AddWorkspaceModal } from './AddWorkspaceModal';
 import { CopyIcon, DetailIcon } from './WorkspaceIcons';
 
-interface WorkspaceMount extends Record<string, unknown> {
-  id: string;
-  logicalPath?: string;
-  hostRoot?: string;
-  capabilities?: string[];
-  sensitivityPolicyId?: string;
-}
-
-interface WorkspaceRow extends WorkspaceSummary, Record<string, unknown> {
-  mounts: WorkspaceMount[];
-  mountCount: number;
-  mountState: string;
-}
-
-async function load(signal: AbortSignal): Promise<WorkspaceRow[]> {
-  const workspaces = await requestJson<WorkspaceSummary[]>('/api/workspaces', {
-    signal,
-  });
-  return Promise.all(
-    workspaces.map(async (workspace) => {
-      const mounts = await requestJson<WorkspaceMount[]>(
-        `/api/workspaces/${encodeURIComponent(workspace.id)}/mounts`,
-        { signal },
-      );
-      return {
-        ...workspace,
-        mounts,
-        mountCount: mounts.length,
-        mountState: mounts.length ? 'Has mounts' : 'No mounts',
-      };
-    }),
-  );
-}
-
 export function WorkspacesPage() {
-  const resource = useApiResource(load);
+  const resource = useWorkspaceRows();
+  const { copiedId, copyWorkspaceId } = useCopiedWorkspaceId();
   const dialog = useDialog();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const { ref: detailLayerRef } = useModalLayer();
   const selected = resource.data?.find((workspace) => workspace.id === selectedId) ?? null;
 
-  const copyWorkspaceId = async (id: string) => {
-    await navigator.clipboard.writeText(id);
-    setCopiedId(id);
-    window.setTimeout(() => {
-      setCopiedId((current) => (current === id ? null : current));
-    }, 1600);
-  };
   const removeWorkspace = async (row: WorkspaceRow) => {
     if (
       !(await dialog.confirm({
@@ -211,6 +171,7 @@ export function WorkspacesPage() {
       ) : null}
       {selected ? (
         <div
+          ref={detailLayerRef}
           className="modal-backdrop"
           onMouseDown={(event) => {
             if (event.currentTarget === event.target) setSelectedId(null);
@@ -294,11 +255,6 @@ export function WorkspacesPage() {
                       key: 'capabilities',
                       label: 'Capabilities',
                       value: (row) => (row.capabilities ?? []).join(', '),
-                    },
-                    {
-                      key: 'sensitivityPolicyId',
-                      label: 'Sensitivity',
-                      value: (row) => row.sensitivityPolicyId ?? 'Default',
                     },
                     {
                       key: 'actions',

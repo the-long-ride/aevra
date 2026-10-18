@@ -166,7 +166,7 @@ describe('DesktopControlSettings exact grants', () => {
     expect(screen.getByText(/Persistent · C:\\A\\k\.exe/)).toBeInTheDocument();
     const list = screen.getByLabelText('Granted apps');
     fireEvent.click(within(list).getAllByRole('button', { name: 'Revoke' })[1]!);
-    expect(await screen.findByText('// App grant revoked.')).toBeInTheDocument();
+    expect(await screen.findByText('App grant revoked.')).toBeInTheDocument();
     expect(requestJsonMock).toHaveBeenCalledWith(
       '/api/desktop/app-grants/g-persist',
       expect.objectContaining({ method: 'DELETE' }),
@@ -203,7 +203,7 @@ describe('DesktopControlSettings toggles', () => {
     fireEvent.click(await screen.findByRole('switch', { name: /WebView2 Runtime/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Allow WebView2 across apps?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Allow broad WebView2 access' }));
-    expect(await screen.findByText('// Broad WebView2 access enabled.')).toBeInTheDocument();
+    expect(await screen.findByText('Broad WebView2 access enabled.')).toBeInTheDocument();
     expect(save).toHaveBeenCalledWith({ applications: ['msedgewebview2.exe'] });
   });
 
@@ -222,7 +222,7 @@ describe('DesktopControlSettings toggles', () => {
       loadApps: () => Promise.resolve([{ ...webview, grantId: 'wv-grant' }]),
     });
     fireEvent.click(await screen.findByRole('switch', { name: /WebView2 Runtime/ }));
-    expect(await screen.findByText('// WebView2 access revoked.')).toBeInTheDocument();
+    expect(await screen.findByText('WebView2 access revoked.')).toBeInTheDocument();
     expect(save).toHaveBeenCalledWith({ applications: ['other.exe'] });
     expect(requestJsonMock).toHaveBeenCalledWith(
       '/api/desktop/app-grants/wv-grant',
@@ -235,7 +235,7 @@ describe('DesktopControlSettings toggles', () => {
       loadApps: () => Promise.resolve([row({ isGranted: true, grantId: 'paint-grant' })]),
     });
     fireEvent.click(await screen.findByRole('switch', { name: /Paint Tool/ }));
-    expect(await screen.findByText('// App access revoked.')).toBeInTheDocument();
+    expect(await screen.findByText('App access revoked.')).toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();
   });
 
@@ -244,7 +244,7 @@ describe('DesktopControlSettings toggles', () => {
       policy: { ...basePolicy, applications: ['Paint.exe'] },
     });
     fireEvent.click(await screen.findByRole('switch', { name: /Paint Tool/ }));
-    expect(await screen.findByText('// App access revoked.')).toBeInTheDocument();
+    expect(await screen.findByText('App access revoked.')).toBeInTheDocument();
     expect(save).toHaveBeenCalledWith({ applications: [] });
     expect(requestJsonMock).not.toHaveBeenCalledWith(
       expect.stringMatching(/^\/api\/desktop\/app-grants\//),
@@ -258,7 +258,7 @@ describe('DesktopControlSettings toggles', () => {
         Promise.resolve([row({ executablePath: undefined, sources: undefined, version: null })]),
     });
     fireEvent.click(await screen.findByRole('switch', { name: /Paint Tool/ }));
-    expect(await screen.findByText('// Desktop policy saved.')).toBeInTheDocument();
+    expect(await screen.findByText('Desktop policy saved.')).toBeInTheDocument();
     expect(save).toHaveBeenCalledWith({ applications: ['paint.exe'] });
   });
 
@@ -290,7 +290,7 @@ describe('DesktopControlSettings toggles', () => {
       body: expect.any(String),
     });
     await act(async () => finish({ ...basePolicy, exposeExecutablePaths: true }));
-    expect(await screen.findByText('// Desktop policy saved.')).toBeInTheDocument();
+    expect(await screen.findByText('Desktop policy saved.')).toBeInTheDocument();
   });
 
   it('shows a non-Error save failure as text', async () => {
@@ -303,10 +303,10 @@ describe('DesktopControlSettings toggles', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     renderSettings();
     fireEvent.click(await screen.findByRole('switch', { name: /show file paths/i }));
-    expect(await screen.findByText('// Desktop policy saved.')).toBeInTheDocument();
+    expect(await screen.findByText('Desktop policy saved.')).toBeInTheDocument();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3100);
     });
-    expect(screen.queryByText('// Desktop policy saved.')).toBeNull();
+    expect(screen.queryByText('Desktop policy saved.')).toBeNull();
   });
 });

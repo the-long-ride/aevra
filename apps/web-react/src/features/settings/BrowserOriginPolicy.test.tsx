@@ -43,7 +43,7 @@ describe('BrowserOriginPolicy', () => {
     );
     const toast = await screen.findByRole('status');
     expect(toast).toHaveClass('toast', 'success');
-    expect(toast).toHaveTextContent('// Origin policy saved.');
+    expect(toast).toHaveTextContent('Origin policy saved.');
   });
 
   it('splits a host list on commas and whitespace alike', async () => {

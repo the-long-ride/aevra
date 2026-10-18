@@ -30,7 +30,6 @@ function dashboardDataAt(generatedAt = '2026-08-28T12:10:00.000Z'): DashboardDat
       power: null,
       transport: null,
     },
-    onboarding: {},
     exposure: {},
     workspaces: [],
   } as unknown as DashboardData;

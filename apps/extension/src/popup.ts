@@ -1,6 +1,7 @@
 import { initPopupResources } from './popup-resources.js';
 import type { ExtensionConnectionState } from './rpc.js';
 import { getBrowserProfileIdentity } from './profile-identity.js';
+import { validatePairingResponse } from './pairing-response.js';
 
 export {
   NPM_PACKAGE_URL,
@@ -78,9 +79,10 @@ export async function executePairing(
     };
   }
 
+  const selected = validatePairingResponse(payload, port, scheme);
+  if (!selected) return { ok: false, message: 'Pairing failed: invalid server response.' };
   await chrome.storage.local.set({
-    token: payload.token,
-    wsUrl: payload.wsUrl,
+    ...selected,
     pairedProfileId: identity.profileId,
   });
   chrome.runtime.sendMessage({ type: 'aevra:paired' });
@@ -117,6 +119,7 @@ export function initPopup(): void {
   if (!toggle || !profileInput) return;
 
   let hasSavedPairing = false;
+  let serverLabel = '';
 
   function renderStatus(
     isPaired: boolean,
@@ -135,7 +138,7 @@ export function initPopup(): void {
     }
 
     if (unpairedBanner) unpairedBanner.setAttribute('hidden', '');
-    pairingInfo.textContent = 'Pairing saved';
+    pairingInfo.textContent = serverLabel || 'Pairing saved';
 
     if (!isEnabled) {
       statusChip.dataset.state = 'off';
@@ -165,7 +168,7 @@ export function initPopup(): void {
   }
 
   void chrome.storage.local.get(
-    ['token', 'wsUrl', 'enabled', 'profileName'],
+    ['token', 'wsUrl', 'enabled', 'profileName', 'serverName', 'pairingPort'],
     (stored: Record<string, unknown> = {}) => {
       hasSavedPairing = Boolean(
         typeof stored.token === 'string' &&
@@ -174,6 +177,11 @@ export function initPopup(): void {
         stored.wsUrl.length > 0,
       );
       const isEnabled = stored.enabled !== false;
+      serverLabel =
+        typeof stored.pairingPort === 'number'
+          ? `${String(stored.serverName ?? 'Aevra')} · port ${stored.pairingPort}`
+          : '';
+      if (pairPortInput && stored.pairingPort) pairPortInput.value = String(stored.pairingPort);
       const profileName = typeof stored.profileName === 'string' ? stored.profileName : '';
 
       toggle.checked = isEnabled;

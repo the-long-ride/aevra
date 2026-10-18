@@ -153,7 +153,7 @@ describe('DesktopControlSettings browser-local migration', () => {
     renderSettings({ policy: { ...basePolicy, mode: 'denylist' } });
     expect(await screen.findByText(/1 custom app are saved/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Import to Aevra' }));
-    expect(await screen.findByText('// Imported 1 custom app.')).toBeInTheDocument();
+    expect(await screen.findByText('Imported 1 custom app.')).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem(CUSTOM_APPS_STORAGE_KEY)!)).toEqual([]);
     expect(screen.queryByRole('button', { name: 'Import to Aevra' })).toBeNull();
   });

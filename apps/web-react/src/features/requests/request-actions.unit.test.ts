@@ -50,3 +50,20 @@ test('host control actions remain one-time approvals', () => {
     ['Allow', 'once'],
   ]);
 });
+
+test('oauth workspace select offers connection scope alongside once and deny', () => {
+  expect(
+    actionsForApproval({
+      id: 'ws-1',
+      state: 'PENDING',
+      actor: 'oauth:Gemini',
+      risk: 'MEDIUM',
+      sessionId: 's1',
+      operation: { family: 'workspace:select', capability: 'files.read' },
+    } as any).map((action) => [action.label, action.scope]),
+  ).toEqual([
+    ['Deny', null],
+    ['Allow', 'once'],
+    ['Allow this connection', 'connection'],
+  ]);
+});

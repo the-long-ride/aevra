@@ -69,7 +69,6 @@ function createDashboardData(): DashboardData {
       power: null,
       transport: null,
     },
-    onboarding: {},
     exposure: {},
     workspaces: [{ id: 'ws_1', name: 'Aevra Workspace' }],
   } as unknown as DashboardData;

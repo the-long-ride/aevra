@@ -13,6 +13,9 @@ export interface PollingResource<T> {
   refresh(): Promise<void>;
 }
 
+/** A timer tick never aborts a young request; only one stuck this long is replaced. */
+const MIN_STALE_MS = 30_000;
+
 export function usePollingResource<T>({
   load,
   intervalMs = 0,
@@ -24,11 +27,14 @@ export function usePollingResource<T>({
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const hasData = useRef(false);
+  const startedAt = useRef<number | null>(null);
+  const loadedWith = useRef<PollingResourceOptions<T>['load'] | null>(null);
 
   const invalidate = useCallback(() => {
     generation.current += 1;
     controller.current?.abort();
     controller.current = null;
+    startedAt.current = null;
   }, []);
 
   const refresh = useCallback(async () => {
@@ -37,6 +43,7 @@ export function usePollingResource<T>({
     controller.current?.abort();
     const nextController = new AbortController();
     controller.current = nextController;
+    startedAt.current = Date.now();
     if (!hasData.current) setLoading(true);
 
     try {
@@ -51,7 +58,10 @@ export function usePollingResource<T>({
         setError(cause instanceof Error ? cause : new Error(String(cause)));
       }
     } finally {
-      if (currentGeneration === generation.current) setLoading(false);
+      if (currentGeneration === generation.current) {
+        startedAt.current = null;
+        setLoading(false);
+      }
     }
   }, [enabled, load]);
 
@@ -62,17 +72,32 @@ export function usePollingResource<T>({
       return undefined;
     }
 
+    // A different `load` is a different resource: do not show the old one's data as current.
+    if (loadedWith.current !== load) {
+      if (loadedWith.current !== null) {
+        hasData.current = false;
+        setData(null);
+        setError(null);
+      }
+      loadedWith.current = load;
+    }
+
     void refresh();
     if (intervalMs <= 0) {
       return invalidate;
     }
 
-    const timer = window.setInterval(() => void refresh(), intervalMs);
+    const staleMs = Math.max(MIN_STALE_MS, intervalMs * 5);
+    const timer = window.setInterval(() => {
+      const started = startedAt.current;
+      if (started !== null && Date.now() - started < staleMs) return;
+      void refresh();
+    }, intervalMs);
     return () => {
       window.clearInterval(timer);
       invalidate();
     };
-  }, [enabled, intervalMs, invalidate, refresh]);
+  }, [enabled, intervalMs, invalidate, load, refresh]);
 
   return { data, error, loading, refresh };
 }

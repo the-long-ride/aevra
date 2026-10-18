@@ -3,7 +3,9 @@ import type { Page } from '@playwright/test';
 export const ADMIN_SURFACES = [{ name: 'React', path: '/' }] as const;
 
 interface FixtureOptions {
-  onboardingCompleted?: boolean;
+  /** Defaults to seen so the first-launch welcome modal stays out of other flows. */
+  welcomeSeen?: boolean;
+  tunnelTools?: unknown;
   approvals?: unknown[];
   oauth?: unknown[];
   permissions?: unknown[];
@@ -52,7 +54,7 @@ function dashboardSnapshot() {
 }
 
 export async function installAdminApi(page: Page, options: FixtureOptions = {}) {
-  const completed = options.onboardingCompleted ?? false;
+  const completed = options.welcomeSeen ?? true;
   const routes = new Map<string, unknown>([
     [
       '/api/status',
@@ -73,9 +75,15 @@ export async function installAdminApi(page: Page, options: FixtureOptions = {}) 
       '/api/onboarding',
       {
         completed,
-        completedSections: completed
-          ? ['remote-access', 'connect-ai', 'workspace', 'try-aevra']
-          : [],
+        completedSections: completed ? ['welcome'] : [],
+      },
+    ],
+    [
+      '/api/system/tunnel-tools',
+      options.tunnelTools ?? {
+        cloudflared: { available: true, version: '2026.5.2' },
+        ngrok: { available: true, version: '3.22.1' },
+        recommended: 'cloudflared',
       },
     ],
     [

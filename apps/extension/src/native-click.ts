@@ -1,3 +1,4 @@
+import { withNativeDocument } from './native-input-guard.js';
 const INPUT_DEADLINE_MS = 12_000;
 const DETACH_DEADLINE_MS = 2_000;
 const CAPTURE_DEADLINE_MS = 25_000;
@@ -35,7 +36,12 @@ async function bounded<T>(operation: Promise<T>, timeoutMs: number): Promise<T> 
   }
 }
 
-async function validateTab(tabId: number, deadline: number): Promise<void> {
+async function validateTab(
+  tabId: number,
+  deadline: number,
+  expectedOrigin?: string,
+  expectedUrl?: string,
+): Promise<string> {
   let tab: chrome.tabs.Tab;
   try {
     tab = await bounded(chrome.tabs.get(tabId), deadline - Date.now());
@@ -52,9 +58,16 @@ async function validateTab(tabId: number, deadline: number): Promise<void> {
   } catch {
     throw inputError('BROWSER_ORIGIN_BLOCKED', tabId);
   }
-  if (protocol !== 'http:' && protocol !== 'https:') {
+  if (
+    (expectedOrigin && new URL(tab.url ?? '').origin !== expectedOrigin) ||
+    (expectedUrl && tab.url !== expectedUrl) ||
+    (['localhost', '127.0.0.1', '[::1]'].includes(new URL(tab.url ?? '').hostname) &&
+      [47830, 47831, 47832, 47833].includes(Number(new URL(tab.url ?? '').port))) ||
+    (protocol !== 'http:' && protocol !== 'https:')
+  ) {
     throw inputError('BROWSER_ORIGIN_BLOCKED', tabId);
   }
+  return tab.url!;
 }
 
 async function attachTarget(tabId: number, deadline: number): Promise<{ tabId: number }> {
@@ -83,17 +96,20 @@ async function attachTarget(tabId: number, deadline: number): Promise<{ tabId: n
 }
 
 /** Sends one browser-native click; this helper owns no debugger session beyond the call. */
-export async function dispatchNativeClick(
+async function nativeClick(
   tabId: number,
   point: { x: number; y: number },
   isCancelled?: () => boolean,
+  expectedOrigin?: string,
+  expectedUrl?: string,
 ): Promise<void> {
   const deadline = Date.now() + INPUT_DEADLINE_MS;
   if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
     throw inputError('BROWSER_INPUT_FAILED', tabId);
   }
 
-  await validateTab(tabId, deadline);
+  const initialUrl = await validateTab(tabId, deadline, expectedOrigin, expectedUrl);
+  expectedUrl ??= initialUrl;
   if (isCancelled?.()) throw inputError('BROWSER_INPUT_FAILED', tabId);
   const target = await attachTarget(tabId, deadline);
 
@@ -108,6 +124,8 @@ export async function dispatchNativeClick(
     );
     if (isCancelled?.()) throw inputError('BROWSER_INPUT_FAILED', tabId);
     for (const type of ['mousePressed', 'mouseReleased'] as const) {
+      await validateTab(tabId, deadline, expectedOrigin, expectedUrl);
+      if (isCancelled?.()) throw inputError('BROWSER_INPUT_FAILED', tabId);
       await bounded(
         chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
           type,
@@ -133,17 +151,21 @@ export async function dispatchNativeClick(
 }
 
 /** Sends a held left-button drag through one short-lived debugger attachment. */
-export async function dispatchNativeDrag(
+async function nativeDrag(
   tabId: number,
   start: { x: number; y: number },
   end: { x: number; y: number },
   isCancelled?: () => boolean,
+  expectedOrigin?: string,
+  expectedUrl?: string,
+  documentCurrent: () => boolean = () => true,
 ): Promise<void> {
   const deadline = Date.now() + INPUT_DEADLINE_MS;
   if (![start.x, start.y, end.x, end.y].every(Number.isFinite)) {
     throw inputError('BROWSER_INPUT_FAILED', tabId);
   }
-  await validateTab(tabId, deadline);
+  const initialUrl = await validateTab(tabId, deadline, expectedOrigin, expectedUrl);
+  expectedUrl ??= initialUrl;
   if (isCancelled?.()) throw inputError('BROWSER_INPUT_FAILED', tabId);
   const target = await attachTarget(tabId, deadline);
   let pressed = false;
@@ -154,6 +176,8 @@ export async function dispatchNativeDrag(
       new Promise<void>((resolve) => setTimeout(resolve, DEBUGGER_VIEWPORT_SETTLE_MS)),
       deadline - Date.now(),
     );
+    if (isCancelled?.()) throw inputError('BROWSER_INPUT_FAILED', tabId);
+    await validateTab(tabId, deadline, expectedOrigin, expectedUrl);
     if (isCancelled?.()) throw inputError('BROWSER_INPUT_FAILED', tabId);
     pressed = true;
     await bounded(
@@ -173,6 +197,8 @@ export async function dispatchNativeDrag(
         new Promise<void>((resolve) => setTimeout(resolve, DRAG_STEP_MS)),
         deadline - Date.now(),
       );
+      if (isCancelled?.()) throw inputError('BROWSER_INPUT_FAILED', tabId);
+      await validateTab(tabId, deadline, expectedOrigin, expectedUrl);
       if (isCancelled?.()) throw inputError('BROWSER_INPUT_FAILED', tabId);
       const point = {
         x: start.x + ((end.x - start.x) * step) / DRAG_STEPS,
@@ -195,6 +221,9 @@ export async function dispatchNativeDrag(
   } finally {
     if (pressed) {
       try {
+        // Refuse to synthesize a release into a replacement document.
+        await validateTab(tabId, Date.now() + DETACH_DEADLINE_MS, expectedOrigin, expectedUrl);
+        if (!documentCurrent()) throw inputError('BROWSER_INPUT_FAILED', tabId);
         await bounded(
           chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
             type: 'mouseReleased',
@@ -277,4 +306,28 @@ export async function withDebuggerViewport<T>(
       throw inputError('BROWSER_INPUT_FAILED', tabId);
     }
   }
+}
+
+export function dispatchNativeClick(
+  tabId: number,
+  point: { x: number; y: number },
+  isCancelled?: () => boolean,
+  expectedOrigin?: string,
+  expectedUrl?: string,
+): Promise<void> {
+  return withNativeDocument(tabId, isCancelled, (cancel) =>
+    nativeClick(tabId, point, cancel, expectedOrigin, expectedUrl),
+  );
+}
+export function dispatchNativeDrag(
+  tabId: number,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  isCancelled?: () => boolean,
+  expectedOrigin?: string,
+  expectedUrl?: string,
+): Promise<void> {
+  return withNativeDocument(tabId, isCancelled, (cancel, current) =>
+    nativeDrag(tabId, start, end, cancel, expectedOrigin, expectedUrl, current),
+  );
 }

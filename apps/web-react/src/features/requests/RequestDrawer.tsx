@@ -1,9 +1,11 @@
 import type { ApprovalItem, ApprovalScope } from '@aevra/admin-contracts';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
+import { useModalLayer } from '../../components/modal-layer';
 import { useToast } from '../../components/Toast';
-import { actionsForApproval } from './request-actions';
+import { ApprovalScopeHint } from './ApprovalScopeHint';
+import { actionsForApproval, savedMatcher } from './request-actions';
+import { RequestHistory } from './RequestHistory';
 import { announceNewRequests } from './request-notifications';
 import {
   approveRequest,
@@ -17,17 +19,13 @@ import {
   type RequestsData,
 } from './requests-service';
 
-function savedMatcher(item: ApprovalItem) {
-  if (item.operation.capability !== 'commands.run') return '';
-  const payload = item.payload ?? {};
-  const original =
-    typeof payload.original === 'object' && payload.original !== null
-      ? (payload.original as Record<string, unknown>)
-      : {};
-  return String(
-    payload.permissionMatcher ?? original.permissionMatcher ?? item.operation.family ?? '',
-  );
-}
+const isWebView2 = (p: string) => p.split(/[\\/]/).pop()?.toLowerCase() === 'msedgewebview2.exe';
+
+const NOTIFICATION_LABELS: Record<string, string> = {
+  granted: 'Browser notifications enabled',
+  denied: 'Browser notifications blocked',
+  unsupported: 'Browser notifications unavailable',
+};
 
 function ApprovalCard({
   item,
@@ -86,6 +84,10 @@ function ApprovalCard({
           </span>
         ) : null}
       </div>
+      <ApprovalScopeHint
+        item={item}
+        connectionHasMultipleSessions={presentation.connectionHasMultipleSessions}
+      />
       <div className="request-actions">
         {actionsForApproval(item).map((action) => (
           <button
@@ -133,6 +135,7 @@ export function RequestDrawer({
   const [desktopAccessRequests, setDesktopAccessRequests] = useState<DesktopAccessRequest[]>([]);
   const [desktopAccessError, setDesktopAccessError] = useState('');
   const { toast, error } = useToast();
+  const { ref: layerRef } = useModalLayer(open);
   const [tab, setTab] = useState<'pending' | 'history'>('pending');
   const [notifications, setNotifications] = useState(
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
@@ -216,7 +219,7 @@ export function RequestDrawer({
 
   return (
     <>
-      <div className={`request-drawer ${open ? 'open' : ''}`} aria-hidden={!open}>
+      <div ref={layerRef} className={`request-drawer ${open ? 'open' : ''}`} aria-hidden={!open}>
         <div className="request-drawer-backdrop" onClick={onClose} />
         <aside>
           <header>
@@ -230,13 +233,7 @@ export function RequestDrawer({
               disabled={notifications === 'granted' || notifications === 'denied'}
               onClick={() => void requestNotifications()}
             >
-              {notifications === 'granted'
-                ? 'Browser notifications enabled'
-                : notifications === 'denied'
-                  ? 'Browser notifications blocked'
-                  : notifications === 'unsupported'
-                    ? 'Browser notifications unavailable'
-                    : 'Enable browser notifications'}
+              {NOTIFICATION_LABELS[notifications] ?? 'Enable browser notifications'}
             </button>
             <button type="button" aria-label="Close" onClick={onClose}>
               ×
@@ -280,14 +277,12 @@ export function RequestDrawer({
                     </div>
                     <div className="request-detail">
                       <b>
-                        {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() ===
-                        'msedgewebview2.exe'
+                        {isWebView2(item.targetExecutablePath)
                           ? 'Verified host app'
                           : 'Application'}
                         : {item.hostExecutablePath}
                       </b>
-                      {item.targetExecutablePath.split(/[\\/]/).pop()?.toLowerCase() ===
-                      'msedgewebview2.exe' ? (
+                      {isWebView2(item.targetExecutablePath) ? (
                         <span>WebView2 process: {item.targetExecutablePath}</span>
                       ) : null}
                       <span>
@@ -364,28 +359,7 @@ export function RequestDrawer({
                 ) : null}
               </>
             ) : (
-              <DataTable
-                id="react-request-history"
-                rows={history}
-                pageSize={10}
-                filters={[
-                  { key: 'state', label: 'Status' },
-                  { key: 'risk', label: 'Risk' },
-                ]}
-                columns={[
-                  { key: 'actor', label: 'Actor' },
-                  { key: 'state', label: 'Status' },
-                  { key: 'risk', label: 'Risk' },
-                  {
-                    key: 'operation',
-                    label: 'Operation',
-                    value: (row) => row.operation.family,
-                    render: (row) => row.operation.family,
-                  },
-                ]}
-                emptyText="No approval history."
-                rowKey={(row) => row.id}
-              />
+              <RequestHistory history={history} onCleared={refresh} />
             )}
           </div>
         </aside>

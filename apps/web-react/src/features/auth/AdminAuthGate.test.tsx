@@ -22,7 +22,7 @@ async function submitCredentials(username = 'admin', password = plainPhrase1) {
 }
 
 test('renders children once the admin session is authenticated', async () => {
-  installApiFixtures({ onboardingCompleted: true });
+  installApiFixtures();
   renderGate();
   expect(await screen.findByText('Secured content')).toBeInTheDocument();
 });

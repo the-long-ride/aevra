@@ -43,7 +43,7 @@ describe('DataPage', () => {
     });
 
     const toast = await screen.findByRole('status');
-    expect(toast).toHaveTextContent('// Backup downloaded successfully.');
+    expect(toast).toHaveTextContent('Backup downloaded successfully.');
   });
 
   it('shows error if an invalid JSON file is selected', async () => {
@@ -108,7 +108,7 @@ describe('DataPage', () => {
     });
 
     const toast = await screen.findByRole('status');
-    expect(toast).toHaveTextContent('// Data imported successfully.');
+    expect(toast).toHaveTextContent('Data imported successfully.');
     expect(toast).toHaveTextContent(
       '1 workspace(s), 2 permission rule(s), 1 custom app(s) restored.',
     );

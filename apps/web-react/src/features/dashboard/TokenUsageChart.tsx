@@ -1,5 +1,7 @@
 import type { TokenUsageRange, TokenUsageReport } from '@aevra/admin-contracts';
 import { useState } from 'react';
+import { TokenStatisticsIcon } from './TokenStatisticsIcon';
+import { TokenUsageStatisticsModal } from './TokenUsageStatisticsModal';
 import { formatTokens } from './token-format';
 import { layoutBars, niceMax } from './token-usage-geometry';
 
@@ -26,6 +28,7 @@ function periodLabel(start: string, granularity: 'hour' | 'day'): string {
 }
 
 export function TokenUsageChart({ report, range, onRangeChange }: Props) {
+  const [statisticsOpen, setStatisticsOpen] = useState(false);
   const [active, setActive] = useState<number | undefined>();
   const series = report?.series ?? [];
   const peak = series.reduce(
@@ -63,6 +66,16 @@ export function TokenUsageChart({ report, range, onRangeChange }: Props) {
               {item.label}
             </button>
           ))}
+          <button
+            type="button"
+            className="token-usage-range token-usage-statistics-button"
+            aria-label="All-time statistics"
+            title="All-time statistics"
+            aria-haspopup="dialog"
+            onClick={() => setStatisticsOpen(true)}
+          >
+            <TokenStatisticsIcon />
+          </button>
         </div>
       </div>
       {empty ? (
@@ -147,6 +160,9 @@ export function TokenUsageChart({ report, range, onRangeChange }: Props) {
           </table>
         </>
       )}
+      {statisticsOpen ? (
+        <TokenUsageStatisticsModal onClose={() => setStatisticsOpen(false)} />
+      ) : null}
     </section>
   );
 }
