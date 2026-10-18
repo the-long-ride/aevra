@@ -14,6 +14,11 @@ interface PlannedFile {
 }
 
 export interface ExtensionCommandDependencies {
+  onInstalled?(parent: string): void;
+  /** Why installing into `parent` would fail, checked before anything is downloaded. */
+  checkParent?(parent: string): string | null;
+  /** Runs the copy and the claim together (under the shared integration lock). */
+  transaction?<T>(run: () => T): T;
   version: string;
   download(url: string): Promise<Buffer>;
   /** Returns the answer, or the fallback when the user just presses enter. */
@@ -43,10 +48,7 @@ async function chooseDirectory(
 ): Promise<string> {
   if (command.dir) return path.resolve(command.dir);
   if (!dependencies.isInteractive()) {
-    throw Object.assign(
-      new Error('extension install needs --dir when there is no terminal to ask on'),
-      { code: 'EXTENSION_DIR_REQUIRED' },
-    );
+    return path.resolve(dependencies.defaultDirectory());
   }
   const fallback = dependencies.defaultDirectory();
   const answer = await dependencies.ask(
@@ -78,6 +80,11 @@ export async function runExtensionCommand(
   try {
     const parent = await chooseDirectory(command, dependencies);
     const destination = path.join(parent, EXTENSION_FOLDER);
+    const conflict = dependencies.checkParent?.(parent);
+    if (conflict) {
+      dependencies.error(`[aevra] ${conflict}`);
+      return 1;
+    }
 
     // Checked up front so a doomed run does not download first. The folder is
     // not touched yet.
@@ -100,11 +107,16 @@ export async function runExtensionCommand(
     // destination path validated - is the existing install removed. Removing it
     // first would mean a failed download left the user with no extension at all,
     // and, because the id is bound to the folder, an unpaired browser.
-    if (occupied) {
-      dependencies.log(`[aevra] Replacing ${destination}`);
-      dependencies.remove(destination);
-    }
-    for (const item of planned) dependencies.writeEntry(item.file, item.data);
+    const copy = () => {
+      if (occupied) {
+        dependencies.log(`[aevra] Replacing ${destination}`);
+        dependencies.remove(destination);
+      }
+      for (const item of planned) dependencies.writeEntry(item.file, item.data);
+      dependencies.onInstalled?.(parent);
+    };
+    if (dependencies.transaction) dependencies.transaction(copy);
+    else copy();
 
     dependencies.log(`[aevra] Unzipped ${planned.length} files into ${destination}`);
     explain(destination, dependencies);

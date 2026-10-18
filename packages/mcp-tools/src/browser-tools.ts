@@ -1,23 +1,15 @@
+import { run, targetTab, audit, originOf, sessionTool } from './browser-session-tools.js';
 import { createHash } from 'node:crypto';
-import type { BrowserOriginClass, BrowserTabInfo } from '../../protocol/src/browser.js';
-import type { RiskTier } from '../../protocol/src/index.js';
-import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { classifyOrigin } from '../../browser/src/origin-policy.js';
-import type { OriginPolicyConfig } from '../../browser/src/origin-policy.js';
 import { scanNavigateUrl } from '../../security/src/browser-url-policy.js';
 import { markUntrusted } from '../../security/src/untrusted.js';
-import {
-  authorizeHostControl,
-  gatedHostControl,
-  requireHostControlIdentity,
-} from './host-control-gate.js';
+import { authorizeHostControl, gatedHostControl } from './host-control-gate.js';
 import {
   browserOperationRisk,
   isFirstVisit,
   noteVisited,
   refuseBlockedOrigin,
   refuseSensitiveScreenshot,
-  resetVisited,
 } from './browser-risk.js';
 import { browserOperation } from './browser-operations.js';
 import { browserApprovalBinding } from './browser-approval-binding.js';
@@ -38,105 +30,6 @@ export const BROWSER_TOOL_NAMES = new Set([
   'browser_execute_script',
   'browser_logs',
 ]);
-
-async function run(context: McpRuntimeContext, sessionId: string, operation: WorkerOperation) {
-  const identity = requireHostControlIdentity(context, sessionId, 'browser.control');
-  const result = await context.worker.execute({
-    sessionId,
-    workspaceId: '',
-    scope: { kind: 'host-control', capability: 'browser.control', identity },
-    roots: [],
-    operation,
-    executionMode: 'host',
-  });
-  if (!result.ok) {
-    throw new AevraToolError(result.error.code, result.error.message, result.error.details);
-  }
-  return result.value as any;
-}
-
-/** Origin of the tab an operation will land on, resolved before the operation runs. */
-async function targetTab(
-  context: McpRuntimeContext,
-  sessionId: string,
-  tabId?: string,
-  policy?: Partial<OriginPolicyConfig>,
-): Promise<{ tabId?: string; url: string; originClass: BrowserOriginClass }> {
-  const tabs = (await run(context, sessionId, {
-    kind: 'browser.tabs',
-    action: 'list',
-  })) as BrowserTabInfo[];
-  const tab = tabId
-    ? tabs.find((entry) => entry.tabId === tabId)
-    : (tabs.find((entry) => entry.active) ?? tabs[0]);
-  if (!tab) {
-    throw new AevraToolError('NOT_FOUND', `No browser tab matches ${tabId ?? 'the active tab'}`);
-  }
-  return { tabId: tab.tabId, url: tab.url, originClass: classifyOrigin(tab.url, policy) };
-}
-
-function audit(
-  context: McpRuntimeContext,
-  sessionId: string,
-  tool: string,
-  origin: string,
-  risk: RiskTier,
-  result: string,
-  redactionCount = 0,
-) {
-  context.deps.audit?.append({
-    sessionId,
-
-    tool,
-    operation: tool.replace('browser_', 'browser:').replace('_many', ''),
-    target: origin,
-    risk,
-    result,
-    redactionCount,
-  });
-}
-
-function originOf(url: string): string {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return url;
-  }
-}
-
-async function sessionTool(context: McpRuntimeContext, sessionId: string, name: string, args: any) {
-  const pairing = context.deps.browserPairing;
-  const risk: RiskTier = name === 'browser_connect' ? 'MEDIUM' : 'LOW';
-  const gate = await authorizeHostControl(
-    context,
-    sessionId,
-    'browser.control',
-    name,
-    args,
-    `browser:${name === 'browser_connect' ? 'connect' : 'disconnect'}`,
-    risk,
-  );
-  if ('response' in gate) return gate.response;
-  const paired = pairing?.pairedExtensionId();
-  const operation: WorkerOperation =
-    name === 'browser_connect'
-      ? {
-          kind: 'browser.connect',
-          transport: args.transport === 'cdp' ? 'cdp' : 'extension',
-          ...(args.cdpPort === undefined ? {} : { cdpPort: Number(args.cdpPort) }),
-          ...(args.tabId === undefined ? {} : { tabId: String(args.tabId) }),
-          ...(pairing ? { epoch: pairing.epoch() } : {}),
-          ...(pairing ? { pairings: pairing.workerPairings?.() ?? [] } : {}),
-          ...(paired ? { extensionId: paired } : {}),
-        }
-      : { kind: 'browser.disconnect' };
-  const value = await run(context, sessionId, operation);
-  // The visit ledger is per-session first-visit state. A session that has let
-  // go of the browser should not carry its history into the next attachment.
-  if (name === 'browser_disconnect') resetVisited(sessionId);
-  audit(context, sessionId, name, args.transport ?? 'session', risk, 'SUCCEEDED');
-  return value;
-}
 
 export async function handleBrowserTool(
   context: McpRuntimeContext,
@@ -285,6 +178,12 @@ export async function handleBrowserTool(
   // malformed scripts, oversized waits, and secret-shaped outbound values do
   // not enter approval payloads or UI surfaces.
   const operation = browserOperation(name, args, target.tabId);
+  if (
+    ['browser.act', 'browser.snapshot', 'browser.read', 'browser.logs'].includes(operation.kind)
+  ) {
+    (operation as any).expectedUrl = target.url;
+    (operation as any).originPolicy = policy;
+  }
 
   const gate = await authorizeHostControl(
     context,
@@ -299,6 +198,13 @@ export async function handleBrowserTool(
 
   const execute = async () => {
     const value = await run(context, sessionId, operation);
+    if (value?.url && ['browser.snapshot', 'browser.read'].includes(operation.kind)) {
+      refuseBlockedOrigin(value.url, policy);
+      if (value.url !== target.url)
+        throw new AevraToolError('BROWSER_ORIGIN_BLOCKED', 'Browser document changed during read');
+      if (name === 'browser_snapshot')
+        refuseSensitiveScreenshot(classifyOrigin(value.url, policy), String(args.mode ?? 'a11y'));
+    }
     if (navigateUrl) noteVisited(sessionId, navigateUrl);
     // Screenshots are pixels and cannot be DLP-redacted, so the audit log records
     // a content hash of the image instead of the image itself.

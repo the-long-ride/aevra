@@ -10,7 +10,7 @@ export function buildAiGuidePrompt(version?: string): string {
     ? version.startsWith('v')
       ? version
       : `v${version}`
-    : 'v1.2.1';
+    : 'v1.3.0';
   return [
     `I am using Aevra ${normalizedVersion}.`,
     '',

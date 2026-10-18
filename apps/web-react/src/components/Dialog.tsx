@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useModalLayer } from './modal-layer';
 
 export type DialogTone = 'default' | 'primary' | 'danger' | 'yolo';
 
@@ -100,6 +101,7 @@ function CommonDialog({
   onResolve(result: DialogResolution): void;
 }) {
   const titleId = useId();
+  const { ref: layerRef, isTop } = useModalLayer();
   const [value, setValue] = useState(request.input?.initialValue ?? '');
 
   useEffect(() => {
@@ -112,13 +114,13 @@ function CommonDialog({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || !isTop()) return;
       event.preventDefault();
       cancel();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [cancel]);
+  }, [cancel, isTop]);
 
   const submitAction = request.input
     ? request.actions.find((action) => action.id === request.input?.submitId)
@@ -126,6 +128,7 @@ function CommonDialog({
 
   return (
     <div
+      ref={layerRef}
       className="modal-backdrop dialog-backdrop"
       onMouseDown={(event) => {
         if (event.currentTarget === event.target) cancel();

@@ -3,12 +3,16 @@ import type {
   TokenUsageRange,
   TokenUsageReport,
 } from '../../../../../packages/admin-contracts/src/token-usage.js';
+import type { TunnelToolsStatus } from '../../../../../packages/admin-contracts/src/tunnel-tools.js';
 import type { SystemCapabilitySnapshot } from '../../../../../packages/protocol/src/index.js';
 import type { KeepAwakeService } from '../../power/keep-awake-service.js';
 import type { UpstreamRegistryService } from '../../mcp-upstream/upstream-registry-service.js';
 import type { ConnectorProfileStore } from '../../usage/connector-profiles.js';
+import type { ConnectorNotesService } from '../../usage/connector-notes.js';
 
 export interface AdminApiContext {
+  agents?: (input: unknown) => Promise<unknown>;
+  stopCore?: () => void;
   workspaces?: any;
   approvals?: any;
   permissions?: any;
@@ -40,7 +44,9 @@ export interface AdminApiContext {
   mcpUpstreams?: UpstreamRegistryService;
   usage?: { report(range: TokenUsageRange): TokenUsageReport } | undefined;
   connectorProfiles?: ConnectorProfileStore | undefined;
+  connectorNotes?: ConnectorNotesService | undefined;
   systemCapabilities?: () => SystemCapabilitySnapshot;
+  tunnelTools?: () => Promise<TunnelToolsStatus>;
   mcpDiagnostics?: () => unknown;
   safeMode?: () => boolean;
   commandEvaluator?: (input: {

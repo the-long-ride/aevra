@@ -3,6 +3,8 @@ import type { WorkerOperation } from '../../protocol/src/worker.js';
 import { classifyOperationRisk } from '../../../apps/core/src/policy/risk.js';
 import { authorizeCapability, gated } from './authorization.js';
 import { AevraToolError } from './errors.js';
+import { protectedGlobsFor } from './protected-paths.js';
+import { validateGitReadArgs } from '../../security/src/git-arguments.js';
 import { repoState } from './git-state.js';
 import { argsHash, requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
@@ -34,6 +36,8 @@ export async function gitTool(
   name: string,
   args: any,
 ) {
+  if (name === 'git_diff' || name === 'git_log' || name === 'git_branch')
+    validateGitReadArgs(name.slice(4) as 'diff' | 'log' | 'branch', args.args ?? []);
   const capability: Capability =
     name === 'git_commit' || name === 'git_add'
       ? 'git.commit'
@@ -81,6 +85,15 @@ export async function gitTool(
                     branch: args.branch,
                     args: args.args ?? [],
                   };
+
+  if (
+    operation.kind === 'git.diff' ||
+    operation.kind === 'git.log' ||
+    operation.kind === 'git.commit'
+  ) {
+    const globs = protectedGlobsFor(context, lease.workspaceId);
+    if (globs) operation.protectedGlobs = globs;
+  }
 
   const execute = async () => {
     const result = await context.worker.execute({

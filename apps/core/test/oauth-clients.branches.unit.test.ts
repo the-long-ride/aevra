@@ -6,6 +6,8 @@ function repo(existing = 0) {
   const registered: any[] = [];
   return {
     registered,
+    pruneUnconnectedClients: () => 0,
+    countUnconnectedClients: () => existing,
     listClients: () =>
       Array.from({ length: existing }, (_, index) => ({
         clientId: `c${index}`,
@@ -79,7 +81,8 @@ test('client listing exposes the oauth actor and copies redirect URIs', () => {
   assert.deepEqual(row, {
     clientId: 'c0',
     clientName: 'Client 0',
-    actor: 'oauth:Client 0',
+    actor: 'oauth:Client 0@https://app',
+    redirectOrigins: ['https://app'],
     redirectUris: ['https://app/cb'],
     createdAt: '2026-01-01T00:00:00.000Z',
   });

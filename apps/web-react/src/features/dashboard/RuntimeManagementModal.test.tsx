@@ -31,7 +31,6 @@ const sampleData: DashboardData = {
       },
     ],
   } as any,
-  onboarding: { completed: true, completedSections: [] } as any,
   exposure: { state: 'ready' } as any,
   workspaces: [],
 };

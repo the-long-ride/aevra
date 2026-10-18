@@ -22,3 +22,6 @@
 20. [Desktop control](19-desktop-control.md)
 21. [MCP servers](20-mcp-upstreams.md)
 22. [Token usage and tool surface](21-token-usage-and-tool-surface.md)
+23. [GNOME Wayland desktop access](22-wayland-desktop.md)
+
+- [Local AI agents and shared browser extension](23-local-ai-agents.md)

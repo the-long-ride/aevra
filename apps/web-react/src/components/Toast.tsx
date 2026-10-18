@@ -10,6 +10,12 @@ interface ToastState {
 }
 
 export const TOAST_DISMISS_MS = 4000;
+const TOAST_PREFIX = '// ';
+
+/** The //  prefix is drawn by .toast::before; a message that brings its own is not doubled. */
+function withoutPrefix(message: string): string {
+  return message.startsWith(TOAST_PREFIX) ? message.slice(TOAST_PREFIX.length) : message;
+}
 
 let sharedStack: HTMLDivElement | null = null;
 let stackOwners = 0;
@@ -74,7 +80,7 @@ export function useToast(dismissMs = TOAST_DISMISS_MS) {
             role={state.tone === 'error' ? 'alert' : 'status'}
             aria-label={state.ariaLabel}
           >
-            {state.message}
+            {withoutPrefix(state.message)}
           </div>,
           stack,
         )

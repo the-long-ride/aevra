@@ -29,6 +29,16 @@ export function actionsForApproval(item: ApprovalItem): ApprovalAction[] {
         scope: 'connection',
       },
     ];
+  if (item.operation.family === 'workspace:select' && item.actor.startsWith('oauth:'))
+    return [
+      deny,
+      once,
+      {
+        id: 'approve-connection',
+        label: 'Allow this connection',
+        scope: 'connection',
+      },
+    ];
   if (
     item.operation.capability === 'browser.control' ||
     item.operation.capability === 'desktop.control'
@@ -47,4 +57,16 @@ export function actionsForApproval(item: ApprovalItem): ApprovalAction[] {
     },
     { id: 'approve-global', label: 'Always globally', scope: 'global' },
   ];
+}
+
+export function savedMatcher(item: ApprovalItem): string {
+  if (item.operation.capability !== 'commands.run') return '';
+  const payload = item.payload ?? {};
+  const original =
+    typeof payload.original === 'object' && payload.original !== null
+      ? (payload.original as Record<string, unknown>)
+      : {};
+  return String(
+    payload.permissionMatcher ?? original.permissionMatcher ?? item.operation.family ?? '',
+  );
 }

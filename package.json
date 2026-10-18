@@ -1,12 +1,12 @@
 {
   "name": "@the-long-ride/aevra",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "type": "module",
   "workspaces": [
     "apps/web-react"
   ],
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json --noCheck && npm --prefix apps/web-react run build && node scripts/copy-manual.mjs",
@@ -127,6 +127,7 @@
     "dist/apps/worker/src",
     "dist/apps/web",
     "dist/packages/admin-contracts/src",
+    "dist/packages/agent-integration/src",
     "dist/packages/browser/src",
     "dist/packages/command-analysis/src",
     "dist/packages/control/src",
@@ -146,5 +147,9 @@
     "README.md",
     "GUIDELINE.md",
     "CHANGELOG.md"
-  ]
+  ],
+  "dependencies": {
+    "jsonc-parser": "^3.3.1",
+    "smol-toml": "^1.9.1"
+  }
 }

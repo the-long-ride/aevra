@@ -20,7 +20,7 @@ export function YoloPolicySettings({
     try {
       await patchJson('/api/policy/yolo', { mode: nextMode });
       await onChanged();
-      success('// YOLO policy saved.');
+      success('YOLO policy saved.');
     } catch (cause) {
       error(cause);
     } finally {

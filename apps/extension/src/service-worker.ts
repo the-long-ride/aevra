@@ -1,5 +1,6 @@
-import { createChromeBridge, recordConsoleLog } from './bridge.js';
+import { clearConsoleLogs, createChromeBridge, recordConsoleLog } from './bridge.js';
 import { ExtensionRpc } from './rpc.js';
+import { matchesPairingOrigin } from './pairing-response.js';
 
 /**
  * Entry point: constructs the bridge and wires it to the browser's lifecycle.
@@ -11,20 +12,26 @@ export function startServiceWorker(): ExtensionRpc {
 
   // MV3 evicts an idle service worker, so wake-up re-establishes the socket.
   chrome.runtime.onStartup.addListener(() => void rpc.connect());
-  chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'loading' || changeInfo.url) clearConsoleLogs(tabId);
     const url = changeInfo?.url ?? tab?.url ?? '';
-    if (url.includes('127.0.0.1:47831') || url.includes('localhost:47831')) {
-      void rpc.connect(true);
-    }
+    void chrome.storage.local.get(['pairingOrigin', 'wsUrl']).then((saved) => {
+      if (matchesPairingOrigin(url, saved)) void rpc.connect(true);
+    });
   });
   chrome.runtime.onMessage.addListener(
     (
       message: { type?: string; text?: string; level?: string },
-      _sender,
+      sender,
       sendResponse?: (response?: unknown) => void,
     ) => {
       if (message?.type === 'aevra:console') {
-        recordConsoleLog(String(message.text ?? ''), String(message.level ?? 'log'));
+        // Only Chrome's top-frame sender identity is authoritative; page payload is not.
+        if (sender?.tab?.id !== undefined && sender.frameId === 0 && sender.documentId)
+          recordConsoleLog(String(message.text ?? ''), String(message.level ?? 'log'), {
+            tabId: sender.tab.id,
+            documentId: sender.documentId,
+          });
       }
       if (message?.type === 'aevra:paired' || message?.type === 'aevra:connect') {
         if (message?.type === 'aevra:paired') rpc.newPairing();

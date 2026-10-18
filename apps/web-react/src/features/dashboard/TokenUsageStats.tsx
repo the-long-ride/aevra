@@ -26,26 +26,22 @@ export function TokenUsageStats({ report, error }: Props) {
       id: 'out',
       label: 'Tokens out today',
       value: formatTokens(today.outputTokens),
-      detail: `${today.calls} calls`,
     },
     {
       id: 'in',
       label: 'Tokens in today',
       value: formatTokens(today.inputTokens),
-      detail: 'arguments received',
     },
     {
       id: 'saved',
       label: 'Saved today',
       value: formatTokens(today.savedTokens),
-      detail: `${savedShare(today.savedTokens, today.outputTokens)}% less than raw`,
     },
-    { id: 'avg', label: 'Avg tokens per call', value: formatTokens(perCall), detail: 'in + out' },
+    { id: 'avg', label: 'Avg tokens per call', value: formatTokens(perCall) },
     {
       id: 'top',
       label: 'Top tool today',
       value: topToolToday?.tool ?? '—',
-      detail: topToolToday ? `${formatTokens(topToolToday.outputTokens)} out` : '',
     },
   ];
   return (
@@ -57,8 +53,15 @@ export function TokenUsageStats({ report, error }: Props) {
         {boxes.map((box) => (
           <div key={box.id} className="token-stat" data-stat={box.id}>
             <span className="token-stat-label">{box.label}</span>
-            <strong className="token-stat-value">{box.value}</strong>
-            <span className="token-stat-detail">{box.detail}</span>
+            <strong className={`token-stat-value${box.id === 'top' ? ' token-stat-text' : ''}`}>
+              {box.value}
+              {box.id === 'saved' ? (
+                <span className="token-stat-share">
+                  {' '}
+                  ~ {savedShare(today.savedTokens, today.outputTokens)}%
+                </span>
+              ) : null}
+            </strong>
           </div>
         ))}
       </div>

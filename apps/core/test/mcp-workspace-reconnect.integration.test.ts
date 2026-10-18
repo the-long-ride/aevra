@@ -168,3 +168,95 @@ test('one OAuth connection restores every remembered workspace without choosing 
   assert.equal(status.workspace, null);
   f.db.close();
 });
+
+test('approved once workspace ticket is not reused by a new session on the same connection', async () => {
+  const f = fixture();
+  const first = f.sessions.create(identity());
+  const pending = (await f.tools.call(first.id, 'workspace_select', { workspace: 'Aevra' })) as any;
+  assert.equal(pending.status, 'approval_pending');
+  f.approvals.approve(pending.requestId, 'once');
+
+  const second = f.sessions.create(identity());
+  const next = (await f.tools.call(second.id, 'workspace_select', { workspace: 'Aevra' })) as any;
+  assert.equal(next.status, 'approval_pending');
+  assert.notEqual(next.requestId, pending.requestId);
+  f.db.close();
+});
+
+test('approved connection-scoped ticket is reused and resumed across sessions', async () => {
+  const f = fixture();
+  const first = f.sessions.create(identity());
+  const pending = (await f.tools.call(first.id, 'workspace_select', { workspace: 'Aevra' })) as any;
+  assert.equal(pending.status, 'approval_pending');
+  f.approvals.approve(pending.requestId, 'connection');
+
+  const second = f.sessions.create(identity());
+  const selected = (await f.tools.call(second.id, 'workspace_select', {
+    workspace: 'Aevra',
+  })) as any;
+  assert.equal(selected.status, 'selected');
+  assert.equal(selected.workspace.id, f.aevra.id);
+  f.db.close();
+});
+
+test('ticket with a different argsHash is not reused', async () => {
+  const f = fixture();
+  const first = f.sessions.create(identity());
+  const req1 = await f.approvals.request({
+    actor: first.actor,
+    sessionId: first.id,
+    workspaceId: f.aevra.id,
+    operation: {
+      family: 'workspace:select',
+      capability: 'files.read',
+      risk: 'MEDIUM',
+      argsHash: 'hash-a',
+    },
+    payload: { tool: 'workspace_select', workspaceId: f.aevra.id },
+    expectedState: { workspaceId: f.aevra.id },
+    risk: 'MEDIUM',
+  });
+
+  const second = f.sessions.create(identity());
+  const req2 = await f.approvals.request({
+    actor: second.actor,
+    sessionId: second.id,
+    workspaceId: f.aevra.id,
+    operation: {
+      family: 'workspace:select',
+      capability: 'files.read',
+      risk: 'MEDIUM',
+      argsHash: 'hash-b',
+    },
+    payload: { tool: 'workspace_select', workspaceId: f.aevra.id },
+    expectedState: { workspaceId: f.aevra.id },
+    risk: 'MEDIUM',
+  });
+  assert.notEqual(req2.requestId, req1.requestId);
+  f.db.close();
+});
+
+test('pending ticket approved once: other session gets APPROVAL_SCOPE_MISMATCH, then a fresh ticket', async () => {
+  const f = fixture();
+  const first = f.sessions.create(identity());
+  const pending = (await f.tools.call(first.id, 'workspace_select', { workspace: 'Aevra' })) as any;
+
+  const second = f.sessions.create(identity());
+  const reused = (await f.tools.call(second.id, 'workspace_select', { workspace: 'Aevra' })) as any;
+  assert.equal(reused.requestId, pending.requestId);
+
+  f.approvals.approve(pending.requestId, 'once');
+
+  await assert.rejects(
+    () => f.tools.call(second.id, 'approval_wait', { requestId: pending.requestId }),
+    (e: any) =>
+      e.code === 'APPROVAL_SCOPE_MISMATCH' &&
+      e.message ===
+        'This approval was limited to another MCP session. Call workspace_select again; the operator can approve for this connection to cover all your sessions.',
+  );
+
+  const fresh = (await f.tools.call(second.id, 'workspace_select', { workspace: 'Aevra' })) as any;
+  assert.equal(fresh.status, 'approval_pending');
+  assert.notEqual(fresh.requestId, pending.requestId);
+  f.db.close();
+});

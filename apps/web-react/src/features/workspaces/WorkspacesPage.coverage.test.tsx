@@ -142,7 +142,10 @@ test('manages mounts, admission, and modal close mechanisms', async () => {
   await user.click(await screen.findByRole('button', { name: 'Details' }));
   const details = screen.getByRole('dialog', { name: 'Main Workspace' });
   expect(within(details).getByText('/docs')).toBeInTheDocument();
-  expect(within(details).getByText('pol-read')).toBeInTheDocument();
+  expect(within(details).queryByText('pol-read')).not.toBeInTheDocument();
+  expect(
+    within(details).queryByRole('columnheader', { name: 'Sensitivity policy' }),
+  ).not.toBeInTheDocument();
 
   // Add mount
   await user.type(within(details).getByLabelText('Logical path'), '/assets');
@@ -252,10 +255,12 @@ test('saves workspace details without changing hostRoot and handles empty hostRo
   expect(within(details).getByText('—')).toBeInTheDocument();
   await user.click(within(details).getByRole('button', { name: 'Close' }));
 
-  // 2. Open details of ws-existing-root, verify 'Default' sensitivity, change name without changing hostRoot
+  // 2. Open details and change the name without changing hostRoot.
   await user.click(detailsButtons[0]); // ws-existing-root
   details = screen.getByRole('dialog', { name: 'Existing Root WS' });
-  expect(within(details).getByText('Default')).toBeInTheDocument();
+  expect(
+    within(details).queryByRole('columnheader', { name: 'Sensitivity policy' }),
+  ).not.toBeInTheDocument();
 
   const nameInput = within(details).getByLabelText('Workspace name');
   await user.clear(nameInput);

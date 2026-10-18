@@ -48,9 +48,9 @@ beforeEach(() => {
 describe('ConnectionToolSurface', () => {
   it('lists every group with its token estimate; core is fixed on', async () => {
     render(<ConnectionToolSurface actor="oauth:Beta" />);
-    expect(await screen.findByRole('checkbox', { name: /browser/i })).toBeChecked();
+    expect(await screen.findByRole('switch', { name: /browser/i })).toBeChecked();
     expect(screen.getByText(/2\.5k tokens/)).toBeInTheDocument();
-    const core = screen.getByRole('checkbox', { name: /core/i });
+    const core = screen.getByRole('switch', { name: /core/i });
     expect(core).toBeChecked();
     expect(core).toBeDisabled();
   });
@@ -60,14 +60,14 @@ describe('ConnectionToolSurface', () => {
       response({ toolGroups: ['files'], resultFormat: 'text' }),
     );
     render(<ConnectionToolSurface actor="oauth:Beta" />);
-    expect(await screen.findByRole('checkbox', { name: /files/i })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /browser/i })).not.toBeChecked();
+    expect(await screen.findByRole('switch', { name: /files/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /browser/i })).not.toBeChecked();
   });
 
   it('saves the chosen groups and tells the user when it applies', async () => {
     render(<ConnectionToolSurface actor="oauth:Beta" />);
-    await userEvent.click(await screen.findByRole('checkbox', { name: /browser/i }));
-    await userEvent.click(screen.getByRole('checkbox', { name: /desktop/i }));
+    await userEvent.click(await screen.findByRole('switch', { name: /browser/i }));
+    await userEvent.click(screen.getByRole('switch', { name: /desktop/i }));
     await userEvent.click(screen.getByRole('button', { name: /save tool surface/i }));
     await waitFor(() => expect(saveConnectorProfile).toHaveBeenCalledTimes(1));
     const [actor, profile] = saveConnectorProfile.mock.calls[0]!;
@@ -80,14 +80,14 @@ describe('ConnectionToolSurface', () => {
 
   it('shows the estimated saving for the groups switched off', async () => {
     render(<ConnectionToolSurface actor="oauth:Beta" />);
-    await userEvent.click(await screen.findByRole('checkbox', { name: /browser/i }));
+    await userEvent.click(await screen.findByRole('switch', { name: /browser/i }));
     expect(screen.getByText(/saves about 2\.5k tokens/i)).toBeInTheDocument();
   });
 
   it('shows an error when saving fails', async () => {
     saveConnectorProfile.mockRejectedValue(new Error('nope'));
     render(<ConnectionToolSurface actor="oauth:Beta" />);
-    await userEvent.click(await screen.findByRole('checkbox', { name: /git/i }));
+    await userEvent.click(await screen.findByRole('switch', { name: /git/i }));
     await userEvent.click(screen.getByRole('button', { name: /save tool surface/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not save/i);
   });

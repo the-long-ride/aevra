@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
+import { useModalLayer } from '../../components/modal-layer';
 import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 
@@ -61,6 +62,7 @@ export function AddWorkspaceModal({
   const [loading, setLoading] = useState(false);
   const { toast, error, clear } = useToast();
   const [submitting, setSubmitting] = useState(false);
+  const { ref: layerRef, isTop } = useModalLayer();
   const crumbs = useMemo(
     () => breadcrumbs(listing?.path ?? serverPath),
     [listing?.path, serverPath],
@@ -68,13 +70,13 @@ export function AddWorkspaceModal({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || !isTop()) return;
       event.preventDefault();
       onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, [isTop, onClose]);
 
   useEffect(() => {
     const value = serverPath.trim();
@@ -149,6 +151,7 @@ export function AddWorkspaceModal({
 
   return (
     <div
+      ref={layerRef}
       className="modal-backdrop add-workspace-backdrop"
       onMouseDown={(event) => {
         if (event.currentTarget === event.target) onClose();

@@ -1,3 +1,4 @@
+import { connect } from 'node:net';
 import { createServer, type Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { acceptKey, encodeFrame, readFrames, WS_CLOSE, WS_TEXT } from '../src/ws-server.js';
@@ -13,6 +14,32 @@ type Handler = (
  * codec so there is exactly one implementation of the wire format in the repo.
  */
 export class WebSocketServer {
+  private readonly proxied = new WeakMap<Server, string>();
+  private sequence = 0;
+
+  via(server: Server): string {
+    const cached = this.proxied.get(server);
+    if (cached) return cached;
+    const route = `/devtools/proxy-${new URL(this.url).port}-${++this.sequence}`;
+    server.on('upgrade', (request, socket) => {
+      if (request.url !== route) return;
+      const upstream = connect(Number(new URL(this.url).port), '127.0.0.1');
+      this.sockets.add(socket);
+      this.sockets.add(upstream);
+      socket.on('error', () => upstream.destroy());
+      upstream.on('error', () => socket.destroy());
+      upstream.once('connect', () => {
+        const headers = request.rawHeaders
+          .map((value, index) => (index % 2 ? `${value}\r\n` : `${value}: `))
+          .join('');
+        upstream.write(`GET /devtools HTTP/1.1\r\n${headers}\r\n`);
+        socket.pipe(upstream).pipe(socket);
+      });
+    });
+    const result = `ws://127.0.0.1:${(server.address() as { port: number }).port}${route}`;
+    this.proxied.set(server, result);
+    return result;
+  }
   private constructor(
     private readonly server: Server,
     private readonly sockets: Set<Duplex>,

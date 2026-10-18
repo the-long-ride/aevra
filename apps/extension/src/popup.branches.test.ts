@@ -90,7 +90,7 @@ describe('executePairing', () => {
     const bodies: any[] = [];
     (globalThis as any).fetch = async (_url: string, init: any) => {
       bodies.push(JSON.parse(init.body));
-      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://x' }) };
+      return { ok: true, json: async () => ({ token: 'issued', wsUrl: 'ws://127.0.0.1:47833' }) };
     };
     const { executePairing } = await import('./popup.js');
     const result = await executePairing(' abc ');
@@ -99,7 +99,7 @@ describe('executePairing', () => {
       ok: true,
       message: 'Paired over https.',
       token: 'issued',
-      wsUrl: 'ws://x',
+      wsUrl: 'ws://127.0.0.1:47833',
     });
   });
 
@@ -217,7 +217,7 @@ describe('pair modal with partial markup', () => {
     stored.enabled = false;
     (globalThis as any).fetch = async () => ({
       ok: true,
-      json: async () => ({ token: 'issued', wsUrl: 'ws://x' }),
+      json: async () => ({ token: 'issued', wsUrl: 'ws://127.0.0.1:47833' }),
     });
     const { initPopup } = await import('./popup.js');
     initPopup();
@@ -239,7 +239,7 @@ describe('pair modal with partial markup', () => {
     statusReply = () => undefined;
     (globalThis as any).fetch = async () => ({
       ok: true,
-      json: async () => ({ token: 'issued', wsUrl: 'ws://x' }),
+      json: async () => ({ token: 'issued', wsUrl: 'ws://127.0.0.1:47833' }),
     });
     const { initPopup } = await import('./popup.js');
     initPopup();

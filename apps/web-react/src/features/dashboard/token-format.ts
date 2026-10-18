@@ -13,6 +13,11 @@ export function formatTokens(n: number): string {
 }
 
 export function savedShare(saved: number, out: number): number {
-  const total = saved + out;
-  return total > 0 ? Math.round((saved / total) * 100) : 0;
+  const kept = Math.max(0, saved);
+  const sent = Math.max(0, out);
+  const total = kept + sent;
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  const share = Math.round((kept / total) * 100);
+  // Rounding must not claim everything was saved while some output was still sent.
+  return share === 100 && sent > 0 ? 99 : share;
 }

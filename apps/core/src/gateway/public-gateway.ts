@@ -1,3 +1,4 @@
+import { adminHostAllowed } from '../admin/request-guards.js';
 import http, {
   type IncomingHttpHeaders,
   type IncomingMessage,
@@ -8,6 +9,12 @@ import https, {
   type Server as HttpsServer,
   type ServerOptions as HttpsServerOptions,
 } from 'node:https';
+import {
+  guardListener,
+  parseRequestTarget,
+  rejectBadRequestTarget,
+  applyFrameDenyHeaders,
+} from '../mcp/listener-guards.js';
 import { pipeline } from 'node:stream/promises';
 import type { LocalProtocol } from '../exposure/types.js';
 
@@ -19,6 +26,8 @@ export interface PublicGatewayTargets {
 export interface PublicGatewayOptions {
   host: string;
   port: number;
+  /** Configured public origins, resolved live as managed tunnels start/change. */
+  allowedOrigins?: () => string[];
   protocol?: LocalProtocol;
   tls?: HttpsServerOptions;
   targets: PublicGatewayTargets;
@@ -160,9 +169,7 @@ export class PublicGateway {
 
   async start(): Promise<void> {
     if (this.server) return;
-    const handler = (request: IncomingMessage, response: ServerResponse) => {
-      void this.proxy(request, response);
-    };
+    const handler = guardListener((request, response) => this.proxy(request, response));
     const protocol = this.options.protocol ?? 'https';
     if (protocol === 'https') {
       if (!this.options.tls) throw new Error('HTTPS public gateway requires TLS options');
@@ -194,8 +201,30 @@ export class PublicGateway {
   }
 
   private async proxy(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const inboundUrl = new URL(request.url ?? '/', this.url());
+    if (
+      !adminHostAllowed(
+        request.headers.host,
+        this.options.host,
+        undefined,
+        this.options.allowedOrigins?.() ?? [],
+      )
+    ) {
+      response.statusCode = 421;
+      response.end('Unexpected Host');
+      return;
+    }
+    const inboundUrl = parseRequestTarget(request.url, this.url());
+    if (!inboundUrl) {
+      rejectBadRequestTarget(response);
+      return;
+    }
     const toMcp = usesMcpOrigin(inboundUrl.pathname);
+    if (!toMcp) applyFrameDenyHeaders(response);
+    if (inboundUrl.pathname === '/api/browser/pair') {
+      response.statusCode = 403;
+      response.end('Local pairing only');
+      return;
+    }
     if (!toMcp && this.options.adminProxyEnabled?.() === false) {
       response.statusCode = 404;
       response.setHeader('content-type', 'application/json');
@@ -203,7 +232,11 @@ export class PublicGateway {
       return;
     }
     const base = toMcp ? this.options.targets.mcpUrl : this.options.targets.adminUrl;
-    const target = new URL(`${inboundUrl.pathname}${inboundUrl.search}`, base);
+    const target = new URL(base);
+    // Assign path data without resolving it as a potentially new authority.
+    target.pathname = inboundUrl.pathname;
+    target.search = inboundUrl.search;
+    target.hash = '';
 
     const headers = requestHeaders(
       request.headers,
@@ -230,6 +263,7 @@ export class PublicGateway {
           for (const [name, value] of Object.entries(responseHeaders(upstreamResponse.headers))) {
             if (value !== undefined) response.setHeader(name, value);
           }
+          if (!toMcp) applyFrameDenyHeaders(response);
           void pipeline(upstreamResponse, response).catch(() => {
             response.destroy();
           });

@@ -151,14 +151,14 @@ test('surrounding whitespace in the answer is trimmed', async () => {
   assert.ok(state.written.every(([file]) => file.startsWith(path.resolve('/elsewhere'))));
 });
 
-test('with no terminal to ask on it refuses rather than picking for the user', async () => {
+test('without a terminal it uses the shared stable default directory', async () => {
   const state = harness({ isInteractive: () => false });
   const code = await runExtensionCommand(INSTALL, state.dependencies);
 
-  assert.equal(code, 1);
-  assert.match(state.errors[0]!, /needs --dir/);
-  assert.deepEqual(state.downloaded, [], 'nothing should be downloaded before a target is known');
-  assert.deepEqual(state.written, []);
+  assert.equal(code, 0);
+  assert.equal(state.errors.length, 0);
+  assert.equal(state.downloaded.length, 1);
+  assert.ok(state.written.every(([file]) => file.startsWith(path.resolve('/state/browser'))));
 });
 
 test('an occupied target is left alone unless replacing it was asked for', async () => {
@@ -276,4 +276,35 @@ test('it explains how to load the folder and why it must stay put', async () => 
   // silently unpairs the browser. Saying so is part of the install.
   assert.match(output, /moving it changes the extension id/);
   assert.match(output, /Pair extension/);
+});
+
+test('a recorded shared path elsewhere is refused before downloading or writing', async () => {
+  const state = harness({ checkParent: () => 'SHARED_EXTENSION_CONFLICT: recorded at /shared' });
+  const code = await runExtensionCommand(
+    { ...INSTALL, dir: path.resolve('/opt/aevra') },
+    state.dependencies,
+  );
+  assert.equal(code, 1);
+  assert.deepEqual(state.downloaded, []);
+  assert.deepEqual(state.written, []);
+  assert.match(state.errors.join('\n'), /recorded at/);
+});
+
+test('the copy and the claim run inside one transaction', async () => {
+  const order: string[] = [];
+  const state = harness({
+    transaction: (run) => {
+      order.push('begin');
+      const result = run();
+      order.push('end');
+      return result;
+    },
+    writeEntry: () => void order.push('write'),
+    onInstalled: () => void order.push('claim'),
+  });
+  assert.equal(
+    await runExtensionCommand({ ...INSTALL, dir: path.resolve('/opt/aevra') }, state.dependencies),
+    0,
+  );
+  assert.deepEqual(order, ['begin', 'write', 'write', 'claim', 'end']);
 });

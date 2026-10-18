@@ -49,9 +49,12 @@ impl Frame {
 /// dropping the alpha channel -- a screen grab has no meaningful
 /// transparency, and carrying a fourth channel into the encoder would only
 /// cost bytes.
+#[cfg(any(windows, test))]
 pub fn from_bgra_top_down(width: u32, height: u32, bgra: &[u8]) -> Result<Frame, String> {
     if width == 0 || height == 0 {
-        return Err(format!("cannot build a frame from a {width}x{height} region"));
+        return Err(format!(
+            "cannot build a frame from a {width}x{height} region"
+        ));
     }
     let expected = width as usize * height as usize * 4;
     if bgra.len() < expected {
@@ -61,7 +64,7 @@ pub fn from_bgra_top_down(width: u32, height: u32, bgra: &[u8]) -> Result<Frame,
         ));
     }
     let mut rgb = Vec::with_capacity(width as usize * height as usize * 3);
-    for pixel in bgra[..expected].chunks_exact(4) {
+    for pixel in bgra[..expected].as_chunks::<4>().0 {
         rgb.push(pixel[2]);
         rgb.push(pixel[1]);
         rgb.push(pixel[0]);
@@ -110,7 +113,11 @@ pub fn downscale_to_max(frame: Frame, max_edge: u32) -> Frame {
             rgb.push((totals[2] / count) as u8);
         }
     }
-    Frame { width: target_width, height: target_height, rgb }
+    Frame {
+        width: target_width,
+        height: target_height,
+        rgb,
+    }
 }
 
 fn scaled_edge(edge: u32, longest: u32, max_edge: u32) -> u32 {
@@ -132,7 +139,7 @@ fn source_end(target_index: u32, target_edge: u32, source_edge: u32, start: u32)
 /// GPU-composited surface) so it can fall back rather than hand back a black
 /// rectangle that looks like a successful screenshot.
 pub fn is_uniform(frame: &Frame) -> bool {
-    let mut pixels = frame.rgb.chunks_exact(3);
+    let mut pixels = frame.rgb.as_chunks::<3>().0.iter();
     let Some(first) = pixels.next() else {
         return true;
     };
@@ -148,7 +155,12 @@ pub fn encode_jpeg(frame: &Frame, quality: u8) -> Result<Vec<u8>, String> {
     }
     let mut out = Vec::new();
     Encoder::new(&mut out, quality)
-        .encode(&frame.rgb, frame.width as u16, frame.height as u16, ColorType::Rgb)
+        .encode(
+            &frame.rgb,
+            frame.width as u16,
+            frame.height as u16,
+            ColorType::Rgb,
+        )
         .map_err(|err| format!("JPEG encoding failed: {err}"))?;
     Ok(out)
 }
@@ -171,8 +183,16 @@ pub fn base64(bytes: &[u8]) -> String {
         let packed = (b0 << 16) | (b1 << 8) | b2;
         out.push(ALPHABET[((packed >> 18) & 63) as usize] as char);
         out.push(ALPHABET[((packed >> 12) & 63) as usize] as char);
-        out.push(if chunk.len() > 1 { ALPHABET[((packed >> 6) & 63) as usize] as char } else { '=' });
-        out.push(if chunk.len() > 2 { ALPHABET[(packed & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            ALPHABET[((packed >> 6) & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            ALPHABET[(packed & 63) as usize] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -237,7 +257,10 @@ mod tests {
     #[test]
     fn a_short_bgra_buffer_is_an_error_rather_than_a_partial_image() {
         let err = from_bgra_top_down(2, 2, &[0; 8]).unwrap_err();
-        assert!(err.contains("expected at least 16"), "unexpected message: {err}");
+        assert!(
+            err.contains("expected at least 16"),
+            "unexpected message: {err}"
+        );
     }
 
     #[test]
@@ -261,7 +284,10 @@ mod tests {
     fn downscale_never_upscales_a_small_frame() {
         let frame = solid(64, 32, [1, 2, 3]);
         let scaled = downscale_to_max(frame.clone(), 1024);
-        assert_eq!(scaled, frame, "a frame within the cap must be returned untouched");
+        assert_eq!(
+            scaled, frame,
+            "a frame within the cap must be returned untouched"
+        );
     }
 
     #[test]
@@ -276,7 +302,11 @@ mod tests {
         // 2x1: black then white. A nearest-neighbour 1x1 would return one of
         // the two; the average is mid grey. This is the property that keeps
         // one-pixel text strokes from vanishing entirely.
-        let frame = Frame { width: 2, height: 1, rgb: vec![0, 0, 0, 255, 255, 255] };
+        let frame = Frame {
+            width: 2,
+            height: 1,
+            rgb: vec![0, 0, 0, 255, 255, 255],
+        };
         let scaled = downscale_to_max(frame, 1);
         assert_eq!(scaled.width, 1);
         assert_eq!(scaled.pixel(0, 0), [127, 127, 127]);
@@ -295,14 +325,21 @@ mod tests {
         assert!(is_uniform(&solid(4, 4, [0, 0, 0])));
         let mut frame = solid(4, 4, [0, 0, 0]);
         frame.rgb[7] = 9;
-        assert!(!is_uniform(&frame), "a single differing pixel means real content");
+        assert!(
+            !is_uniform(&frame),
+            "a single differing pixel means real content"
+        );
     }
 
     #[test]
     fn jpeg_encoding_produces_a_real_jfif_stream() {
         let jpeg = encode_jpeg(&solid(16, 16, [200, 100, 50]), QUALITY).unwrap();
         assert_eq!(&jpeg[..3], &[0xff, 0xd8, 0xff], "missing the SOI marker");
-        assert_eq!(&jpeg[jpeg.len() - 2..], &[0xff, 0xd9], "missing the EOI marker");
+        assert_eq!(
+            &jpeg[jpeg.len() - 2..],
+            &[0xff, 0xd9],
+            "missing the EOI marker"
+        );
     }
 
     /// A frame with varying content, so it survives the blank-frame refusal.
@@ -325,10 +362,15 @@ mod tests {
         // 1024/1920. A caller divides an image coordinate by this to get a
         // clickable screen coordinate, so it must describe the image it
         // actually got.
-        assert!((ratio - (1024.0 / 1920.0)).abs() < 1e-9, "ratio was {ratio}");
+        assert!(
+            (ratio - (1024.0 / 1920.0)).abs() < 1e-9,
+            "ratio was {ratio}"
+        );
         let payload = uri.trim_start_matches("data:image/jpeg;base64,");
         assert!(payload.len() > 32, "payload was {} chars", payload.len());
-        assert!(payload.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '='));
+        assert!(payload
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '='));
     }
 
     #[test]

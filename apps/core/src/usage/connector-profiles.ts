@@ -51,16 +51,19 @@ export function parseConnectorProfile(input: unknown): ConnectorProfile {
   return profile;
 }
 
+/** The actor key rules shared by every per-connector store. */
+export function isValidConnectorActor(actor: unknown): actor is string {
+  return (
+    typeof actor === 'string' &&
+    actor.length > 0 &&
+    actor.length <= MAX_ACTOR_LENGTH &&
+    actor !== '__proto__' &&
+    !/[\u0000-\u001f]/.test(actor)
+  );
+}
+
 function checkActor(actor: unknown): string {
-  if (
-    typeof actor !== 'string' ||
-    !actor ||
-    actor.length > MAX_ACTOR_LENGTH ||
-    actor === '__proto__' ||
-    /[\u0000-\u001f]/.test(actor)
-  ) {
-    throw invalid('Invalid connector actor.');
-  }
+  if (!isValidConnectorActor(actor)) throw invalid('Invalid connector actor.');
   return actor;
 }
 

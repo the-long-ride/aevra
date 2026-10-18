@@ -247,3 +247,64 @@
     justify-self: stretch;
   }
 }
+
+/* Compact toolbar: opt-in via DataTable density="compact". Row 1 search, row 2 controls. */
+.data-table-host.dt-compact .dt-toolbar {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+}
+
+.data-table-host.dt-compact .dt-search {
+  max-width: none;
+}
+
+.data-table-host.dt-compact .dt-control-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+}
+
+.data-table-host.dt-compact .dt-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  width: auto;
+  gap: 8px 12px;
+}
+
+.data-table-host.dt-compact .dt-filter,
+.data-table-host.dt-compact .dt-size {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.data-table-host.dt-compact .dt-filter .dropdown,
+.data-table-host.dt-compact .dt-size .dropdown {
+  width: auto;
+  min-width: 92px;
+}
+
+.data-table-host.dt-compact .dt-size .dropdown {
+  min-width: 64px;
+}
+
+.data-table-host.dt-compact .dt-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.data-table-host.dt-compact .dt-control-strip > .dt-pagination {
+  margin-left: 0;
+}

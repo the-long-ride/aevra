@@ -1,13 +1,12 @@
 import type { DashboardSectionId } from '@aevra/admin-contracts';
 
-const normal: DashboardSectionId[] = [
+const order: DashboardSectionId[] = [
   'runtime-overview',
   'live-mcp-activity',
   'active-connections',
+  'system-capabilities',
 ];
 
-export function dashboardOrder(completed: boolean): DashboardSectionId[] {
-  return completed
-    ? [...normal, 'onboarding', 'system-capabilities']
-    : ['onboarding', ...normal, 'system-capabilities'];
+export function dashboardOrder(): DashboardSectionId[] {
+  return [...order];
 }

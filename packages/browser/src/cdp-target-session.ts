@@ -1,4 +1,5 @@
 import { BrowserDriverError } from './driver.js';
+import { validateDebuggerUrl } from './action-origin.js';
 import { CdpClient } from './cdp-client.js';
 
 export interface CdpTarget {
@@ -19,13 +20,14 @@ export interface CdpTargetState {
   visionScale: number;
 }
 
-async function createState(target: CdpTarget): Promise<CdpTargetState> {
+async function createState(target: CdpTarget, expectedPort?: number): Promise<CdpTargetState> {
   if (!target.webSocketDebuggerUrl) {
     throw new BrowserDriverError(
       'BROWSER_UNAVAILABLE',
       'Target ' + target.id + ' has no debugger websocket',
     );
   }
+  if (expectedPort !== undefined) validateDebuggerUrl(target.webSocketDebuggerUrl, expectedPort);
   const client = await CdpClient.connect(target.webSocketDebuggerUrl);
   await client.send('Page.enable');
   await client.send('DOM.enable');
@@ -46,7 +48,10 @@ export class CdpTargetSessionRegistry {
   private readonly states = new Map<string, CdpTargetState>();
   private defaultTargetId = '';
 
-  constructor(private readonly targets: () => Promise<CdpTarget[]>) {}
+  constructor(
+    private readonly targets: () => Promise<CdpTarget[]>,
+    private readonly expectedPort?: number,
+  ) {}
 
   activeId(): string {
     return this.defaultTargetId;
@@ -62,7 +67,7 @@ export class CdpTargetSessionRegistry {
     if (!target) {
       throw new BrowserDriverError('BROWSER_UNAVAILABLE', 'No debuggable page target was found');
     }
-    const state = await createState(target);
+    const state = await createState(target, this.expectedPort);
     this.states.set(target.id, state);
     this.defaultTargetId = target.id;
     return state;
@@ -81,7 +86,7 @@ export class CdpTargetSessionRegistry {
     if (!target) {
       throw new BrowserDriverError('NOT_FOUND', 'Browser target ' + id + ' no longer exists');
     }
-    const state = await createState(target);
+    const state = await createState(target, this.expectedPort);
     this.states.set(id, state);
     return state;
   }

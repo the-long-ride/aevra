@@ -40,7 +40,8 @@ test('modern discovery advertises MCP 2026-07-28 with Aevra branding', () => {
   assert.deepEqual(result.supportedVersions, [MODERN_PROTOCOL_VERSION]);
   assert.equal(result.resultType, 'complete');
   assert.ok(result.capabilities.tools);
-  assert.equal(result.cacheScope, 'public');
+  assert.equal(result.cacheScope, 'private');
+  assert.equal(modernDiscoverResult(publicBaseUrl, 'a notice').cacheScope, 'private');
   assert.ok(result.ttlMs > 0);
   assert.equal(result._meta['io.modelcontextprotocol/serverInfo'].name, 'Aevra');
   assert.deepEqual(result._meta['io.modelcontextprotocol/serverInfo'].icons, expectedIcon);

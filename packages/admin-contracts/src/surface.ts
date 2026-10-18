@@ -11,22 +11,11 @@ export const ADMIN_SURFACE = {
     { id: 'about', label: 'About' },
   ],
   dashboardSections: [
-    'onboarding',
     'runtime-overview',
     'live-mcp-activity',
     'active-connections',
     'system-capabilities',
   ],
-  onboarding: {
-    beforeCompletion: [
-      'remote-access',
-      'connect-ai',
-      'workspace',
-      'try-aevra',
-      'finish-onboarding',
-    ],
-    completedPosition: 'bottom',
-  },
   approvalScopes: ['once', 'session', 'workspace', 'global', 'connection'],
   actions: {
     requests: [
@@ -74,7 +63,6 @@ export const ADMIN_SURFACE = {
 export type AdminPageId = (typeof ADMIN_SURFACE.navigation)[number]['id'];
 export type ApprovalScope = (typeof ADMIN_SURFACE.approvalScopes)[number];
 export type DashboardSectionId = (typeof ADMIN_SURFACE.dashboardSections)[number];
-export type OnboardingSectionId = (typeof ADMIN_SURFACE.onboarding.beforeCompletion)[number];
 
 export function surfaceId(category: string, id: string): string {
   return `${category}:${id}`;

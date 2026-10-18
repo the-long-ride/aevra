@@ -102,7 +102,7 @@ test('coordinate click and drag after a downscaled capture land in CSS pixels', 
             type: 'page',
             url: 'https://game.example/',
             title: '',
-            webSocketDebuggerUrl: socket.url,
+            webSocketDebuggerUrl: socket.via(control!),
           },
         ]),
       );

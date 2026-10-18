@@ -147,7 +147,7 @@ describe('DesktopControlSettings', () => {
     );
     const toast = await screen.findByRole('status');
     expect(toast).toHaveClass('toast', 'success');
-    expect(toast).toHaveTextContent('// Desktop policy saved.');
+    expect(toast).toHaveTextContent('Desktop policy saved.');
   });
 
   it('toggling path exposure preserves app table search input state', async () => {

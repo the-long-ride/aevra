@@ -1,3 +1,7 @@
+import {
+  validateExplicitEnvironment,
+  environmentNeedsApproval,
+} from '../../security/src/environment.js';
 import { normalizeYoloMode, type CommandRequest } from '../../protocol/src/index.js';
 import { bindCommandApproval } from '../../../apps/core/src/approvals/command-binding.js';
 import { classifyCommand } from '../../../apps/core/src/policy/command-family.js';
@@ -36,7 +40,10 @@ export async function processStart(context: McpRuntimeContext, sessionId: string
     timeoutMs: args.timeoutMs,
     workspaceId: lease.workspaceId,
   };
+  validateExplicitEnvironment(command.env);
   const classification = classifyCommand([command.executable, ...command.args]);
+  if (environmentNeedsApproval(command.env) && classification.risk !== 'CRITICAL')
+    classification.risk = 'HIGH';
   const permissionMatcher = `process:${commandPermissionMatcher(
     [command.executable, ...command.args],
     { executionMode: 'host' },

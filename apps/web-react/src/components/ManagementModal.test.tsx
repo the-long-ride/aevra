@@ -90,3 +90,34 @@ test('closes on Escape key press or backdrop click', async () => {
   );
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
+
+test('initial reverse Tab stays inside the dialog', async () => {
+  const user = userEvent.setup();
+  render(<Fixture initialOpen />);
+  expect(screen.getByRole('dialog')).toHaveFocus();
+  await user.keyboard('{Shift>}{Tab}{/Shift}');
+  expect(screen.getByRole('button', { name: 'Last action' })).toHaveFocus();
+});
+
+test('traps Tab across visible disclosure summaries and ignores collapsed descendants', async () => {
+  const user = userEvent.setup();
+  render(
+    <ManagementModal open title="Tool docs" onClose={() => {}}>
+      <input aria-label="Search" />
+      <details>
+        <summary>Tool</summary>
+        <details>
+          <summary>Input schema</summary>
+          <p>Schema</p>
+        </details>
+      </details>
+    </ManagementModal>,
+  );
+  await user.keyboard('{Shift>}{Tab}{/Shift}');
+  expect(screen.getByText('Tool')).toHaveFocus();
+  await user.click(screen.getByText('Tool'));
+  await user.keyboard('{Tab}');
+  expect(screen.getByText('Input schema')).toHaveFocus();
+  await user.keyboard('{Tab}');
+  expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+});

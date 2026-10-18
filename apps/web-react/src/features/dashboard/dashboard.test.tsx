@@ -17,20 +17,19 @@ function renderDashboard() {
   );
 }
 
-test('incomplete Onboarding is first and open by default', async () => {
+test('Dashboard no longer renders the onboarding section', async () => {
+  const fetchMock = installApiFixtures();
   const { container } = renderDashboard();
-  const onboarding = await screen.findByText('Onboarding');
-  const details = onboarding.closest('details');
-  expect(details).not.toBeNull();
-  expect(details?.open).toBe(true);
+  await screen.findByText('Runtime overview');
+  expect(container.querySelector('[data-dashboard-section="onboarding"]')).toBeNull();
+  expect(container.querySelector('[data-onboarding-section]')).toBeNull();
+  expect(screen.queryByText('Onboarding')).not.toBeInTheDocument();
   const sections = container.querySelectorAll('[data-dashboard-section]');
-  expect(sections[0]?.getAttribute('data-dashboard-section')).toBe('onboarding');
+  expect(sections[0]?.getAttribute('data-dashboard-section')).toBe('runtime-overview');
   expect(sections[sections.length - 1]?.getAttribute('data-dashboard-section')).toBe(
     'system-capabilities',
   );
-  const blocks = details?.querySelectorAll('[data-onboarding-section]');
-  expect(blocks?.[0]?.getAttribute('data-onboarding-section')).toBe('remote-access');
-  expect(within(details as HTMLElement).getByText('Connect an AI')).toBeInTheDocument();
+  expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/onboarding')).toBe(false);
 });
 
 test('live MCP activity follows Runtime overview', async () => {
@@ -53,18 +52,6 @@ test('recent activity is merged into Runtime overview', async () => {
   expect(within(runtime as HTMLElement).getByText('Open changes')).toBeInTheDocument();
   expect(container.querySelector('[data-dashboard-section="recent-activity"]')).toBeNull();
   expect(screen.queryByText('Recent activity')).not.toBeInTheDocument();
-});
-
-test('completed System capabilities stays final after collapsed Onboarding', async () => {
-  installApiFixtures({ onboardingCompleted: true });
-  const { container } = renderDashboard();
-  await screen.findByText('Onboarding completed');
-  const sections = container.querySelectorAll('[data-dashboard-section]');
-  const system = sections[sections.length - 1] as HTMLDetailsElement | undefined;
-  const onboarding = sections[sections.length - 2] as HTMLDetailsElement | undefined;
-  expect(onboarding?.getAttribute('data-dashboard-section')).toBe('onboarding');
-  expect(system?.getAttribute('data-dashboard-section')).toBe('system-capabilities');
-  expect(onboarding?.open).toBe(false);
 });
 
 test('collapsed Dashboard section remains collapsed after data refresh', async () => {

@@ -40,5 +40,6 @@ test('package metadata exposes only gateway runtime assets', async () => {
   for (const p of forbidden)
     assert.equal(pkg.files?.includes(p), false, `${p} must NOT be in files`);
 
-  assert.deepEqual(pkg.dependencies ?? {}, {});
+  // Only the native agent-configuration parsers are runtime dependencies.
+  assert.deepEqual(Object.keys(pkg.dependencies ?? {}).sort(), ['jsonc-parser', 'smol-toml']);
 });

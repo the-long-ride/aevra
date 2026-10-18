@@ -53,7 +53,7 @@ export async function connectedRpc(bridge: Record<string, unknown> = {}) {
   const { ExtensionRpc } = await import('./rpc');
   const rpc = new ExtensionRpc({
     async listTabs() {
-      return [];
+      return [{ tabId: '1', url: 'https://example.com/', active: true }];
     },
     async serialize() {
       return { tagName: 'body', attributes: {}, children: [], textContent: 'Invoices' };

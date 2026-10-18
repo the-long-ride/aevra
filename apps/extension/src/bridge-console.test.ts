@@ -58,7 +58,7 @@ function installChrome(results: Record<string, unknown> = {}) {
           if (value instanceof Error) throw value;
           return [{ result: value }];
         }
-        return [{ result: { ok: true } }];
+        return [{ documentId: 'fixture-document', result: { ok: true } }];
       },
     },
     debugger: {
@@ -144,14 +144,14 @@ describe('the viewport a capture is fitted with', () => {
 describe('recordConsoleLog', () => {
   it('keeps the level the page reported', async () => {
     installChrome();
-    recordConsoleLog('something failed', 'error');
+    recordConsoleLog('something failed', 'error', { tabId: 7, documentId: 'fixture-document' });
     const [entry] = await createChromeBridge().logs('console', 10);
     expect(entry).toMatchObject({ kind: 'console', level: 'error', text: 'something failed' });
   });
 
   it('defaults the level when none is given', async () => {
     installChrome();
-    recordConsoleLog('plain line');
+    recordConsoleLog('plain line', undefined, { tabId: 7, documentId: 'fixture-document' });
     const [entry] = await createChromeBridge().logs('console', 10);
     expect(entry!.level).toBe('log');
   });

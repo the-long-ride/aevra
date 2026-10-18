@@ -58,12 +58,17 @@ pub fn parse_request(line: &str) -> Result<Request, ErrorReply> {
 
 pub fn success_line(id: i64, result: Value) -> String {
     let reply = SuccessReply { id, result };
-    serde_json::to_string(&reply).unwrap_or_else(|_| format!("{{\"id\":{id},\"error\":\"failed to serialise result\"}}"))
+    serde_json::to_string(&reply)
+        .unwrap_or_else(|_| format!("{{\"id\":{id},\"error\":\"failed to serialise result\"}}"))
 }
 
 pub fn error_line(id: i64, message: impl Into<String>) -> String {
-    let reply = ErrorReply { id, error: Value::String(message.into()) };
-    serde_json::to_string(&reply).unwrap_or_else(|_| format!("{{\"id\":{id},\"error\":\"failed to serialise error\"}}"))
+    let reply = ErrorReply {
+        id,
+        error: Value::String(message.into()),
+    };
+    serde_json::to_string(&reply)
+        .unwrap_or_else(|_| format!("{{\"id\":{id},\"error\":\"failed to serialise error\"}}"))
 }
 
 pub fn structured_error_line(id: i64, code: &str, message: &str, details: Option<Value>) -> String {
@@ -73,8 +78,12 @@ pub fn structured_error_line(id: i64, code: &str, message: &str, details: Option
     if let Some(d) = details {
         map.insert("details".to_string(), d);
     }
-    let reply = ErrorReply { id, error: Value::Object(map) };
-    serde_json::to_string(&reply).unwrap_or_else(|_| format!("{{\"id\":{id},\"error\":\"failed to serialise error\"}}"))
+    let reply = ErrorReply {
+        id,
+        error: Value::Object(map),
+    };
+    serde_json::to_string(&reply)
+        .unwrap_or_else(|_| format!("{{\"id\":{id},\"error\":\"failed to serialise error\"}}"))
 }
 
 impl std::fmt::Display for ErrorReply {
@@ -116,7 +125,10 @@ mod tests {
     #[test]
     fn structured_error_matches_wire_shape() {
         let line = structured_error_line(3, "DESKTOP_REF_STALE", "Expired", None);
-        assert_eq!(line, r#"{"id":3,"error":{"code":"DESKTOP_REF_STALE","message":"Expired"}}"#);
+        assert_eq!(
+            line,
+            r#"{"id":3,"error":{"code":"DESKTOP_REF_STALE","message":"Expired"}}"#
+        );
     }
 
     #[test]

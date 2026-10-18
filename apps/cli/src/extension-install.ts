@@ -1,5 +1,12 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import {
+  claimExtensionLocked,
+  extensionClaimConflict,
+  sharedExtensionDirectory,
+} from '../../../packages/agent-integration/src/shared-extension.js';
+import { withIntegrationLock } from '../../../packages/agent-integration/src/lock.js';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 import { AEVRA_VERSION } from '../../core/src/version.js';
@@ -45,7 +52,12 @@ export function extensionInstallDependencies(config: {
     // Defaults inside the state directory because the folder has to stay put:
     // Chrome derives an unpacked extension's id from its path, so a download
     // parked in a temp or Downloads folder would unpair the moment it is tidied.
-    defaultDirectory: () => path.join(config.stateDir, 'browser'),
+    defaultDirectory: () =>
+      sharedExtensionDirectory(os.homedir(), [path.join(config.stateDir, 'browser')]),
+    checkParent: (parent) => extensionClaimConflict(os.homedir(), parent),
+    // The copy runs under the integration lock, so aevra-browser cannot purge it mid-copy.
+    transaction: (run) => withIntegrationLock(os.homedir(), run),
+    onInstalled: (parent) => claimExtensionLocked(os.homedir(), 'aevra', parent),
     async ask(question, fallback) {
       const prompt = createInterface({ input, output });
       try {

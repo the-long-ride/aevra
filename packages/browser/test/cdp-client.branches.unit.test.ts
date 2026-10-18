@@ -24,8 +24,10 @@ async function withClient(body: (client: CdpClient) => Promise<void>): Promise<v
       push(JSON.stringify({ method: 'Runtime.consoleAPICalled' }));
       push(JSON.stringify({ method: 'Log.entryAdded' }));
       push(JSON.stringify({ method: 'Network.responseReceived' }));
-      push(JSON.stringify({ method: 'Page.frameNavigated', params: {} }));
+      push(JSON.stringify({ method: 'Page.unrelatedEvent', params: {} }));
     }
+    if (method === 'navigate')
+      push(JSON.stringify({ method: 'Page.frameNavigated', params: { frame: { id: 'one' } } }));
     if (method === 'flood') {
       for (let index = 0; index < 505; index += 1) {
         push(
@@ -109,4 +111,15 @@ test('connecting to a port with no listener fails as unavailable', async () => {
     CdpClient.connect(`ws://127.0.0.1:${port}/devtools`),
     /BROWSER_UNAVAILABLE: CDP socket failed to open/,
   );
+});
+
+test('navigation invalidates document reads and clears the previous document logs', async () => {
+  await withClient(async (client) => {
+    await client.send('events');
+    const before = client.documentVersion;
+    await client.send('navigate');
+    assert.equal(client.documentVersion, before + 1);
+    assert.deepEqual(client.drain('console', 10), []);
+    assert.deepEqual(client.drain('network', 10), []);
+  });
 });

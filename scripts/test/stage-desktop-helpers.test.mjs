@@ -18,6 +18,13 @@ test('stages platform helper artifacts for npm and uniquely named release assets
       const dir = path.join(source, `desktop-helper-${slug}`);
       mkdirSync(dir, { recursive: true });
       writeFileSync(path.join(dir, binary), slug);
+      if (slug === 'linux-x64') {
+        writeFileSync(path.join(dir, 'aevra-wayland-kde-source.zip'), 'kde companion');
+        writeFileSync(
+          path.join(dir, 'aevra-desktop@the-long-ride.shell-extension.zip'),
+          'companion',
+        );
+      }
     }
 
     const result = spawnSync(
@@ -26,6 +33,25 @@ test('stages platform helper artifacts for npm and uniquely named release assets
       { encoding: 'utf8' },
     );
     assert.equal(result.status, 0, result.stderr);
+    assert.equal(
+      readFileSync(path.join(packaged, 'linux-x64', 'aevra-wayland-kde-source.zip'), 'utf8'),
+      'kde companion',
+    );
+    assert.equal(
+      readFileSync(path.join(release, 'aevra-wayland-kde-source.zip'), 'utf8'),
+      'kde companion',
+    );
+    assert.equal(
+      readFileSync(
+        path.join(packaged, 'linux-x64', 'aevra-desktop@the-long-ride.shell-extension.zip'),
+        'utf8',
+      ),
+      'companion',
+    );
+    assert.equal(
+      readFileSync(path.join(release, 'aevra-desktop@the-long-ride.shell-extension.zip'), 'utf8'),
+      'companion',
+    );
     assert.equal(
       readFileSync(path.join(packaged, 'linux-x64', 'aevra-desktop-helper'), 'utf8'),
       'linux-x64',

@@ -94,4 +94,13 @@ describe('McpUpstreamEditModal', () => {
     expect((screen.getByLabelText(/server name/i) as HTMLInputElement).value).toBe('github');
     expect((screen.getByLabelText(/header name/i) as HTMLInputElement).value).toBe('X-API-Key');
   });
+  it('never sends enabled, so a save cannot undo a toggle made elsewhere', () => {
+    const { onSubmit } = mount();
+    fireEvent.change(screen.getByLabelText(/server name/i), { target: { value: 'github' } });
+    fireEvent.change(screen.getByLabelText(/server url/i), {
+      target: { value: 'https://mcp.example.com/mcp' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save server/i }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('enabled');
+  });
 });

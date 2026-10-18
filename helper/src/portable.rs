@@ -1,5 +1,8 @@
 //! Shared semantic accessibility backend for macOS (AX) and Linux (AT-SPI2).
-//! Host input synthesis is intentionally absent: shared control uses provider actions only.
+//! Semantic background actions remain separate from verified foreground pixel/input adapters.
+
+#[path = "portable_foreground.rs"]
+mod foreground;
 
 use crate::backend::{
     ActRequest, BackgroundActRequest, BackgroundActResult, Capabilities, CaptureRequest,
@@ -12,8 +15,10 @@ use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use sysinfo::{Pid, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use xa11y::{App, Element, Error as A11yError, Provider, Role, Toggled};
+
+type CollectedTree = (Vec<DescribeNode>, HashMap<String, Element>, bool);
 
 struct PortableSnapshot {
     instance: WindowInstance,
@@ -24,6 +29,8 @@ pub struct PortableBackend {
     provider: Result<Arc<dyn Provider>, String>,
     snapshots: RefCell<HashMap<String, PortableSnapshot>>,
     next_handle: RefCell<u64>,
+    foreground: RefCell<Option<foreground::Snapshot>>,
+    native_bindings: RefCell<HashMap<String, (WindowInstance, u32)>>,
 }
 
 impl PortableBackend {
@@ -32,6 +39,8 @@ impl PortableBackend {
             provider: xa11y::provider().map_err(map_provider_error),
             snapshots: RefCell::new(HashMap::new()),
             next_handle: RefCell::new(1),
+            foreground: RefCell::new(None),
+            native_bindings: RefCell::new(HashMap::new()),
         }
     }
 
@@ -67,6 +76,27 @@ impl PortableBackend {
 
     fn focused_window_element(&self) -> Result<Element, String> {
         let provider = self.provider()?;
+        #[cfg(target_os = "linux")]
+        if crate::wayland::active() {
+            if let Ok(native) = crate::wayland::focused().and_then(crate::wayland::window) {
+                let app = App::from_data(
+                    Arc::clone(&provider),
+                    provider.app_by_pid(native.pid).map_err(map_a11y)?,
+                );
+                let windows = app.windows().map_err(map_a11y)?;
+                let mut matched = windows.into_iter().filter(|w| {
+                    w.pid == Some(native.pid)
+                        && w.bounds.is_some_and(|r| {
+                            crate::wayland_contract::accessibility_rect(&native, r.width, r.height)
+                                .is_ok()
+                        })
+                });
+                return match (matched.next(),matched.next()) {
+                (Some(window),None)=>Ok(window),
+                _=>Err("DESKTOP_TARGET_CHANGED: no unique accessible window matches the GNOME compositor target".into()),
+            };
+            }
+        }
         let app_data = provider.focused_app().map_err(map_a11y)?;
         let app = App::from_data(Arc::clone(&provider), app_data);
         let windows = app.windows().map_err(map_a11y)?;
@@ -86,7 +116,7 @@ impl PortableBackend {
         let pid = window
             .pid
             .ok_or_else(|| "DESKTOP_INPUT_REFUSED: target process is unattributable".to_string())?;
-        let system = System::new_all();
+        let system = process_system(&[Pid::from_u32(pid)]);
         let process = system
             .process(Pid::from_u32(pid))
             .ok_or_else(|| "DESKTOP_TARGET_CHANGED: target process exited".to_string())?;
@@ -101,7 +131,7 @@ impl PortableBackend {
         let mut process_name = None;
         let mut executable_path = None;
         if let Some(pid) = window.pid {
-            let system = System::new_all();
+            let system = process_system(&[Pid::from_u32(pid)]);
             if let Some(process) = system.process(Pid::from_u32(pid)) {
                 let name = process.name().to_string_lossy().to_string();
                 if !name.is_empty() {
@@ -126,7 +156,7 @@ impl PortableBackend {
         window: &Element,
         max_nodes: usize,
         interactive_only: bool,
-    ) -> Result<(Vec<DescribeNode>, HashMap<String, Element>, bool), String> {
+    ) -> Result<CollectedTree, String> {
         let limit = max_nodes.max(1);
         let mut nodes = Vec::new();
         let mut elements = HashMap::new();
@@ -181,14 +211,37 @@ impl PortableBackend {
     }
 }
 
+/// Only refresh attribution/security metadata for the bound processes. CPU,
+/// memory, disks and unrelated applications are not part of an input guard.
+fn process_system(pids: &[Pid]) -> System {
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(pids),
+        true,
+        ProcessRefreshKind::nothing()
+            .with_exe(UpdateKind::Always)
+            .with_user(UpdateKind::Always),
+    );
+    system
+}
+
 impl DesktopBackend for PortableBackend {
     fn connect(&self) -> Result<Capabilities, String> {
         self.provider()?;
+        // This explicit boundary begins a new observation/authority generation.
+        // Never adopt changed compositor mappings inside an authorized action.
+        self.native_bindings.borrow_mut().clear();
+        self.snapshots.borrow_mut().clear();
+        *self.foreground.borrow_mut() = None;
+        #[cfg(target_os = "linux")]
+        if crate::wayland::active() {
+            let _ = crate::wayland::reconnect();
+        }
         Ok(Capabilities {
-            capture: false,
+            capture: crate::portable_pixels::ready(),
             tree: true,
             attribution: true,
-            input: false,
+            input: crate::portable_input::ready(),
             background_actions: Some(true),
         })
     }
@@ -225,12 +278,26 @@ impl DesktopBackend for PortableBackend {
     }
 
     fn describe(&self, request: DescribeRequest) -> Result<DescribeResult, String> {
+        crate::backend::verify_read_target(
+            self,
+            request.expected_target.as_ref(),
+            request.window_id.as_deref(),
+        )?;
         let window = match request.window_id.as_deref() {
             Some(window_id) => self.resolve_window(window_id)?,
             None => self.focused_window_element()?,
         };
-        let (nodes, _, truncated) =
+        let (nodes, elements, truncated) =
             self.describe_window(&window, request.max_nodes, request.interactive_only)?;
+        crate::backend::verify_read_target(
+            self,
+            request.expected_target.as_ref(),
+            request.window_id.as_deref(),
+        )?;
+        *self.foreground.borrow_mut() = Some(foreground::Snapshot {
+            instance: self.process_instance(&window)?,
+            elements,
+        });
         Ok(DescribeResult {
             window: self.identity(&window),
             nodes,
@@ -241,18 +308,12 @@ impl DesktopBackend for PortableBackend {
         })
     }
 
-    fn capture(&self, _request: CaptureRequest) -> Result<CaptureResult, String> {
-        Err(
-            "DESKTOP_CAPTURE_UNSUPPORTED: portable shared-semantic backend does not capture pixels"
-                .into(),
-        )
+    fn capture(&self, request: CaptureRequest) -> Result<CaptureResult, String> {
+        self.capture_pixels(request)
     }
 
-    fn act(&self, _request: ActRequest) -> Result<bool, String> {
-        Err(
-            "DESKTOP_INPUT_REFUSED: macOS/Linux shared control requires semantic background actions; host input synthesis is disabled"
-                .into(),
-        )
+    fn act(&self, request: ActRequest) -> Result<bool, String> {
+        self.act_foreground(request)
     }
 
     fn target_identity(
@@ -401,11 +462,12 @@ fn toggle_name(state: Toggled) -> String {
 }
 
 fn window_id_for(window: &Element) -> String {
-    let pid = window.pid.unwrap_or(0);
-    match window.stable_id.as_deref() {
-        Some(stable) if !stable.is_empty() => format!("{pid}:stable:{stable}"),
-        _ => format!("{pid}:handle:{}", window.handle),
-    }
+    crate::portable_contract::provider_key(
+        window.pid.unwrap_or(0),
+        &window.handle.to_string(),
+        window.raw.get("bus_name").and_then(|v| v.as_str()),
+        window.stable_id.as_deref(),
+    )
 }
 
 fn map_provider_error(error: A11yError) -> String {
@@ -437,3 +499,7 @@ fn map_a11y(error: A11yError) -> String {
         other => format!("DESKTOP_PROVIDER_UNAVAILABLE: {other}"),
     }
 }
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "portable_session_tests.rs"]
+pub(crate) mod session_tests;

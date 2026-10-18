@@ -77,23 +77,29 @@ test('a tab without a remembered capture scale keeps coordinates unchanged', asy
   assert.equal(harness.applied[0].tabId, '2');
 });
 
-test('with no active tab the scale lookup falls back to an unscaled point', async () => {
+test('with no active tab input refuses instead of using an ambiguous target', async () => {
   const registry = new RefRegistry();
   const harness = bridge({
     async listTabs() {
       return [];
     },
   });
-  await handleExtensionCommand(registry, harness.value, {
-    op: 'snapshot',
-    params: { mode: 'vision' },
-  });
-  await handleExtensionCommand(registry, harness.value, {
-    op: 'act',
-    params: { actions: [{ op: 'click', x: 8, y: 6 }] },
-  });
-  // The capture was remembered under '' (no tab) with scale 2.
-  assert.deepEqual(harness.applied[0].action, { op: 'click', x: 4, y: 3 });
+  await assert.rejects(
+    handleExtensionCommand(registry, harness.value, {
+      op: 'snapshot',
+      params: { mode: 'vision' },
+    }),
+    { code: 'NOT_FOUND' },
+  );
+  await assert.rejects(
+    () =>
+      handleExtensionCommand(registry, harness.value, {
+        op: 'act',
+        params: { actions: [{ op: 'click', x: 8, y: 6 }] },
+      }),
+    (error: any) => error.code === 'NOT_FOUND',
+  );
+  assert.equal(harness.applied.length, 0);
 });
 
 test('an act command without an actions array does nothing', async () => {
@@ -293,10 +299,12 @@ test('read with a selector that matches nothing fails with NOT_FOUND', async () 
   );
 });
 
-test('read of a tab the bridge does not list reports empty tab identity', async () => {
-  const result = await read({ tabId: 'gone' });
-  assert.equal(result.tabId, '');
-  assert.equal(result.url, '');
+test('read of an unlisted tab refuses before collecting content', async () => {
+  const harness = bridge({ listTabs: async () => [] });
+  await assert.rejects(
+    () => handleExtensionCommand(new RefRegistry(), harness.value, { op: 'read', params: {} }),
+    { code: 'NOT_FOUND' },
+  );
 });
 
 test('read with a ref scopes to that snapshot element', async () => {

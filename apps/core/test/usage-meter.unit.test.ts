@@ -129,3 +129,30 @@ test('responseFailed detects JSON-RPC errors and tool errors', () => {
   assert.equal(responseFailed({ result: { content: [] } }), false);
   assert.equal(responseFailed(null), false);
 });
+
+test('image block data is not metered but text and the rest of the body are', () => {
+  const { db, repo, meter } = setup();
+  const text = { type: 'text', text: 'plain test phrase' };
+  const image = { type: 'image', mimeType: 'image/png', data: 'plain image phrase '.repeat(2000) };
+  const body = JSON.stringify({ result: { content: [text, image] } });
+  meter.finish(meter.begin('a', 'tools/call', 'notes_read', {}), body);
+  meter.flush();
+  const metered = JSON.stringify({
+    result: { content: [text, { type: 'image', mimeType: 'image/png', data: '' }] },
+  });
+  const [row] = repo.rows(ALL);
+  assert.equal(row!.outputTokens, estimateTokens(metered));
+  assert.ok(row!.outputTokens < estimateTokens(body) / 10);
+  db.close();
+});
+
+test('a body without image blocks is metered unchanged', () => {
+  const { db, repo, meter } = setup();
+  const body = JSON.stringify({
+    result: { content: [{ type: 'text', text: 'type image phrase' }] },
+  });
+  meter.finish(meter.begin('a', 'tools/call', 'x', {}), body);
+  meter.flush();
+  assert.equal(repo.rows(ALL)[0]!.outputTokens, estimateTokens(body));
+  db.close();
+});

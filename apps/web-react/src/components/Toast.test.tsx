@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -177,4 +178,33 @@ test('StrictMode replay and a fresh mount leave only one owned stack', () => {
   press('succeed');
   expect(screen.getByRole('status')).toBeInTheDocument();
   expect(document.querySelectorAll('.toast-stack')).toHaveLength(1);
+});
+
+test('toast text carries no prefix of its own; CSS draws it', () => {
+  render(<Harness />);
+  press('succeed');
+  const toast = screen.getByRole('status');
+  expect(toast.textContent).toBe('Saved it');
+  press('fail');
+  expect(screen.getByRole('alert').textContent).toBe('Broke it');
+});
+
+function PrefixedHarness() {
+  const { toast, success } = useToast();
+  return (
+    <>
+      <button onClick={() => success('// already prefixed')}>prefixed</button>
+      {toast}
+    </>
+  );
+}
+
+test('a message that already starts with the prefix is not doubled', () => {
+  render(<PrefixedHarness />);
+  press('prefixed');
+  expect(screen.getByRole('status').textContent).toBe('already prefixed');
+});
+test('every toast starts with the comment prefix drawn by CSS, hidden from screen readers', () => {
+  const css = readFileSync('src/styles/dialog.css', 'utf8');
+  expect(css).toMatch(/\.toast::before\s*\{[^}]*content:\s*'\/\/ '\s*\/\s*''/);
 });

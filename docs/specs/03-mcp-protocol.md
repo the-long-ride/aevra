@@ -1,6 +1,6 @@
 # 03 — MCP Protocol
 
-**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.2.1`
+**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.3.0`
 
 ## Transport
 
@@ -10,7 +10,7 @@ Aevra does not keep a tool HTTP request open for the lifetime of a long-running 
 
 ## Session lifecycle
 
-1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.2.1"}`.
+1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.3.0"}`.
 2. Every subsequent `POST` carries that header; `DELETE` disconnects. The session's admission identity (actor + subject + durable OAuth connection when present) must match on every call.
 3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
 4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
@@ -115,9 +115,8 @@ pending captures retain stage and close-cause diagnostics without page content.
 
 `desktop_connect` starts the packaged native helper for the current platform.
 Windows uses UI Automation (UIA); macOS uses Accessibility/AX; Linux uses AT-SPI2.
-Capability flags are literal: v1.2.0 retains shared semantic tree/action support,
-first shipped in v1.1.1, on all three platforms, while legacy foreground
-mouse/keyboard injection and pixel capture remain Windows-only.
+Capability flags are literal: current source retains shared semantic tree/action support,
+first shipped in v1.1.1, on all three platforms. Explicit foreground/capture adapters cover Windows, macOS 13+, Ubuntu X11, GNOME Wayland and KDE KWin 6.6. Wayland requires an explicitly enabled compositor companion and human-approved helper executable path. Private GNOME/KDE native fixtures pass in both consumers; native macOS, physical-GPU capture and production approval/lock acceptance remain pending. Other Wayland compositors remain unsupported. Capture and input booleans describe probed readiness, not just the compiled OS; see [setup and verification limits](../user-manual/22-wayland-desktop.md).
 Permission/provider failures are errors, not empty successful trees.
 
 Shared semantic automation uses `desktop_describe(mode:'background')`,
@@ -161,7 +160,7 @@ same owner/request/digest. `control_plan_status` and `control_plan_cancel` are
 owner checked.
 
 Mode `sharedSemantic` is implemented. Mode `isolated` is deliberately fail-closed
-in v1.2.0: unless a separately provisioned runner has verified containment, the
+in v1.3.0: unless a separately provisioned runner has verified containment, the
 adapter returns `CONTROL_ISOLATION_UNAVAILABLE` with
 `chooseIsolatedRunner`. A same-desktop worker is never relabeled as isolated.
 
@@ -188,9 +187,26 @@ disconnect just before a call fails rather than replaying it; reconnect must
 validate the catalog first. These dynamic upstream entries are additional to
 the 74 discoverable built-in tools listed above.
 
+An operator can disable a registered upstream (`aevra mcp disable <id>`, the
+Web UI switch, or `POST /api/mcp/upstreams/{id}/disable`; `enable` reverses
+it). A disabled upstream is absent from `tools/list`, `prompts/list`, and
+`resources/list`, its worker session is closed, and tool calls, prompt reads,
+resource reads, `test`, and refresh are refused with `MCP_UPSTREAM_DISABLED`.
+Stored configuration and credentials are kept, an edit of a disabled upstream
+persists without connecting, and re-enabling reconnects on first use and
+re-validates the catalog fingerprint; `needs-review` still requires
+acknowledgement. Each real change is audited as `mcp.upstream.enable` or
+`mcp.upstream.disable`. Aevra does not emit `notifications/*/list_changed` for
+this change, so a connected client sees it on its next list request.
+
+The management view exposes status and catalog details, including searchable tool descriptions,
+parameter documentation, aliases and usage examples when supplied. Viewing those details does
+not acknowledge a changed catalog or execute a tool; upstream text stays untrusted. See the
+[MCP server guide](../user-manual/20-mcp-upstreams.md).
+
 ## Error codes
 
-`CAPABILITY_REQUIRED` · `SESSION_WORKSPACE_REQUIRED` · `TOOL_GROUP_DISABLED` · `CONTROL_ISOLATION_UNAVAILABLE` · `CONTROL_REQUEST_CONFLICT` · `WORKSPACE_ESCAPE` · `WRITE_CONFLICT` · `MERGE_CONFLICT` · `APPROVAL_PENDING` · `APPROVAL_DENIED` · `APPROVAL_TIMEOUT` · `APPROVAL_CONTEXT_CHANGED` · `EXECUTOR_UNAVAILABLE` · `RECOVERY_REQUIRED` · `EXECUTION_OUTCOME_UNKNOWN` · `INVALID_REQUEST` · `UNAUTHORIZED` · `NOT_FOUND` · `VAULT_LOCKED` · `SKILL_NOT_FOUND` · `SKILL_PATH_ESCAPE` · `SKILL_FILE_TOO_LARGE`
+`CAPABILITY_REQUIRED` · `SESSION_WORKSPACE_REQUIRED` · `TOOL_GROUP_DISABLED` · `CONTROL_ISOLATION_UNAVAILABLE` · `CONTROL_REQUEST_CONFLICT` · `WORKSPACE_ESCAPE` · `WRITE_CONFLICT` · `MERGE_CONFLICT` · `APPROVAL_PENDING` · `APPROVAL_DENIED` · `APPROVAL_TIMEOUT` · `APPROVAL_CONTEXT_CHANGED` · `APPROVAL_SCOPE_MISMATCH` · `EXECUTOR_UNAVAILABLE` · `RECOVERY_REQUIRED` · `EXECUTION_OUTCOME_UNKNOWN` · `INVALID_REQUEST` · `UNAUTHORIZED` · `NOT_FOUND` · `VAULT_LOCKED` · `SKILL_NOT_FOUND` · `SKILL_PATH_ESCAPE` · `SKILL_FILE_TOO_LARGE`
 
 HTTP-level: `401` admission failure · `405` bad method · `503` safe mode · `501` tools not wired.
 

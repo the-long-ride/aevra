@@ -1,15 +1,15 @@
+import { findBySelector, textOf } from './snapshot-read.js';
 import type {
   BrowserActionInput,
   BrowserActionResult,
-  BrowserBox,
   BrowserLogEntry,
-  BrowserSnapshotResult,
   BrowserTabInfo,
 } from '../../protocol/src/browser.js';
 import type { NavigateResult } from './driver.js';
-import { classifyOrigin } from './origin-policy.js';
-import { buildSnapshot, RefRegistry, type SnapshotElementLike } from './dom-snapshot.js';
-import { boundedSnapshotAnnotations } from './snapshot-annotations.js';
+import { assertActionOrigin, assertReadOrigin } from './action-origin.js';
+import type { ActOptions } from './driver.js';
+import { RefRegistry, type SnapshotElementLike } from './dom-snapshot.js';
+import { extensionSnapshot } from './extension-snapshot.js';
 import type { VisionCapture } from './vision-budget.js';
 
 export type CaptureStage =
@@ -22,6 +22,11 @@ export interface CaptureProgress {
 }
 
 export interface ExtensionBridge {
+  guardRead?(
+    tabId: string,
+    expectedUrl: string,
+    operation: () => Promise<unknown>,
+  ): Promise<unknown>;
   listTabs(): Promise<BrowserTabInfo[]>;
   focus(tabId: string): Promise<void>;
   serialize(tabId?: string): Promise<SnapshotElementLike>;
@@ -30,6 +35,7 @@ export interface ExtensionBridge {
     elementId: string | null,
     tabId?: string,
     isCancelled?: () => boolean,
+    guard?: ActOptions,
   ): Promise<{ ok: boolean; code?: string }>;
   /** Bounded to the transport budget; the ratio is image pixels per CSS pixel. */
   captureVisible(
@@ -122,7 +128,16 @@ async function act(
 ): Promise<BrowserActionResult[]> {
   const actions: BrowserActionInput[] = Array.isArray(params.actions) ? params.actions : [];
   const results: BrowserActionResult[] = [];
+  if (!actions.length) return results;
+  const initial = (await bridge.listTabs()).find((tab) =>
+    params.tabId ? tab.tabId === params.tabId : tab.active,
+  );
+  if (!initial) throw Object.assign(new Error('Target tab unavailable'), { code: 'NOT_FOUND' });
+  const tabId = initial.tabId;
+  const expectedUrl = params.expectedUrl ?? initial.url;
   for (const requested of actions) {
+    const live = (await bridge.listTabs()).find((tab) => tab.tabId === tabId);
+    assertActionOrigin(live?.url ?? '', expectedUrl, params.originPolicy);
     if (isCancelled?.()) {
       throw Object.assign(new Error('Browser action cancelled'), { code: 'BROWSER_INPUT_FAILED' });
     }
@@ -130,6 +145,7 @@ async function act(
     const ref = 'ref' in action && action.ref ? String(action.ref) : null;
     let elementId: string | null = null;
     if (ref) {
+      assertRefScope(registry, tabId, live?.url ?? '');
       if (!registry.has(ref)) {
         results.push(
           failure(action.op, 'BROWSER_REF_STALE', `${ref} is from an older page snapshot`),
@@ -159,7 +175,12 @@ async function act(
         continue;
       }
     }
-    const outcome = await bridge.apply(action, elementId, params.tabId, isCancelled);
+    const outcome = await bridge.apply(action, elementId, tabId, isCancelled, {
+      expectedUrl,
+      expectedDocumentId: ref ? registry.documentId : undefined,
+      originPolicy: params.originPolicy,
+      stopOnError: params.stopOnError !== false,
+    });
     // The page-side code reports *why* it refused - a credential field, a timed
     // out wait. Dropping the code here would surface every failure as a bare
     // false and leave the two transports disagreeing on error reporting.
@@ -177,119 +198,11 @@ async function act(
   return results;
 }
 
-function scaleBox(box: BrowserBox, scale: number): BrowserBox {
-  return {
-    x: box.x * scale,
-    y: box.y * scale,
-    width: box.width * scale,
-    height: box.height * scale,
-  };
-}
-
-async function snapshot(
-  registry: RefRegistry,
-  bridge: ExtensionBridge,
-  params: Record<string, any>,
-  onProgress?: (progress: CaptureProgress) => void,
-  isCancelled?: () => boolean,
-): Promise<BrowserSnapshotResult> {
-  const tabs = await bridge.listTabs();
-  const tab = params.tabId
-    ? tabs.find((entry) => entry.tabId === params.tabId)
-    : tabs.find((entry) => entry.active);
-  // Chrome's composited screenshot does not need a DOM tree. A loading page
-  // may briefly have no body, and a canvas game can make DOM injection slow.
-  // Neither may prevent the image from reaching the caller.
-  const boundedAnnotations = () =>
-    boundedSnapshotAnnotations(() => bridge.serialize(params.tabId), isCancelled);
-  const capture =
-    params.mode === 'vision'
-      ? await bridge.captureVisible(params.tabId, onProgress, boundedAnnotations, isCancelled)
-      : null;
-  let root: SnapshotElementLike | null;
-  if (capture) {
-    root =
-      'annotationRoot' in capture ? (capture.annotationRoot ?? null) : await boundedAnnotations();
-  } else {
-    root = await bridge.serialize(params.tabId);
-  }
-  // Each snapshot takes the next version, which is what makes an older ref
-  // stale rather than silently rebound to a different element.
-  const built = registry.record(
-    root
-      ? buildSnapshot(root, {
-          version: registry.version() + 1,
-          maxNodes: Number(params.maxNodes ?? 400),
-        })
-      : { version: registry.version() + 1, nodes: [], elements: [], truncated: false },
-  );
-  const base = {
-    tabId: tab?.tabId ?? '',
-    url: tab?.url ?? '',
-    // Fail closed: an unresolved tab has no url, and classifyOrigin('') is BLOCKED.
-    originClass: tab?.originClass ?? classifyOrigin(tab?.url ?? ''),
-    snapshotVersion: registry.version(),
-  };
-  if (capture) {
-    // The screenshot is bounded to fit the transport, so its scale is whatever
-    // the capture settled on, while every box is in CSS pixels. Scaling the
-    // boxes into the image's own space is what lets a model point at what it
-    // sees; the ratio travels with the result and is remembered for the
-    // coordinate clicks that follow.
-    const { devicePixelRatio } = capture;
-    rememberScale(registry, base.tabId, devicePixelRatio);
-    return {
-      ...base,
-      mode: 'vision',
-      imageDataUri: capture.imageDataUri,
-      devicePixelRatio,
-      imageWidth: capture.imageWidth,
-      imageHeight: capture.imageHeight,
-      viewport: capture.viewport,
-      boxes: built.nodes
-        .filter((node) => node.box)
-        .map((node) => ({
-          ref: node.ref,
-          label: node.name,
-          box: scaleBox(node.box!, devicePixelRatio),
-        })),
-    };
-  }
-  return { ...base, mode: 'a11y', nodes: built.nodes, truncated: built.truncated };
-}
-
-/**
- * A deliberately small selector subset - tag, #id, .class - matched against the
- * serialized tree. It exists so a scoped read returns one element rather than
- * the whole document; anything richer belongs in the page, not here.
- */
-function findBySelector(node: SnapshotElementLike, selector: string): SnapshotElementLike | null {
-  const matches = (candidate: SnapshotElementLike): boolean => {
-    if (selector.startsWith('#')) return candidate.attributes.id === selector.slice(1);
-    if (selector.startsWith('.')) {
-      return (candidate.attributes.class ?? '').split(/\s+/).includes(selector.slice(1));
-    }
-    return candidate.tagName.toLowerCase() === selector.toLowerCase();
-  };
-  if (matches(node)) return node;
-  for (const child of node.children ?? []) {
-    const found = findBySelector(child, selector);
-    if (found) return found;
-  }
-  return null;
-}
-
-function textOf(node: SnapshotElementLike): string {
-  const own = String(node.textContent ?? '').trim();
-  const children = (node.children ?? []).map(textOf).filter(Boolean);
-  return [own, ...children].filter(Boolean).join('\n');
-}
-
 /**
  * The only branching logic in the extension, kept here so it runs under the
  * `packages/browser` suites - `scripts/test.mjs` never scans `apps/extension`.
  */
-export async function handleExtensionCommand(
+async function handleExtensionCommandUnchecked(
   registry: RefRegistry,
   bridge: ExtensionBridge,
   command: ExtensionCommand,
@@ -313,7 +226,8 @@ export async function handleExtensionCommand(
       params.tabId,
     );
   }
-  if (command.op === 'snapshot') return snapshot(registry, bridge, params, onProgress, isCancelled);
+  if (command.op === 'snapshot')
+    return extensionSnapshot(registry, rememberScale, bridge, params, onProgress, isCancelled);
   if (command.op === 'act') return act(registry, bridge, params, isCancelled);
   if (command.op === 'logs') {
     return bridge.logs(
@@ -331,8 +245,14 @@ export async function handleExtensionCommand(
     // Scoped like the CDP transport: handing back the whole document when the
     // caller named one element would return far more of the page than asked.
     let scoped: SnapshotElementLike | null = root;
-    if (params.ref) scoped = registry.resolve(String(params.ref));
-    else if (params.selector) scoped = findBySelector(root, String(params.selector));
+    if (params.ref) {
+      assertRefScope(registry, tab?.tabId ?? '', tab?.url ?? '');
+      if (registry.documentId !== root.documentId)
+        throw Object.assign(new Error('BROWSER_REF_STALE: document changed'), {
+          code: 'BROWSER_REF_STALE',
+        });
+      scoped = registry.resolve(String(params.ref));
+    } else if (params.selector) scoped = findBySelector(root, String(params.selector));
     if (!scoped) {
       throw Object.assign(new Error(`No element matches ${String(params.selector)}`), {
         code: 'NOT_FOUND',
@@ -341,4 +261,60 @@ export async function handleExtensionCommand(
     return { tabId: tab?.tabId ?? '', url: tab?.url ?? '', content: textOf(scoped) };
   }
   throw new Error(`unsupported browser operation: ${String((command as any).op)}`);
+}
+
+export async function handleExtensionCommand(
+  registry: RefRegistry,
+  bridge: ExtensionBridge,
+  command: ExtensionCommand,
+  onProgress?: (progress: CaptureProgress) => void,
+  isCancelled?: () => boolean,
+): Promise<unknown> {
+  if (!['snapshot', 'read', 'logs'].includes(command.op))
+    return handleExtensionCommandUnchecked(registry, bridge, command, onProgress, isCancelled);
+  const params = command.params ?? {};
+  const tab = (await bridge.listTabs()).find((item) =>
+    params.tabId ? item.tabId === params.tabId : item.active,
+  );
+  if (!tab) throw Object.assign(new Error('Target tab unavailable'), { code: 'NOT_FOUND' });
+  const guard = { expectedUrl: params.expectedUrl ?? tab.url, originPolicy: params.originPolicy };
+  assertReadOrigin(tab.url, guard, params.mode);
+  const staged = command.op === 'snapshot' ? registry.fork() : registry;
+  const read = async () => {
+    const result = await handleExtensionCommandUnchecked(
+      staged,
+      bridge,
+      { ...command, params: { ...params, tabId: tab.tabId } },
+      onProgress,
+      isCancelled,
+    );
+    const live = (await bridge.listTabs()).find((item) => item.tabId === tab.tabId);
+    assertReadOrigin(live?.url ?? '', guard, params.mode);
+    return result;
+  };
+  try {
+    const result = await (bridge.guardRead
+      ? bridge.guardRead(tab.tabId, guard.expectedUrl, read)
+      : read());
+    if (command.op === 'snapshot') {
+      staged.target = { tabId: tab.tabId, url: guard.expectedUrl };
+      registry.adopt(staged);
+      if (captureScales.has(staged))
+        captureScales.set(
+          registry,
+          new Map([...(captureScales.get(registry) ?? []), ...captureScales.get(staged)!]),
+        );
+    }
+    return result;
+  } catch (error) {
+    registry.invalidate();
+    throw error;
+  }
+}
+
+function assertRefScope(registry: RefRegistry, tabId: string, url: string) {
+  if (!registry.target || registry.target.tabId !== tabId || registry.target.url !== url)
+    throw Object.assign(new Error('BROWSER_REF_STALE: ref belongs to another tab or document'), {
+      code: 'BROWSER_REF_STALE',
+    });
 }

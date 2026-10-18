@@ -37,3 +37,9 @@
     min-width: 0;
   }
 }
+
+/* Every toast reads as a code comment; screen readers skip the prefix. */
+.toast::before {
+  content: '// ';
+  content: '// ' / '';
+}

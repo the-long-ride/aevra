@@ -5,7 +5,9 @@ export class ApprovalRepository {
   constructor(private db: DatabaseSync) {}
   put(t: any) {
     const now = new Date().toISOString();
-    const payload = sanitizeStructuredSecrets(t.payload ?? null);
+    const payload = sanitizeStructuredSecrets(t.payload ?? null, {
+      exposeOrdinaryEnvironment: true,
+    });
     this.db
       .prepare(
         `INSERT OR REPLACE INTO pending_approvals(id,actor,session_id,workspace_id,scope,identity_kind,identity_key,operation_json,expected_state_json,risk,state,expires_at,cancellation_reason,decision_scope,connection_subject,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -65,6 +67,16 @@ export class ApprovalRepository {
     return (
       this.db.prepare('SELECT id FROM pending_approvals ORDER BY created_at DESC').all() as any[]
     ).map((r) => this.get(r.id));
+  }
+
+  /** Deletes every ticket that is not live. Allow-list so unknown terminal states are cleared. */
+  clearFinished(): number {
+    const res = this.db
+      .prepare(
+        `DELETE FROM pending_approvals WHERE state NOT IN ('PENDING','APPROVED','EXECUTING')`,
+      )
+      .run();
+    return Number(res.changes);
   }
 
   claimExecution(id: string, nowIso: string): boolean {

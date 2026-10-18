@@ -22,11 +22,13 @@ export { emptySchema } from './registry-schema-parts.js';
 import { browserInputSchemas } from './registry-browser-schemas.js';
 import { controlInputSchemas } from './registry-control-schemas.js';
 import { desktopInputSchemas } from './registry-desktop-schemas.js';
+import { notesInputSchemas } from './registry-notes-schemas.js';
 
 export const inputSchemas: Record<string, JsonSchema> = {
   ...browserInputSchemas,
   ...controlInputSchemas,
   ...desktopInputSchemas,
+  ...notesInputSchemas,
   aevra_status: emptySchema,
   control_access_status: emptySchema,
   workspace_list: emptySchema,

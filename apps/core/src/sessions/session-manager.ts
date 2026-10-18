@@ -18,10 +18,18 @@ import {
   rebindDetachedLeases,
   restoreRememberedWorkspaces,
   revokeWorkspaceAccess,
+  type SessionContext,
 } from './session-lease-continuity.js';
-import { connectionIdentityFor, type SessionScope } from './session-connection-scope.js';
+import {
+  connectionHasMultipleSessions,
+  connectionIdentityFor,
+  grantSourceFor,
+  type GrantSource,
+  type SessionScope,
+} from './session-connection-scope.js';
 import { disableYoloSession, enableYoloSession, isYoloSession } from './session-yolo.js';
 import type {
+  ConnectionTicketLike,
   DisconnectedIdentity,
   SecuritySession,
   SessionResolution,
@@ -63,7 +71,7 @@ export class SessionManager {
       sessions: this.sessions,
       disconnected: this.disconnectedIdentities,
       yolo: this.yoloSessions,
-      ...(this.connections ? { connections: this.connections } : {}),
+      connections: this.connections,
     };
   }
   connectionIdentity(sessionId: string) {
@@ -80,6 +88,9 @@ export class SessionManager {
   }
   matchingDetachedIdentities(connectionId: string) {
     return findMatchingDetachedIdentities(this.disconnectedIdentities.entries(), connectionId);
+  }
+  hasMultipleSessionsForConnection(ticket: ConnectionTicketLike) {
+    return connectionHasMultipleSessions(this.scope(), ticket, this.clock.now().getTime());
   }
   matchingLeasesForWorkspace(connectionId: string, workspaceId: string) {
     return findMatchingConnectionLeases({
@@ -212,9 +223,8 @@ export class SessionManager {
     const leases = this.leases(sessionId);
     return leases.length === 1 ? leases[0]! : null;
   }
-  grantConnectionWorkspace(sessionId: string, workspaceId: string, profileId: string) {
-    const source = this.sessions.get(sessionId) ?? this.disconnectedIdentities.get(sessionId);
-    if (!source) throw new Error('session identity not found');
+  grantConnectionWorkspace(from: GrantSource, workspaceId: string, profileId: string) {
+    const source = grantSourceFor(this.scope(), from);
     if (!source.actor.startsWith('oauth:')) return null;
     return grantRememberedWorkspaceAcrossSessions({
       repo: this.repo,
@@ -301,28 +311,27 @@ export class SessionManager {
     if (!this.leaseRows.delete(id)) return;
     this.repo.revokeLease(id);
   }
-  detach(sessionId: string) {
-    detachSession({
-      sessionId,
+  private context(): SessionContext {
+    return {
       sessions: this.sessions,
       disconnectedIdentities: this.disconnectedIdentities,
-      connections: this.connections,
-      repo: this.repo,
+      leaseRows: this.leaseRows,
       yoloSessions: this.yoloSessions,
       pendingRememberedRestore: this.pendingRememberedRestore,
+      connections: this.connections,
+      repo: this.repo,
       reconnectGraceMs: this.reconnectGraceMs,
-      disconnectImmediate: (id, remember) => this.disconnectImmediate(id, remember),
-    });
+      clock: this.clock,
+    };
+  }
+  detach(sessionId: string) {
+    detachSession(this.context(), sessionId, (id) => this.revokeLease(id));
   }
   disconnect(sessionId: string) {
     this.detach(sessionId);
   }
   expireGraceConnections() {
-    expireGraceSessionConnections({
-      connections: this.connections,
-      disconnectedIdentities: this.disconnectedIdentities,
-      disconnectImmediate: (id, remember) => this.disconnectImmediate(id, remember),
-    });
+    expireGraceSessionConnections(this.context(), (id, rem) => this.disconnectImmediate(id, rem));
   }
   invalidateForRestart() {
     this.sessions.clear();
@@ -334,16 +343,8 @@ export class SessionManager {
     this.repo.invalidateAll();
   }
   private disconnectImmediate(sessionId: string, rememberIdentity: boolean) {
-    disconnectSessionImmediate({
-      sessionId,
-      rememberIdentity,
-      sessions: this.sessions,
-      disconnectedIdentities: this.disconnectedIdentities,
-      leaseRows: this.leaseRows,
-      yoloSessions: this.yoloSessions,
-      pendingRememberedRestore: this.pendingRememberedRestore,
-      connections: this.connections,
-      revokeLease: (id) => this.revokeLease(id),
-    });
+    disconnectSessionImmediate(this.context(), sessionId, rememberIdentity, (id) =>
+      this.revokeLease(id),
+    );
   }
 }

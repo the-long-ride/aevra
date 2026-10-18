@@ -11,6 +11,8 @@
         "tests/ui-parity/static-server.mjs",
         "scripts/run-ts-tests.mjs",
         "scripts/ts-loader.mjs",
+        "scripts/export-browser-shared.mjs",
+        "packages/agent-integration/src/command.ts",
         "scripts/test/*.test.mjs",
         "apps/*/test/**/*.test.ts",
         "packages/*/test/**/*.test.ts",
@@ -34,5 +36,6 @@
         "@aevra/admin-contracts": ["../../packages/admin-contracts/src/index.ts"]
       }
     }
-  }
+  },
+  "ignore": [".test-dist*/**"]
 }

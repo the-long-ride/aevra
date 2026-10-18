@@ -179,11 +179,13 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
     }
     if (op.kind === 'git.status') return { ok: true, value: await gitStatus(cwd) };
     if (op.kind === 'git.add') return { ok: true, value: await gitAdd(cwd, op.args) };
-    if (op.kind === 'git.diff') return { ok: true, value: await gitDiff(cwd, op.args) };
-    if (op.kind === 'git.log') return { ok: true, value: await gitLog(cwd, op.args) };
+    if (op.kind === 'git.diff')
+      return { ok: true, value: await gitDiff(cwd, op.args, op.protectedGlobs) };
+    if (op.kind === 'git.log')
+      return { ok: true, value: await gitLog(cwd, op.args, op.protectedGlobs) };
     if (op.kind === 'git.branch') return { ok: true, value: await gitBranch(cwd, op.args) };
     if (op.kind === 'git.commit') {
-      return { ok: true, value: await gitCommit(cwd, op.message, op.args) };
+      return { ok: true, value: await gitCommit(cwd, op.message, op.args, op.protectedGlobs) };
     }
     if (op.kind === 'git.push') {
       return { ok: true, value: await gitPush(cwd, op.remote, op.branch, op.args) };

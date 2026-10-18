@@ -138,14 +138,8 @@ export function evaluateWindowGate(
 ): GateVerdict {
   const attribution = attributed(identity) ? 'attributed' : 'unattributable';
 
-  // Reading is recoverable and reviewable; acting is neither. The two
-  // directions are priced differently on purpose.
-  if (direction === 'capture') {
-    return { allowed: true, reason: 'capture is permitted regardless of attribution', attribution };
-  }
-
   if (attribution === 'unattributable') {
-    if (direction === 'background') {
+    if (direction === 'background' || direction === 'capture') {
       return {
         allowed: false,
         reason: 'window identity is unavailable for background target',
@@ -198,7 +192,13 @@ export function isProtectedDesktopTitle(
   identity: DesktopWindowIdentity,
   policy: DesktopPolicy,
 ): boolean {
-  const title = identity.title?.toLowerCase();
+  const title = identity.title
+    ?.toLowerCase()
+    .replace(
+      /\s+[-��|]\s+(?:google chrome|chromium|microsoft edge|mozilla firefox|firefox|brave|opera|safari)(?:\s+.*)?$/i,
+      '',
+    )
+    .trim();
   return Boolean(
     title && policy.deniedTitlePatterns?.some((pattern) => title === pattern.toLowerCase()),
   );
@@ -234,7 +234,6 @@ export function evaluateDesktopTargetGate(
 ): GateVerdict {
   const target = identity.window;
   const targetVerdict = evaluateWindowGate(target, policy, direction);
-  if (direction === 'capture') return targetVerdict;
   if (policy.mode === 'denylist') {
     if (!targetVerdict.allowed) return targetVerdict;
     if (isSharedWebViewRuntime(target) && identity.hostApplication) {

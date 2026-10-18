@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useModalLayer } from '../../components/modal-layer';
 import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 
@@ -14,15 +15,16 @@ export function ConnectorModal({
   const [name, setName] = useState('');
   const [token, setToken] = useState('');
   const { toast, error } = useToast();
+  const { ref: layerRef, isTop } = useModalLayer();
 
   useEffect(() => {
     if (!open) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape' && isTop()) onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, open]);
+  }, [isTop, onClose, open]);
 
   useEffect(() => {
     if (!open) {
@@ -49,7 +51,7 @@ export function ConnectorModal({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div ref={layerRef} className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
         className="modal"
         role="dialog"

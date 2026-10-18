@@ -117,7 +117,7 @@ test('issued tokens remain verifiable even though only hashes are stored', () =>
   // Guards the inverse risk: proving secrets are absent is worthless if the
   // store also stopped being able to authenticate them.
   const identity = service.verifyAccessToken(issued.access_token);
-  assert.equal(identity.actor, 'oauth:ChatGPT');
+  assert.equal(identity.actor, 'oauth:ChatGPT@https://chatgpt.com');
   assert.equal(identity.audience, 'https://mcp.example.com/mcp');
   db.close();
 });

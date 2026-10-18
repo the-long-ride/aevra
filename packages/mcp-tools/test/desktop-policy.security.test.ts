@@ -18,7 +18,9 @@ test('typed text never reaches the audit log', async () => {
 
 test("a screenshot's imageDataUri never reaches the audit log", async () => {
   const ctx = desktopContext();
-  const result: any = await handleDesktopTool(ctx.value, 's1', 'desktop_capture', {});
+  const result: any = await handleDesktopTool(ctx.value, 's1', 'desktop_capture', {
+    windowId: 'w1',
+  });
   assert.equal(JSON.stringify(ctx.auditEntries).includes('data:image/'), false);
   // It IS returned to the caller.
   assert.match(result.imageDataUri, /^data:image\//);
@@ -40,7 +42,7 @@ test('an unknown tool name is refused with CAPABILITY_REQUIRED', async () => {
 
 test('a capture is audited, with a gate verdict recorded', async () => {
   const ctx = desktopContext();
-  await handleDesktopTool(ctx.value, 's1', 'desktop_capture', {});
+  await handleDesktopTool(ctx.value, 's1', 'desktop_capture', { windowId: 'w1' });
   const entry = ctx.auditEntries.find((e: any) => e.tool === 'desktop_capture');
   assert.ok(entry, 'expected an audit entry for desktop_capture');
   assert.equal(entry.gateVerdict, 'allow');

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AgentIntegrationsSettings } from './AgentIntegrationsSettings';
 import { PageState } from '../../components/PageState';
 import { BrowserControlSettings } from './BrowserControlSettings';
 import { CommandPolicySettings } from './CommandPolicySettings';
@@ -10,6 +11,7 @@ import { KeepAwakeSettings } from './KeepAwakeSettings';
 import { McpUpstreamsSettings } from './McpUpstreamsSettings';
 import { NetworkPolicySettings } from './NetworkPolicySettings';
 import { RemoteAccessSettings } from './RemoteAccessSettings';
+import { useRemoteAccessHighlight } from './remote-access-highlight';
 import { SecretReferencesSettings } from './SecretReferencesSettings';
 import { YoloPolicySettings } from './YoloPolicySettings';
 import { loadSettings, patchJson, type SettingsData } from './settings-service';
@@ -29,6 +31,7 @@ export function SettingsPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  const highlight = useRemoteAccessHighlight(data !== null);
 
   if (!data) {
     return (
@@ -46,7 +49,14 @@ export function SettingsPage() {
           <p>Execution, remote access, network, environment, and secure local configuration.</p>
         </div>
       </section>
-      <RemoteAccessSettings status={data.exposure} onChanged={refresh} />
+      <div
+        ref={highlight.ref}
+        id="settings-remote-access"
+        data-surface-id="settings:remote-access-highlight"
+        className={`remote-access-highlight-target${highlight.active ? ' is-highlighted' : ''}`}
+      >
+        <RemoteAccessSettings status={data.exposure} onChanged={refresh} />
+      </div>
       <div className="settings-grid settings-grid-compact">
         <KeepAwakeSettings
           status={data.power}
@@ -56,6 +66,7 @@ export function SettingsPage() {
         <BrowserControlSettings status={data.browser} onChanged={refresh} />
         <DesktopControlSettings />
         <McpUpstreamsSettings />
+        <AgentIntegrationsSettings />
         <section className="panel settings-compact-panel configuration-panel">
           <div className="panel-head compact-panel-head">
             <div>

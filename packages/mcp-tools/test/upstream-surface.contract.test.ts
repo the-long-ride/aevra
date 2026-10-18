@@ -123,3 +123,34 @@ test('prompts/get routes a namespaced name upstream and the built-in name locall
   assert.ok(localGet.result.messages);
   assert.equal(calls.length, 1, 'the built-in prompt reached the upstream');
 });
+
+test('a disabled upstream contributes nothing to any list', async () => {
+  const { service } = upstreamService({ enabled: false });
+  const call = async (method: string): Promise<any> =>
+    (await handleJsonRpc(service as any, 's1', { jsonrpc: '2.0', id: 1, method })).result;
+  const tools = (await call('tools/list')).tools.map((tool: any) => tool.name);
+  assert.ok(!tools.includes('github__search'));
+  assert.equal(tools.length, toolDefinitions().length);
+  assert.deepEqual((await call('resources/list')).resources, []);
+  assert.deepEqual(
+    (await call('prompts/list')).prompts.map((prompt: any) => prompt.name),
+    ['aevra-instructions'],
+  );
+});
+
+test('a disabled upstream refuses resources/read and prompts/get without contacting it', async () => {
+  const { service, calls } = upstreamService({ enabled: false });
+  const read: any = await handleJsonRpc(service as any, 's1', {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'resources/read',
+    params: { uri: 'mcp+github://repo://readme' },
+  });
+  assert.equal(read.result.isError, true);
+  assert.match(read.result.content[0].text, /CAPABILITY_REQUIRED/);
+  await assert.rejects(
+    () => (service as any).promptGet('s1', 'github__triage', {}),
+    (error: any) => error.code === 'CAPABILITY_REQUIRED',
+  );
+  assert.deepEqual(calls, []);
+});

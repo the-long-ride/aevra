@@ -77,6 +77,7 @@ export interface CommandNode {
   scope: ScopeStatus;
   reasons: Reason[];
   scriptFingerprint?: string;
+  explicitEnvFingerprint?: string;
 }
 
 export interface CommandAnalysis {
@@ -110,6 +111,7 @@ export interface CommandRuleV2 {
   executableFingerprint: string;
   wrapperFingerprints: string[];
   scriptFingerprint?: string;
+  explicitEnvFingerprint?: string;
 }
 
 export type CommandDecision =

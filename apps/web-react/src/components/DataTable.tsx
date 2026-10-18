@@ -33,6 +33,10 @@ export interface DataTableProps<T> {
   rowProps?(row: T, index: number): React.HTMLAttributes<HTMLTableRowElement>;
   paginationPosition?: 'toolbar' | 'footer';
   fillAvailableHeight?: boolean;
+  /** Extra controls rendered at the end of the control strip (e.g. a bulk action button). */
+  toolbarActions?: React.ReactNode;
+  /** compact opts into a single-row, inline-labelled toolbar; the default is unchanged. */
+  density?: 'default' | 'compact';
 }
 
 function rawValue<T>(row: T, column: Column<T>): unknown {
@@ -72,6 +76,8 @@ export function DataTable<T>({
   rowProps,
   paginationPosition = 'footer',
   fillAvailableHeight = false,
+  toolbarActions,
+  density = 'default',
 }: DataTableProps<T>) {
   const [query, setQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({});
@@ -169,7 +175,7 @@ export function DataTable<T>({
 
   return (
     <div
-      className={`data-table-host${fillAvailableHeight ? ' data-table-fill-height' : ''}`}
+      className={`data-table-host${fillAvailableHeight ? ' data-table-fill-height' : ''}${density === 'compact' ? ' dt-compact' : ''}`}
       data-table-id={id}
     >
       <div className="dt-toolbar">
@@ -227,6 +233,7 @@ export function DataTable<T>({
             />
           </label>
           {paginationPosition === 'toolbar' ? pagination : null}
+          {toolbarActions ? <div className="dt-toolbar-actions">{toolbarActions}</div> : null}
         </div>
       </div>
       <div className="dt-scroll">

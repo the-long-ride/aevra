@@ -40,15 +40,17 @@
 .token-stat-value {
   overflow-wrap: anywhere;
   color: var(--ink);
-  font-size: 16px;
-  line-height: 1.25;
+  font-size: 28px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
-.token-stat-detail {
-  color: var(--mute);
-  font-size: 11px;
-  line-height: 1.35;
-  min-height: 1em;
-  overflow-wrap: anywhere;
+.token-stat-share {
+  white-space: nowrap;
+  font-size: 18px;
+  font-weight: 500;
+}
+.token-stat-text {
+  font-size: 16px;
 }
 .token-usage-chart {
   margin-top: 16px;
@@ -62,6 +64,7 @@
 }
 .token-usage-ranges {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 .token-usage-range {
@@ -277,4 +280,41 @@
   .runtime-grid .token-usage-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.token-usage-statistics-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 2px 6px;
+}
+.token-statistics-breakdown {
+  min-width: 0;
+  margin-top: 20px;
+}
+.token-statistics-table-scroll {
+  overflow-x: auto;
+}
+.token-statistics-breakdown table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--hairline);
+}
+.token-statistics-breakdown th,
+.token-statistics-breakdown td {
+  border: 1px solid var(--hairline);
+  padding: 8px;
+  text-align: right;
+}
+.token-statistics-breakdown th:first-child {
+  text-align: left;
+  overflow-wrap: anywhere;
+  min-width: 120px;
+}
+
+.token-statistics-content {
+  min-height: 0;
+  overflow: auto;
+  flex: 1 1 auto;
 }

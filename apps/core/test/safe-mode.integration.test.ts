@@ -1,3 +1,5 @@
+import { AevraDatabase } from '../../../packages/store/src/database.js';
+import { loginCookie } from './admin-session-fixture.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
@@ -11,11 +13,11 @@ import { ensureLocalTls, localTlsPaths } from '../src/tls/local-tls.js';
 
 const plainPhrase1 = 'secret';
 
-async function getJson(url: string, caPath: string): Promise<any> {
+async function getJson(url: string, caPath: string, cookie?: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const request = https.get(
       url,
-      { ca: readFileSync(caPath), servername: 'localhost' },
+      { ca: readFileSync(caPath), servername: 'localhost', headers: cookie ? { cookie } : {} },
       (response) => {
         const chunks: Buffer[] = [];
         response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
@@ -36,19 +38,13 @@ async function getJson(url: string, caPath: string): Promise<any> {
 test('integrity failure starts admin safe mode without worker authority', async () => {
   const d = mkdtempSync(path.join(os.tmpdir(), 'aevra-safe-'));
   let workerStarts = 0;
+  const database = AevraDatabase.open(':memory:');
   const fakeDb: any = {
     integrityCheck() {
       return { ok: false, message: 'bad' };
     },
-    raw() {
-      return {
-        prepare() {
-          return { get() {}, run() {} };
-        },
-        exec() {},
-      };
-    },
-    close() {},
+    raw: () => database.raw(),
+    close: () => database.close(),
   };
   const worker = {
     async start() {
@@ -75,7 +71,12 @@ test('integrity failure starts admin safe mode without worker authority', async 
 
   await r.start();
   try {
-    const health = await getJson(`${r.adminUrl}/api/health`, localTlsPaths(d).certificatePath);
+    const cookie = await loginCookie(r.adminUrl!, 'admin', plainPhrase1);
+    const health = await getJson(
+      `${r.adminUrl}/api/status`,
+      localTlsPaths(d).certificatePath,
+      cookie,
+    );
     assert.equal(health.safeMode, true);
     assert.equal(workerStarts, 0);
   } finally {

@@ -1,14 +1,15 @@
+import { OauthModalCard } from './OauthModalCard';
 import type { ApprovalItem, OauthRequestItem } from '@aevra/admin-contracts';
 import { useEffect, useRef, useState } from 'react';
 import { useDialog } from '../../components/Dialog';
-import { Switch } from '../../components/Switch';
+import { useModalLayer } from '../../components/modal-layer';
 import { useToast } from '../../components/Toast';
 import { CommandExplanation } from '../permissions/CommandExplanation';
 import { ApprovalPayloadPanel, hasApprovalDetails } from './ApprovalPayloadPanel';
-import { actionsForApproval } from './request-actions';
+import { ApprovalScopeHint } from './ApprovalScopeHint';
+import { actionsForApproval, savedMatcher } from './request-actions';
 import {
   approveRequest,
-  decideOauth,
   denyRequest,
   enableYoloRequest,
   type RequestsData,
@@ -18,18 +19,6 @@ export interface RequestApprovalModalProps {
   data: RequestsData;
   onActioned(): Promise<void>;
   onDismiss(): void;
-}
-
-function savedMatcher(item: ApprovalItem) {
-  if (item.operation.capability !== 'commands.run') return '';
-  const payload = item.payload ?? {};
-  const original =
-    typeof payload.original === 'object' && payload.original !== null
-      ? (payload.original as Record<string, unknown>)
-      : {};
-  return String(
-    payload.permissionMatcher ?? original.permissionMatcher ?? item.operation.family ?? '',
-  );
 }
 
 function ApprovalModalCard({
@@ -132,6 +121,10 @@ function ApprovalModalCard({
             <CommandExplanation analysis={item.payload.commandAnalysis as any} />
           ) : null}
         </div>
+        <ApprovalScopeHint
+          item={item}
+          connectionHasMultipleSessions={presentation.connectionHasMultipleSessions}
+        />
         <div className="request-actions approval-modal-actions">
           {actionsForApproval(item).map((action) => (
             <button
@@ -164,88 +157,6 @@ function ApprovalModalCard({
   );
 }
 
-function OauthModalCard({
-  item,
-  onActioned,
-}: {
-  item: OauthRequestItem;
-  onActioned(): Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
-  const { toast, error: showError } = useToast();
-  const [keepSignedIn, setKeepSignedIn] = useState(true);
-
-  const decide = async (allow: boolean) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await decideOauth(item.id, allow, { renewable: keepSignedIn });
-      await onActioned();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'The decision could not be recorded.';
-      const isTerminalOrStale = /expired|timeout|not found|already|invalid_state/i.test(message);
-      if (isTerminalOrStale) {
-        await onActioned();
-        return;
-      }
-      showError(message);
-      setBusy(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="approval-modal-head">
-        <div>
-          <b>OAuth connection</b>
-          <span>{item.clientName ?? item.clientId}</span>
-        </div>
-        <span className="risk medium">MEDIUM</span>
-      </div>
-      <p className="approval-modal-detail">
-        {item.remoteIp ?? 'Remote client'} · code <code>{item.pairingCode}</code>
-      </p>
-      <div className="approval-modal-option-row">
-        <Switch
-          checked={keepSignedIn}
-          onChange={(e) => setKeepSignedIn(e.target.checked)}
-          data-surface-id="approval-modal:oauth-renewable"
-          containerClassName="approval-modal-option-label"
-          label={
-            <div className="approval-modal-option-info">
-              <span className="approval-modal-option-title">Keep this connection signed in</span>
-              <span className="approval-modal-option-description">
-                Issue a refresh token for continued access beyond 1 hour.
-              </span>
-            </div>
-          }
-        />
-      </div>
-      <div className="request-actions approval-modal-actions">
-        <button
-          type="button"
-          data-surface-id="approval-modal:oauth-deny"
-          disabled={busy}
-          onClick={() => void decide(false)}
-        >
-          Deny
-        </button>
-        <button
-          type="button"
-          className="primary"
-          data-surface-id="approval-modal:oauth-allow"
-          disabled={busy}
-          onClick={() => void decide(true)}
-        >
-          Allow
-        </button>
-      </div>
-      {toast}
-    </>
-  );
-}
-
 export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApprovalModalProps) {
   const pending = data.approvals.filter((item) => item.state === 'PENDING');
   const workspaceNames = new Map(data.workspaces.map((item) => [item.id, item.name]));
@@ -261,6 +172,8 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
   const dialogRef = useRef<HTMLElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const dismissRef = useRef(onDismiss);
+  // A floating card, not a blocking modal: the page stays usable while it is shown.
+  const { ref: layerRef, isTop } = useModalLayer(true, { blocking: false });
 
   useEffect(() => {
     dismissRef.current = onDismiss;
@@ -280,6 +193,7 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
     dialogRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isTop()) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         dismissRef.current();
@@ -309,7 +223,7 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
       window.removeEventListener('keydown', handleKeyDown);
       previousFocus.current?.focus();
     };
-  }, []);
+  }, [isTop]);
 
   if (!oauthItem && !approvalItem) return null;
 
@@ -321,6 +235,7 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
 
   return (
     <div
+      ref={layerRef}
       className="modal-backdrop approval-modal-backdrop"
       onMouseDown={(event) => {
         if (event.currentTarget === event.target) onDismiss();
@@ -332,6 +247,7 @@ export function RequestApprovalModal({ data, onActioned, onDismiss }: RequestApp
         role="dialog"
         aria-modal="true"
         aria-label="Approval request"
+        data-enter-default="off"
         tabIndex={-1}
       >
         <div className="approval-modal-toolbar">

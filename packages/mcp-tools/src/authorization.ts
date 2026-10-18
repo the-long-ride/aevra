@@ -183,6 +183,11 @@ export async function authorizeCapability(
   if (lowDecision?.outcome === 'deny') {
     throw new AevraToolError('CAPABILITY_REQUIRED', lowDecision.reason);
   }
+  if (
+    oneTimeAllowed(context, sessionId, capability, permissionMatcher) &&
+    (!forceCriticalApproval || context.capabilityApprovalProof?.risk === 'CRITICAL')
+  )
+    return { authorization };
   if (yoloAllowed) {
     return { authorization };
   }
@@ -277,7 +282,8 @@ export async function gated<T>(
   const newCommandApproval =
     normalized.capability === 'commands.run' &&
     needsCommandPermissionApproval(decision?.outcome, once);
-  if (once) return execute();
+  if (once && (!forceCriticalApproval || context.capabilityApprovalProof?.risk === 'CRITICAL'))
+    return execute();
   if (normalized.risk === 'LOW' && !forceCriticalApproval && !newCommandApproval) {
     return execute();
   }

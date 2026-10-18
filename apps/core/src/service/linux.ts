@@ -28,6 +28,13 @@ export class LinuxServiceAdapter implements UserServiceAdapter {
     const r = await this.io.run('systemctl', ['--user', 'restart', this.unit]);
     if (r.code) throw new Error(r.stderr);
   }
+  async uninstall() {
+    await this.stop();
+    await this.io.run('systemctl', ['--user', 'disable', this.unit]);
+    await this.io.remove(this.file);
+    const result = await this.io.run('systemctl', ['--user', 'daemon-reload']);
+    if (result.code) throw new Error(result.stderr);
+  }
   async status() {
     const r = await this.io.run('systemctl', ['--user', 'is-active', this.unit]);
     if (r.code && /not-found|could not be found/i.test(r.stderr)) return 'not-installed';

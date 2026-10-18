@@ -1,4 +1,5 @@
 import type {
+  Capability,
   CapabilityRoot,
   RiskTier,
   SystemCapabilitySnapshot,
@@ -18,6 +19,7 @@ import type { SecurityGuard } from '../../../apps/core/src/security/security-gua
 import type { SessionManager } from '../../../apps/core/src/sessions/session-manager.js';
 import type { SkillsService } from '../../../apps/core/src/skills/skills-service.js';
 import type { WorkspaceService } from '../../../apps/core/src/workspaces/workspace-service.js';
+import type { ConnectorNotesPort } from './notes-port.js';
 import type { UpstreamRegistryService } from './upstream-port.js';
 
 export interface WorkerGateway {
@@ -179,6 +181,7 @@ export interface McpToolDependencies {
   desktopAppCatalog?: {
     list(): Promise<DesktopAppCatalogResult>;
   };
+  connectorNotes?: ConnectorNotesPort;
 }
 
 export type McpDependencies = McpToolDependencies;
@@ -194,6 +197,22 @@ export interface HostApprovalProof {
   consumed: boolean;
 }
 
+/**
+ * Created only while an approved once-scoped capability ticket is replayed.
+ * Bound to the exact frozen call (`binding`) and claimed by that single
+ * invocation; it is never published to state other calls can observe.
+ */
+export interface CapabilityApprovalProof {
+  kind: 'capability';
+  requestId: string;
+  sessionId: string;
+  capability: Capability;
+  matcher: string;
+  risk: RiskTier;
+  binding: string;
+  consumed: boolean;
+}
+
 export interface McpRuntimeContext {
   sessions: SessionManager;
   workspaces: WorkspaceService;
@@ -202,16 +221,20 @@ export interface McpRuntimeContext {
   reads: ReadVersionCache;
   approvals?: ApprovalService;
   deps: McpDependencies;
-  oneTimeCapabilities: Set<string>;
   hostApprovalProof?: HostApprovalProof;
+  capabilityApprovalProof?: Readonly<CapabilityApprovalProof>;
   processStart: (sessionId: string, args: any) => Promise<any>;
   callInner: (
     sessionId: string,
     name: string,
     args: any,
-    proof?: HostApprovalProof,
+    proof?: HostApprovalProof | CapabilityApprovalProof,
   ) => Promise<any>;
-  proxyOperation: (sessionId: string, operation: McpProxyOperation) => Promise<unknown>;
+  proxyOperation: (
+    sessionId: string,
+    operation: McpProxyOperation,
+    proof?: CapabilityApprovalProof,
+  ) => Promise<unknown>;
 }
 
 export type McpProxyOperation =

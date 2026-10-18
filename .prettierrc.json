@@ -5,7 +5,7 @@
   "printWidth": 100,
   "overrides": [
     {
-      "files": ["*.txt"],
+      "files": ["llm.txt"],
       "options": {
         "parser": "markdown"
       }

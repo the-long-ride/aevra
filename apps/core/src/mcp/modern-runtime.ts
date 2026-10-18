@@ -34,6 +34,8 @@ interface ModernRuntimeDependencies {
   oauth?: AevraOAuthService;
   usage?: UsageMeter | undefined;
   connectorProfile?: ((actor: string) => ConnectorProfile | undefined) | undefined;
+  /** Per-actor text for the connect handshake, e.g. the connector notes notice. */
+  connectNotice?: ((actor: string) => string | null) | undefined;
 }
 
 function runtimeHooks(deps: ModernRuntimeDependencies): McpHookEmitter | undefined {
@@ -118,7 +120,7 @@ export async function handleModernRuntimeRequest(
     await sendHookedResponse(res, hooks, context, 200, {
       jsonrpc: '2.0',
       id: body.id ?? null,
-      result: modernDiscoverResult(deps.oauth?.issuer),
+      result: modernDiscoverResult(deps.oauth?.issuer, deps.connectNotice?.(identity.actor)),
     });
     return;
   }

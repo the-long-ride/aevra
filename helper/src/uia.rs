@@ -14,20 +14,20 @@ use std::collections::VecDeque;
 use ::windows::core::Interface;
 use ::windows::Win32::Foundation::HWND;
 use ::windows::Win32::UI::Accessibility::{
-    IUIAutomation, IUIAutomationElement, IUIAutomationValuePattern, UIA_CONTROLTYPE_ID,
-    UIA_AppBarControlTypeId, UIA_ButtonControlTypeId, UIA_CalendarControlTypeId,
-    UIA_CheckBoxControlTypeId, UIA_ComboBoxControlTypeId, UIA_CustomControlTypeId,
-    UIA_DataGridControlTypeId, UIA_DataItemControlTypeId, UIA_DocumentControlTypeId,
-    UIA_EditControlTypeId, UIA_GroupControlTypeId, UIA_HeaderControlTypeId,
-    UIA_HeaderItemControlTypeId, UIA_HyperlinkControlTypeId, UIA_ImageControlTypeId,
-    UIA_ListItemControlTypeId, UIA_MenuBarControlTypeId, UIA_MenuControlTypeId,
-    UIA_MenuItemControlTypeId, UIA_PaneControlTypeId, UIA_ProgressBarControlTypeId,
-    UIA_RadioButtonControlTypeId, UIA_ScrollBarControlTypeId, UIA_SemanticZoomControlTypeId,
-    UIA_SeparatorControlTypeId, UIA_SliderControlTypeId, UIA_SpinnerControlTypeId,
-    UIA_SplitButtonControlTypeId, UIA_StatusBarControlTypeId, UIA_TabItemControlTypeId,
-    UIA_TableControlTypeId, UIA_TextControlTypeId, UIA_ThumbControlTypeId,
-    UIA_TitleBarControlTypeId, UIA_ToolBarControlTypeId, UIA_ToolTipControlTypeId,
-    UIA_TreeItemControlTypeId, UIA_ValuePatternId, UIA_WindowControlTypeId,
+    IUIAutomation, IUIAutomationElement, IUIAutomationValuePattern, UIA_AppBarControlTypeId,
+    UIA_ButtonControlTypeId, UIA_CalendarControlTypeId, UIA_CheckBoxControlTypeId,
+    UIA_ComboBoxControlTypeId, UIA_CustomControlTypeId, UIA_DataGridControlTypeId,
+    UIA_DataItemControlTypeId, UIA_DocumentControlTypeId, UIA_EditControlTypeId,
+    UIA_GroupControlTypeId, UIA_HeaderControlTypeId, UIA_HeaderItemControlTypeId,
+    UIA_HyperlinkControlTypeId, UIA_ImageControlTypeId, UIA_ListItemControlTypeId,
+    UIA_MenuBarControlTypeId, UIA_MenuControlTypeId, UIA_MenuItemControlTypeId,
+    UIA_PaneControlTypeId, UIA_ProgressBarControlTypeId, UIA_RadioButtonControlTypeId,
+    UIA_ScrollBarControlTypeId, UIA_SemanticZoomControlTypeId, UIA_SeparatorControlTypeId,
+    UIA_SliderControlTypeId, UIA_SpinnerControlTypeId, UIA_SplitButtonControlTypeId,
+    UIA_StatusBarControlTypeId, UIA_TabItemControlTypeId, UIA_TableControlTypeId,
+    UIA_TextControlTypeId, UIA_ThumbControlTypeId, UIA_TitleBarControlTypeId,
+    UIA_ToolBarControlTypeId, UIA_ToolTipControlTypeId, UIA_TreeItemControlTypeId,
+    UIA_ValuePatternId, UIA_WindowControlTypeId, UIA_CONTROLTYPE_ID,
 };
 
 use crate::backend::DescribeNode;
@@ -92,7 +92,13 @@ fn read_node(element: &IUIAutomationElement) -> ::windows::core::Result<RawNode>
         let enabled = element.CurrentIsEnabled()?.as_bool();
         let focused = element.CurrentHasKeyboardFocus()?.as_bool();
         let value = read_value(element);
-        Ok(RawNode { control_type, name, value, enabled, focused })
+        Ok(RawNode {
+            control_type,
+            name,
+            value,
+            enabled,
+            focused,
+        })
     }
 }
 
@@ -137,44 +143,120 @@ fn is_interactive(control_type: UIA_CONTROLTYPE_ID) -> bool {
 /// back to a numeric-but-labelled string instead of silently vanishing from
 /// the tree.
 fn role_for(control_type: UIA_CONTROLTYPE_ID) -> String {
-    if control_type == UIA_ButtonControlTypeId { return "button".to_string(); }
-    if control_type == UIA_EditControlTypeId { return "edit".to_string(); }
-    if control_type == UIA_CheckBoxControlTypeId { return "checkbox".to_string(); }
-    if control_type == UIA_RadioButtonControlTypeId { return "radioButton".to_string(); }
-    if control_type == UIA_ComboBoxControlTypeId { return "comboBox".to_string(); }
-    if control_type == UIA_ListItemControlTypeId { return "listItem".to_string(); }
-    if control_type == UIA_MenuItemControlTypeId { return "menuItem".to_string(); }
-    if control_type == UIA_HyperlinkControlTypeId { return "link".to_string(); }
-    if control_type == UIA_TabItemControlTypeId { return "tab".to_string(); }
-    if control_type == UIA_SplitButtonControlTypeId { return "splitButton".to_string(); }
-    if control_type == UIA_SliderControlTypeId { return "slider".to_string(); }
-    if control_type == UIA_SpinnerControlTypeId { return "spinner".to_string(); }
-    if control_type == UIA_DataItemControlTypeId { return "dataItem".to_string(); }
-    if control_type == UIA_HeaderItemControlTypeId { return "headerItem".to_string(); }
-    if control_type == UIA_TreeItemControlTypeId { return "treeItem".to_string(); }
-    if control_type == UIA_ThumbControlTypeId { return "thumb".to_string(); }
-    if control_type == UIA_TextControlTypeId { return "text".to_string(); }
-    if control_type == UIA_PaneControlTypeId { return "pane".to_string(); }
-    if control_type == UIA_WindowControlTypeId { return "window".to_string(); }
-    if control_type == UIA_GroupControlTypeId { return "group".to_string(); }
-    if control_type == UIA_ImageControlTypeId { return "image".to_string(); }
-    if control_type == UIA_DocumentControlTypeId { return "document".to_string(); }
-    if control_type == UIA_ToolBarControlTypeId { return "toolbar".to_string(); }
-    if control_type == UIA_StatusBarControlTypeId { return "statusBar".to_string(); }
-    if control_type == UIA_TitleBarControlTypeId { return "titleBar".to_string(); }
-    if control_type == UIA_ScrollBarControlTypeId { return "scrollBar".to_string(); }
-    if control_type == UIA_ProgressBarControlTypeId { return "progressBar".to_string(); }
-    if control_type == UIA_TableControlTypeId { return "table".to_string(); }
-    if control_type == UIA_MenuControlTypeId { return "menu".to_string(); }
-    if control_type == UIA_MenuBarControlTypeId { return "menuBar".to_string(); }
-    if control_type == UIA_SeparatorControlTypeId { return "separator".to_string(); }
-    if control_type == UIA_ToolTipControlTypeId { return "tooltip".to_string(); }
-    if control_type == UIA_DataGridControlTypeId { return "dataGrid".to_string(); }
-    if control_type == UIA_HeaderControlTypeId { return "header".to_string(); }
-    if control_type == UIA_AppBarControlTypeId { return "appBar".to_string(); }
-    if control_type == UIA_CalendarControlTypeId { return "calendar".to_string(); }
-    if control_type == UIA_SemanticZoomControlTypeId { return "semanticZoom".to_string(); }
-    if control_type == UIA_CustomControlTypeId { return "custom".to_string(); }
+    if control_type == UIA_ButtonControlTypeId {
+        return "button".to_string();
+    }
+    if control_type == UIA_EditControlTypeId {
+        return "edit".to_string();
+    }
+    if control_type == UIA_CheckBoxControlTypeId {
+        return "checkbox".to_string();
+    }
+    if control_type == UIA_RadioButtonControlTypeId {
+        return "radioButton".to_string();
+    }
+    if control_type == UIA_ComboBoxControlTypeId {
+        return "comboBox".to_string();
+    }
+    if control_type == UIA_ListItemControlTypeId {
+        return "listItem".to_string();
+    }
+    if control_type == UIA_MenuItemControlTypeId {
+        return "menuItem".to_string();
+    }
+    if control_type == UIA_HyperlinkControlTypeId {
+        return "link".to_string();
+    }
+    if control_type == UIA_TabItemControlTypeId {
+        return "tab".to_string();
+    }
+    if control_type == UIA_SplitButtonControlTypeId {
+        return "splitButton".to_string();
+    }
+    if control_type == UIA_SliderControlTypeId {
+        return "slider".to_string();
+    }
+    if control_type == UIA_SpinnerControlTypeId {
+        return "spinner".to_string();
+    }
+    if control_type == UIA_DataItemControlTypeId {
+        return "dataItem".to_string();
+    }
+    if control_type == UIA_HeaderItemControlTypeId {
+        return "headerItem".to_string();
+    }
+    if control_type == UIA_TreeItemControlTypeId {
+        return "treeItem".to_string();
+    }
+    if control_type == UIA_ThumbControlTypeId {
+        return "thumb".to_string();
+    }
+    if control_type == UIA_TextControlTypeId {
+        return "text".to_string();
+    }
+    if control_type == UIA_PaneControlTypeId {
+        return "pane".to_string();
+    }
+    if control_type == UIA_WindowControlTypeId {
+        return "window".to_string();
+    }
+    if control_type == UIA_GroupControlTypeId {
+        return "group".to_string();
+    }
+    if control_type == UIA_ImageControlTypeId {
+        return "image".to_string();
+    }
+    if control_type == UIA_DocumentControlTypeId {
+        return "document".to_string();
+    }
+    if control_type == UIA_ToolBarControlTypeId {
+        return "toolbar".to_string();
+    }
+    if control_type == UIA_StatusBarControlTypeId {
+        return "statusBar".to_string();
+    }
+    if control_type == UIA_TitleBarControlTypeId {
+        return "titleBar".to_string();
+    }
+    if control_type == UIA_ScrollBarControlTypeId {
+        return "scrollBar".to_string();
+    }
+    if control_type == UIA_ProgressBarControlTypeId {
+        return "progressBar".to_string();
+    }
+    if control_type == UIA_TableControlTypeId {
+        return "table".to_string();
+    }
+    if control_type == UIA_MenuControlTypeId {
+        return "menu".to_string();
+    }
+    if control_type == UIA_MenuBarControlTypeId {
+        return "menuBar".to_string();
+    }
+    if control_type == UIA_SeparatorControlTypeId {
+        return "separator".to_string();
+    }
+    if control_type == UIA_ToolTipControlTypeId {
+        return "tooltip".to_string();
+    }
+    if control_type == UIA_DataGridControlTypeId {
+        return "dataGrid".to_string();
+    }
+    if control_type == UIA_HeaderControlTypeId {
+        return "header".to_string();
+    }
+    if control_type == UIA_AppBarControlTypeId {
+        return "appBar".to_string();
+    }
+    if control_type == UIA_CalendarControlTypeId {
+        return "calendar".to_string();
+    }
+    if control_type == UIA_SemanticZoomControlTypeId {
+        return "semanticZoom".to_string();
+    }
+    if control_type == UIA_CustomControlTypeId {
+        return "custom".to_string();
+    }
     format!("unknown({})", control_type.0)
 }
 
@@ -276,7 +358,12 @@ pub fn describe_background_tree(
     max_nodes: usize,
     interactive_only: bool,
     manager: &mut crate::background_snapshots::BackgroundSnapshotManager,
-) -> ::windows::core::Result<(IUIAutomationElement, Vec<DescribeNode>, std::collections::HashMap<String, IUIAutomationElement>, bool)> {
+) -> ::windows::core::Result<(
+    IUIAutomationElement,
+    Vec<DescribeNode>,
+    std::collections::HashMap<String, IUIAutomationElement>,
+    bool,
+)> {
     let walker = unsafe { automation.RawViewWalker() }?;
     let root = unsafe { automation.ElementFromHandle(hwnd) }?;
 

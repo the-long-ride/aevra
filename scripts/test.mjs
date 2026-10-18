@@ -1,3 +1,4 @@
+import { testFileBatches } from './lib/test-file-batches.mjs';
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -19,10 +20,14 @@ function collect(root, pred) {
 
 function runNodeTests(files, label) {
   console.error(`[test] ${label}: ${files.length} files`);
-  const result = spawnSync(process.execPath, ['--test', ...files], {
-    stdio: 'inherit',
-    timeout: TEST_RUN_TIMEOUT_MS,
-  });
+  const result = spawnSync(
+    process.execPath,
+    ['--test', '--test-concurrency=4', '--test-timeout=90000', ...files],
+    {
+      stdio: 'inherit',
+      timeout: TEST_RUN_TIMEOUT_MS,
+    },
+  );
   if (result.error?.code === 'ETIMEDOUT') {
     console.error(
       `[test] ${label} timed out after ${TEST_RUN_TIMEOUT_MS}ms. Suspect files:\n${files.join('\n')}`,
@@ -71,7 +76,7 @@ if (ts.length) {
     ),
   );
   const otherTests = mapped.filter((file) => !nativeWindowTests.includes(file));
-  if (otherTests.length) runNodeTests(otherTests, `Node ${suite} suite`);
+  for (const batch of testFileBatches(otherTests)) runNodeTests(batch, `Node ${suite} suite`);
   for (const file of nativeWindowTests) {
     runNodeTests([file], `Node ${suite} native desktop suite`);
   }

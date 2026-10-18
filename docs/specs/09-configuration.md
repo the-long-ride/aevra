@@ -1,6 +1,6 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.2.1`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.3.0`
 
 ## Ports and listeners (fixed hosts)
 
@@ -62,7 +62,7 @@ aevra connectors list|create|revoke <id> manage static admission connector token
 aevra connections list|revoke <id>       inspect/revoke durable OAuth connections
 aevra sessions list|revoke <id>          inspect/revoke live MCP sessions
 aevra sessions revoke-others --yes       revoke other remote/admin sessions with confirmation
-aevra mcp list|add|remove|test            manage upstream MCP servers (list renders aligned box table)
+aevra mcp list|add|remove|test|enable|disable  manage upstream MCP servers (list renders aligned box table with an Enabled column)
 aevra audit clear --yes                   clear audit rows while preserving chain checkpoint semantics
 aevra backup verify|restore <file>       verify or restore database backup
 aevra extension install [--dir <path>] [--yes]  download and unzip the browser extension for this version

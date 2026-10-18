@@ -76,8 +76,14 @@ mod native {
         }
 
         #[allow(dead_code)]
-        pub fn get_element(&self, snapshot_id: &str, handle: &str) -> Option<&IUIAutomationElement> {
-            self.snapshots.get(snapshot_id).and_then(|s| s.elements.get(handle))
+        pub fn get_element(
+            &self,
+            snapshot_id: &str,
+            handle: &str,
+        ) -> Option<&IUIAutomationElement> {
+            self.snapshots
+                .get(snapshot_id)
+                .and_then(|s| s.elements.get(handle))
         }
 
         pub fn release_snapshot(&mut self, snapshot_id: &str) -> bool {
@@ -122,10 +128,16 @@ mod native {
             // Check ValuePattern (10002)
             if let Ok(pattern) = element.GetCurrentPattern(UIA_ValuePatternId) {
                 if let Ok(val_pat) = pattern.cast::<IUIAutomationValuePattern>() {
-                    let is_ro = val_pat.CurrentIsReadOnly().map(|b| b.as_bool()).unwrap_or(false);
+                    let is_ro = val_pat
+                        .CurrentIsReadOnly()
+                        .map(|b| b.as_bool())
+                        .unwrap_or(false);
                     read_only = Some(is_ro);
 
-                    let is_password = element.CurrentIsPassword().map(|b| b.as_bool()).unwrap_or(false);
+                    let is_password = element
+                        .CurrentIsPassword()
+                        .map(|b| b.as_bool())
+                        .unwrap_or(false);
                     if !is_ro && !is_password {
                         actions.push("setValue".to_string());
                     }
@@ -147,7 +159,9 @@ mod native {
                         toggle_state = match state {
                             s if s == ToggleState_Off => Some("off".to_string()),
                             s if s == ToggleState_On => Some("on".to_string()),
-                            s if s == ToggleState_Indeterminate => Some("indeterminate".to_string()),
+                            s if s == ToggleState_Indeterminate => {
+                                Some("indeterminate".to_string())
+                            }
                             _ => None,
                         };
                     }

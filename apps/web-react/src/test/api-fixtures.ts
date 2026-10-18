@@ -2,7 +2,8 @@ import { vi } from 'vitest';
 import { connectorProfilesFixture, tokenUsageReport } from './token-usage-fixture';
 
 export interface FixtureOptions {
-  onboardingCompleted?: boolean;
+  /** Defaults to seen, so the first-launch welcome modal stays out of every other case. */
+  welcomeSeen?: boolean;
   /** Defaults to paired, so the browser-setup prompt stays out of every other case. */
   browserPaired?: boolean;
   approvals?: unknown[];
@@ -19,7 +20,7 @@ function json(value: unknown, status = 200) {
 }
 
 export function installApiFixtures(options: FixtureOptions = {}) {
-  const completed = options.onboardingCompleted ?? false;
+  const completed = options.welcomeSeen ?? true;
   const routes = new Map<string, unknown>([
     [
       '/api/status',
@@ -40,9 +41,15 @@ export function installApiFixtures(options: FixtureOptions = {}) {
       '/api/onboarding',
       {
         completed,
-        completedSections: completed
-          ? ['remote-access', 'connect-ai', 'workspace', 'try-aevra']
-          : [],
+        completedSections: completed ? ['welcome'] : [],
+      },
+    ],
+    [
+      '/api/system/tunnel-tools',
+      {
+        cloudflared: { available: true, version: '2026.5.2' },
+        ngrok: { available: false },
+        recommended: 'cloudflared',
       },
     ],
     [

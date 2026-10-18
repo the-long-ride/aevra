@@ -67,6 +67,9 @@ describe('popup pairing logic', () => {
       profileName: 'TLR',
     });
     expect(stored).toEqual({
+      pairingOrigin: 'https://127.0.0.1:47831',
+      pairingPort: 47831,
+      serverName: 'Aevra',
       token: 'new-token',
       wsUrl: 'ws://127.0.0.1:47833',
       pairedProfileId: '11111111-1111-4111-8111-111111111111',

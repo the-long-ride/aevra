@@ -9,6 +9,7 @@ export interface UserServiceAdapter {
   install(): Promise<void>;
   start(): Promise<void>;
   stop(): Promise<void>;
+  uninstall?(): Promise<void>;
   restart(): Promise<void>;
   status(): Promise<'running' | 'stopped' | 'not-installed' | 'unknown'>;
 }

@@ -1,4 +1,5 @@
 import { getBrowserProfileIdentity } from './profile-identity.js';
+import { validatePairingResponse } from './pairing-response.js';
 
 export {};
 
@@ -71,9 +72,13 @@ async function pair(): Promise<void> {
     return;
   }
   // The token is stored and never logged or rendered.
+  const selected = validatePairingResponse(payload, adminPort(), scheme);
+  if (!selected) {
+    statusLine.textContent = 'Pairing failed: invalid server response.';
+    return;
+  }
   await chrome.storage.local.set({
-    token: payload.token,
-    wsUrl: payload.wsUrl,
+    ...selected,
     pairedProfileId: identity.profileId,
   });
   chrome.runtime.sendMessage({ type: 'aevra:paired' });

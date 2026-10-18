@@ -7,7 +7,7 @@ import type { McpUpstreamCall } from '../../../../packages/protocol/src/mcp-upst
 import { redactSecrets, resolveUpstreamTransport } from './credential-resolver.js';
 import { invalidUpstream, type UpstreamRecord } from './upstream-records.js';
 import type { UpstreamPatch } from './upstream-repository.js';
-import type { UpstreamRegistryDeps, UpstreamRefreshResult } from './upstream-registry-service.js';
+import type { UpstreamRegistryDeps, UpstreamRefreshResult } from './upstream-registry-types.js';
 
 function invalid(message: string, code: string): Error {
   return invalidUpstream(message, code);
@@ -77,6 +77,8 @@ export class UpstreamRegistryRuntime {
 
   private async refreshUnlocked(id: string): Promise<UpstreamRefreshResult> {
     const record = this.require(id);
+    if (!record.enabled)
+      throw invalid(`MCP upstream ${record.name} is disabled`, 'MCP_UPSTREAM_DISABLED');
     const resolved = await resolveUpstreamTransport(record, this.deps.secrets);
     let catalog: UpstreamCatalog;
     try {
@@ -159,7 +161,7 @@ export class UpstreamRegistryRuntime {
     );
   }
 
-  async reconcileChanged(): Promise<void> {
+  async reconcileChanged(options: { retryFailed?: boolean } = {}): Promise<void> {
     for (const record of this.deps.repository.list()) {
       if (!record.enabled) continue;
       const status = await this.deps.worker.status(record.id).catch(() => null);
@@ -170,16 +172,28 @@ export class UpstreamRegistryRuntime {
       try {
         await this.refresh(record.id);
       } catch {
-        this.listChangedAt.delete(record.id);
+        if (options.retryFailed !== false) this.listChangedAt.delete(record.id);
       }
     }
   }
 
-  async restoreSession(record: UpstreamRecord): Promise<boolean> {
+  async restoreSession(
+    record: UpstreamRecord,
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean> {
     try {
       const resolved = await resolveUpstreamTransport(record, this.deps.secrets);
+      if (!isCurrent()) return false;
       await this.deps.worker.connect(record.id, resolved.config);
+      if (!isCurrent()) {
+        await this.deps.worker.disconnect(record.id).catch(() => {});
+        return false;
+      }
       const catalog = await this.deps.worker.catalog(record.id);
+      if (!isCurrent()) {
+        await this.deps.worker.disconnect(record.id).catch(() => {});
+        return false;
+      }
       this.cacheCatalog(record.id, catalog);
       const fingerprint = catalogFingerprint(catalog);
       if (record.catalogFingerprint !== null && fingerprint !== record.catalogFingerprint) {
@@ -213,6 +227,20 @@ export class UpstreamRegistryRuntime {
   }
 
   private async redactedCall(record: UpstreamRecord, call: McpUpstreamCall): Promise<unknown> {
+    const catalog = record.catalog;
+    const listed =
+      call.method === 'tool'
+        ? catalog?.tools.some((entry) => entry.name === call.name)
+        : call.method === 'prompt'
+          ? catalog?.prompts.some((entry) => entry.name === call.name)
+          : catalog?.resources.some((entry) => entry.uri === call.uri);
+    if (!listed) {
+      this.patch(record.id, { state: 'needs-review' });
+      throw invalid(
+        'Upstream entry is outside the reviewed catalog',
+        'MCP_UPSTREAM_ENTRY_NOT_REVIEWED',
+      );
+    }
     const resolved = await resolveUpstreamTransport(record, this.deps.secrets);
     try {
       return redactValue(await this.deps.worker.call(record.id, call), resolved.knownSecrets);

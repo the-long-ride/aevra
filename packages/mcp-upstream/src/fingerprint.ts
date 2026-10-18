@@ -4,9 +4,11 @@ import type { UpstreamCatalog } from './protocol.js';
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') {
-    return Object.entries(value as Record<string, unknown>)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([key, inner]) => [key, canonical(inner)]);
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([key, inner]) => [key, canonical(inner)]),
+    );
   }
   return value ?? null;
 }
@@ -30,13 +32,18 @@ function catalogEntries(catalog: UpstreamCatalog): {
     resources: new Map(
       catalog.resources.map((resource) => [
         `resource:${resource.uri}`,
-        line([resource.uri, resource.name ?? '', resource.description ?? '']),
+        line([
+          resource.uri,
+          resource.name ?? '',
+          resource.description ?? '',
+          resource.mimeType ?? '',
+        ]),
       ]),
     ),
     prompts: new Map(
       catalog.prompts.map((prompt) => [
         `prompt:${prompt.name}`,
-        line([prompt.name, prompt.description ?? '']),
+        line([prompt.name, prompt.description ?? '', prompt.arguments ?? []]),
       ]),
     ),
   };
@@ -75,12 +82,21 @@ export function catalogFingerprint(catalog: UpstreamCatalog): string {
     .map((tool) => line([tool.name, tool.description ?? '', tool.inputSchema ?? null]))
     .sort();
   const resources = catalog.resources
-    .map((resource) => line([resource.uri, resource.name ?? '', resource.description ?? '']))
+    .map((resource) =>
+      line([
+        resource.uri,
+        resource.name ?? '',
+        resource.description ?? '',
+        resource.mimeType ?? '',
+      ]),
+    )
     .sort();
   const prompts = catalog.prompts
-    .map((prompt) => line([prompt.name, prompt.description ?? '']))
+    .map((prompt) => line([prompt.name, prompt.description ?? '', prompt.arguments ?? []]))
     .sort();
   const hash = createHash('sha256');
+  // Version the encoding: persisted pre-v2 hashes require explicit review on refresh.
+  hash.update('aevra-catalog-v2\n');
   hash.update(`tools\n${tools.join('\n')}\n`);
   hash.update(`resources\n${resources.join('\n')}\n`);
   hash.update(`prompts\n${prompts.join('\n')}\n`);

@@ -165,6 +165,12 @@ test('mcp list, remove and test parse; bad forms are rejected', () => {
   assert.throws(() => parseAevraArgs(['mcp', 'remove']), /mcp remove requires an id/);
   assert.throws(() => parseAevraArgs(['mcp', 'test', '']), /mcp test requires an id/);
   assert.throws(() => parseAevraArgs(['mcp']), /mcp requires list/);
+  assert.deepEqual(parseAevraArgs(['mcp', 'enable', 'u1']), {
+    command: 'mcp',
+    action: 'enable',
+    id: 'u1',
+  });
+  assert.throws(() => parseAevraArgs(['mcp', 'disable', '']), /mcp disable requires an id/);
 });
 
 test('unknown commands are rejected', () => {

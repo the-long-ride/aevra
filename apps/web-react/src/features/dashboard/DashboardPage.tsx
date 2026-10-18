@@ -8,10 +8,8 @@ import { ConnectorModal } from './ConnectorModal';
 import { ConnectionDetailModal, type ActiveConnection } from './ConnectionDetailModal';
 import { dashboardOrder } from './dashboard-order';
 import { loadDashboard, revokeActiveConnection, type DashboardData } from './dashboard-service';
-import { Onboarding } from './DashboardOnboarding';
 import { DashboardSection } from './DashboardSection';
 import { McpActivityPanel } from './McpActivityPanel';
-import { RemoteAccessPanel } from './RemoteAccessPanel';
 import { RuntimeManagementModal } from './RuntimeManagementModal';
 import { RuntimeOverview, type RuntimeModalKind } from './RuntimeOverview';
 import { SystemCapabilities } from './SystemCapabilities';
@@ -134,16 +132,6 @@ export function DashboardPage() {
   };
 
   const sections = {
-    onboarding: (
-      <DashboardSection
-        key="onboarding"
-        id="onboarding"
-        title="Onboarding"
-        defaultOpen={!data.onboarding.completed}
-      >
-        <Onboarding data={data} refresh={resource.refresh} />
-      </DashboardSection>
-    ),
     'runtime-overview': (
       <DashboardSection key="runtime" id="runtime-overview" title="Runtime overview">
         <RuntimeOverview
@@ -340,10 +328,10 @@ export function DashboardPage() {
       <section className="page-head">
         <div>
           <h2>Dashboard</h2>
-          <p>Local gateway runtime, connections, requests, and onboarding.</p>
+          <p>Local gateway runtime, connections, and requests.</p>
         </div>
       </section>
-      {dashboardOrder(data.onboarding.completed).map((id) => sections[id])}
+      {dashboardOrder().map((id) => sections[id])}
       <RuntimeManagementModal
         kind={runtimeModal}
         data={data}

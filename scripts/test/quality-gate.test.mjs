@@ -48,8 +48,8 @@ test('quality gate parallelizes validation and runs portability across Windows m
   assert.match(workflow, /browser-parity:/);
   assert.match(workflow, /portability:/);
   assert.match(workflow, /os: \[windows-latest, macos-latest, ubuntu-latest\]/);
-  assert.match(workflow, /actions\/checkout@v7/);
-  assert.match(workflow, /actions\/setup-node@v7/);
+  assert.match(workflow, /actions\/checkout@v6/);
+  assert.match(workflow, /actions\/setup-node@v6/);
   assert.match(workflow, /node-version:\s*24/);
   assert.match(workflow, /cancel-in-progress:\s*true/);
   assert.match(workflow, /npm ci --ignore-scripts/);
@@ -148,8 +148,8 @@ test('release publishes only an exact SHA already validated by the quality workf
   const releaseWorkflow = readFileSync('.github/workflows/release.yml', 'utf8');
   assert.match(releaseWorkflow, /tags:\s*\n\s*-\s*['"]v\*\.\*\.\*['"]/);
   assert.match(releaseWorkflow, /workflow_dispatch:/);
-  assert.match(releaseWorkflow, /actions\/checkout@v7/);
-  assert.match(releaseWorkflow, /actions\/setup-node@v7/);
+  assert.match(releaseWorkflow, /actions\/checkout@v6/);
+  assert.match(releaseWorkflow, /actions\/setup-node@v6/);
   assert.match(releaseWorkflow, /node-version:\s*24/);
   assert.match(releaseWorkflow, /id-token:\s*write/);
   assert.match(releaseWorkflow, /actions:\s*read/);
@@ -214,4 +214,29 @@ test('nothing signs a crx, because a browser would refuse to install one', () =>
   // A stored, sorted, fixed-timestamp archive is byte-identical for identical
   // input, which is what lets a published download be checked against source.
   assert.match(readFileSync('scripts/lib/zip.mjs', 'utf8'), /0x0021/);
+});
+
+test('native helper CI enforces Rust format/strict Clippy and explicit Node 24', () => {
+  const jobs = workflow.replaceAll('\r\n', '\n');
+  const helper = jobs.slice(jobs.indexOf('  desktop-helper:'), jobs.indexOf('  wayland-gnome:'));
+  assert.match(helper, /cargo fmt --check/);
+  assert.match(helper, /cargo clippy --all-targets --locked -- -D warnings/);
+  assert.match(helper, /rustup toolchain install stable.*--component rustfmt.*--component clippy/);
+  for (const [name, next] of [
+    ['changes', 'static-checks'],
+    ['desktop-helper', 'wayland-gnome'],
+    ['wayland-gnome', 'wayland-kde'],
+  ]) {
+    const job = jobs.slice(jobs.indexOf(`  ${name}:`), jobs.indexOf(`  ${next}:`));
+    assert.match(job, /uses: actions\/setup-node@v6/);
+    assert.match(job, /node-version: 24/);
+  }
+});
+
+test('package runtime check can fetch registry metadata for the packed dependencies', () => {
+  const verifier = readFileSync('scripts/verify-package-runtime.mjs', 'utf8');
+  // npm ci caches tarballs, not registry metadata, so an --offline install of the packed tarball
+  // fails with ENOTCACHED on a fresh runner.
+  assert.doesNotMatch(verifier, /'--offline'/);
+  assert.match(verifier, /'--prefer-offline'/);
 });

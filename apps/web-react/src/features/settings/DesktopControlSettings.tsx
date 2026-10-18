@@ -93,7 +93,7 @@ export function DesktopControlSettings({
       try {
         const updated = await save(next);
         setPolicy(updated);
-        success('// Desktop policy saved.');
+        success('Desktop policy saved.');
       } catch (cause) {
         error(cause);
       } finally {
@@ -145,7 +145,7 @@ export function DesktopControlSettings({
               );
           setPolicy(await save({ applications }));
           await refreshCatalog();
-          success(checked ? '// Broad WebView2 access enabled.' : '// WebView2 access revoked.');
+          success(checked ? 'Broad WebView2 access enabled.' : 'WebView2 access revoked.');
           return;
         }
         if (row?.executablePath) {
@@ -163,7 +163,7 @@ export function DesktopControlSettings({
               setPolicy(await save({ applications }));
           }
           await refreshCatalog();
-          success(checked ? '// App access granted.' : '// App access revoked.');
+          success(checked ? 'App access granted.' : 'App access revoked.');
         } else {
           const applications = checked
             ? [...current.applications, exeBasename]
@@ -171,7 +171,7 @@ export function DesktopControlSettings({
                 (entry) => entry.toLowerCase() !== exeBasename.toLowerCase(),
               );
           setPolicy(await save({ applications }));
-          success('// Desktop policy saved.');
+          success('Desktop policy saved.');
         }
       } catch (cause) {
         error(cause);
@@ -197,7 +197,7 @@ export function DesktopControlSettings({
       try {
         await saveCustomApp(app, customAppId);
         await refreshCatalog();
-        success(customAppId ? '// Custom application updated.' : '// Custom application added.');
+        success(customAppId ? 'Custom application updated.' : 'Custom application added.');
       } catch (cause) {
         error(cause);
       }
@@ -211,7 +211,7 @@ export function DesktopControlSettings({
       try {
         await deleteCustomApp(customAppId);
         await refreshCatalog();
-        success('// Custom application removed.');
+        success('Custom application removed.');
       } catch (cause) {
         error(cause);
       }
@@ -331,7 +331,7 @@ export function DesktopControlSettings({
                 onClick={() =>
                   void revokeDesktopAppGrant(grant.id)
                     .then(refreshCatalog)
-                    .then(() => success('// App grant revoked.'))
+                    .then(() => success('App grant revoked.'))
                     .catch((cause: unknown) => error(cause))
                 }
               >

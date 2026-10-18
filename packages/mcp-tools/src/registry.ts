@@ -88,6 +88,9 @@ export const STABLE_TOOL_NAMES = [
   'desktop_select',
   'desktop_toggle',
   'desktop_release_window',
+  'notes_list',
+  'notes_read',
+  'notes_delete',
 ] as const;
 export type AevraToolName = (typeof STABLE_TOOL_NAMES)[number];
 
@@ -232,7 +235,6 @@ const outputSchemas: Partial<Record<AevraToolName, JsonSchema>> = {
   skill_write: anyObjectSchema,
   instructions_write: anyObjectSchema,
 };
-
 const operationInputs: Partial<Record<AevraToolName, JsonSchema>> = {
   operation_get: operationGetInputSchema,
   operation_list: operationListInputSchema,
@@ -270,6 +272,8 @@ const readOnly = new Set<AevraToolName>([
   'desktop_capture',
   'control_observe',
   'control_plan_status',
+  'notes_list',
+  'notes_read',
 ]);
 // `destructive` here means "irreversible or unbounded-consequence", not
 // merely "mutates something" -- file_delete, git_push, change_rollback,
@@ -296,6 +300,7 @@ const destructive = new Set<AevraToolName>([
   'desktop_toggle',
   'control_execute',
   'desktop_act_many',
+  'notes_delete',
 ]);
 // `openWorld` marks a tool whose effect reaches outside the workspace
 // sandbox this codebase can see and reason about. The four desktop input

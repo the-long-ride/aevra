@@ -68,6 +68,9 @@ try {
     ]),
   )[0];
   const installRoot = join(tempRoot, 'install');
+  // The tarball itself is local; its dependencies resolve from the npm cache when present and
+  // otherwise from the registry. `--offline` fails with ENOTCACHED on a fresh CI runner, whose
+  // cache holds only the tarballs `npm ci` fetched and none of the registry metadata.
   run(process.execPath, [
     npmCli,
     'install',
@@ -75,7 +78,7 @@ try {
     installRoot,
     join(tempRoot, packed.filename),
     '--ignore-scripts',
-    '--offline',
+    '--prefer-offline',
     '--no-audit',
     '--no-fund',
   ]);

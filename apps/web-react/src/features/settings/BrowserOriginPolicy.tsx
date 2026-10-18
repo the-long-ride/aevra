@@ -82,7 +82,7 @@ export function BrowserOriginPolicy({
           sensitiveHosts: parseHosts(sensitive),
         }),
       );
-      success('// Origin policy saved.');
+      success('Origin policy saved.');
     } catch (cause) {
       error(cause);
     } finally {

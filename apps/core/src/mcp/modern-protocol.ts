@@ -93,7 +93,9 @@ function serverMeta(baseUrl?: string, existing?: Record<string, unknown>) {
   };
 }
 
-export function modernDiscoverResult(baseUrl?: string) {
+/** The result varies per identity (connect notice), so it is always private. */
+export function modernDiscoverResult(baseUrl?: string, notice?: string | null) {
+  const description = aevraServerInfo(baseUrl).description;
   return {
     resultType: 'complete',
     supportedVersions: [MODERN_PROTOCOL_VERSION],
@@ -102,9 +104,9 @@ export function modernDiscoverResult(baseUrl?: string) {
       resources: { listChanged: true },
       prompts: { listChanged: true },
     },
-    instructions: aevraServerInfo(baseUrl).description,
+    instructions: notice ? `${description}\n\n${notice}` : description,
     ttlMs: CACHE_TTL_MS,
-    cacheScope: 'public',
+    cacheScope: 'private',
     _meta: serverMeta(baseUrl),
   };
 }

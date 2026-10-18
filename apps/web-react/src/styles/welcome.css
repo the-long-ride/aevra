@@ -1,0 +1,115 @@
+.welcome-modal .welcome-body {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.welcome-intro,
+.welcome-section p,
+.welcome-note {
+  margin: 0;
+  color: var(--body);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.welcome-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.welcome-section h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.welcome-tunnel-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.welcome-tunnel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.welcome-tunnel-row > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.welcome-status {
+  display: grid;
+  gap: 6px;
+}
+
+.welcome-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+.welcome-note {
+  color: var(--mute);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .welcome-actions {
+    display: grid;
+  }
+
+  .welcome-actions .primary {
+    width: 100%;
+  }
+}
+
+.remote-access-highlight-target {
+  min-width: 0;
+  border-radius: 4px;
+}
+
+.remote-access-highlight-target.is-highlighted {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  animation: remote-access-blink 1s ease-in-out 5;
+}
+
+@keyframes remote-access-blink {
+  0%,
+  100% {
+    outline-color: var(--accent);
+  }
+
+  50% {
+    outline-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remote-access-highlight-target.is-highlighted {
+    animation: none;
+  }
+}

@@ -65,6 +65,13 @@ export async function approveRequest(id: string, scope: ApprovalScope) {
   });
 }
 
+export async function clearApprovalHistory(): Promise<number> {
+  const result = await requestJson<{ deleted: number }>('/api/approvals/history', {
+    method: 'DELETE',
+  });
+  return result.deleted;
+}
+
 export async function enableYoloRequest(id: string) {
   await requestJson(`/api/approvals/${encodeURIComponent(id)}/yolo`, {
     method: 'POST',

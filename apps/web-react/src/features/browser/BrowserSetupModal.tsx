@@ -1,5 +1,6 @@
 import { BROWSER_EXTENSION_DOWNLOAD_URL, browserExtensionZipUrl } from '@aevra/admin-contracts';
 import { useEffect, useRef, useState } from 'react';
+import { useModalLayer } from '../../components/modal-layer';
 import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 import { useBrowserExtensionInfo } from './use-browser-extension';
@@ -31,15 +32,16 @@ export function BrowserSetupModal({
   const [copiedCode, setCopiedCode] = useState(false);
   const [generatingCode, setGeneratingCode] = useState(false);
   const { toast, error } = useToast();
+  const { ref: layerRef, isTop } = useModalLayer();
 
   useEffect(() => {
     panel.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape' && isTop()) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [isTop, onClose]);
 
   const cleanAevra = (aevraVersion ?? '').replace(/^v/, '').trim();
   const cleanExt = (extVersion ?? '').replace(/^v/, '').trim();
@@ -74,6 +76,7 @@ export function BrowserSetupModal({
 
   return (
     <div
+      ref={layerRef}
       className="modal-backdrop browser-setup-backdrop"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();

@@ -23,6 +23,7 @@ import { GIT_TOOL_NAMES, gitTool } from './git-tools.js';
 import { assertToolGroupEnabled, type ConnectorProfile } from './tool-groups.js';
 import { HookService } from './hook-service.js';
 import { handleOperationTool, OPERATION_TOOL_NAMES } from './operation-tools.js';
+import { handleNotesTool, NOTES_TOOL_NAMES } from './notes-tools.js';
 import {
   handleProcessChangeTool,
   processStart,
@@ -30,12 +31,14 @@ import {
 } from './process-change-tools.js';
 import { searchTool } from './search-tool.js';
 import { evaluateRuntimeCommand } from './command-evaluation.js';
+import { claimCapabilityProof } from './capability-approval-proof.js';
 import { resolveWorkspaceLease } from './service-helpers.js';
 import type {
   McpProxyOperation,
   McpRuntimeContext,
   McpToolDependencies,
   HostApprovalProof,
+  CapabilityApprovalProof,
   WorkerGateway,
 } from './service-types.js';
 import {
@@ -61,7 +64,12 @@ const TARGETED_WORKSPACE_TOOLS = new Set([
 function needsWorkspaceTarget(name: string, args: any) {
   if (name === 'workspace_select') return false;
   if (TARGETED_WORKSPACE_TOOLS.has(name)) return true;
-  if (BROWSER_TOOL_NAMES.has(name) || DESKTOP_TOOL_NAMES.has(name) || CONTROL_TOOL_NAMES.has(name))
+  if (
+    BROWSER_TOOL_NAMES.has(name) ||
+    DESKTOP_TOOL_NAMES.has(name) ||
+    CONTROL_TOOL_NAMES.has(name) ||
+    NOTES_TOOL_NAMES.has(name)
+  )
     return false;
   const explicitTarget = Boolean(
     String(args?.workspace ?? '').trim() || String(args?.workspaceId ?? '').trim(),
@@ -108,7 +116,6 @@ export type {
 } from './service-types.js';
 
 export class McpToolService {
-  private readonly oneTimeCapabilities = new Set<string>();
   readonly hooks?: HookService;
 
   constructor(
@@ -157,7 +164,10 @@ export class McpToolService {
     }
   }
 
-  private context(workspaceId?: string, proof?: HostApprovalProof): McpRuntimeContext {
+  private context(
+    workspaceId?: string,
+    proof?: HostApprovalProof | CapabilityApprovalProof,
+  ): McpRuntimeContext {
     return {
       sessions: this.sessions,
       workspaces: this.workspaces,
@@ -166,16 +176,26 @@ export class McpToolService {
       reads: this.reads,
       approvals: this.approvals,
       deps: this.deps,
-      oneTimeCapabilities: this.oneTimeCapabilities,
-      ...(proof ? { hostApprovalProof: proof } : {}),
+      ...(proof
+        ? 'kind' in proof
+          ? { capabilityApprovalProof: proof }
+          : { hostApprovalProof: proof }
+        : {}),
       callInner: (sessionId, name, args, approvedProof) =>
         this.callInner(sessionId, name, args, approvedProof),
-      proxyOperation: (sessionId, operation: McpProxyOperation) => {
+      proxyOperation: async (sessionId, operation: McpProxyOperation, approvedProof) => {
+        const original = {
+          tool: operation.kind === 'resource' ? operation.uri : operation.name,
+          args: operation.kind === 'resource' ? { uri: operation.uri } : operation.args,
+          proxy: operation,
+        };
+        if (approvedProof) claimCapabilityProof(approvedProof, sessionId, original);
+        const invocation = this.context(workspaceId, approvedProof);
         if (operation.kind === 'tool')
-          return callUpstreamTool(this.context(), sessionId, operation.name, operation.args);
+          return callUpstreamTool(invocation, sessionId, operation.name, operation.args);
         if (operation.kind === 'resource')
-          return readUpstreamResource(this.context(), sessionId, operation.uri);
-        return getUpstreamPrompt(this.context(), sessionId, operation.name, operation.args);
+          return readUpstreamResource(invocation, sessionId, operation.uri);
+        return getUpstreamPrompt(invocation, sessionId, operation.name, operation.args);
       },
       processStart: (sessionId, args) => processStart(this.context(workspaceId), sessionId, args),
     };
@@ -185,10 +205,11 @@ export class McpToolService {
     sessionId: string,
     name: string,
     args: any = {},
-    proof?: HostApprovalProof,
+    proof?: HostApprovalProof | CapabilityApprovalProof,
   ) {
     const session = this.sessions.get(sessionId);
     if (!session) throw new AevraToolError('UNAUTHORIZED', 'Unknown Aevra session');
+    if (proof && 'kind' in proof) claimCapabilityProof(proof, sessionId, { tool: name, args });
     const baseContext = this.context();
     const workspaceLease = needsWorkspaceTarget(name, args)
       ? resolveWorkspaceLease(baseContext, sessionId, args)
@@ -219,6 +240,7 @@ export class McpToolService {
     if (BROWSER_TOOL_NAMES.has(name)) return handleBrowserTool(context, sessionId, name, args);
     if (CONTROL_TOOL_NAMES.has(name)) return handleControlTool(context, sessionId, name, args);
     if (DESKTOP_TOOL_NAMES.has(name)) return handleDesktopTool(context, sessionId, name, args);
+    if (NOTES_TOOL_NAMES.has(name)) return handleNotesTool(context, sessionId, name, args);
     return callUpstreamTool(context, sessionId, name, args);
   }
 

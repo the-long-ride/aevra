@@ -1,6 +1,7 @@
 import type { ConnectorProfilesResponse, ResultFormat, ToolGroup } from '@aevra/admin-contracts';
 import { useEffect, useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
+import { Switch } from '../../components/Switch';
 import { useToast } from '../../components/Toast';
 import {
   fetchConnectorProfiles,
@@ -13,6 +14,15 @@ const FORMAT_OPTIONS: ReadonlyArray<{ value: ResultFormat; label: string }> = [
   { value: 'text', label: 'Text only (smallest)' },
   { value: 'structured', label: 'Structured only' },
 ];
+
+function GroupLabel({ name, hint }: { name: string; hint: string }) {
+  return (
+    <span className="tool-surface-name">
+      <span>{name}</span>
+      <span className="token-usage-note">{hint}</span>
+    </span>
+  );
+}
 
 export function ConnectionToolSurface({ actor }: { actor: string }) {
   const [info, setInfo] = useState<ConnectorProfilesResponse>();
@@ -72,37 +82,44 @@ export function ConnectionToolSurface({ actor }: { actor: string }) {
 
   return (
     <section
-      className="tool-surface"
+      className="tool-surface connection-section"
       aria-label="Tool surface"
       data-surface-id="connections:tool-surface"
     >
-      <h4 className="token-usage-heading">Tool surface</h4>
+      <h3 className="connection-section-title">Tool surface</h3>
       <p className="token-usage-note">
         Tools this client sees. Fewer tools means fewer tokens on every conversation.
       </p>
       <ul className="tool-surface-list">
         <li>
-          <label>
-            <input type="checkbox" checked disabled aria-label="core" /> core{' '}
-            <span className="token-usage-note">
-              always on · ~{formatTokens(info.groupTokens.core)} tokens
-            </span>
-          </label>
+          <Switch
+            containerClassName="tool-surface-switch"
+            aria-label="core"
+            checked
+            disabled
+            readOnly
+            label={
+              <GroupLabel
+                name="core"
+                hint={`always on · ~${formatTokens(info.groupTokens.core)} tokens`}
+              />
+            }
+          />
         </li>
         {info.groups.map((group) => (
           <li key={group}>
-            <label>
-              <input
-                type="checkbox"
-                aria-label={group}
-                checked={groups.includes(group)}
-                onChange={() => toggle(group)}
-              />{' '}
-              {group}{' '}
-              <span className="token-usage-note">
-                ~{formatTokens(info.groupTokens[group])} tokens
-              </span>
-            </label>
+            <Switch
+              containerClassName="tool-surface-switch"
+              aria-label={group}
+              checked={groups.includes(group)}
+              onChange={() => toggle(group)}
+              label={
+                <GroupLabel
+                  name={group}
+                  hint={`~${formatTokens(info.groupTokens[group])} tokens`}
+                />
+              }
+            />
           </li>
         ))}
       </ul>
@@ -111,27 +128,30 @@ export function ConnectionToolSurface({ actor }: { actor: string }) {
           Saves about {formatTokens(saving)} tokens per conversation (est.).
         </p>
       )}
-      <Dropdown
-        ariaLabel="Result format"
-        value={format}
-        options={FORMAT_OPTIONS}
-        onChange={(value) => {
-          setFormat(value as ResultFormat);
-        }}
-      />
+      <div className="tool-surface-actions">
+        <Dropdown
+          ariaLabel="Result format"
+          value={format}
+          options={FORMAT_OPTIONS}
+          onChange={(value) => {
+            setFormat(value as ResultFormat);
+          }}
+        />
+        <button
+          type="button"
+          className="primary"
+          data-surface-id="connections:tool-surface-save"
+          disabled={state === 'saving'}
+          onClick={() => void save()}
+        >
+          Save tool surface
+        </button>
+      </div>
       {format === 'structured' && (
         <p className="token-usage-note">
           Some clients ignore structured content. Use this only if yours reads it.
         </p>
       )}
-      <button
-        type="button"
-        data-surface-id="connections:tool-surface-save"
-        disabled={state === 'saving'}
-        onClick={() => void save()}
-      >
-        Save tool surface
-      </button>
       {toast}
     </section>
   );
