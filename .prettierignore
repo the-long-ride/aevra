@@ -15,3 +15,10 @@ helper/tests/fixtures
 **/obj/**
 *.deps.json
 *.runtimeconfig.json
+
+.test-dist-*
+.work-tracking
+
+# Local agent notes are not repository source.
+current-work-*.md
+plan-ignore-from-commit.md

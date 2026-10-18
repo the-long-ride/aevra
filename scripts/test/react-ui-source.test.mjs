@@ -86,22 +86,18 @@ test('React feature pages cover the complete admin navigation surface', () => {
   }
 });
 
-test('React Dashboard and Requests preserve security and onboarding behavior', () => {
+test('React Dashboard and Requests preserve security behavior without onboarding', () => {
   const dashboard = readFileSync('apps/web-react/src/features/dashboard/DashboardPage.tsx', 'utf8');
-  // Onboarding lives in its own component; assert on both so the contract keeps
-  // covering it wherever the markup sits.
-  const onboarding = readFileSync(
-    'apps/web-react/src/features/dashboard/DashboardOnboarding.tsx',
-    'utf8',
-  );
+  // Onboarding moved to the first-launch welcome modal.
+  assert.equal(existsSync('apps/web-react/src/features/dashboard/DashboardOnboarding.tsx'), false);
+  assert.match(readFileSync('apps/web-react/src/app/App.tsx', 'utf8'), /WelcomeModal/);
   const requests = readFileSync('apps/web-react/src/features/requests/RequestDrawer.tsx', 'utf8');
   const requestActions = readFileSync(
     'apps/web-react/src/features/requests/request-actions.ts',
     'utf8',
   );
-  assert.match(onboarding, /remote-access/);
   assert.match(dashboard, /dashboardOrder/);
-  assert.match(onboarding, /completed/);
+  assert.doesNotMatch(dashboard, /Onboarding/);
   assert.doesNotMatch(dashboard, /\['Version'/);
   assert.match(requestActions, /CRITICAL/);
   assert.match(requestActions, /approve-global/);
