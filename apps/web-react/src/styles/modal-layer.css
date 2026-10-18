@@ -1,0 +1,24 @@
+/*
+ * Modal layers (see components/modal-layer.ts). The page behind is locked and
+ * inert; scrolling inside a modal never chains out to the page.
+ */
+.modal-backdrop,
+.modal,
+.modal-body,
+.management-modal-body > .permission-modal-form,
+.request-drawer aside {
+  overscroll-behavior: contain;
+}
+
+/*
+ * Stacked layers: the most recently opened one is the interactive one, so it paints
+ * above the layers below it, and so do menus portaled out of it. Toasts (200) stay on top.
+ */
+body[data-modal-stacked] .modal-backdrop[data-modal-layer-top],
+body[data-modal-stacked] .request-drawer[data-modal-layer-top] {
+  z-index: 150;
+}
+
+body[data-modal-stacked] .dropdown-menu-portal {
+  z-index: 160;
+}

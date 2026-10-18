@@ -1,0 +1,345 @@
+/* Connection detail modal: wider layout, titled sections, tabs and the Notes tab. */
+.connection-modal {
+  width: min(1040px, calc(100vw - 24px));
+}
+
+.connection-tabs {
+  flex: 0 0 auto;
+}
+
+.connection-modal-body {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.connection-modal-foot {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.connection-tab-panel {
+  min-width: 0;
+}
+
+.connection-detail > section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  background: var(--canvas);
+}
+
+.connection-section-title,
+.connection-detail > section > h3 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.connection-section > .token-usage-note {
+  margin: 0;
+}
+
+.tool-surface .tool-surface-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
+  margin: 0;
+}
+
+.tool-surface-list li {
+  min-width: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.tool-surface-switch {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 38px;
+}
+
+.tool-surface-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.tool-surface-name > .token-usage-note {
+  margin: 0;
+}
+
+.tool-surface-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-surface-actions .dropdown {
+  flex: 0 1 280px;
+  width: auto;
+  min-width: 220px;
+}
+
+.connection-origins ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-origins li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.connection-workspace-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.connection-notes {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.connection-notes-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.connection-notes-hint {
+  flex: 1 1 280px;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+}
+
+.note-content {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.note-content .muted {
+  font-size: 11px;
+}
+
+.note-editor .connection-section-title {
+  margin: 0;
+}
+
+.note-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.note-field > span {
+  color: var(--mute);
+  font-size: 12px;
+}
+
+.note-field input,
+.note-field textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.note-field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.note-images-hint {
+  margin: 0;
+  font-size: 12px;
+}
+
+.note-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-thumbs li {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+}
+
+.note-thumbs img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.note-thumbs button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  line-height: 1;
+}
+
+.note-editor {
+  position: relative;
+}
+
+.note-editor[data-dragging='true'] {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.note-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--canvas) 82%, transparent);
+  color: var(--ink);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* Stretch keeps the drop zone exactly as tall as the Cancel / Save note buttons. */
+.note-editor-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.note-dropzone {
+  display: flex;
+  flex: 1 1 200px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 5px 9px;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: 4px;
+  color: var(--mute);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
+}
+
+.note-dropzone:hover,
+.note-dropzone:focus-visible {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.note-editor-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* Notes table only: search, rows and pagination share one sticky row in the modal body. */
+.connection-notes .data-table-host[data-table-id='connection-notes'] > .dt-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 6px 0 8px;
+  background: var(--canvas);
+}
+
+.connection-notes .data-table-host[data-table-id='connection-notes'] .dt-search {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.connection-notes .data-table-host[data-table-id='connection-notes'] .dt-control-strip {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+/* Note editor: Title takes the free width; the three switches share its row and wrap under it. */
+.note-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+}
+
+.note-title-row > .note-field {
+  flex: 1 1 240px;
+}
+
+.note-title-switches {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  min-width: 0;
+  min-height: 34px;
+}
+@media (max-width: 760px) {
+  .connection-modal {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .tool-surface .tool-surface-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .connection-detail > section {
+    padding: 12px;
+  }
+
+  .connection-modal-foot {
+    padding: 12px 16px;
+  }
+
+  .note-dropzone {
+    flex-basis: 100%;
+  }
+
+  .note-editor-actions {
+    flex: 1 1 100%;
+  }
+
+  .connection-modal-foot > button,
+  .connection-notes-bar > button {
+    flex: 1 1 auto;
+  }
+}
