@@ -114,6 +114,15 @@ test('mcp failures use the error message, the status, or a connectivity hint', a
   await runMcpCommand({}, mcp({ action: 'test', id: 'u1' }), h.deps);
   assert.equal(h.errors[0], '[aevra] mcp failed: 502');
 
+  h = harness(() => brokenJson);
+  await runMcpCommand({}, mcp({ action: 'enable', id: 'u1' }), h.deps);
+  assert.equal(h.errors[0], '[aevra] mcp failed: 502');
+
+  h = harness(() => brokenJson);
+  await runMcpCommand({}, mcp({ action: 'disable', id: 'a b' }), h.deps);
+  assert.equal(h.calls[0]!.path, '/api/mcp/upstreams/a%20b/disable');
+  assert.equal(h.errors[0], '[aevra] mcp failed: 502');
+
   h = harness(() => {
     throw Object.assign(new Error('connect refused'), { code: 'ECONNREFUSED' });
   });

@@ -49,6 +49,7 @@ test('mcp list prints summary without credentials', async () => {
           toolCount: 12,
           risk: 'HIGH',
           transport: 'http',
+          enabled: true,
           auth: { secretRefId: plainPhrase1 },
         },
       ],
@@ -57,7 +58,7 @@ test('mcp list prints summary without credentials', async () => {
   await runMcpCommand({}, { command: 'mcp', action: 'list' }, state.dependencies);
   assert.match(
     state.logs.join('\n'),
-    /u1\s+│\s+github\s+│\s+http\s+│\s+active\s+│\s+12 tools\s+│\s+HIGH/,
+    /u1\s+│\s+github\s+│\s+http\s+│\s+active\s+│\s+yes\s+│\s+12 tools\s+│\s+HIGH/,
   );
   assert.equal(state.logs.join('\n').includes('sr_github'), false);
 });
@@ -72,6 +73,7 @@ test('mcp list prints table with borders and headers when upstreams exist', asyn
           toolCount: 12,
           risk: 'HIGH',
           transport: 'http',
+          enabled: true,
         },
       ],
     }),
@@ -79,10 +81,123 @@ test('mcp list prints table with borders and headers when upstreams exist', asyn
   await runMcpCommand({}, { command: 'mcp', action: 'list' }, state.dependencies);
   assert.equal(state.logs.length, 5);
   assert.ok(state.logs[0]!.startsWith('┌'));
-  assert.match(state.logs[1]!, /ID\s+│\s+Name\s+│\s+Transport\s+│\s+State\s+│\s+Tools\s+│\s+Risk/);
+  assert.match(
+    state.logs[1]!,
+    /ID\s+│\s+Name\s+│\s+Transport\s+│\s+State\s+│\s+Enabled\s+│\s+Tools\s+│\s+Risk/,
+  );
   assert.ok(state.logs[2]!.startsWith('├'));
-  assert.match(state.logs[3]!, /u1\s+│\s+github\s+│\s+http\s+│\s+active\s+│\s+12 tools\s+│\s+HIGH/);
+  assert.match(
+    state.logs[3]!,
+    /u1\s+│\s+github\s+│\s+http\s+│\s+active\s+│\s+yes\s+│\s+12 tools\s+│\s+HIGH/,
+  );
   assert.ok(state.logs[4]!.startsWith('└'));
+});
+test('mcp list shows no for a disabled server', async () => {
+  const state = fixture(async () =>
+    response({
+      upstreams: [
+        {
+          id: 'u2',
+          name: 'paused',
+          state: 'active',
+          toolCount: 3,
+          risk: 'LOW',
+          transport: 'stdio',
+          enabled: false,
+        },
+      ],
+    }),
+  );
+  await runMcpCommand({}, { command: 'mcp', action: 'list' }, state.dependencies);
+  assert.match(state.logs[3]!, /u2\s+│\s+paused\s+│\s+stdio\s+│\s+active\s+│\s+no\s+│\s+3 tools/);
+});
+test('mcp list marks pending rows and prints hints in order', async () => {
+  const base = { transport: 'http', toolCount: 1, risk: 'LOW', enabled: true };
+  const state = fixture(async () =>
+    response({
+      upstreams: [
+        { ...base, id: 'mu_0', name: 'fine', state: 'active' },
+        {
+          ...base,
+          id: 'mu_1',
+          name: 'engram',
+          state: 'needs-review',
+          pendingCatalogDiff: { added: ['tool:a', 'tool:b'], removed: [], changed: ['tool:c'] },
+          pendingCatalogFingerprint: 'fingerprintvalue',
+        },
+        {
+          ...base,
+          id: 'mu_2',
+          name: 'other',
+          state: 'needs-review',
+          pendingCatalogDiff: null,
+          pendingCatalogFingerprint: null,
+        },
+      ],
+    }),
+  );
+  assert.equal(await runMcpCommand({}, { command: 'mcp', action: 'list' }, state.dependencies), 0);
+  assert.ok(state.logs[1]!.startsWith('│ ! │'));
+  assert.ok(state.logs[3]!.startsWith('│   │'));
+  assert.ok(state.logs[4]!.startsWith('│ ! │'));
+  assert.ok(state.logs[5]!.startsWith('│ ! │'));
+  assert.deepEqual(state.logs.slice(-2), [
+    '[aevra] engram changed its catalog (+2 added, -0 removed, ~1 changed). Run: aevra mcp review mu_1',
+    '[aevra] other is blocked pending review. Run: aevra mcp test mu_2',
+  ]);
+});
+test('mcp list does not flag a disabled needs-review server', async () => {
+  const state = fixture(async () =>
+    response({
+      upstreams: [
+        {
+          id: 'mu_3',
+          name: 'paused',
+          state: 'needs-review',
+          transport: 'http',
+          toolCount: 1,
+          risk: 'LOW',
+          enabled: false,
+        },
+      ],
+    }),
+  );
+  await runMcpCommand({}, { command: 'mcp', action: 'list' }, state.dependencies);
+  assert.equal(state.logs.length, 5);
+  assert.ok(state.logs[3]!.startsWith('│   │'));
+});
+test('mcp enable and disable post to their endpoints and log the result', async () => {
+  const state = fixture(async () => response({ id: 'mu_1', enabled: true }));
+  assert.equal(
+    await runMcpCommand({}, { command: 'mcp', action: 'enable', id: 'mu_1' }, state.dependencies),
+    0,
+  );
+  assert.equal(state.calls[0].path, '/api/mcp/upstreams/mu_1/enable');
+  assert.equal(state.calls[0].init.method, 'POST');
+  assert.equal(state.logs[0], '[aevra] Enabled mu_1');
+  assert.equal(
+    await runMcpCommand({}, { command: 'mcp', action: 'disable', id: 'mu_1' }, state.dependencies),
+    0,
+  );
+  assert.equal(state.calls[1].path, '/api/mcp/upstreams/mu_1/disable');
+  assert.equal(state.calls[1].init.method, 'POST');
+  assert.equal(state.logs[1], '[aevra] Disabled mu_1');
+});
+test('a failed mcp enable or disable returns nonzero with the formatted error', async () => {
+  const state = fixture(async () => response({ error: { message: 'not found' } }, false, 404));
+  assert.equal(
+    await runMcpCommand({}, { command: 'mcp', action: 'enable', id: 'gone' }, state.dependencies),
+    1,
+  );
+  assert.equal(
+    await runMcpCommand({}, { command: 'mcp', action: 'disable', id: 'gone' }, state.dependencies),
+    1,
+  );
+  assert.deepEqual(state.errors, [
+    '[aevra] mcp failed: not found',
+    '[aevra] mcp failed: not found',
+  ]);
+  assert.deepEqual(state.logs, []);
 });
 test('mcp add posts http and stdio registration bodies', async () => {
   const state = fixture(async () => response({ id: 'u1', name: 'github', toolCount: 12 }));

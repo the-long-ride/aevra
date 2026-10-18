@@ -1,0 +1,174 @@
+.agent-connections-scroll {
+  overflow-x: auto;
+}
+
+.agent-connections-table {
+  min-width: 720px;
+}
+
+.agent-config-cell {
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.agent-modal-form {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-modal-group {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+
+.agent-modal-group legend {
+  padding: 0 4px;
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.agent-modal-hint {
+  margin: 0;
+  color: var(--mute);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.agent-modal-anyway {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.agent-modal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.agent-agent-card,
+.agent-scope-card {
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--canvas);
+}
+
+.agent-agent-card {
+  justify-content: space-between;
+}
+
+.agent-agent-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agent-scope-card {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-scope-card[data-selected='true'] {
+  border-color: var(--accent);
+}
+
+.agent-scope-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.agent-workspace-list {
+  display: grid;
+  gap: 4px;
+  padding-left: 24px;
+}
+
+.agent-workspace-list[data-active='false'] {
+  opacity: 0.55;
+}
+
+.agent-settings-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  margin-top: 0;
+}
+
+.agent-settings-actions button {
+  white-space: nowrap;
+}
+
+.agent-empty {
+  display: grid;
+  gap: 4px;
+  padding: 14px 12px;
+  border: 1px dashed var(--hairline);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.agent-empty p {
+  margin: 0;
+}
+
+.agent-empty-hint {
+  color: var(--mute);
+  font-size: 11px;
+}
+
+.agent-preview-scroll {
+  overflow-x: auto;
+}
+
+.agent-preview-table {
+  min-width: 0;
+  table-layout: auto;
+}
+
+.agent-preview-path {
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* Smaller dialogs: beat the fixed .management-modal size; long content scrolls inside. */
+.management-modal.agent-modal-size-form {
+  width: min(680px, calc(100vw - 24px));
+  height: auto;
+}
+
+.management-modal.agent-modal-size-compact {
+  width: min(560px, calc(100vw - 24px));
+  height: auto;
+}
+
+.management-modal-body > .agent-modal-form {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+@media (max-width: 760px) {
+  .management-modal.agent-modal-size-form,
+  .management-modal.agent-modal-size-compact {
+    width: calc(100vw - 12px);
+    height: calc(100dvh - 12px);
+  }
+
+  .compact-panel-head > .agent-settings-actions {
+    width: 100%;
+  }
+}
+
+.agent-modal-results {
+  margin: 0;
+  padding-left: 18px;
+}

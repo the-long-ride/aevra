@@ -18,6 +18,13 @@ test('help and shell completions expose only the single UI launch flag', () => {
   }
 });
 
+test('usage advertises mcp enable and disable', () => {
+  assert.match(
+    usageText(),
+    /aevra mcp list\|add <name> --transport …\|remove <id>\|test <id>\|enable <id>\|disable <id>/,
+  );
+});
+
 test('aevra start ready output renders the service endpoints as a table', () => {
   const lines = readyLines({
     gatewayUrl: 'http://127.0.0.1:47830',

@@ -141,6 +141,64 @@ test('mcp remove and test take one id', () => {
   });
   assert.throws(() => parseAevraArgs(['mcp', 'remove']), /requires an id/);
 });
+test('mcp enable and disable take one id', () => {
+  assert.deepEqual(parseAevraArgs(['mcp', 'enable', 'mu_1']), {
+    command: 'mcp',
+    action: 'enable',
+    id: 'mu_1',
+  });
+  assert.deepEqual(parseAevraArgs(['mcp', 'disable', 'mu_1']), {
+    command: 'mcp',
+    action: 'disable',
+    id: 'mu_1',
+  });
+  assert.throws(() => parseAevraArgs(['mcp', 'enable']), /mcp enable requires an id/);
+  assert.throws(() => parseAevraArgs(['mcp', 'disable']), /mcp disable requires an id/);
+  assert.throws(() => parseAevraArgs(['mcp', 'enable', 'a', 'b']), /mcp enable requires an id/);
+  assert.throws(() => parseAevraArgs(['mcp', 'disable', '']), /mcp disable requires an id/);
+});
+test('mcp review takes exactly one id', () => {
+  assert.deepEqual(parseAevraArgs(['mcp', 'review', 'mu_1']), {
+    command: 'mcp',
+    action: 'review',
+    id: 'mu_1',
+  });
+  assert.throws(() => parseAevraArgs(['mcp', 'review']), /mcp review requires an id/);
+  assert.throws(() => parseAevraArgs(['mcp', 'review', 'a', 'b']), /mcp review requires an id/);
+  assert.throws(() => parseAevraArgs(['mcp', 'review', 'a', '--yes']), /mcp review requires an id/);
+});
+test('mcp accept takes an id and an optional --yes', () => {
+  assert.deepEqual(parseAevraArgs(['mcp', 'accept', 'mu_1', '--yes']), {
+    command: 'mcp',
+    action: 'accept',
+    id: 'mu_1',
+    yes: true,
+  });
+  assert.deepEqual(parseAevraArgs(['mcp', 'accept', 'mu_1']), {
+    command: 'mcp',
+    action: 'accept',
+    id: 'mu_1',
+    yes: false,
+  });
+  assert.throws(() => parseAevraArgs(['mcp', 'accept']), /mcp accept requires an id/);
+  assert.throws(() => parseAevraArgs(['mcp', 'accept', '--yes']), /mcp accept requires an id/);
+  assert.throws(
+    () => parseAevraArgs(['mcp', 'accept', 'mu_1', '--force']),
+    /Unknown mcp accept option: --force/,
+  );
+  assert.throws(
+    () => parseAevraArgs(['mcp', 'accept', 'mu_1', '--yes', '--yes']),
+    /Unknown mcp accept option: --yes/,
+  );
+});
+test('--yes on other mcp actions is rejected', () => {
+  assert.throws(() => parseAevraArgs(['mcp', 'enable', 'mu_1', '--yes']), /requires an id/);
+  assert.throws(() => parseAevraArgs(['mcp', 'list', '--yes']), /takes no arguments/);
+});
 test('unknown mcp actions report usage', () => {
   assert.throws(() => parseAevraArgs(['mcp', 'frobnicate']), /mcp requires list\|add/);
+  assert.throws(
+    () => parseAevraArgs(['mcp', 'frobnicate']),
+    /remove <id>\|test <id>\|enable <id>\|disable <id>\|review <id>\|accept <id> \[--yes\]/,
+  );
 });

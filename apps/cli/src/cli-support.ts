@@ -1,27 +1,4 @@
-export function usageText(): string {
-  return [
-    'Aevra — workspace-scoped local MCP execution gateway for AI web interfaces',
-    '',
-    'Usage:',
-    '  aevra start [--ui]',
-    '  aevra ui [--logout-all]',
-    '  aevra setup',
-    '  aevra service install|start|stop|restart|status',
-    '  aevra connectors list|create <name>|revoke <id>',
-    '  aevra connections list|revoke <id>',
-    '  aevra mcp list|add <name> --transport …|remove <id>|test <id>',
-    '  aevra sessions list|revoke <id>',
-    '  aevra sessions revoke-others --yes',
-    '  aevra audit clear --yes',
-    '  aevra extension install [--dir <path>] [--yes]',
-    '  aevra status [--json]',
-    '  aevra backup verify <file>|restore <file> [--yes]',
-    '  aevra completion bash|zsh|powershell',
-    '  aevra about',
-    '  aevra --version',
-    '  aevra --help',
-  ].join('\n');
-}
+export { completionText, usageText } from './cli-usage.js';
 
 export function formatCliError(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
@@ -84,67 +61,6 @@ export function readyLines(info: {
     ...serviceTable(info),
     '',
   ];
-}
-
-export function completionText(shell: 'bash' | 'zsh' | 'powershell'): string {
-  const commands = [
-    'start',
-    'ui',
-    'setup',
-    'service',
-    'connectors',
-    'mcp',
-    'sessions',
-    'audit',
-    'extension',
-    'status',
-    'backup',
-    'completion',
-    '--version',
-    '-v',
-    '--help',
-    '-h',
-  ];
-  const startOptions = '--ui';
-
-  if (shell === 'bash') {
-    return `_aevra() {
-  local cur
-  cur="\${COMP_WORDS[COMP_CWORD]}"
-  if [[ "\${COMP_WORDS[1]}" == "start" && $COMP_CWORD -ge 2 ]]; then
-    COMPREPLY=( $(compgen -W "${startOptions}" -- "$cur") )
-    return
-  fi
-  COMPREPLY=( $(compgen -W "${commands.join(' ')}" -- "$cur") )
-}
-complete -F _aevra aevra
-`;
-  }
-
-  if (shell === 'zsh') {
-    return `#compdef aevra
-_aevra() {
-  if (( CURRENT >= 3 )) && [[ $words[2] == start ]]; then
-    _values 'start options' \
-      '--ui[open authenticated React dashboard when ready]'
-    return
-  fi
-  _arguments '1:command:(${commands.join(' ')})'
-}
-_aevra "$@"
-`;
-  }
-
-  return `Register-ArgumentCompleter -CommandName aevra -ScriptBlock {
-  param($wordToComplete, $commandAst, $cursorPosition)
-  $elements = $commandAst.CommandElements
-  if ($elements.Count -ge 2 -and $elements[1].Value -eq 'start') {
-    @('--ui') | Where-Object { $_ -like "$wordToComplete*" }
-    return
-  }
-  @('start','ui','setup','service','connectors','mcp','sessions','audit','extension','status','backup','completion','--version','-v','--help','-h') | Where-Object { $_ -like "$wordToComplete*" }
-}
-`;
 }
 
 export function cloudflareSetupNeedsAccess(value: string): boolean {
