@@ -79,7 +79,7 @@ test('decisions: missing request yields null and explicit renewable overrides st
   const issued = repo.issueAuthorizationCode(req.id, 60_000);
   const consumed = repo.consumeAuthorizationCode(issued.code)!;
   assert.equal(consumed.renewable, false);
-  assert.equal(consumed.actor, 'oauth:Sample');
+  assert.equal(consumed.actor, 'oauth:Sample@https://a.test');
   assert.match(consumed.subject, /^oauth_grant_/);
   db.close();
 });

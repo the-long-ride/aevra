@@ -1,3 +1,4 @@
+import { windowsCredentialOperation } from './windows-store.js';
 import { spawn } from 'node:child_process';
 import type { SecretStore } from './store.js';
 
@@ -22,7 +23,7 @@ export class SpawnAdapter implements ProcessAdapter {
         stdout += chunk.toString('utf8');
       });
       child.once('error', reject);
-      child.once('exit', (code: number | null) => resolve({ code: code ?? 1, stdout }));
+      child.once('close', (code: number | null) => resolve({ code: code ?? 1, stdout }));
       if (input) child.stdin.end(input);
       else child.stdin.end();
     });
@@ -81,20 +82,15 @@ export class CommandSecretStore implements SecretStore {
       return;
     }
     if (this.platform === 'win32') {
-      const script = `$v=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(value).toString('base64')}'));cmdkey /generic:${this.service}:${ref} /user:${this.service} /pass:$v | Out-Null`;
-      const result = await this.adapter.run('powershell.exe', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        script,
-      ]);
-      if (result.code) throw new Error('Credential Manager store failed');
+      await windowsCredentialOperation(this.adapter, this.service, ref, 'set', value);
       return;
     }
     throw new Error('unsupported platform');
   }
 
   async get(ref: string) {
+    if (this.platform === 'win32')
+      return windowsCredentialOperation(this.adapter, this.service, ref, 'get');
     if (this.platform === 'darwin') {
       const result = await this.adapter.run('security', [
         'find-generic-password',
@@ -131,7 +127,7 @@ export class CommandSecretStore implements SecretStore {
     } else if (this.platform === 'linux') {
       await this.adapter.run('secret-tool', ['clear', 'service', this.service, 'ref', ref]);
     } else if (this.platform === 'win32') {
-      await this.adapter.run('cmdkey', [`/delete:\`${this.service}:${ref}\``]);
+      await windowsCredentialOperation(this.adapter, this.service, ref, 'delete');
     }
   }
 }

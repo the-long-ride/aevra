@@ -227,3 +227,48 @@ test('browser approval rejects navigation of its frozen tab before replay', asyn
     db.close();
   }
 });
+
+test('approved full-screen capture replays once with worker policy evidence', async () => {
+  const fixture = desktopContext();
+  const context = fixture.value;
+  const { db, approvals } = approvalsFor(context);
+  const execute = fixture.worker.execute;
+  fixture.worker.execute = async (input: any) => {
+    if (input.operation.kind !== 'desktop.capture') return execute(input);
+    fixture.worker.calls.push(input);
+    return {
+      ok: true,
+      value: {
+        window: null,
+        imageDataUri: 'ordinary image',
+        devicePixelRatio: 1,
+        readPolicy: {
+          scope: 'screen',
+          targets: [
+            {
+              window: fixture.window,
+              windowInstance: { windowId: 'w1', processId: 1, processStartedAt: 'now' },
+            },
+          ],
+        },
+      },
+    };
+  };
+  context.callInner = (sessionId: string, name: string, args: any, proof: any) =>
+    handleDesktopTool({ ...context, hostApprovalProof: proof }, sessionId, name, args);
+  try {
+    const pending: any = await handleDesktopTool(context, 's1', 'desktop_capture', {});
+    assert.equal(pending.status, 'approval_pending');
+    assert.equal(fixture.worker.calls.length, 0);
+    approvals.approve(pending.requestId);
+    const resumed: any = await resumeApproval(context, 's1', pending.requestId);
+    assert.equal(resumed.imageDataUri, 'ordinary image');
+    assert.equal('readPolicy' in resumed, false);
+    assert.equal(
+      fixture.worker.calls.filter((call: any) => call.operation.kind === 'desktop.capture').length,
+      1,
+    );
+  } finally {
+    db.close();
+  }
+});

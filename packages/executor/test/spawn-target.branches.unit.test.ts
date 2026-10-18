@@ -9,14 +9,16 @@ import { resolveExecutable, windowsShimCommand } from '../src/spawn-target.js';
 const WIN = process.platform === 'win32';
 
 test(
-  'resolveExecutable on Windows keeps names with an extension and defaults PATHEXT',
+  'resolveExecutable on Windows resolves extensions only from PATH and defaults PATHEXT',
   { skip: !WIN },
   () => {
-    assert.equal(resolveExecutable('tool.exe', { PATH: 'C:\\nowhere' }), 'tool.exe');
-    assert.equal(resolveExecutable('aevra-missing-tool', {}), 'aevra-missing-tool');
+    assert.throws(() => resolveExecutable('tool.exe', { PATH: 'C:\\nowhere' }), { code: 'ENOENT' });
+    assert.throws(() => resolveExecutable('aevra-missing-tool', {}), { code: 'ENOENT' });
     const dir = mkdtempSync(path.join(os.tmpdir(), 'aevra-spawn-br-'));
     try {
       writeFileSync(path.join(dir, 'helper.BAT'), '@echo off\r\n');
+      writeFileSync(path.join(dir, 'tool.exe'), 'ordinary executable fixture words');
+      assert.equal(resolveExecutable('tool.exe', { PATH: dir }), path.join(dir, 'tool.exe'));
       const resolved = resolveExecutable('helper', { PATH: `;${dir};` });
       assert.equal(resolved.toLowerCase(), path.join(dir, 'helper.bat').toLowerCase());
       const inherited = resolveExecutable('helper', { Path: `;${dir};`, PathExt: '.BAT' });

@@ -12,7 +12,7 @@ test('typed contract matches the JSON parity manifest', () => {
   assert.deepEqual(ADMIN_SURFACE, manifest);
 });
 
-test('navigation and onboarding ordering are stable', () => {
+test('navigation and dashboard section ordering are stable', () => {
   assert.deepEqual(
     ADMIN_SURFACE.navigation.map((item) => item.id),
     [
@@ -28,20 +28,12 @@ test('navigation and onboarding ordering are stable', () => {
     ],
   );
   assert.deepEqual(ADMIN_SURFACE.dashboardSections, [
-    'onboarding',
     'runtime-overview',
     'live-mcp-activity',
     'active-connections',
     'system-capabilities',
   ]);
-  assert.deepEqual(ADMIN_SURFACE.onboarding.beforeCompletion, [
-    'remote-access',
-    'connect-ai',
-    'workspace',
-    'try-aevra',
-    'finish-onboarding',
-  ]);
-  assert.equal(ADMIN_SURFACE.onboarding.completedPosition, 'bottom');
+  assert.equal('onboarding' in ADMIN_SURFACE, false);
 });
 
 test('approval scopes include every persistent choice after once', () => {

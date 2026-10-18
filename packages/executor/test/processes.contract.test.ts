@@ -69,7 +69,7 @@ test('re-adoption requires pid start identity and exact marker', () => {
 test('a spawn that never starts is reported as failed, not left running', async () => {
   const runtime = new ManagedProcessRuntime();
   const started = runtime.start(
-    { executable: 'aevra-no-such-executable', args: [], env: {} },
+    { executable: path.join(process.cwd(), 'aevra-no-such-executable'), args: [], env: {} },
     process.cwd(),
     'stop-with-aevra',
   );

@@ -1,5 +1,6 @@
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { normalizeLogicalPath } from './logical-path.js';
 import type {
   Capability,
   CapabilityRoot,
@@ -42,6 +43,8 @@ export async function resolveCapabilityPath(
   roots: CapabilityRoot[],
   mode: 'read' | 'write' | 'command',
 ): Promise<ResolvedCapabilityPath> {
+  // Validate spelling before realpath; do not normalize away traversal.
+  if (process.platform === 'win32') normalizeLogicalPath(logicalPath);
   const logical = ('/' + logicalPath.replaceAll('\\', '/')).replace(/\/+/g, '/');
   const sorted = [...roots].sort((a, b) => b.logicalPrefix.length - a.logicalPrefix.length);
   const root = sorted.find(

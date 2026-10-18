@@ -1,5 +1,6 @@
 import { advertisedToolDefinitions } from './registry-advertised.js';
 import { asToolError } from './errors.js';
+import { splitImageContent, type McpImageBlock } from './mcp-image-content.js';
 import { shapeToolResult } from './result-shaper/shape.js';
 import type { McpToolService } from './service.js';
 import {
@@ -20,6 +21,7 @@ function toolEnvelope(
   data: unknown,
   protocolVersion: string | undefined,
   format: ResultFormat | undefined,
+  images: McpImageBlock[] = [],
 ) {
   const structured = format === 'text' ? undefined : structuredContent(data, protocolVersion);
   const text =
@@ -27,7 +29,7 @@ function toolEnvelope(
       ? 'See structuredContent.'
       : JSON.stringify(data);
   return {
-    content: [{ type: 'text', text }],
+    content: [{ type: 'text', text }, ...images],
     ...(structured !== undefined ? { structuredContent: structured } : {}),
   };
 }
@@ -137,17 +139,17 @@ export async function handleJsonRpc(
       const name = String(body.params?.name ?? ''),
         args = body.params?.arguments ?? {};
       assertToolGroupEnabled(name, options.profile?.toolGroups);
-      const shaped = shapeToolResult(
-        name,
-        args,
+      // Image blocks ride beside the result, never inside its text or structuredContent.
+      const { data, images } = splitImageContent(
         await service.call(sessionId, name, args, options.profile),
       );
+      const shaped = shapeToolResult(name, args, data);
       if (shaped.savedChars || shaped.savedTokens)
         options.onSaved?.(shaped.savedChars, shaped.savedTokens);
       return {
         jsonrpc: '2.0',
         id,
-        result: toolEnvelope(shaped.data, protocolVersion, options.profile?.resultFormat),
+        result: toolEnvelope(shaped.data, protocolVersion, options.profile?.resultFormat, images),
       };
     }
     return { jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } };

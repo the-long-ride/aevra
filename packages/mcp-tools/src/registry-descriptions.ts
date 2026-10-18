@@ -104,4 +104,9 @@ export const toolDescriptions: Partial<Record<AevraToolName, string>> = {
   desktop_select: 'Select an item element in a background desktop window.',
   desktop_toggle: 'Toggle the check or toggle state of an element in a background desktop window.',
   desktop_release_window: 'Release an acquired background desktop window lease.',
+  notes_list:
+    'List notes (messages, instructions, todos) the user left for this connector. Call only when the user mentions notes, or at connect for notes with readOnConnect true.',
+  notes_read: 'Read one note from the user for this connector: its text and attached images.',
+  notes_delete:
+    'Permanently delete one note, only after finishing its todo and only if the user allowed it (aiCanDelete).',
 };

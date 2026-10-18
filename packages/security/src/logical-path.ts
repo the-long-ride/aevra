@@ -32,6 +32,9 @@ export function normalizeLogicalPath(value: string): string {
       segments.pop();
       continue;
     }
+    if (process.platform === 'win32' && (/[ .]$/.test(segment) || segment.includes(':'))) {
+      throw Object.assign(new Error('Ambiguous Windows path segment'), { code: 'INVALID_REQUEST' });
+    }
     segments.push(segment);
   }
   return `/${segments.join('/')}`;

@@ -112,6 +112,7 @@ export interface ApprovalPresentation {
   action: string;
   target: string;
   preview?: string;
+  connectionHasMultipleSessions?: boolean;
 }
 
 export interface ApprovalItem {
@@ -132,6 +133,8 @@ export interface ApprovalItem {
 }
 
 export interface OauthRequestItem {
+  redirectOrigin?: string;
+  duplicateClientName?: boolean;
   id: string;
   clientId?: string;
   clientName?: string;

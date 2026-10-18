@@ -1,4 +1,8 @@
 import {
+  validateExplicitEnvironment,
+  environmentNeedsApproval,
+} from '../../security/src/environment.js';
+import {
   normalizeYoloMode,
   type CommandRequest,
   type ExecutionMode,
@@ -38,6 +42,7 @@ function resolveExecutionMode(context: McpRuntimeContext, requestedMode: unknown
 }
 
 export async function shellTool(context: McpRuntimeContext, sessionId: string, args: any) {
+  validateExplicitEnvironment(args.env ?? {});
   const mode = resolveExecutionMode(context, args.executionMode);
   const recommendedShell = context.deps.systemCapabilities?.os.recommendedShell;
   const command = buildShellCommand(
@@ -90,6 +95,7 @@ export async function commandTool(
     throw new AevraToolError('INVALID_REQUEST', 'command executable is required');
   }
 
+  validateExplicitEnvironment(command.env);
   const mode = resolveExecutionMode(context, args.executionMode);
   const original = {
     tool: source?.tool ?? 'command_run',
@@ -111,6 +117,7 @@ export async function commandTool(
     classifyCommand([command.executable, ...command.args]);
   let risk: RiskTier =
     mode === 'host' && classification.risk === 'LOW' ? 'MEDIUM' : classification.risk;
+  if (environmentNeedsApproval(command.env)) risk = maxRisk(risk, 'HIGH');
   if (source) risk = maxRisk(risk, source.riskFloor);
 
   const classificationFamily = source

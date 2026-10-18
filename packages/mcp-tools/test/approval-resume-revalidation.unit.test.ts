@@ -1,3 +1,4 @@
+import { onceProof } from './once-proof-fixture.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -138,7 +139,7 @@ test('ordinary approval accepts remembered permission one-time capability and ma
   assert.deepEqual(await resumeApproval(permission.context, 's1', 'req1'), { ran: true });
 
   const once = fixture(ticket(), { capabilities: [] });
-  once.context.oneTimeCapabilities.add('s1\u0000files.write\u0000files:write');
+  once.context.capabilityApprovalProof = onceProof('s1\u0000files.write\u0000files:write');
   assert.deepEqual(await resumeApproval(once.context, 's1', 'req1'), { ran: true });
 
   const repoTicket = ticket({ expectedState: { head: 'abc123' } });
@@ -251,7 +252,8 @@ test('workspace admission validates OAuth connection scope session scope non-OAu
   const changedSession = fixture(once, { sessionId: 'new' });
   assert.deepEqual(await resumeApproval(changedSession.context, 's1', 'req1'), {
     ok: false,
-    reason: 'session changed',
+    reason: 'approval scope mismatch',
+    code: 'APPROVAL_SCOPE_MISMATCH',
   });
 
   const staticTicket = { ...once, actor: 'connector:CLI' };

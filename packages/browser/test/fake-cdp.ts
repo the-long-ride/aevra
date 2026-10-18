@@ -32,6 +32,7 @@ export class FakeCdp {
   private readonly pushers = new Map<string, (data: string) => void>();
   private readonly sockets: WebSocketServer[] = [];
   private server: Server | null = null;
+  private socketByPage = new Map<string, WebSocketServer>();
   private list: Array<Record<string, unknown>> = [];
 
   static async start(pages: FakePageSpec[]): Promise<FakeCdp> {
@@ -43,7 +44,20 @@ export class FakeCdp {
       response.setHeader('content-type', 'application/json');
       if (url === '/json/list') {
         response.statusCode = fake.status;
-        response.end(JSON.stringify(fake.list));
+        response.end(
+          JSON.stringify(
+            fake.list.map((entry) => ({
+              ...entry,
+              ...(fake.socketByPage.has(String(entry.id))
+                ? {
+                    webSocketDebuggerUrl: fake.socketByPage
+                      .get(String(entry.id))!
+                      .via(fake.server!),
+                  }
+                : {}),
+            })),
+          ),
+        );
         return;
       }
       const closed = /^\/json\/close\/(.+)$/.exec(url);
@@ -82,6 +96,7 @@ export class FakeCdp {
         reply(JSON.stringify({ id: request.id, result }));
       });
       this.sockets.push(socket);
+      this.socketByPage.set(page.id, socket);
       entry.webSocketDebuggerUrl = socket.url;
     }
     this.list.push(entry);

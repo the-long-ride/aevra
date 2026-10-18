@@ -14,17 +14,20 @@ import path, { delimiter } from 'node:path';
 export function resolveExecutable(executable: string, env: NodeJS.ProcessEnv = process.env) {
   if (executable.includes('/') || executable.includes('\\')) return executable;
   if (process.platform !== 'win32') return executable;
-  if (path.extname(executable)) return executable;
   const windowsValue = (name: string) =>
     Object.entries(env).find(([key]) => key.toUpperCase() === name)?.[1];
   const extensions = (windowsValue('PATHEXT') ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
   for (const directory of (windowsValue('PATH') ?? '').split(delimiter).filter(Boolean)) {
     for (const extension of extensions) {
-      const candidate = path.join(directory, `${executable}${extension}`);
+      if (!path.isAbsolute(directory)) continue;
+      const candidate = path.join(
+        directory,
+        path.extname(executable) ? executable : `${executable}${extension}`,
+      );
       if (existsSync(candidate)) return candidate;
     }
   }
-  return executable;
+  throw Object.assign(new Error(`Executable not found on PATH: ${executable}`), { code: 'ENOENT' });
 }
 
 /**

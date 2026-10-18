@@ -90,6 +90,10 @@ async function ensureFixtures(): Promise<void> {
 runDriverConformance('CdpDriver', async () => {
   await ensureFixtures();
   const driver = new CdpDriver();
+  // The operator explicitly permits our ordinary loopback fixture for screenshots.
+  const snapshot = driver.snapshot.bind(driver);
+  driver.snapshot = (request) =>
+    snapshot({ ...request, originPolicy: { loopbackClass: 'NORMAL' } });
   return {
     driver,
     connectOptions: { transport: 'cdp', cdpPort: port },

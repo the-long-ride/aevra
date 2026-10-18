@@ -1,3 +1,4 @@
+import { onceProof } from './once-proof-fixture.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -95,7 +96,7 @@ test('authorize capability covers YOLO lease one-time allow permission allow den
   }
 
   const once = fixture();
-  once.context.oneTimeCapabilities.add(oneTimeKey('s1', 'files.write', '*'));
+  once.context.capabilityApprovalProof = onceProof(oneTimeKey('s1', 'files.write', '*'));
   assert.ok(
     'authorization' in
       (await authorizeCapability(
@@ -166,7 +167,7 @@ test('authorize capability creates wildcard and matcher pending requests with ex
 
 test('immutable security approval covers one-time, missing service and pending response', async () => {
   const once = fixture();
-  once.context.oneTimeCapabilities.add(oneTimeKey('s1', 'files.write', '*'));
+  once.context.capabilityApprovalProof = onceProof(oneTimeKey('s1', 'files.write', '*'));
   assert.ok(
     'authorization' in
       (await authorizeImmutableSecurityApproval(
@@ -217,7 +218,7 @@ test('gated covers YOLO one-time low-risk permission allow deny command step-up 
 
   assert.equal(await gated(fixture({ yolo: true }).context, 's1', normalized, {}, {}, execute), 1);
   const once = fixture();
-  once.context.oneTimeCapabilities.add(oneTimeKey('s1', 'files.write', 'files:write'));
+  once.context.capabilityApprovalProof = onceProof(oneTimeKey('s1', 'files.write', 'files:write'));
   assert.equal(await gated(once.context, 's1', normalized, {}, {}, execute), 2);
   assert.equal(
     await gated(fixture().context, 's1', { ...normalized, risk: 'LOW' }, {}, {}, execute),

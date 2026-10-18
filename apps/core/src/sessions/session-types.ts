@@ -1,4 +1,5 @@
 import type { Capability } from '../../../../packages/protocol/src/index.js';
+import type { FrozenOperationTicket } from '../approvals/approval-types.js';
 
 export interface SecuritySession {
   id: string;
@@ -29,4 +30,10 @@ export interface DisconnectedIdentity {
   actor: string;
   subject: string;
   connectionId?: string;
+  disconnectedAt?: string;
 }
+
+export type ConnectionTicketLike = Pick<
+  FrozenOperationTicket,
+  'actor' | 'connectionId' | 'connectionSubject' | 'sessionId'
+>;

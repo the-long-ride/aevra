@@ -11,6 +11,7 @@ export interface ApprovalPresentation {
   truncated?: boolean;
   /** Original character count, so a caller can state exactly how much is hidden. */
   previewFullLength?: number;
+  connectionHasMultipleSessions?: boolean;
 }
 
 /**
@@ -77,7 +78,17 @@ function originalIntent(original: any) {
   return clean(original.tool, 100);
 }
 
-export function presentApproval(ticket: FrozenOperationTicket): ApprovalPresentation {
+export function presentApproval(
+  ticket: FrozenOperationTicket,
+  options?: { connectionHasMultipleSessions?: boolean },
+): ApprovalPresentation {
+  return {
+    ...presentApprovalContent(ticket),
+    ...(options?.connectionHasMultipleSessions ? { connectionHasMultipleSessions: true } : {}),
+  };
+}
+
+function presentApprovalContent(ticket: FrozenOperationTicket): ApprovalPresentation {
   const family = String(ticket.operation?.family ?? ''),
     payload: any = ticket.payload ?? {},
     args: any = payload.args ?? {};

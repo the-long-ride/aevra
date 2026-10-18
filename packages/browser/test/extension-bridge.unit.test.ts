@@ -305,15 +305,14 @@ test('read targeting a named tab reports that tab', async () => {
 });
 
 test('a snapshot of a tab the bridge does not list fails closed', async () => {
-  const registry = new RefRegistry();
-  const result: any = await handleExtensionCommand(registry, bridge().value, {
-    op: 'snapshot',
-    params: { mode: 'a11y', maxNodes: 100, tabId: 'absent' },
-  });
-  assert.equal(result.tabId, '');
-  // No tab means no url, and an origin that cannot be classified must not
-  // arrive labelled ordinary.
-  assert.equal(result.originClass, 'BLOCKED');
+  await assert.rejects(
+    () =>
+      handleExtensionCommand(new RefRegistry(), bridge().value, {
+        op: 'snapshot',
+        params: { mode: 'a11y', maxNodes: 100, tabId: 'absent' },
+      }),
+    { code: 'NOT_FOUND' },
+  );
 });
 
 test('navigate defaults to load when no waitUntil is given', async () => {

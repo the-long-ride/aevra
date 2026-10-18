@@ -85,16 +85,25 @@ const structuredSecretKey =
   /(?:^|_)(?:token|secret|password|credential|passphrase|code_verifier)(?:$|_)/i;
 const opaquePayloadKey = new Set(['content', 'patch']);
 
-function collectStructuredSecrets(value: unknown, out: string[]) {
+function collectStructuredSecrets(
+  value: unknown,
+  out: string[],
+  exposeOrdinaryEnvironment: boolean,
+) {
   if (Array.isArray(value)) {
-    for (const item of value) collectStructuredSecrets(item, out);
+    for (const item of value) collectStructuredSecrets(item, out, exposeOrdinaryEnvironment);
     return;
   }
   if (!value || typeof value !== 'object') return;
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
     if (key.toLowerCase() === 'env' && item && typeof item === 'object' && !Array.isArray(item)) {
-      for (const envValue of Object.values(item as Record<string, unknown>)) {
-        if (typeof envValue === 'string' && envValue.length >= 4) out.push(envValue);
+      for (const [envKey, envValue] of Object.entries(item as Record<string, unknown>)) {
+        if (
+          (!exposeOrdinaryEnvironment || structuredSecretKey.test(envKey)) &&
+          typeof envValue === 'string' &&
+          envValue.length >= 4
+        )
+          out.push(envValue);
       }
       continue;
     }
@@ -102,13 +111,16 @@ function collectStructuredSecrets(value: unknown, out: string[]) {
       out.push(item);
       continue;
     }
-    collectStructuredSecrets(item, out);
+    collectStructuredSecrets(item, out, exposeOrdinaryEnvironment);
   }
 }
 
-export function sanitizeStructuredSecrets(value: unknown): unknown {
+export function sanitizeStructuredSecrets(
+  value: unknown,
+  options: { exposeOrdinaryEnvironment?: boolean } = {},
+): unknown {
   const knownSecrets: string[] = [];
-  collectStructuredSecrets(value, knownSecrets);
+  collectStructuredSecrets(value, knownSecrets, options.exposeOrdinaryEnvironment === true);
 
   const visit = (item: unknown, key?: string): unknown => {
     if (Array.isArray(item)) return item.map((entry) => visit(entry));
@@ -128,7 +140,12 @@ export function sanitizeStructuredSecrets(value: unknown): unknown {
         !Array.isArray(childValue)
       ) {
         result[childKey] = Object.fromEntries(
-          Object.keys(childValue as Record<string, unknown>).map((name) => [name, '[REDACTED]']),
+          Object.entries(childValue as Record<string, unknown>).map(([name, value]) => [
+            name,
+            !options.exposeOrdinaryEnvironment || structuredSecretKey.test(name)
+              ? '[REDACTED]'
+              : visit(value, name),
+          ]),
         );
         continue;
       }

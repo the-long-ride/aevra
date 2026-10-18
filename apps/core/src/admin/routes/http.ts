@@ -11,13 +11,16 @@ export function sendAdminResponse(
   response.end(contentType === 'application/json' ? JSON.stringify(value) : String(value));
 }
 
-export async function readAdminBody(request: IncomingMessage): Promise<Record<string, any>> {
+export async function readAdminBody(
+  request: IncomingMessage,
+  maxBytes = 1024 * 1024,
+): Promise<Record<string, any>> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     const buffer = Buffer.from(chunk);
     size += buffer.length;
-    if (size > 1024 * 1024) {
+    if (size > maxBytes) {
       throw Object.assign(new Error('request body too large'), { status: 413 });
     }
     chunks.push(buffer);

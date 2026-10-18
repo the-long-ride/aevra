@@ -2,6 +2,7 @@ import { McpToolService } from '../../../../packages/mcp-tools/src/service.js';
 import type { McpToolDependencies } from '../../../../packages/mcp-tools/src/service.js';
 import { SkillsService } from '../skills/skills-service.js';
 import { ManifestService } from '../workspaces/manifest-service.js';
+import { detectTunnelTools } from '../system/tunnel-tools.js';
 import { ApprovalService } from '../approvals/approval-service.js';
 import type { CoreConfig } from '../config.js';
 import { createLoginLockoutReporter } from './login-lockout-report.js';
@@ -21,16 +22,23 @@ export function createRuntimeApprovalService(
   });
   if (!safeMode) approvals.cancelForRestart();
   approvals.setSessionIdentityResolver((sessionId) => sessions.connectionIdentity(sessionId));
+  approvals.setMultipleSessionsResolver(
+    (ticket) => sessions.hasMultipleSessionsForConnection?.(ticket) ?? false,
+  );
   approvals.setApprovedHandler((ticket) => {
     if (ticket.operation.family === 'workspace:select' && ticket.decisionScope === 'connection') {
       const profileId = String((ticket.payload as any)?.profileId ?? 'read-only');
-      sessions.grantConnectionWorkspace(ticket.sessionId, ticket.workspaceId, profileId);
+      // Pass the ticket, not its session id: a rotating client's requesting
+      // session may be gone by the time the operator approves.
+      sessions.grantConnectionWorkspace(ticket, ticket.workspaceId, profileId);
     }
   });
   return approvals;
 }
 
 export function buildAdminApiContext(input: {
+  agents?: (input: unknown) => Promise<unknown>;
+  stopCore?: () => void;
   workspaces: any;
   approvals: any;
   permissions: any;
@@ -61,12 +69,15 @@ export function buildAdminApiContext(input: {
   mcpUpstreams: any;
   usage?: any;
   connectorProfiles?: any;
+  connectorNotes?: any;
   systemCapabilities: () => any;
   getMcpDiagnostics: () => any;
   isSafeMode: () => boolean;
   commandEvaluator?: (input: any) => Promise<any>;
 }) {
   return {
+    agents: input.agents,
+    stopCore: input.stopCore,
     workspaces: input.workspaces,
     approvals: input.approvals,
     permissions: input.permissions,
@@ -98,7 +109,9 @@ export function buildAdminApiContext(input: {
     mcpUpstreams: input.mcpUpstreams,
     usage: input.usage,
     connectorProfiles: input.connectorProfiles,
+    connectorNotes: input.connectorNotes,
     systemCapabilities: input.systemCapabilities,
+    tunnelTools: () => detectTunnelTools(),
     mcpDiagnostics: input.getMcpDiagnostics,
     safeMode: input.isSafeMode,
     commandEvaluator: input.commandEvaluator,
@@ -138,6 +151,7 @@ export function createCoreToolService(
     browserPolicy: deps.browserPolicy,
     manifests: new ManifestService(workspaces),
     upstreams: deps.upstreams ?? deps.mcpUpstreams,
+    connectorNotes: deps.connectorNotes,
   });
 }
 

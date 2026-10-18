@@ -38,22 +38,11 @@
     }
   ],
   "dashboardSections": [
-    "onboarding",
     "runtime-overview",
     "live-mcp-activity",
     "active-connections",
     "system-capabilities"
   ],
-  "onboarding": {
-    "beforeCompletion": [
-      "remote-access",
-      "connect-ai",
-      "workspace",
-      "try-aevra",
-      "finish-onboarding"
-    ],
-    "completedPosition": "bottom"
-  },
   "approvalScopes": ["once", "session", "workspace", "global", "connection"],
   "actions": {
     "requests": [

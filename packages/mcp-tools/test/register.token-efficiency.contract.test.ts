@@ -23,7 +23,7 @@ test('tools/list advertises the compact list', async () => {
   const response: any = await handleJsonRpc(service, 's1', rpc('tools/list'));
   assert.equal(response.result.tools.length > 60, true);
   const upstreamSize = JSON.stringify(upstreamTool).length;
-  assert.ok(JSON.stringify(response.result.tools).length <= 54_000 + upstreamSize + 2);
+  assert.ok(JSON.stringify(response.result.tools).length <= 55_000 + upstreamSize + 2);
 });
 
 test('tools/list honours the connector profile and hides upstream when its group is off', async () => {

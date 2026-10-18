@@ -32,6 +32,24 @@ export function responseFailed(response: unknown): boolean {
   return Boolean(value?.error || value?.result?.isError);
 }
 
+/** Measures a body with every image block's base64 `data` emptied; the sent body is unchanged. */
+function meterableBody(body: string): string {
+  if (!body.includes('"image"')) return body;
+  try {
+    return JSON.stringify(JSON.parse(body), (_k, value) =>
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      value.type === 'image' &&
+      typeof value.data === 'string'
+        ? { ...value, data: '' }
+        : value,
+    );
+  } catch {
+    return body;
+  }
+}
+
 function estimateInput(input: unknown): number {
   try {
     const text = typeof input === 'string' ? input : JSON.stringify(input);
@@ -97,7 +115,7 @@ export class UsageMeter {
     body: string | undefined,
     extra: { savedTokens?: number; failed?: boolean } = {},
   ): void {
-    this.guard(() => this.record(token, body ? estimateTokens(body) : 0, extra));
+    this.guard(() => this.record(token, body ? estimateTokens(meterableBody(body)) : 0, extra));
   }
 
   fail(token: UsageToken): void {

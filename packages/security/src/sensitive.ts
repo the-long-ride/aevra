@@ -31,9 +31,14 @@ export function classifySensitivity(input: SensitivityInput): Sensitivity {
   // all used to miss a pattern that `aevra.json` matched, while naming the
   // same file. That turned every declared `protectedPaths` entry into a
   // speed bump anyone could step around by rewriting the argument.
-  const canonical = normalizeLogicalPath(input.path);
-  for (const rule of input.userPatterns ?? []) if (rule.pattern.test(canonical)) return rule.class;
-  if (input.mountPolicy) return input.mountPolicy;
+  const canonical = normalizeLogicalPath(
+    process.platform === 'win32' ? input.path.replace(/^[a-z]:[\\/]/i, '/') : input.path,
+  );
+  let configured: Sensitivity = input.mountPolicy ?? 'NORMAL';
+  for (const rule of input.userPatterns ?? []) {
+    rule.pattern.lastIndex = 0;
+    if (rule.pattern.test(canonical)) configured = maxSensitivity(configured, rule.class);
+  }
   const p = canonical.toLowerCase(),
     base = p.split('/').pop() ?? '';
   if (
@@ -43,9 +48,13 @@ export function classifySensitivity(input: SensitivityInput): Sensitivity {
     /\.pem$|\.p12$|\.pfx$|private[-_]?key/.test(base)
   )
     return 'SECRET';
-  if (input.gitIgnored || /credentials|secrets?\.json|\.npmrc$|\.pypirc$/.test(base))
-    return 'SENSITIVE';
-  return 'NORMAL';
+  if (
+    /(?:^|\/)\.git(?:\/|$)/.test(p) ||
+    input.gitIgnored ||
+    /credentials|secrets?\.json|\.npmrc$|\.pypirc$/.test(base)
+  )
+    return maxSensitivity('SENSITIVE', configured);
+  return configured;
 }
 
 export function maskSecretFile(path: string, content: string) {

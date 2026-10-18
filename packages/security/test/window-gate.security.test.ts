@@ -17,13 +17,13 @@ const named = { windowId: 'w1', processName: 'notepad.exe', title: 'Untitled' };
 const blocked = { windowId: 'w2', processName: 'cmd.exe', title: 'Command Prompt' };
 const nameless = { windowId: 'w3' };
 
-test('capture is permitted in all three attribution states', () => {
+test('capture requires an attributable allowed application', () => {
   const namedVerdict = evaluateWindowGate(named, allowlist, 'capture');
   const blockedVerdict = evaluateWindowGate(blocked, allowlist, 'capture');
   const namelessVerdict = evaluateWindowGate(nameless, allowlist, 'capture');
-  for (const verdict of [namedVerdict, blockedVerdict, namelessVerdict]) {
-    assert.equal(verdict.allowed, true);
-  }
+  assert.equal(namedVerdict.allowed, true);
+  assert.equal(blockedVerdict.allowed, false);
+  assert.equal(namelessVerdict.allowed, false);
   assert.equal(namedVerdict.attribution, 'attributed');
   assert.equal(blockedVerdict.attribution, 'attributed');
   assert.equal(namelessVerdict.attribution, 'unattributable');

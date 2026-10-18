@@ -31,6 +31,12 @@ export class WindowsServiceAdapter implements UserServiceAdapter {
     await this.stop();
     await this.start();
   }
+  async uninstall() {
+    await this.stop();
+    const result = await this.io.run('schtasks.exe', ['/Delete', '/TN', this.taskName, '/F']);
+    if (result.code && !/cannot find|does not exist/i.test(result.stderr))
+      throw new Error(result.stderr);
+  }
   async status() {
     const r = await this.io.run('schtasks.exe', ['/Query', '/TN', this.taskName, '/FO', 'LIST']);
     if (r.code) return 'not-installed';

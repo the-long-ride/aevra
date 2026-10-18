@@ -21,6 +21,7 @@ import { buildRuntimeHealth } from './admin/runtime-health.js';
 import { McpIngressServer } from './mcp/server.js';
 import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
 import * as adminRuntime from './admin/admin-api-context.js';
+import { agentAdminContext, prepareStateDirectory } from './admin/agent-integration.js';
 import { LocalFilesystemService } from './admin/local-filesystem.js';
 import type { WorkerClient } from '../../../packages/ipc/src/client.js';
 import { ReadVersionCache } from './operations/read-version-cache.js';
@@ -92,7 +93,7 @@ export async function createCoreRuntime(
     async start() {
       if (started) return;
       try {
-        await mkdir(config.stateDir, { recursive: true, mode: 0o700 });
+        prepareStateDirectory(config);
         await mkdir(config.recoveryDir, { recursive: true, mode: 0o700 });
         const startup = await prepareRuntimeStartup(config, deps);
         const { systemCapabilities, tls, adminCredentialVerifier } = startup;
@@ -199,7 +200,6 @@ export async function createCoreRuntime(
           desktopAppCatalog = createDesktopAppCatalogService(db!, desktopAccess, audit),
           activity = new McpActivityLog(),
           dataServices = await createRuntimeDataServices(config, db);
-        const { vault, environment, databaseAdmin } = dataServices;
         const mcpUpstreams = createMcpUpstreams(db, workerGateway, dataServices.secretStore);
         usageWiring = createRuntimeUsage(raw, settings);
         const tools = adminRuntime.createCoreToolService(
@@ -228,6 +228,7 @@ export async function createCoreRuntime(
             browserPairing,
             browserPolicy,
             upstreams: mcpUpstreams,
+            ...usageWiring.tools,
           },
         );
         const remoteTools = new SessionSkillAccessGate(tools, sessions, approvals);
@@ -260,6 +261,7 @@ export async function createCoreRuntime(
             trustedAdminOrigins: config.trustedAdminOrigins,
             gatewayTrustSecret,
             api: adminRuntime.buildAdminApiContext({
+              ...agentAdminContext(config, connectorRepo, sessions, cleanup),
               workspaces,
               approvals,
               permissions: permissionRepo,
@@ -275,9 +277,9 @@ export async function createCoreRuntime(
               oauth,
               connections,
               hostControlAccess,
-              environment,
-              vault,
-              database: databaseAdmin,
+              environment: dataServices.environment,
+              vault: dataServices.vault,
+              database: dataServices.databaseAdmin,
               connectors: connectorRepo,
               metrics,
               activity,

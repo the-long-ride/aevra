@@ -13,6 +13,7 @@ const MAX_BUFFERED = 500;
  * drains. It never evaluates page script.
  */
 export class CdpClient {
+  documentVersion = 0;
   private nextId = 1;
   private readonly pending = new Map<number, Pending>();
   private readonly buffers: Record<BrowserLogKind, BrowserLogEntry[]> = {
@@ -69,6 +70,15 @@ export class CdpClient {
       if (message.error) pending.reject(new Error(String(message.error.message ?? 'CDP error')));
       else pending.resolve(message.result ?? {});
       return;
+    }
+    if (
+      ['Page.frameNavigated', 'Page.navigatedWithinDocument', 'Page.frameStartedLoading'].includes(
+        message.method,
+      )
+    ) {
+      this.documentVersion++;
+      this.buffers.console.length = 0;
+      this.buffers.network.length = 0;
     }
     const at = new Date().toISOString();
     if (message.method === 'Runtime.consoleAPICalled') {

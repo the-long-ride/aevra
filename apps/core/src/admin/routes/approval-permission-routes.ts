@@ -19,12 +19,31 @@ function permissionRuleDto(row: any) {
   };
 }
 
+/** Workspace admission is once, or connection-wide for an OAuth connection only. */
+function admissionScope(before: any, inputScope?: string): string {
+  return before.actor?.startsWith('oauth:') && inputScope === 'connection' ? 'connection' : 'once';
+}
+
 export const handleApprovalPermissionRoutes: AdminRouteHandler = async (req, res, url, context) => {
   const path = url.pathname;
   const method = req.method ?? 'GET';
 
   if (path === '/api/approvals' && method === 'GET') {
     sendAdminResponse(res, 200, context.approvals?.list?.() ?? []);
+    return true;
+  }
+
+  if (path === '/api/approvals/history' && method === 'DELETE') {
+    const deleted = Number(context.approvals?.clearHistory?.() ?? 0);
+    context.audit?.append?.({
+      actor: 'admin',
+      operation: 'approval.history.clear',
+      target: String(deleted),
+      result: 'ok',
+      redactionCount: 0,
+      class: 'normal',
+    });
+    sendAdminResponse(res, 200, { deleted });
     return true;
   }
 
@@ -92,7 +111,7 @@ export const handleApprovalPermissionRoutes: AdminRouteHandler = async (req, res
       return true;
     }
     const admission = before?.operation?.family === 'workspace:select';
-    const scope = admission ? 'once' : (input.scope ?? 'once');
+    const scope = admission ? admissionScope(before, input.scope) : (input.scope ?? 'once');
     const ticket =
       match[2] === 'approve'
         ? before.state === 'APPROVED'

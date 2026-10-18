@@ -42,7 +42,7 @@ const SHELL_PROBES = [
   { id: 'wsl', label: 'WSL', args: ['--status'] },
 ] as const;
 
-class DefaultCapabilityProbeRunner implements CapabilityProbeRunner {
+export class DefaultCapabilityProbeRunner implements CapabilityProbeRunner {
   async run(
     executable: string,
     args: readonly string[],
@@ -102,7 +102,7 @@ function normalizedLine(output: string) {
     .find(Boolean);
 }
 
-function normalizeVersion(result: CapabilityProbeResult): string | undefined {
+export function normalizeVersion(result: CapabilityProbeResult): string | undefined {
   const line = normalizedLine(result.stdout) ?? normalizedLine(result.stderr);
   if (!line) return undefined;
   const match = line.match(/(?:^|[^\d])v?(\d+(?:\.\d+){1,4}(?:[-+][0-9A-Za-z.-]+)?)/);
