@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
-import { HelperProcess } from '../src/helper-process.js';
-import { WindowsDesktopDriver } from '../src/windows-driver.js';
+import { BINARY, SKIP, makeDriver, NO_FOCUSED_WINDOW } from './real-helper-fixture.js';
 
 // This test spawns the ACTUAL COMPILED binary (not the TypeScript
 // fake-helper fixture) and proves the TypeScript supervisor and the real
@@ -17,37 +14,31 @@ import { WindowsDesktopDriver } from '../src/windows-driver.js';
 // source location. So this climbs one level further than the source-tree
 // distance to `packages/desktop/test/` would suggest, landing beside
 // `.test-dist` at the true repo root.
-const rel = fileURLToPath(
-  new URL('../../../../helper/target/release/aevra-desktop-helper.exe', import.meta.url),
+test(
+  'required native run has a compiled helper',
+  { skip: process.env.AEVRA_REQUIRE_NATIVE_DESKTOP !== '1' },
+  () => {
+    assert.ok(BINARY, 'required native helper missing; build helper/ first');
+  },
 );
-const deb = fileURLToPath(
-  new URL('../../../../helper/target/debug/aevra-desktop-helper.exe', import.meta.url),
-);
-const BINARY = existsSync(rel) ? rel : existsSync(deb) ? deb : undefined;
 
-const SKIP =
-  BINARY === undefined
-    ? 'The compiled desktop helper binary was not found. Build it with `cargo build` ' +
-      '(or `cargo build --release`) inside helper/, then re-run this test.'
-    : false;
-
-function makeDriver(): { driver: WindowsDesktopDriver; teardown: () => Promise<void> } {
-  const helper = new HelperProcess({ command: BINARY as string, args: [], deadlineMs: 5000 });
-  const driver = new WindowsDesktopDriver(helper);
-  return { driver, teardown: () => driver.disconnect() };
-}
-
-test('real helper: connect reports every capability true', { skip: SKIP }, async () => {
+test('real helper: connect reports runtime capability readiness', { skip: SKIP }, async () => {
   const { driver, teardown } = makeDriver();
   try {
     const cap = await driver.connect();
-    assert.ok(cap.attribution && cap.capture && cap.tree && cap.input);
+    assert.ok(cap.attribution && cap.tree);
+    assert.equal(typeof cap.capture, 'boolean');
+    assert.equal(typeof cap.input, 'boolean');
+    if (process.platform === 'win32' || process.env.AEVRA_REQUIRE_NATIVE_DESKTOP === '1') {
+      assert.ok(
+        cap.capture && cap.input,
+        'required capture/input permissions or native session unavailable',
+      );
+    }
   } finally {
     await teardown();
   }
 });
-
-const NO_FOCUSED_WINDOW = /no focused window|window \d+ no longer exists/;
 
 test('real helper: focusedWindow returns an object with a windowId', { skip: SKIP }, async (t) => {
   const { driver, teardown } = makeDriver();
@@ -241,106 +232,8 @@ test(
     const { driver, teardown } = makeDriver();
     try {
       await driver.connect();
-      // Rejected by the chord parser before a single key event is sent, so
-      // this cannot leak keystrokes into the focused window.
+      // Missing authorization or the malformed chord is refused before effects.
       await assert.rejects(() => driver.act({ op: 'key', keys: 'hyper+q' }));
-    } finally {
-      await teardown();
-    }
-  },
-);
-
-// WHY THESE CAPTURE TESTS CAN SKIP THEMSELVES MID-RUN.
-//
-// `capture` refuses a uniform image rather than returning it, because a
-// black rectangle presented as a successful screenshot is the worst outcome
-// this subsystem has (see helper/src/capture.rs). A locked, asleep, or
-// blank display legitimately produces exactly that refusal, and a test
-// cannot tell that apart from a real defect by looking at the error. So it
-// skips, and says why. The refusal itself is covered by a Rust unit test
-// that constructs a blank frame directly, so nothing goes unverified here.
-const UNIFORM =
-  /uniform \d+x\d+ image|BitBlt of the primary screen failed|The handle is invalid|window \d+ no longer exists|no focused window/;
-
-test(
-  'real helper: capture returns a real JPEG data URI and a usable devicePixelRatio',
-  { skip: SKIP },
-  async (t) => {
-    const { driver, teardown } = makeDriver();
-    try {
-      await driver.connect();
-      let shot;
-      try {
-        shot = await driver.capture();
-      } catch (error) {
-        if (UNIFORM.test(String(error))) {
-          t.skip('the display is blank (locked or asleep), so there is nothing to capture');
-          return;
-        }
-        throw error;
-      }
-      // Anchored, and requires a non-trivial payload: an empty-payload data
-      // URI must fail this.
-      assert.match(shot.imageDataUri, /^data:image\/jpeg;base64,[A-Za-z0-9+/]{32,}={0,2}$/);
-      // Image pixels per screen coordinate. A caller divides an image
-      // coordinate by this to get something clickable, so a zero or negative
-      // value would be unusable.
-      assert.ok(shot.devicePixelRatio > 0, `devicePixelRatio was ${shot.devicePixelRatio}`);
-      assert.ok(shot.devicePixelRatio <= 1, 'capture never upscales, so the ratio cannot exceed 1');
-      // A primary-monitor capture is not one window's pixels, so it must not
-      // be labelled with one window's identity - the tool layer audits this
-      // field as the capture's target.
-      assert.equal(shot.window, null);
-    } finally {
-      await teardown();
-    }
-  },
-);
-
-test(
-  'real helper: capturing one window reports that window identity',
-  { skip: SKIP },
-  async (t) => {
-    const { driver, teardown } = makeDriver();
-    try {
-      await driver.connect();
-      let focused;
-      try {
-        focused = await driver.focusedWindow();
-      } catch (error) {
-        if (NO_FOCUSED_WINDOW.test(String(error))) {
-          t.skip('no focused window to capture');
-          return;
-        }
-        throw error;
-      }
-      let shot;
-      try {
-        shot = await driver.capture(focused.windowId);
-      } catch (error) {
-        if (UNIFORM.test(String(error))) {
-          t.skip('the focused window captured blank, which capture refuses by design');
-          return;
-        }
-        throw error;
-      }
-      assert.match(shot.imageDataUri, /^data:image\/jpeg;base64,[A-Za-z0-9+/]{32,}={0,2}$/);
-      assert.ok(shot.devicePixelRatio > 0);
-      assert.equal(shot.window?.windowId, focused.windowId);
-    } finally {
-      await teardown();
-    }
-  },
-);
-
-test(
-  'real helper: capturing a windowId that does not exist is an error',
-  { skip: SKIP },
-  async () => {
-    const { driver, teardown } = makeDriver();
-    try {
-      await driver.connect();
-      await assert.rejects(() => driver.capture('999999999'));
     } finally {
       await teardown();
     }

@@ -70,7 +70,9 @@ impl Drop for MemoryDc {
         // SAFETY: deleting a DC this guard created; any bitmap selected into
         // it has already been deselected by `Selection`'s Drop, which runs
         // first because it is declared later in `capture_region`.
-        unsafe { let _ = DeleteDC(self.0); };
+        unsafe {
+            let _ = DeleteDC(self.0);
+        };
     }
 }
 
@@ -99,13 +101,14 @@ impl Dib {
         let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
         // SAFETY: `info` is fully initialised above and outlives the call;
         // `bits` receives a pointer GDI owns until the bitmap is deleted.
-        let bitmap = unsafe {
-            CreateDIBSection(reference, &info, DIB_RGB_COLORS, &mut bits, None, 0)
-        }
-        .map_err(|err| format!("CreateDIBSection failed: {err:?}"))?;
+        let bitmap =
+            unsafe { CreateDIBSection(reference, &info, DIB_RGB_COLORS, &mut bits, None, 0) }
+                .map_err(|err| format!("CreateDIBSection failed: {err:?}"))?;
         if bits.is_null() {
             // SAFETY: deleting the bitmap we just created, before returning.
-            unsafe { let _ = DeleteObject(HGDIOBJ(bitmap.0)); };
+            unsafe {
+                let _ = DeleteObject(HGDIOBJ(bitmap.0));
+            };
             return Err("CreateDIBSection returned no pixel buffer".to_string());
         }
         Ok(Dib {
@@ -127,7 +130,9 @@ impl Dib {
 impl Drop for Dib {
     fn drop(&mut self) {
         // SAFETY: deleting a bitmap this guard created and has not deleted.
-        unsafe { let _ = DeleteObject(HGDIOBJ(self.bitmap.0)); };
+        unsafe {
+            let _ = DeleteObject(HGDIOBJ(self.bitmap.0));
+        };
     }
 }
 
@@ -158,11 +163,15 @@ impl Drop for Selection {
 
 fn check_size(width: i32, height: i32) -> Result<(u32, u32), String> {
     if width <= 0 || height <= 0 {
-        return Err(format!("nothing to capture: the region is {width}x{height}"));
+        return Err(format!(
+            "nothing to capture: the region is {width}x{height}"
+        ));
     }
     let pixels = width as u64 * height as u64;
     if pixels > MAX_PIXELS {
-        return Err(format!("refusing to capture {width}x{height}: {pixels} pixels"));
+        return Err(format!(
+            "refusing to capture {width}x{height}: {pixels} pixels"
+        ));
     }
     Ok((width as u32, height as u32))
 }
@@ -185,7 +194,9 @@ fn capture_region(
     // GDI batches drawing on the calling thread; without a flush the DIB
     // bytes can still be unwritten when they are read below.
     // SAFETY: takes no arguments.
-    unsafe { let _ = GdiFlush(); };
+    unsafe {
+        let _ = GdiFlush();
+    };
     capture::from_bgra_top_down(w, h, &dib.to_vec())
 }
 
@@ -215,13 +226,9 @@ pub fn grab_primary_screen() -> Result<Frame, String> {
 /// because capturing an overlapping window would put another application's
 /// content into a frame labelled with this window's identity.
 ///
-/// It also fails, silently, on some GPU-composited surfaces, returning an
-/// all-black bitmap. That failure mode is the reason for the uniform-frame
-/// check: a black rectangle returned as a successful screenshot is the worst
-/// outcome available here, so a uniform result falls back to blitting the
-/// window's rectangle straight off the screen. The fallback CAN include an
-/// overlapping window, which is why it is second and why it says so on
-/// stderr.
+/// Some GPU-composited windows refuse rendering or produce uniform frames.
+/// Fail closed: a screen rectangle could include protected overlapping windows
+/// and cannot be returned under the requested window's identity.
 pub fn grab_window(hwnd: HWND) -> Result<Frame, String> {
     let mut rect = RECT::default();
     // SAFETY: `hwnd` was validated by the caller (`resolve_target_hwnd`);
@@ -239,35 +246,41 @@ pub fn grab_window(hwnd: HWND) -> Result<Frame, String> {
             Err("PrintWindow refused to render the window".to_string())
         }
     });
-    match printed {
-        Ok(frame) if !capture::is_uniform(&frame) => Ok(frame),
-        Ok(_) => {
-            eprintln!(
-                "PrintWindow returned a uniform (probably black) frame; falling back to a screen blit, which may include overlapping windows"
-            );
-            blit_window_rect(&rect, width, height)
-        }
-        Err(err) => {
-            eprintln!("{err}; falling back to a screen blit, which may include overlapping windows");
-            blit_window_rect(&rect, width, height)
-        }
-    }
+    checked_window_frame(printed)
 }
 
-fn blit_window_rect(rect: &RECT, width: i32, height: i32) -> Result<Frame, String> {
-    let (left, top) = (rect.left, rect.top);
-    capture_region(width, height, |hdc, screen| {
-        // SAFETY: both DCs are live for the duration of the call. Source
-        // coordinates are virtual-screen coordinates and may legitimately be
-        // negative for a window on a monitor left of or above the primary.
-        unsafe { BitBlt(hdc, 0, 0, width, height, screen, left, top, SRCCOPY) }
-            .map_err(|err| format!("BitBlt of the window rectangle failed: {err:?}"))
-    })
+fn checked_window_frame(printed: Result<Frame, String>) -> Result<Frame, String> {
+    match printed {
+        Ok(frame) if !capture::is_uniform(&frame) => Ok(frame),
+        Ok(_) => Err("PrintWindow returned a uniform frame; window capture refused".to_string()),
+        Err(err) => Err(format!("{err}; window capture refused")),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_or_uniform_window_frames_are_refused_without_screen_fallback() {
+        assert!(checked_window_frame(Err("render refused".to_string()))
+            .unwrap_err()
+            .contains("window capture refused"));
+        let solid = Frame {
+            width: 2,
+            height: 1,
+            rgb: vec![0, 0, 0, 0, 0, 0],
+        };
+        assert!(checked_window_frame(Ok(solid))
+            .unwrap_err()
+            .contains("uniform"));
+        let content = Frame {
+            width: 2,
+            height: 1,
+            rgb: vec![0, 0, 0, 255, 255, 255],
+        };
+        assert_eq!(checked_window_frame(Ok(content.clone())).unwrap(), content);
+    }
 
     #[test]
     fn a_zero_or_negative_region_is_refused_before_any_allocation() {
@@ -279,7 +292,10 @@ mod tests {
     #[test]
     fn an_absurd_region_is_refused_rather_than_allocated() {
         let err = check_size(100_000, 100_000).unwrap_err();
-        assert!(err.contains("refusing to capture"), "unexpected message: {err}");
+        assert!(
+            err.contains("refusing to capture"),
+            "unexpected message: {err}"
+        );
     }
 
     #[test]

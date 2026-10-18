@@ -30,10 +30,6 @@ fn is_null(hwnd: HWND) -> bool {
     hwnd_value(hwnd) == 0
 }
 
-fn basename(path: &str) -> &str {
-    path.rsplit(['\\', '/']).next().unwrap_or(path)
-}
-
 fn normalized_path(path: &str) -> String {
     let mut normalized = path.replace('/', "\\");
     if normalized

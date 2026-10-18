@@ -93,7 +93,13 @@ export async function dispatchBrowserOperation(op: BrowserOperation): Promise<Wo
     return {
       ok: true,
       value: await registry.run((driver) =>
-        driver.snapshot({ tabId: op.tabId, mode: op.mode, maxNodes: op.maxNodes }),
+        driver.snapshot({
+          tabId: op.tabId,
+          mode: op.mode,
+          maxNodes: op.maxNodes,
+          expectedUrl: op.expectedUrl,
+          originPolicy: op.originPolicy,
+        }),
       ),
     };
   }
@@ -106,6 +112,8 @@ export async function dispatchBrowserOperation(op: BrowserOperation): Promise<Wo
           ref: op.ref,
           selector: op.selector,
           format: op.format,
+          expectedUrl: op.expectedUrl,
+          originPolicy: op.originPolicy,
         }),
       ),
     };
@@ -114,7 +122,12 @@ export async function dispatchBrowserOperation(op: BrowserOperation): Promise<Wo
     return {
       ok: true,
       value: await registry.run((driver) =>
-        driver.act(op.actions, { tabId: op.tabId, stopOnError: op.stopOnError }),
+        driver.act(op.actions, {
+          tabId: op.tabId,
+          stopOnError: op.stopOnError,
+          expectedUrl: op.expectedUrl,
+          originPolicy: op.originPolicy,
+        }),
       ),
     };
   }
@@ -126,6 +139,8 @@ export async function dispatchBrowserOperation(op: BrowserOperation): Promise<Wo
         logKind: op.logKind,
         limit: op.limit,
         since: op.since,
+        expectedUrl: op.expectedUrl,
+        originPolicy: op.originPolicy,
       }),
     ),
   };

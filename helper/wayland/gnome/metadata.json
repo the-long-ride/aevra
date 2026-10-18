@@ -1,0 +1,8 @@
+{
+  "uuid": "aevra-desktop@the-long-ride",
+  "name": "Aevra Desktop Access",
+  "description": "Explicitly enable or pause Aevra's guarded GNOME Wayland window capture and keyboard/mouse access. Access resets when the session locks or this extension is disabled.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 1,
+  "url": "https://github.com/the-long-ride/aevra"
+}

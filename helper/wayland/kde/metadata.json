@@ -1,0 +1,9 @@
+{
+  "KPlugin": {
+    "Id": "aevra-desktop",
+    "Name": "Aevra desktop access",
+    "Description": "Explicitly granted native Wayland window capture and input",
+    "License": "GPL-2.0-or-later",
+    "EnabledByDefault": false
+  }
+}
