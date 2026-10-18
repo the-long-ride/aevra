@@ -1,6 +1,6 @@
 # 02 — Security Model
 
-**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.2.1`
+**Audience:** engineers & AI agents · **Scope:** admission, sessions, authority · **Verified against:** `1.3.0`
 
 Security is two questions: **who gets in** (admission) and **what may they do** (authority). They never mix.
 
@@ -161,6 +161,14 @@ All administrative removals, deletions, and revocations in the Web UI are fail-s
 - Safe mode (DB integrity failure) ⇒ both MCP paths return `503 SAFE_MODE`; admin mutations blocked.
 - Sandbox unavailable ⇒ command fails; **no silent host fallback** (host execution is a separate, separately-approved request).
 - Secrets: raw values never in SQLite; OS credential backend with AES-256-GCM vault fallback; DLP masks secrets in MCP output, logs, audit.
+
+Foreground desktop authorization binds `expectedTarget` to the approved window/process instance, executable identity and optional verified host. Both the worker and standalone host pass that identity to the canonical native backend; missing or changed authorization is refused before new effects. Guards revalidate during portable text/chord dispatch and Windows input batches, while key/button cleanup remains permitted after revocation. A partially applied action returns an uncertain outcome and requires fresh observation. Portable input uses targeted process and accessible-field-path refresh with a 7.5-second native budget inside the worker's 10-second helper deadline. Linux capture/input acceptance covers X11 and a private GNOME 50 Wayland session. The GNOME companion requires explicit enablement and approval of the same-user helper executable path; pause/lock clears grants and closes peers. Only explicit backend connect can recover authority. Native Wayland window IDs and credential-derived PIDs bind uniquely to AT-SPI windows by dimensions, with origin translation after binding. Capture reads the isolated window actor; pointer input checks compositor focus and reactive hit target. KDE KWin 6.6 now has a native plugin; software-rendered native acceptance passes, while GPU capture acceptance remains pending, and macOS native execution acceptance remains outstanding.
+
+### Authorized desktop reads and native connection generations
+
+Both authorized hosts forward `expectedTarget` on window capture and foreground describe. Native Windows/portable backends compare process/window/executable/host identity before and after capture/tree collection. Before returning data or installing refs, standalone additionally compares returned attribution, re-queries identity and evaluates the current allowlist; mid-read revocation refuses publication. Root verifies returned attribution against the original authorized identity as well as its post-read gate. Optional wire identity is retained for legacy direct helper reads; those callers continue to own their authorization boundary.
+
+GNOME checks Shell modal/grab/overview keyboard ownership at compositor dispatch, including a native Wayland input-method focus for text. Held-input cleanup remains permitted. Frame and client-buffer geometry are explicit for decorated windows; only authorized actor pixels are cropped to the frame. Disconnect increments the host session generation; cancelled connect completions cannot restore a session, and in-flight reads cannot return data or reinstall refs after invalidation. Foreground refs publish under an atomic generation check. At explicit reconnect, connection-owned native bindings, refs and snapshots are cleared; changed mappings are still refused during an action. KDE uses finite native pointer containment for wheel input and separate integer validation for client move commands.
 
 **Boundaries:** token storage details (`04`), execution internals (`06`).
 

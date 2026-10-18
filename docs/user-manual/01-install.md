@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 22.5 or newer.
+- Node.js 24 or newer.
 - `cloudflared` only for managed Cloudflare exposure.
 - `ngrok` only for managed ngrok exposure.
 - A trusted TLS certificate and key when using Direct HTTPS exposure.

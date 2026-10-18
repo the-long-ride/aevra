@@ -1,11 +1,13 @@
 # aevra
 
+Current source release: **1.3.0**. Standalone browser and desktop source releases: **1.0.0** each.
+
 <div align="center">
 
 <img src="https://raw.githubusercontent.com/the-long-ride/aevra/main/assets/aevra-logo.png" alt="aevra Logo" width="256" />
 
 [![npm version](https://img.shields.io/npm/v/@the-long-ride/aevra.svg?style=flat-square&color=ffffff&labelColor=000000&logo=npm&logoColor=ffffff)](https://www.npmjs.com/package/@the-long-ride/aevra)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D22.5.0-ffffff?style=flat-square&labelColor=000000&logo=node.js&logoColor=ffffff)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D24.0.0-ffffff?style=flat-square&labelColor=000000&logo=node.js&logoColor=ffffff)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-ffffff?style=flat-square&labelColor=000000)](https://github.com/the-long-ride/aevra/blob/main/LICENSE)
 
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-ffffff?style=flat-square&labelColor=000000)](https://github.com/the-long-ride/aevra)
@@ -69,6 +71,58 @@ Execution Worker
 
 ---
 
+## Local AI agents and one browser extension
+
+Run `aevra agent list` to see which of Codex, Claude Code, OpenCode and Antigravity
+Aevra detects, then `aevra agent install` to connect them: it lists the detected
+agents and asks to confirm (`--yes` skips the question). You can also name targets,
+for example `aevra agent install codex` or `aevra agent install all`. stdio is the
+default; `--transport http` selects native HTTP for global connections. Add
+`--workspace <name>` to connect an agent to one registered workspace only (stdio,
+no skill). Settings offers the same controls, including a Connect dialog.
+Each target gets its own credential, and existing gateway approvals and access
+policy apply through either transport.
+
+Skills live in `~/.agents/skills/aevra`, with managed links into agent-specific
+folders. `aevra agent uninstall <target|all>` removes owned registration/link
+resources and revokes credentials. `aevra uninstall --purge` additionally removes
+owned service/state resources; user changes and the other product's shared files
+are preserved. Use `--dry-run` to inspect an installation or removal first.
+
+A single loaded extension serves both products. Pair with root Aevra's port
+`47831`, or standalone Browser's port `47841`, using a fresh code. One server is
+active at a time. See the [local agent guide](docs/user-manual/23-local-ai-agents.md)
+for transport, shared installation, cleanup and TLS details.
+
+## Work alongside your AI agent
+
+Keep using your mouse and keyboard while an agent works through supported background actions in another application or browser tab. Desktop semantic operations address controls through UIA, AX or AT-SPI; browser actions address a selected tab through the extension or CDP. These paths avoid driving the system cursor or typing into whichever application you happen to be using.
+
+For desktop work, prefer `desktop_describe(mode:"background")` with `desktop_invoke`, `desktop_set_value`, `desktop_select` and `desktop_toggle`. For browser work, keep the agent pinned to its task tab while you use another tab or application. Coordinate edits to the same document, page or field: background targeting avoids input-device conflicts but does not merge simultaneous edits.
+
+Explicit desktop foreground click/type/key/scroll tools use shared OS input and need a coordinated turn. An application can also change focus or open a modal after a semantic action; a reported `focusChanged` suspends the desktop lease until a fresh describe. Explicit browser tab-focus commands change the selected tab, and the extension's visible-tab screenshot path requires an active tab rather than activating a background tab silently.
+
+**Shared engine, different products:** root Aevra and [Aevra Desktop](https://github.com/the-long-ride/aevra-desktop-use) use the same canonical native desktop implementation, including the background semantic path. Root runs it through a helper process under gateway policy; standalone runs it in-process under its app allowlist. They have independent sessions, grants and configuration. The common engine does not coordinate competing operations from both hosts on the same target.
+
+## Choose the right Aevra project
+
+| Project                                                             | Choose it for                                                                                        | How you manage access                                                                                |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Aevra — this repository**                                         | One gateway for files, commands, Git, processes, browser/desktop automation and upstream MCP servers | Workspace policies, connector grants, approvals and audited execution in the Web UI                  |
+| [Aevra Desktop](https://github.com/the-long-ride/aevra-desktop-use) | A standalone native MCP server for controlling allowed desktop applications                          | A tray/settings app with an application allowlist and local Activity history; stdio or loopback HTTP |
+| [Aevra Browser](https://github.com/the-long-ride/aevra-browser)     | A standalone browser MCP server shared by local clients                                              | One paired browser daemon, extension or CDP transport, and stdio or authenticated loopback HTTP      |
+
+Choose the gateway when browser and desktop actions belong to a wider workspace workflow with centralized policy and audit. Choose either standalone project when its focused toolset is all you need. Their access models and configuration are independent of the gateway.
+
+## Recent changes in current source
+
+- **Clearer MCP management:** inspect server status, instructions, tool parameters and examples in searchable Detail views; pending catalog changes remain visible.
+- **Usage beyond the selected chart range:** view all-time token totals, savings, calls, failures and tool/connector breakdowns from the dashboard statistics dialog.
+- **Broader native desktop control:** the canonical helper now has a shared Rust library and guarded input executor used by the gateway and Aevra Desktop. Explicit capture/input adapters cover Windows, macOS 13+, Ubuntu X11, GNOME Wayland and KDE KWin 6.6.
+- **Safer target and session handling:** window reads retain their authorized identity through collection; stale native targets and revoked access refuse publication. Standalone disconnect/reconnect also invalidates pending connect/read completions and old refs. GNOME checks Shell keyboard ownership and decorated-window geometry; KDE supports fractional native wheel positions.
+
+These changes are tracked under [1.3.0](CHANGELOG.md#130---2026-10-17); source versions are Aevra **1.3.0** and both standalone packages **1.0.0**. Native macOS, physical-GPU capture and production Wayland approval/lock acceptance remain open. See [desktop platform support](docs/user-manual/19-desktop-control.md) and [Wayland setup](docs/user-manual/22-wayland-desktop.md). Aevra Browser retains its separately pinned driver/extension snapshot.
+
 ## What makes aevra different?
 
 Most local MCP servers do one job (files, a shell, or a browser) and trust whichever client launched them. aevra puts one policy layer in front of all of it.
@@ -77,7 +131,7 @@ Most local MCP servers do one job (files, a shell, or a browser) and trust which
 - **Files, shell, Git, processes, browser, desktop, and upstream MCP servers behind one policy.** Upstream servers are republished as `server__tool`, and aevra stops serving one if its schema changes unexpectedly.
 - **Authority is decided in one place.** The Core checks capability profiles, path and command policy, and per-connection browser and desktop grants. The out-of-process Worker runs only the exact grant it receives. Sensitive actions wait for your approval in the Web UI.
 - **Evidence you can verify.** Every action lands in a hash-chained audit log. Secret paths are denied, sensitive output is masked, and multi-file edits are journaled change sets you can roll back.
-- **Computer use that stays out of your way.** Desktop control goes through native accessibility APIs (UIA, AX, AT-SPI), and browser actions are pinned to background tabs, so the agent works without moving your cursor or stealing focus. Canvas and WebGL apps get browser-native coordinate clicks. Password, OTP, and payment fields are refused. See the [desktop](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/19-desktop-control.md) and [browser](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/18-browser-control.md) guides.
+- **Computer use that stays out of your way.** Background desktop actions use native accessibility APIs (UIA, AX, AT-SPI), and browser actions stay pinned to their target tabs. You can keep using your mouse and keyboard elsewhere; explicit foreground/focus actions need coordination, and applications can still open or focus dialogs. Canvas and WebGL apps get browser-native coordinate clicks. Password, OTP, and payment fields are refused. See the [desktop](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/19-desktop-control.md) and [browser](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/18-browser-control.md) guides.
 - **Fewer model round trips.** Batch tools (`file_read_many`, `file_write_many`, `command_run_many`) and bounded browser and desktop plans do in one call what would otherwise take many.
 - **Built for token efficiency.** Compact advertised schemas cut definition tokens by ~20%. Results are automatically shaped at the edge: redundant batch wrappers and duplicate paths are flattened, security notices hoisted, whole ANSI escapes stripped, repeated lines collapsed, and output stream budgets (`maxOutputChars`) enforced. Connectors can toggle tool groups off to send only the tools that model needs.
 
@@ -86,18 +140,19 @@ Most local MCP servers do one job (files, a shell, or a browser) and trust which
 ## Core features
 
 - **74 built-in MCP tools and fast lane interfaces:** Includes batch file operations, command execution, workspace management, Git actions, background processes, change sets, browser automation, and desktop control. Upstream MCP tools load dynamically under namespaced names.
-- **Token usage metering & live analytics:** Accurately measures incoming, outgoing, and saved tokens using a lightweight heuristic estimator (`heuristic-v1`). Non-sensitive metrics accumulate in memory and persist to SQLite (`token_usage` table) with automatic 7-day roll-up. The React Admin Dashboard features live stat cards and an interactive historical SVG chart (24h to all-time). See the [token usage and tool surface guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/21-token-usage-and-tool-surface.md).
+- **MCP tool documentation:** The server Detail modal shows searchable instructions, parameters, advisory flags and example arguments for recorded tools, with pending catalog changes clearly labeled.
+- **Token usage metering & live analytics:** Accurately measures incoming, outgoing, and saved tokens using a lightweight heuristic estimator (`heuristic-v1`). Non-sensitive metrics accumulate in memory and persist to SQLite (`token_usage` table) with automatic 7-day roll-up. The React Admin Dashboard features live stat cards and an interactive historical SVG chart (24h to all-time), and an All-time statistics modal with totals and tool/connector breakdowns. See the [token usage and tool surface guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/21-token-usage-and-tool-surface.md).
 - **Per-connector tool surface & result formats:** Customize advertised tool groups (`files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, `upstream`) per AI client to drastically reduce session token overhead. Select between dual `both`, `text`-only, or `structured` MCP result formats.
 - **HTTP response compression & transport speed:** Automatically gzip-compresses MCP JSON responses of 1,024 bytes or larger for clients that accept it, caches serialized tool lists, and bounds activity log depth to keep local execution fast.
 - **Shared-semantic desktop automation & background auto-clicker (Windows, macOS, Linux):** Operates as a background auto-clicker and desktop automation engine. `desktop_invoke`, `desktop_set_value`, `desktop_select`, `desktop_toggle`, `desktop_release_window`, and background `desktop_describe` use native accessibility providers (UIA / AX / AT-SPI) without moving physical pointers, synthesizing host mouse or keyboard input, or stealing window focus. Windows keeps its additional integrity/secure-desktop defenses; macOS/Linux surface permission/provider failures explicitly. Strict `isolated` control never downgrades to the host session and is refused until a separately qualified runner is available. See the [desktop control guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/19-desktop-control.md).
-- **Foreground desktop control (Windows):** Legacy foreground click/type/key/scroll and pixel capture remain Windows-specific. They are explicit tools only and are never an automatic fallback from shared-semantic control.
+- **Foreground desktop capture and input:** Explicit tools have native adapters on Windows, macOS 13+, Ubuntu X11, GNOME Wayland and KDE KWin 6.6. macOS requires Accessibility/Screen Recording and still needs native acceptance. Wayland requires an explicitly enabled companion and approved helper path; GNOME/KDE private-compositor fixtures pass, while physical-GPU and production approval/lock acceptance remain open. Runtime capabilities report permission/session readiness. See [platform support](docs/user-manual/19-desktop-control.md) and [Wayland setup](docs/user-manual/22-wayland-desktop.md).
 - **Browser control, background auto-clicking, and enhanced canvas support:** Ten `browser_*` tools drive Chromium browsers through the Aevra MV3 browser extension or Chrome DevTools Protocol (CDP) under capability, risk, approval, DLP, and audit controls. It operates as a true background auto-clicker: CDP actions are target-pinned without activating another tab, and extension interactions work seamlessly in background tabs without stealing focus. **Enhanced canvas and WebGL handling:** drives HTML5 canvas viewports and web games with high-reliability vision coordinate mapping and native browser mouse clicks and drags (`Input.dispatchMouseEvent` via Chrome debugger or CDP) instead of brittle synthetic DOM events. Extension snapshot refs resolve through isolated-world opaque element identities rather than page-writable DOM attributes. `browser_execute_script` accepts a bounded Playwright-like action grammar for single-call multi-step interaction without exposing arbitrary JavaScript evaluation, and credential fields remain refused. The Web UI and `aevra status` report pairing state, with download and load-unpacked instructions via `aevra extension install`. See the [browser control guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/18-browser-control.md).
 - **Guarded local control plans:** `control_observe`, `control_execute`, owner-bound status/cancel, and `desktop_act_many` let Aevra validate, schedule, dispatch, and verify bounded browser/desktop workflows locally. Durable request IDs prevent blind replay after reconnect/restart, and compact deltas reduce model round trips.
 - **Floating-IP OAuth continuity and runner leases:** Decouples authentication and workspace authority from ephemeral cloud runner IP pools used by ChatGPT and Claude. Persists workspace grants across rotating IPs, adds atomic approval claims (`claimExecution`) to prevent double execution, shares connection rate limiters, and retains runner origin IPs in audit logs for 24 hours.
 - **Admin login lockout:** Repeated failed Admin sign-ins lock the login temporarily, per (address, username) and per address, with a doubling backoff from 1 minute to 1 hour. Locked requests return `429` with `Retry-After`, the login page shows a countdown, and each lockout is audited as a `security` event and raised as a desktop notification. See the [security guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/13-security-authentication.md).
 - **Host system capabilities:** The `aevra_status` MCP tool reports toolchains, available shells, and execution defaults to models and the Admin UI.
 - **Dynamic resources and instruction prompts:** Serves context files via MCP resources (`aevra://skill/<source>/<name>`) and instruction prompts parsed from `AGENTS.md` and `CLAUDE.md`.
-- **MCP upstream proxy:** Connect external HTTP, SSE, or stdio MCP servers through the Admin UI or `aevra mcp`. Upstream tools republish under collision-resistant namespaced identifiers, with secret-backed credentials and catalog fingerprinting that pauses serving if schemas change unexpectedly. See the [MCP upstreams guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/20-mcp-upstreams.md).
+- **MCP upstream proxy:** Connect external HTTP, SSE, or stdio MCP servers through the Admin UI or `aevra mcp`. Upstream tools republish under collision-resistant namespaced identifiers, with secret-backed credentials and catalog fingerprinting that pauses serving if schemas change unexpectedly. Servers can be disabled and re-enabled from the Admin UI or `aevra mcp enable|disable <id>` without losing their configuration. When a server changes its catalog, `aevra mcp list` marks it with `!` and prints a next-step hint; `aevra mcp review <id>` shows what changed and `aevra mcp accept <id> --yes` accepts it. See the [MCP upstreams guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/20-mcp-upstreams.md).
 - **Workspace manifest (`aevra.json`):** Workspaces can advertise build, test, and lint commands, and declare sensitive or secret path globs that feed directly into the file security boundary. See the [manifest design specification](https://github.com/the-long-ride/aevra/blob/main/docs/specs/2026-09-12-aevra-manifest-design.md).
 - **Configuration backup and restore:** Download and restore complete gateway configurations as JSON through the Admin UI Data tab (`/api/data/export` and `/api/data/import`), excluding machine-specific secrets for safe portability.
 - **React 19 Admin dashboard:** Single-page dark theme dashboard with an edge-to-edge Request Activity timeline, universal switch toggles, upward-anchored dropdowns, live capability status, and modal confirmations for danger actions.
@@ -280,6 +335,12 @@ Aevra does not automatically replay a lost mutating request after reconnection. 
 - **[Markdown Explorer](https://github.com/the-long-ride/markdown-explorer/releases/latest):** A desktop tool to preview, search, and navigate Markdown files and document collections.
 
 ---
+
+## Build and release automation
+
+GitHub Actions uses Node.js 24 and GitHub-maintained actions at `@v6`; the third-party Rust cache keeps its own supported version. `.node-version` selects Node 24 for local development.
+
+Pull requests, pushes to `main` and manual dispatch run the quality gate. The native helper matrix checks Rust formatting and strict Clippy before release builds/tests; GNOME/KDE acceptance runs separately. Version-tag or manual releases wait for a successful push-triggered quality run on the exact release commit and reuse its artifacts. See [release CI](docs/specs/10-package-and-test-runners.md#release-ci).
 
 ## License
 

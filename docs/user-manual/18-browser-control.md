@@ -254,3 +254,13 @@ per-tab attach. Stated plainly: a browser-side compromise of the extension
 reaches every tab in that profile regardless of Aevra's gate. That is the
 accepted cost of that decision, and it is why the policy layer above it is as
 strict as it is.
+
+## Navigation during a request
+
+Read, snapshot and log requests pin the selected tab and live policy. A navigation during a read discards the result, and sensitive-origin screenshots remain refused. Action batches recheck the live URL before each action; changing origin or moving from a normal route into a sensitive route stops the batch so a fresh call can receive the appropriate approval. Extension reads also monitor reloads, and CDP reads track document navigation events.
+
+CDP connections use only the operator-configured loopback debugging port (9222 by default). An agent cannot select another host or a different local service through `browser_connect`. A target's debugger WebSocket must use the same endpoint.
+
+Extension console logs include only messages attributed by Chrome to the selected top-frame tab and its current document; old documents, other tabs, subframes and unattributed messages are excluded.
+
+CDP input checks the document and origin before every consequential input command, including clear/type and held-drag events after awaited operations. Extension native actions invalidate on navigation or reload and recheck before each drag movement and release. Cancellation in the same document retains button-release cleanup; navigation suppresses synthetic release into the replacement document and detaches the debugger. These checks reduce observable navigation races but cannot make separate browser protocol commands atomic.

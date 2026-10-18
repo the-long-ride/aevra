@@ -1,7 +1,7 @@
 # Aevra — Architecture & Usage Guide for AI Assistants (llm.txt)
 
 > **Specification & Operator Reference for Language Models**
-> Version: 1.2.1
+> Version: 1.3.0
 > Author: the-long-ride (made by <3)
 > Repository: https://github.com/the-long-ride/aevra
 > Issues: https://github.com/the-long-ride/aevra/issues
@@ -134,18 +134,34 @@ Shared semantic control is available through Windows UIA, macOS Accessibility
 (AX), and Linux AT-SPI2. Prefer `desktop_describe(mode:"background")` plus
 `desktop_invoke`, `desktop_set_value`, `desktop_select`, or
 `desktop_toggle`; these provider actions do not synthesize host mouse/keyboard
-input. Windows additionally supports explicit legacy foreground click/type/key/
-scroll and pixel capture. macOS/Linux portable mode intentionally reports those
-foreground/capture capabilities unavailable. `desktop_request_access` submits a
+input. Explicit foreground click/type/key/scroll and pixel capture adapters cover Windows, macOS 13+, Ubuntu X11, GNOME Wayland and KDE KWin 6.6. macOS needs Accessibility plus Screen Recording, and native acceptance is pending. X11 needs XTest and a compositing window manager. Linux capture/input covers X11 and GNOME Wayland through an explicitly installed/enabled companion with approved helper path; see docs/user-manual/22-wayland-desktop.md. GNOME 50 native acceptance passes; GNOME 46 is a required CI target. KDE KWin 6.6 now has a native plugin; software-rendered native acceptance passes, while GPU capture acceptance remains pending. No XWayland or uinput fallback is used. Capability flags report actual probed readiness. `desktop_request_access` submits a
 pending request for human review when an attributed application is refused.
 When `AEVRA_DESKTOP_HELPER_PATH` points to a missing file, Aevra safely falls back
 to bundled or Cargo helper binaries.
+
+Both hosts consume one canonical native helper library with a shared guarded input executor. Authorized window reads retain their original process/window identity and are rechecked before publishing; standalone also rechecks its current allowlist. Disconnect/reconnect invalidates connection generations and old refs/mappings; cancelled connects and stale in-flight reads cannot restore authority. Observe again after recovery.
 
 ### Upstream MCP Proxies
 
 External MCP servers (stdio, SSE, HTTP) can be registered via Admin UI or
 `aevra mcp add`. Their tools are projected under namespaced tool names (`server__tool`)
-and remain subject to Aevra policy/audit boundaries.
+and remain subject to Aevra policy/audit boundaries. A server can be disabled
+(`aevra mcp disable <id>`, Admin UI switch, `POST /api/mcp/upstreams/{id}/disable`):
+it is hidden from lists, its worker session is closed, and calls/test/refresh fail with
+`MCP_UPSTREAM_DISABLED` until re-enabled. Changes are audited as `mcp.upstream.enable`/`disable`
+and are seen by connected clients on their next list (no `list_changed` is sent). If an upstream changes its catalog it is held in `needs-review` and its tools are not served until an admin accepts the change: the Admin UI list shows a warning icon in the leftmost column that opens a review dialog with **Accept changes**, `aevra mcp list` marks the server with `!` and prints a hint, and `aevra mcp review <id>` / `aevra mcp accept <id> --yes` show and accept the diff. The list checks for pending changes on every load, and accepting is audited as `mcp.upstream.acknowledge`.
+
+### Local AI Agent Integration
+
+`aevra agent` connects local coding agents (`codex`, `claude-code` with the alias `claude`, `opencode`, `antigravity`) to a running Aevra. `aevra agent list` (alias `status`) shows each agent, whether it was detected (command name on `PATH` or a config home; no process is spawned), its scope (`global` or a workspace name), transport, state and last use. `aevra agent install` with no agent names acts on the detected agents after a `Proceed? [y/N]` question (`--yes` skips it; without a terminal and without `--yes` it prints the list and exits 1; `all` with nothing detected exits 1; `--dry-run` never prompts). Naming an agent installs it even if it was not detected. Several agents run independently and the exit code is 1 if any fails. `--json` prints one JSON document on stdout and never prints credential file paths or hashes.
+
+- Scope: `--scope user|workspace` (default `user`). `--workspace <name|id>` implies workspace scope and is resolved through the registered Aevra workspaces. `uninstall <agent>` without `--scope` removes the global connection; with `--workspace` and no `--scope` it removes that workspace connection; `uninstall all` without `--scope` removes every connection, global and workspace (API: `scope: 'all'`); with `--scope user` it removes global connections only and never touches workspace ones; each agent is removed independently, so one failing agent does not stop the others (exit code 1). `aevra agent uninstall --id <id>` (API: `credentialId`, uninstall only, not combinable with agent names, `all`, `--scope` or `--workspace`) removes exactly one connection by its connection id, also when its workspace folder was deleted or is no longer a registered Aevra workspace (the registration is removed and its credential revoked; a note says the entry file could not be edited); `agent list` prints the id of such orphaned connections, and Settings removes them with Remove (Update stays disabled).
+- Workspace scope is stdio only (`--transport http` is refused), installs no skill and creates no skill links. The entry goes to: Codex `<root>/.codex/config.toml` (Codex reads it for trusted projects only); Claude Code `~/.claude.json` (or `$CLAUDE_CONFIG_DIR/.claude.json`) under `projects[<root>]` (local scope, nothing written into the project folder); OpenCode `<root>/opencode.json` or an existing `opencode.jsonc`; Antigravity `<root>/.agents/mcp_config.json`.
+- A project file tracked by git is refused with `AGENT_PROJECT_FILE_TRACKED`; otherwise it is added to the repository `info/exclude`. A symbolic link or directory junction on the way to the file inside the project is refused with `AGENT_PATH_CONFLICT`; a workspace folder that is the home folder or a filesystem root, or a project file that is the agent's own global file, is refused with `AGENT_OPTIONS_INVALID` (dry runs included). git runs only from an absolute `PATH` entry outside the project (device paths and 8.3 short names of the project are recognised); when the folder or a parent holds `.git` but no such git exists, the install goes ahead with the note `git could not be found outside the project folder <root>, so git tracking was not checked.` The link refusal also applies to uninstall and status: remove the link, uninstall again, then delete the leftover `aevra` entry by hand in the file the link pointed to. After install: trust the folder in Codex; start Claude Code in the folder and restart it.
+- The stdio bridge that generated configs start is `aevra agent serve --credential-file <file>`. It replaces `aevra mcp serve --stdio` with no alias: configs written by earlier local builds are refreshed by running `aevra agent install <agent>` again with the same scope (or Update in Settings): a changed stdio entry is rewritten in place and keeps its credential; after an MCP port or TLS CA change the stdio credential file gets the current endpoint and CA file (same id and token) and an HTTP entry is rewritten with the stored credential (never a new one); an identical connection is `no change`.
+- Uninstall acts only on registrations Aevra recorded: a hand-written `aevra` entry is left alone and does not block it; a managed entry, credential file or skill modified since install refuses the uninstall (nothing is removed) and root `aevra uninstall` then skips cleanup and `--purge`.
+- The Admin UI Settings page shows the connections table (with Last used) and a Connect dialog: detected agents, global or several workspaces (stdio only), dry-run preview and per-agent results.
+- Uninstall saves config edits and the connection record first and revokes credentials last; a failed revoke fails the command with `AGENT_REVOKE_INCOMPLETE` (naming the credential ids) and leaves the saved files. Git exclude and file cleanup failures after the save are notes only. Settings Remove asks for confirmation; a connection with a deleted credential shows `Credential missing` (CLI `missing`, state `incomplete`).
 
 ### Token Efficiency, Result Shaping & Transport (v1.2.0)
 
@@ -166,24 +182,28 @@ and remain subject to Aevra policy/audit boundaries.
 
 ## 5. CLI Command Reference
 
-| Command                                                            | Description                                                                                         |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `aevra start [--ui]`                                               | Start the Core daemon and Execution Worker. Opens Admin UI if `--ui` is given.                      |
-| `aevra ui [--logout-all]`                                          | Open the Admin Web UI in the default browser with an authenticated single-use token.                |
-| `aevra setup`                                                      | Run interactive onboarding wizard to configure remote access, tunnels, and initial workspace.       |
-| `aevra service install\|start\|stop\|restart\|status`              | Manage Aevra as a native user service (Windows Scheduled Tasks, Linux systemd, macOS LaunchAgents). |
-| `aevra connectors list\|create <name>\|revoke <id>`                | Manage external AI connectors (e.g. ChatGPT, Claude).                                               |
-| `aevra connections list\|revoke <id>`                              | Inspect and revoke active client connections.                                                       |
-| `aevra mcp list\|add <name> --transport …\|remove <id>\|test <id>` | Configure and test upstream MCP server proxies.                                                     |
-| `aevra sessions list\|revoke <id>\|revoke-others --yes`            | Inspect and revoke active user or client sessions.                                                  |
-| `aevra audit clear --yes`                                          | Clear audit log history while preserving cryptographic checkpoint integrity.                        |
-| `aevra extension install [--dir <path>] [--yes]`                   | Download and stage the matching browser extension build.                                            |
-| `aevra status [--json]`                                            | Check gateway health, tunnel status, exposure mode, and browser extension pairing.                  |
-| `aevra backup verify <file>\|restore <file> [--yes]`               | Verify or restore configuration and policy backups.                                                 |
-| `aevra completion bash\|zsh\|powershell`                           | Output shell tab-completion scripts.                                                                |
-| `aevra about`                                                      | Display author, repository, issues link, and project information.                                   |
-| `aevra --version`                                                  | Output the installed Aevra version string.                                                          |
-| `aevra --help`                                                     | Display CLI command usage instructions.                                                             |
+| Command                                                                                                                       | Description                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aevra start [--ui]`                                                                                                          | Start the Core daemon and Execution Worker. Opens Admin UI if `--ui` is given.                                                                                |
+| `aevra ui [--logout-all]`                                                                                                     | Open the Admin Web UI in the default browser with an authenticated single-use token.                                                                          |
+| `aevra setup`                                                                                                                 | Run interactive onboarding wizard to configure remote access, tunnels, and initial workspace.                                                                 |
+| `aevra service install\|start\|stop\|restart\|status`                                                                         | Manage Aevra as a native user service (Windows Scheduled Tasks, Linux systemd, macOS LaunchAgents).                                                           |
+| `aevra connectors list\|create <name>\|revoke <id>`                                                                           | Manage external AI connectors (e.g. ChatGPT, Claude).                                                                                                         |
+| `aevra connections list\|revoke <id>`                                                                                         | Inspect and revoke active client connections.                                                                                                                 |
+| `aevra mcp list\|add <name> --transport …\|remove <id>\|test <id>\|enable <id>\|disable <id>\|review <id>\|accept <id> --yes` | Configure, test, enable and disable upstream MCP server proxies; review and accept catalog changes.                                                           |
+| `aevra agent list\|status [--json]`                                                                                           | List local agents (Codex, Claude Code, OpenCode, Antigravity), whether they were detected, and their Aevra connections.                                       |
+| `aevra agent install [<agent>...\|all] [--scope user\|workspace] [--workspace <name>] [--yes] [--dry-run]`                    | Connect agents globally or to one workspace (`--transport stdio\|http`, http global only). With no agent names, acts on detected agents after a confirmation. |
+| `aevra agent uninstall <agent>...\|all [--scope user\|workspace] [--workspace <name>] [--dry-run]`                            | Remove agent connections.                                                                                                                                     |
+| `aevra uninstall [--dry-run] [--purge]`                                                                                       | Remove agent integrations, print a summary, then run product cleanup (only after agent removal succeeded).                                                    |
+| `aevra sessions list\|revoke <id>\|revoke-others --yes`                                                                       | Inspect and revoke active user or client sessions.                                                                                                            |
+| `aevra audit clear --yes`                                                                                                     | Clear audit log history while preserving cryptographic checkpoint integrity.                                                                                  |
+| `aevra extension install [--dir <path>] [--yes]`                                                                              | Download and stage the matching browser extension build.                                                                                                      |
+| `aevra status [--json]`                                                                                                       | Check gateway health, tunnel status, exposure mode, and browser extension pairing.                                                                            |
+| `aevra backup verify <file>\|restore <file> [--yes]`                                                                          | Verify or restore configuration and policy backups.                                                                                                           |
+| `aevra completion bash\|zsh\|powershell`                                                                                      | Output shell tab-completion scripts.                                                                                                                          |
+| `aevra about`                                                                                                                 | Display author, repository, issues link, and project information.                                                                                             |
+| `aevra --version`                                                                                                             | Output the installed Aevra version string.                                                                                                                    |
+| `aevra --help`                                                                                                                | Display CLI command usage instructions.                                                                                                                       |
 
 ---
 

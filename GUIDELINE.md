@@ -2,7 +2,7 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current source version is **1.2.1**. It includes command understanding,
+The current source version is **1.3.0**. It includes command understanding,
 workspace containment, typed command rules, efficient browser/control plans,
 cross-platform shared-semantic desktop control, MCP upstream servers, and
 workspace manifests. Version 1.1.2 fixed missing compiled modules in npm
@@ -18,7 +18,7 @@ truth for detailed contracts and security limitations.
 
 ## 1. Prerequisites & System Requirements
 
-- **Node.js**: `22.5.0` or higher (`node -v`)
+- **Node.js**: `24.0.0` or higher (`node -v`)
 - **npm**: `10.8.0` or higher
 - **Git**: Installed and available in PATH (for git tools)
 - **Exposure Tunnel (optional)**: `cloudflared`, `caddy`, `tailscale`, `frp`, or `ngrok` for remote connectivity
@@ -154,14 +154,14 @@ synthesizes host pointer/keyboard input. Use background `desktop_describe` plus
 legacy foreground input and pixel capture; macOS/Linux portable mode reports
 those capabilities unavailable.
 
-Strict `isolated` mode is not a label for the ordinary worker: v1.2.0 refuses
+Strict `isolated` mode is not a label for the ordinary worker: v1.3.0 refuses
 it until a separately provisioned runner has passed containment qualification.
 Read [Desktop control](docs/user-manual/19-desktop-control.md) before enabling it.
 
 ### MCP upstream servers
 
 Register HTTP, SSE, or stdio servers under **Settings → MCP servers**, or use
-the `aevra mcp add/list/test/remove` commands. Store credentials in **Secret
+the `aevra mcp add/list/test/remove/enable/disable` commands. Store credentials in **Secret
 references** first; upstream registration accepts a secret-reference id, not a
 raw token. A server is catalogued before it is stored, its tools are exposed
 under a namespaced name, and calls require a selected workspace.
@@ -170,6 +170,12 @@ The configured risk tier applies to every upstream tool. Upstream annotations
 are advisory and cannot bypass approval. Temporary outages remain visible as
 degraded; catalog changes pause serving until the operator reviews and
 acknowledges the diff. Calls are not automatically replayed after a disconnect.
+Inspect tool instructions, parameters, example arguments and advisory hints using the info button in each MCP server row. Search and expand tools to inspect recorded documentation, including pending catalog changes. The modal does not change the configured risk tier.
+
+Disable a server with the switch in **Settings → MCP servers** or
+`aevra mcp disable <id>` to hide its tools and refuse calls without losing its
+configuration or credentials; `aevra mcp enable <id>` brings it back, and
+connected clients see the change on their next list.
 See [MCP servers](docs/user-manual/20-mcp-upstreams.md).
 
 ### Workspace manifest (`aevra.json`)
@@ -302,6 +308,7 @@ The state folder stores:
 | `CAPABILITY_REQUIRED`           | Current capability profile or lease denies the operation       | Upgrade workspace profile in Admin UI or approve step-up permission in Requests.                                                                 |
 | `APPROVAL_PENDING`              | High-risk or sensitive operation requires local confirmation   | Open `aevra ui`, click Allow on the request ticket, then call `approval_wait`.                                                                   |
 | `APPROVAL_CONTEXT_CHANGED`      | State changed while approval was pending                       | Re-issue the tool call against the current repository / workspace state.                                                                         |
+| `APPROVAL_SCOPE_MISMATCH`       | Approval was limited to another MCP session                    | Call `workspace_select` again; the operator can approve for this connection to cover all your sessions.                                          |
 | `WORKSPACE_ESCAPE`              | Path attempts traversal outside registered capability root     | Ensure files and links resolve inside workspace boundaries or configure an external mount.                                                       |
 | `EXECUTOR_UNAVAILABLE`          | Docker/Podman container sandbox backend unavailable            | Start Docker/Podman or explicitly configure host execution permission in workspace settings.                                                     |
 | `MERGE_CONFLICT`                | Concurrent conflicting writes on overlapping lines             | Aevra wrote nothing; re-read latest content via `file_read` and apply resolved patch.                                                            |
@@ -310,3 +317,8 @@ The state folder stores:
 | `DESKTOP_HELPER_NOT_INSTALLED`  | Native helper binary is missing for this platform/architecture | Reinstall the official package, build `helper/`, or point `AEVRA_DESKTOP_HELPER_PATH` at an existing file; the message lists every path checked. |
 | `CONTROL_ISOLATION_UNAVAILABLE` | A strict isolated plan has no verified isolated runner         | Use `sharedSemantic` only when that mode is acceptable, or provision/qualify a separate runner; Aevra will not downgrade automatically.          |
 | `UPSTREAM_CATALOG_CHANGED`      | A downstream MCP server changed its advertised catalog         | Review the catalog diff in **Settings → MCP servers** and acknowledge it before calls resume.                                                    |
+| `MCP_UPSTREAM_DISABLED`         | A call, test, or refresh targeted a disabled MCP server        | Enable the server with the **Settings → MCP servers** switch or `aevra mcp enable <id>`.                                                         |
+
+## Native Wayland desktop integration
+
+GNOME Wayland uses the explicit-install companion in helper/wayland/gnome and the shared canonical Rust transport. Require the approved helper executable path, exact compositor window/PID, process start and app policy; retain protected-field, reactive hit and lock/pause/peer revocation guards. Never guess portal window identity from titles/opaque IDs or substitute monitor crops. AT-SPI coordinates can be window-relative or include CSD padding: bind unique PID and exact native frame/buffer geometry, translate using its origin, and crop only the authorized actor to frame. Refuse Shell modal/keyboard ownership at each effect boundary. Run helper/tests/run-wayland-gnome.sh for actual private compositor acceptance, alongside existing native X11/Windows suites. Test-only GNOME control code must never enter the distributed extension archive. KDE KWin 6.6 has its own explicit-grant native adapter; preserve finite fractional native pointer coordinates. The canonical Rust library owns all native module/cfg/dependency wiring; stdio and standalone actor consume it. Share prepared input effect ordering/cleanup via transport sinks. Always carry authorized read identity through native collection and post-read policy checks.

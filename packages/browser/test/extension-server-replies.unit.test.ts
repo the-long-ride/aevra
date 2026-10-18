@@ -82,8 +82,10 @@ test('fragmentation cannot bypass the reply size limit', async () => {
       );
       return undefined;
     });
+    // Generous budget: a slow runner needs time to receive the fragments before the size limit
+    // trips, and the assertion is about the error code, not about speed.
     await assert.rejects(
-      server.call('snapshot', { mode: 'vision' }, 1000),
+      server.call('snapshot', { mode: 'vision' }, 15_000),
       (error: any) => error.code === 'BROWSER_REPLY_TOO_LARGE',
     );
   } finally {

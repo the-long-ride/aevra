@@ -15,6 +15,14 @@ When local approval is required, open **Approvals**. Review the actor, workspace
 
 Approval scopes can be one-time, session, workspace, or global where policy permits. Critical operations do not receive persistent always-allow rules.
 
+Clients that open a new MCP session per call (observed with distributed agents) can only resume a **workspace access** approval granted for the whole connection. For such a client's workspace request, choose "Allow this connection" so later workers on the same OAuth connection can use the workspace without an `APPROVAL_SCOPE_MISMATCH` error. Other approvals do not need a wider scope: a one-time approval can be resumed by any session on the same OAuth connection.
+
 When YOLO is enabled for a connector session, command authorization follows the configured YOLO policy. **Workspace** mode auto-allows non-critical commands only when structured analysis proves they stay inside the selected workspace. **Unrestricted** mode auto-allows non-critical commands regardless of workspace scope; with host execution this can affect the whole device, while sandbox execution remains isolated by its backend. Remembered command/network DENY rules do not preempt an active in-scope YOLO command. CRITICAL commands always require a fresh local confirmation and cannot be persistently auto-allowed.
 
 OAuth pairing approvals are separate from tool-operation approvals. Pairing allows a client to authenticate; it does not bypass workspace permissions.
+
+## Exact one-time authority
+
+A one-time capability approval resumes only its frozen tool, arguments, capability, matcher and risk. Another concurrent request cannot borrow that authority. Resuming from another session of the same authorized OAuth connection remains supported, and CRITICAL actions retain their explicit approval requirement.
+
+Mount `sensitivityPolicyId` is reserved metadata and does not select an enforced policy. The workspace UI hides it. Use enforced protected-path patterns and capability restrictions to control access; built-in SECRET classifications remain a minimum.
