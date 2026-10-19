@@ -6,12 +6,14 @@ export class LinuxServiceAdapter implements UserServiceAdapter {
     private nodeExe: string,
     private cliPath: string,
     private io: ServiceIo,
+    private startArgs: string[] = [],
   ) {}
   get file() {
     return path.join(this.io.home, '.config', 'systemd', 'user', this.unit);
   }
   async install() {
-    const content = `[Unit]\nDescription=Aevra MCP Execution Gateway\nAfter=network-online.target\n\n[Service]\nType=simple\nExecStart=${quote(this.nodeExe)} ${quote(this.cliPath)} start\nRestart=on-failure\nRestartSec=3\n\n[Install]\nWantedBy=default.target\n`;
+    const command = [this.nodeExe, this.cliPath, 'start', ...this.startArgs].map(quote).join(' ');
+    const content = `[Unit]\nDescription=Aevra MCP Execution Gateway\nAfter=network-online.target\n\n[Service]\nType=simple\nExecStart=${command}\nRestart=on-failure\nRestartSec=3\n\n[Install]\nWantedBy=default.target\n`;
     await this.io.write(this.file, content);
     await this.io.run('systemctl', ['--user', 'daemon-reload']);
     const r = await this.io.run('systemctl', ['--user', 'enable', this.unit]);

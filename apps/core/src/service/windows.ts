@@ -5,9 +5,10 @@ export class WindowsServiceAdapter implements UserServiceAdapter {
     private nodeExe: string,
     private cliPath: string,
     private io: ServiceIo,
+    private startArgs: string[] = [],
   ) {}
   async install() {
-    const tr = `\"${this.nodeExe}\" \"${this.cliPath}\" start`;
+    const tr = [`\"${this.nodeExe}\"`, `\"${this.cliPath}\"`, 'start', ...this.startArgs].join(' ');
     const r = await this.io.run('schtasks.exe', [
       '/Create',
       '/TN',

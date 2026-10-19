@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { AdminCredentialVerifier, loadAdminCredentials } from './admin/admin-credentials.js';
 import { normalizeAdminPublicUrl, normalizeTrustedAdminOrigins } from './exposure/admin-origin.js';
+import { resolveListenerPorts, type ListenerPortOptions } from './listener-ports.js';
 
 export interface CoreConfig {
   publicHost: '127.0.0.1';
@@ -10,6 +11,7 @@ export interface CoreConfig {
   adminPort: number;
   mcpHost: '127.0.0.1';
   mcpPort: number;
+  browserPort?: number;
   stateDir: string;
   databasePath: string;
   recoveryDir: string;
@@ -27,14 +29,6 @@ export interface CoreConfig {
   tlsCaPath?: string;
   createAdminCredentialVerifier(): Promise<AdminCredentialVerifier>;
   approvalLifetimeByRiskMs: Partial<Record<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL', number>>;
-}
-
-function port(env: NodeJS.ProcessEnv, key: string, fallback: number) {
-  const raw = env[key];
-  if (raw === undefined) return fallback;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error(`${key} must be 1..65535`);
-  return n;
 }
 
 function durationMs(env: NodeJS.ProcessEnv, key: string, fallback: number, allowZero = false) {
@@ -66,7 +60,10 @@ export function workerSocketPathForPlatform(
     : path.join(stateDir, 'worker.sock');
 }
 
-export function loadCoreConfig(env: NodeJS.ProcessEnv = process.env): CoreConfig {
+export function loadCoreConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  ports: ListenerPortOptions = {},
+): CoreConfig {
   const adminCredentials = loadAdminCredentials(env);
   const stateDir = defaultStateDir(env);
   const workerSocketPath = workerSocketPathForPlatform(stateDir);
@@ -95,12 +92,10 @@ export function loadCoreConfig(env: NodeJS.ProcessEnv = process.env): CoreConfig
     env.AEVRA_TRUSTED_ADMIN_ORIGINS?.split(','),
   );
   return {
+    ...resolveListenerPorts(env, ports),
     publicHost: '127.0.0.1',
-    publicPort: port(env, 'AEVRA_PUBLIC_PORT', 47830),
     adminHost: '127.0.0.1',
-    adminPort: port(env, 'AEVRA_ADMIN_PORT', 47831),
     mcpHost: '127.0.0.1',
-    mcpPort: port(env, 'AEVRA_MCP_PORT', 47832),
     stateDir,
     databasePath: path.join(stateDir, 'aevra.db'),
     recoveryDir: path.join(stateDir, 'recovery'),

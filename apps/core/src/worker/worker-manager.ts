@@ -27,6 +27,7 @@ export interface WorkerManagerOptions {
   startupTimeoutMs?: number;
   startupPollMs?: number;
   browserTokenKeyPath?: string;
+  browserPort?: number;
 }
 
 type ExitInfo = { code: number | null; signal: NodeJS.Signals | null };
@@ -91,6 +92,9 @@ export class WorkerManager {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
+        ...(this.options.browserPort === undefined
+          ? {}
+          : { AEVRA_BROWSER_PORT: String(this.options.browserPort) }),
         AEVRA_WORKER_ENDPOINT: this.endpoint,
         AEVRA_WORKER_SECRET: secret.toString('base64url'),
         AEVRA_BROWSER_TOKEN_KEY: this.browserKey.toString('base64url'),

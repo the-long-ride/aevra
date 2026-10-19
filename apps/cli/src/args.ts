@@ -1,5 +1,7 @@
 import { parseAgentArgs, type AgentCliCommand } from './agent-args.js';
 import { parseMcpArgs } from './mcp-args.js';
+import type { ListenerPortOptions } from '../../core/src/listener-ports.js';
+import { parsePortArgs } from './port-args.js';
 
 export type AdminUiDestination = '/';
 
@@ -7,12 +9,13 @@ export type AevraCommand =
   | { command: 'help' }
   | { command: 'version' }
   | { command: 'about' }
-  | { command: 'start'; uiDestination: AdminUiDestination | null }
+  | { command: 'start'; uiDestination: AdminUiDestination | null; ports?: ListenerPortOptions }
   | { command: 'ui'; logoutAll: boolean }
   | { command: 'setup' }
   | {
       command: 'service';
       action: 'install' | 'start' | 'stop' | 'restart' | 'status';
+      ports?: ListenerPortOptions;
     }
   | {
       command: 'connectors';
@@ -77,12 +80,13 @@ export function parseAevraArgs(argv: string[]): AevraCommand {
   const [command, ...rest] = argv;
 
   if (command === 'start') {
+    const parsed = parsePortArgs(rest);
     let uiDestination: AdminUiDestination | null = null;
-    for (const arg of rest) {
+    for (const arg of parsed.rest) {
       if (arg !== '--ui') throw new Error(`Unknown option: ${arg}`);
       uiDestination = '/';
     }
-    return { command: 'start', uiDestination };
+    return { command: 'start', uiDestination, ...(parsed.ports ? { ports: parsed.ports } : {}) };
   }
 
   if (command === 'setup') {
@@ -101,8 +105,10 @@ export function parseAevraArgs(argv: string[]): AevraCommand {
 
   if (command === 'service') {
     const action = rest[0];
+    const parsed = parsePortArgs(rest.slice(1));
     if (
-      rest.length !== 1 ||
+      parsed.rest.length ||
+      (parsed.ports && !['install', 'start', 'restart'].includes(action ?? '')) ||
       !['install', 'start', 'stop', 'restart', 'status'].includes(action ?? '')
     ) {
       throw new Error('service requires install|start|stop|restart|status');
@@ -110,6 +116,7 @@ export function parseAevraArgs(argv: string[]): AevraCommand {
     return {
       command: 'service',
       action: action as 'install' | 'start' | 'stop' | 'restart' | 'status',
+      ...(parsed.ports ? { ports: parsed.ports } : {}),
     };
   }
 
