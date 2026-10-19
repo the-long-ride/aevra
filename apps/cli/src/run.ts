@@ -17,12 +17,17 @@ export async function runStart(
   dependencies: RunStartDependencies,
 ): Promise<number> {
   const runtime = await dependencies.createRuntime(config);
-  await runtime.start();
-  await dependencies.onReady?.({
-    adminUrl: runtime.adminUrl,
-    mcpUrl: runtime.mcpUrl,
-    gatewayUrl: runtime.gatewayUrl,
-  });
+  try {
+    await runtime.start();
+    await dependencies.onReady?.({
+      adminUrl: runtime.adminUrl,
+      mcpUrl: runtime.mcpUrl,
+      gatewayUrl: runtime.gatewayUrl,
+    });
+  } catch (error) {
+    await runtime.close();
+    throw error;
+  }
 
   return new Promise<number>((resolve) => {
     let closing = false;

@@ -18,6 +18,18 @@
 - Modern `server/discover` results are now always `cacheScope: 'private'`. Token usage no longer counts base64 image data in tool results.
 - Settings: the Local AI agents section's Add connection button is now Connect; the connect dialog uses switches, lets you pick several workspaces, and shows a compact two-column preview.
 
+## [1.3.1] - 2026-10-19
+
+### Added
+
+- Custom startup listeners: `aevra start --ui --basePort=50000` moves gateway, UI/admin and pairing, MCP, and extension WebSocket to `50000`–`50003`. Individual `--gateway-port/--gp`, `--ui-port/--up`, `--mcp-port/--mp`, and `--ws-port/--wp` flags change any selected listeners. Both `--flag=value` and `--flag value` work; mixed modes, duplicate aliases, invalid values, overflowing blocks, and colliding listeners are rejected before binding.
+- User-service install/start/restart accept the same options and retain the selected startup arguments. Foreground overrides remain invocation-only; later UI/status/agent-management commands discover the running instance's actual listener addresses.
+- Document the implemented custom-port contract, service retention rules, extension pairing addresses, and versioned release metadata for the core, dashboard, and owned browser extension.
+
+### Fixed
+
+- Pass the configured WebSocket port into the execution worker, pairing replies, and origin protection. A failed WebSocket bind now fails startup and releases the other listeners instead of announcing an unusable port block.
+
 ## [1.3.0] - 2026-10-17
 
 ### Added - Local AI agents and browser packaging

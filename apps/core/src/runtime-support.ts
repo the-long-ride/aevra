@@ -72,6 +72,7 @@ export function createRuntimeWorkerManager(config: CoreConfig, deps: RuntimeDepe
     deps.worker ??
     new WorkerManager(config.workerSocketPath, path.join(config.stateDir, 'process-logs'), {
       browserTokenKeyPath: path.join(config.stateDir, 'browser-token.key'),
+      browserPort: config.browserPort,
     })
   );
 }
@@ -100,15 +101,14 @@ export function createBrowserPairingService(
   settings: Pick<SettingsRepository, 'get' | 'set'>,
   worker: ReturnType<typeof createRuntimeWorkerManager>,
   gateway: WorkerGateway,
+  config?: Pick<CoreConfig, 'browserPort'>,
 ): BrowserPairingService {
-  return new BrowserPairingService(settings, gateway, browserTokenKeyResolver(worker));
+  return new BrowserPairingService(settings, gateway, browserTokenKeyResolver(worker), {
+    browserPort: config?.browserPort,
+  });
 }
 
 /**
- * The browser port has no CoreConfig field of its own yet, so it is read
- * directly from the environment here, matching AEVRA_BROWSER_PORT's default
- * used by the browser pairing listener.
- *
  * `origins` is resolved lazily on every snapshot rather than captured once:
  * exposure wiring is constructed after this service, and a tunnel can be
  * turned on, renamed, or turned off long after startup. A stale list here is
@@ -116,7 +116,7 @@ export function createBrowserPairingService(
  */
 export function createBrowserOriginPolicyService(
   settings: Pick<SettingsRepository, 'get' | 'set'>,
-  config: Pick<CoreConfig, 'publicPort' | 'adminPort' | 'mcpPort'>,
+  config: Pick<CoreConfig, 'publicPort' | 'adminPort' | 'mcpPort' | 'browserPort'>,
   origins: () => Array<string | undefined> = () => [],
 ): BrowserOriginPolicyService {
   return new BrowserOriginPolicyService(
@@ -125,7 +125,7 @@ export function createBrowserOriginPolicyService(
       publicPort: config.publicPort,
       adminPort: config.adminPort,
       mcpPort: config.mcpPort,
-      browserPort: Number(process.env.AEVRA_BROWSER_PORT ?? 47833),
+      browserPort: config.browserPort ?? Number(process.env.AEVRA_BROWSER_PORT ?? 47833),
     }),
     origins,
   );
@@ -313,5 +313,10 @@ export async function syncBrowserPairingStatus(
   browserPairing: BrowserPairingService,
   _workerGateway: WorkerGateway,
 ): Promise<void> {
-  await browserPairing.pairingHealth();
+  const listener = (await browserPairing.pairingHealth()).worker?.listener;
+  if (listener?.state === 'failed') {
+    throw new Error(
+      `WebSocket listener failed on port ${listener.port}: ${listener.errorCode}. Choose --ws-port or --basePort to use another port.`,
+    );
+  }
 }

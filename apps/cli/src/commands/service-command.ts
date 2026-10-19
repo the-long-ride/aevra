@@ -24,11 +24,21 @@ export async function runServiceCommand(
   try {
     if (command.action === 'install') await service.install();
     else if (command.action === 'start' || command.action === 'restart') {
-      if ((await service.status()) === 'not-installed') {
+      const status = await service.status();
+      if (status === 'not-installed') {
         dependencies.error(
           `[aevra] service ${command.action} failed: Aevra service is not installed. Run "aevra service install" first.`,
         );
         return 1;
+      }
+      if (command.ports) {
+        if (command.action === 'start' && status === 'running') {
+          dependencies.error(
+            '[aevra] service start failed: Aevra service is already running. Run "aevra service restart" with the port options to apply them.',
+          );
+          return 1;
+        }
+        await service.install();
       }
       if (command.action === 'start') await service.start();
       else await service.restart();

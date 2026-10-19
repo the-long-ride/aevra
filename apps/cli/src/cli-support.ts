@@ -44,6 +44,22 @@ function serviceTable(info: {
   ];
 }
 
+const AUTHOR_NAME = 'the-long-ride';
+const AUTHOR_URL = 'https://github.com/the-long-ride';
+const REPO_NAME = 'the-long-ride/aevra';
+const REPO_URL = 'https://github.com/the-long-ride/aevra';
+
+const ESC = String.fromCharCode(27);
+const ST = ESC + String.fromCharCode(92);
+
+function link(label: string, url: string, hyperlinks: boolean): string {
+  return hyperlinks ? `${ESC}]8;;${url}${ST}${label}${ESC}]8;;${ST}` : `${label} (${url})`;
+}
+
+export function creditLine(hyperlinks = Boolean(process.stderr.isTTY)): string {
+  return `Author: ${link(AUTHOR_NAME, AUTHOR_URL, hyperlinks)} // Repo: ${link(REPO_NAME, REPO_URL, hyperlinks)}`;
+}
+
 export function readyLines(info: {
   adminUrl: string;
   mcpUrl: string;
@@ -59,6 +75,8 @@ export function readyLines(info: {
     '▄▀█▄██▄▀█▄▄▄  ▀█▀ ▄█▀  ▄▀█▄██',
     '',
     ...serviceTable(info),
+    '',
+    creditLine(),
     '',
   ];
 }

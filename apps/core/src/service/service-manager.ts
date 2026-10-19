@@ -49,9 +49,10 @@ export function createUserServiceAdapter(
   nodeExe: string,
   cliPath: string,
   io: ServiceIo = defaultServiceIo(),
+  startArgs: string[] = [],
 ): UserServiceAdapter {
-  if (platform === 'win32') return new WindowsServiceAdapter(nodeExe, cliPath, io);
-  if (platform === 'linux') return new LinuxServiceAdapter(nodeExe, cliPath, io);
-  if (platform === 'darwin') return new MacosServiceAdapter(nodeExe, cliPath, io);
+  if (platform === 'win32') return new WindowsServiceAdapter(nodeExe, cliPath, io, startArgs);
+  if (platform === 'linux') return new LinuxServiceAdapter(nodeExe, cliPath, io, startArgs);
+  if (platform === 'darwin') return new MacosServiceAdapter(nodeExe, cliPath, io, startArgs);
   throw new Error(`Unsupported platform: ${platform}`);
 }

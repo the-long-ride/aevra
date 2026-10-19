@@ -101,3 +101,65 @@ test('service failures report action and error', async () => {
   assert.equal(code, 1);
   assert.match(state.errors[0]!, /service start failed: denied/);
 });
+
+test('service start with ports refreshes a stopped service before starting', async () => {
+  const state = fixture({
+    status: async () => {
+      state.calls.push('status');
+      return 'stopped';
+    },
+  });
+  const code = await runServiceCommand(
+    { command: 'service', action: 'start', ports: { basePort: 9100 } },
+    state.service,
+    state.dependencies,
+  );
+  assert.equal(code, 0);
+  assert.deepEqual(state.calls, ['status', 'install', 'start']);
+});
+
+test('service start with ports rejects a running service with restart guidance', async () => {
+  const state = fixture();
+  const code = await runServiceCommand(
+    { command: 'service', action: 'start', ports: { gatewayPort: 9100 } },
+    state.service,
+    state.dependencies,
+  );
+  assert.equal(code, 1);
+  assert.deepEqual(state.calls, ['status']);
+  assert.match(state.errors[0]!, /service restart/);
+});
+
+test('service restart with ports refreshes the installed service before restarting', async () => {
+  const state = fixture();
+  const code = await runServiceCommand(
+    { command: 'service', action: 'restart', ports: { mcpPort: 9102 } },
+    state.service,
+    state.dependencies,
+  );
+  assert.equal(code, 0);
+  assert.deepEqual(state.calls, ['status', 'install', 'restart']);
+});
+
+test('service start without ports retains existing installed listener arguments', async () => {
+  const state = fixture();
+  const code = await runServiceCommand(
+    { command: 'service', action: 'start' },
+    state.service,
+    state.dependencies,
+  );
+  assert.equal(code, 0);
+  assert.deepEqual(state.calls, ['status', 'start']);
+});
+
+test('service start with ports still requires an installed service', async () => {
+  const state = fixture({ status: async () => 'not-installed' });
+  const code = await runServiceCommand(
+    { command: 'service', action: 'start', ports: { basePort: 9100 } },
+    state.service,
+    state.dependencies,
+  );
+  assert.equal(code, 1);
+  assert.deepEqual(state.calls, []);
+  assert.match(state.errors[0]!, /service install/);
+});

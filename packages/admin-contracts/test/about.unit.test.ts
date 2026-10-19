@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  AEVRA_BROWSER_USE_REPOSITORY_URL,
+  AEVRA_DESKTOP_USE_REPOSITORY_URL,
   AUTHOR,
   AUTHOR_NOTE,
   AUTHOR_PROFILE_URL,
@@ -15,6 +17,14 @@ test('about constants provide accurate author and repository links', () => {
   assert.equal(AUTHOR_NOTE, 'made by <3');
   assert.equal(AUTHOR_PROFILE_URL, 'https://github.com/the-long-ride');
   assert.equal(REPOSITORY_URL, 'https://github.com/the-long-ride/aevra');
+  assert.equal(
+    AEVRA_DESKTOP_USE_REPOSITORY_URL,
+    'https://github.com/the-long-ride/aevra-desktop-use',
+  );
+  assert.equal(
+    AEVRA_BROWSER_USE_REPOSITORY_URL,
+    'https://github.com/the-long-ride/aevra-browser-use',
+  );
   assert.equal(ISSUES_URL, 'https://github.com/the-long-ride/aevra/issues');
   assert.equal(LLM_TXT_URL, 'https://raw.githubusercontent.com/the-long-ride/aevra/main/llm.txt');
   assert.equal(LLM_TXT_BLOB_URL, 'https://github.com/the-long-ride/aevra/blob/main/llm.txt');

@@ -10,6 +10,42 @@ aevra start --ui
 
 Aevra validates the credentials before opening listeners, starts the internal Admin and MCP services on loopback, starts the unified HTTPS Public Gateway, and opens the Aevra login page. Keep the terminal running unless Aevra is installed as a background service.
 
+## Custom ports
+
+If another process occupies a default port, choose a different block:
+
+```sh
+aevra start --ui --basePort=50000
+```
+
+This starts the gateway on `50000`, UI/admin and extension pairing on `50001`,
+internal MCP on `50002`, and extension WebSocket on `50003`. The default block
+is `47830` through `47833`. Enter the UI/pairing port (`50001` in this example)
+when pairing the browser extension.
+
+Alternatively, change any subset of the listeners:
+
+```sh
+aevra start --ui --gateway-port=50000 --ui-port=51000 --mcp-port=52000 --ws-port=53000
+aevra start --ui --gp=50000 --up=51000 --mp=52000 --wp=53000
+```
+
+Long names and aliases behave identically; `--flag value` also works. Explicit
+ports override the corresponding environment settings for this invocation.
+Omitted individual ports retain their environment settings or defaults. Base and
+individual modes cannot be combined. Ports must be distinct integers from `1`
+through `65535`; a base cannot exceed `65532`. Occupied ports are reported rather
+than silently replaced. Startup output shows the actual addresses, and subsequent
+CLI commands such as `aevra ui`, `aevra status`, and agent installation follow the
+running instance in the same state directory.
+
+`aevra service install`, `start`, and `restart` accept the same port options.
+Installed services retain the selected arguments for future starts. An explicit
+selection replaces the previously installed selection; omitted individual flags
+then use normal environment/default resolution. Starting or restarting without
+port flags preserves the installed selection. Use `service restart` to change a
+running service's ports. Foreground overrides do not rewrite saved settings.
+
 ## Startup output
 
 Once startup is ready, Aevra renders Core readiness and the local service endpoints as an aligned table. With the default local ports and `--ui`, the status portion looks like this:

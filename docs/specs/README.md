@@ -1,6 +1,6 @@
 # Aevra Software Specs
 
-For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.3.0`.
+For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.3.1`.
 
 | #   | File                                                           | Answers the question                                      |
 | --- | -------------------------------------------------------------- | --------------------------------------------------------- |
@@ -17,6 +17,8 @@ For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Ve
 | 11  | [token-efficiency-and-usage](11-token-efficiency-and-usage.md) | How are results compacted and token usage measured?       |
 
 Release feature contracts:
+
+- [Custom startup ports](12-custom-startup-ports.md): listener blocks, aliases, validation, discovery and service persistence.
 
 - [Browser control](../browser-control.md) and [browser user manual](../user-manual/18-browser-control.md)
 - [Canvas control reliability design](../superpowers/specs/2026-09-27-browser-canvas-control-reliability-design.md) and [native coordinate input design](../superpowers/specs/2026-09-27-browser-native-coordinate-input-design.md)

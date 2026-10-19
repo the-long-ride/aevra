@@ -181,7 +181,7 @@ export async function createCoreRuntime(
         );
         const hostControlApproval = new HostControlApproval(sessions, hostControlAccess, approvals);
         const metrics = new MetricsService(),
-          browserPairing = createBrowserPairingService(settings, wm, workerGateway),
+          browserPairing = createBrowserPairingService(settings, wm, workerGateway, config),
           browserPolicy = createBrowserOriginPolicyService(settings, config, () => [
             exposureWiring?.gatewayUrl(),
             exposureWiring?.publicUrl(),

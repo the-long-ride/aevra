@@ -1,4 +1,6 @@
 import {
+  AEVRA_BROWSER_USE_REPOSITORY_URL,
+  AEVRA_DESKTOP_USE_REPOSITORY_URL,
   AUTHOR,
   AUTHOR_NOTE,
   AUTHOR_PROFILE_URL,
@@ -74,6 +76,32 @@ export function AboutPage() {
                 >
                   GitHub Repository
                 </a>
+              </li>
+              <li>
+                <a
+                  href={AEVRA_DESKTOP_USE_REPOSITORY_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-surface-id="about:desktop-use-repo-link"
+                >
+                  aevra-desktop-use
+                </a>{' '}
+                <span className="about-link-note">
+                  (Fork from Aevra focused on desktop use only)
+                </span>
+              </li>
+              <li>
+                <a
+                  href={AEVRA_BROWSER_USE_REPOSITORY_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-surface-id="about:browser-use-repo-link"
+                >
+                  aevra-browser-use
+                </a>{' '}
+                <span className="about-link-note">
+                  (Fork from Aevra focused on browser use only)
+                </span>
               </li>
               <li>
                 <a

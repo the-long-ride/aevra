@@ -32,6 +32,28 @@ describe('AboutPage', () => {
     expect(issuesLink).toHaveAttribute('target', '_blank');
   });
 
+  test('renders specialized fork repository links for desktop and browser use', async () => {
+    render(<AboutPage />);
+    const desktopLink = await screen.findByRole('link', { name: 'aevra-desktop-use' });
+    expect(desktopLink).toHaveAttribute(
+      'href',
+      'https://github.com/the-long-ride/aevra-desktop-use',
+    );
+    expect(desktopLink).toHaveAttribute('target', '_blank');
+    expect(desktopLink).toHaveAttribute('rel', 'noreferrer');
+
+    const browserLink = screen.getByRole('link', { name: 'aevra-browser-use' });
+    expect(browserLink).toHaveAttribute(
+      'href',
+      'https://github.com/the-long-ride/aevra-browser-use',
+    );
+    expect(browserLink).toHaveAttribute('target', '_blank');
+    expect(browserLink).toHaveAttribute('rel', 'noreferrer');
+
+    expect(screen.getByText(/Fork from Aevra focused on desktop use only/)).toBeInTheDocument();
+    expect(screen.getByText(/Fork from Aevra focused on browser use only/)).toBeInTheDocument();
+  });
+
   test('renders version from runtime status', async () => {
     render(<AboutPage />);
     // installApiFixtures provides version '0.1.0'

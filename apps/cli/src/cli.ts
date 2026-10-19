@@ -41,11 +41,12 @@ import { dispatchCommand } from './dispatch.js';
 import { agentDependencies, rootCleanup } from './agent-wiring.js';
 import { extensionInstallDependencies } from './extension-install.js';
 import { localAdminFetch } from './local-client.js';
-import { runStart } from './run.js';
+import { activeListenerConfig, runStartWithDiscovery } from './active-listeners.js';
 import { AgentUsageError } from './local-agent-command.js';
 import { runRootAgentEntry } from './local-agent-entry.js';
 import { adminDependencies } from './admin-dependencies.js';
 import { prepareStateDirectory } from '../../core/src/admin/agent-integration.js';
+import { portOptionsToArgs } from './port-args.js';
 
 function openBrowser(url: string) {
   const [command, args] =
@@ -149,7 +150,9 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
 
   let config;
   try {
-    config = loadCoreConfig();
+    config = loadCoreConfig(process.env, 'ports' in command ? command.ports : undefined);
+    if (command.command !== 'start' && command.command !== 'service')
+      config = activeListenerConfig(config);
   } catch (error) {
     console.error(`[aevra] ${formatCliError(error)}`);
     return 1;
@@ -168,7 +171,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       start: (current) =>
         runStartCommand(config, current, {
           run: (currentConfig, hooks) =>
-            runStart(currentConfig, {
+            runStartWithDiscovery(currentConfig, {
               signals: process,
               createRuntime: createCoreRuntime,
               onReady: hooks.onReady,
@@ -202,7 +205,13 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       service: (current) =>
         runServiceCommand(
           current,
-          createUserServiceAdapter(process.platform, process.execPath, process.argv[1]!),
+          createUserServiceAdapter(
+            process.platform,
+            process.execPath,
+            process.argv[1]!,
+            undefined,
+            portOptionsToArgs(current.ports),
+          ),
           {
             log: console.log,
             error: console.error,

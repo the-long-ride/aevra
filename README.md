@@ -182,6 +182,8 @@ npm install -g @the-long-ride/aevra@latest
 
 # Start aevra with dashboard in browser
 aevra start --ui
+# If a default port is occupied, move all listeners to 50000 through 50003:
+aevra start --ui --basePort=50000
 ```
 
 ### macOS and Linux (zsh / bash)
@@ -194,6 +196,8 @@ npm install -g @the-long-ride/aevra@latest
 export AEVRA_USERNAME="admin"
 export AEVRA_PASSWORD="YourSecurePassword"
 aevra start --ui
+# Or select ports individually (the aliases are --gp, --up, --mp and --wp):
+aevra start --ui --gateway-port=50000 --ui-port=51000 --mcp-port=52000 --ws-port=53000
 ```
 
 _(Optional)_ Run aevra automatically as a user-level background service:

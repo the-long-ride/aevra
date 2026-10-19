@@ -56,7 +56,7 @@ export class BrowserPairingService {
     private readonly settings: SettingsLike,
     private readonly worker: WorkerGateway,
     private readonly tokenKey: () => Buffer,
-    private readonly options: { now?: () => number } = {},
+    private readonly options: { now?: () => number; browserPort?: number } = {},
   ) {
     const loaded = this.settings.get<unknown>(SETTINGS_KEY, { epoch: 1, pairings: [] });
     this.stored = normalizeStoredPairing(loaded);
@@ -171,7 +171,7 @@ export class BrowserPairingService {
       issuedAt: new Date(issuedAt).toISOString(),
       expiresAt: new Date(issuedAt + TOKEN_TTL_MS).toISOString(),
     });
-    const port = Number(process.env.AEVRA_BROWSER_PORT ?? 47833);
+    const port = this.options.browserPort ?? Number(process.env.AEVRA_BROWSER_PORT ?? 47833);
     await this.pairingHealth();
     return { token, wsUrl: `ws://127.0.0.1:${port}` };
   }

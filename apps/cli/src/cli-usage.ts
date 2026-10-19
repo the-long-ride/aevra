@@ -5,11 +5,20 @@ export function usageText(): string {
     'Usage: aevra <command> [options]',
     '',
     'Run:',
-    '  aevra start [--ui]',
+    '  aevra start [--ui] [--basePort <n> | <individual port options>]',
     '  aevra ui [--logout-all]',
     '  aevra setup',
     '  aevra service install|start|stop|restart|status',
+    '    install/start/restart accept the same port options as start',
     '  aevra status [--json]',
+    '',
+    'Startup ports (use --flag=value or --flag value):',
+    '  --basePort <n>         gateway n, UI n+1, MCP n+2, WebSocket n+3 (1..65532)',
+    '  --gateway-port, --gp   gateway port (default 47830)',
+    '  --ui-port, --up        UI/admin and extension pairing port (default 47831)',
+    '  --mcp-port, --mp       internal MCP port (default 47832)',
+    '  --ws-port, --wp        extension WebSocket port (default 47833)',
+    '  Individual ports: 1..65535, distinct; cannot be combined with --basePort.',
     '',
     'Connect:',
     '  aevra agent list|install|uninstall|status  connect local AI agents (aevra agent --help)',
@@ -141,7 +150,7 @@ export function completionText(shell: 'bash' | 'zsh' | 'powershell'): string {
   local cur
   cur="\${COMP_WORDS[COMP_CWORD]}"
   if [[ "\${COMP_WORDS[1]}" == "start" && $COMP_CWORD -ge 2 ]]; then
-    COMPREPLY=( $(compgen -W "--ui" -- "$cur") )
+    COMPREPLY=( $(compgen -W "--ui --basePort --gateway-port --gp --ui-port --up --mcp-port --mp --ws-port --wp" -- "$cur") )
     return
   fi
   if [[ "\${COMP_WORDS[1]}" == "agent" && $COMP_CWORD -ge 2 ]]; then
@@ -159,7 +168,12 @@ complete -F _aevra aevra
 _aevra() {
   if (( CURRENT >= 3 )) && [[ $words[2] == start ]]; then
     _values 'start options' \\
-      '--ui[open authenticated React dashboard when ready]'
+      '--ui[open authenticated React dashboard when ready]' \\
+      '--basePort[start of the four-port listener block]' \\
+      '--gateway-port[gateway port]' '--gp[gateway port]' \\
+      '--ui-port[UI/admin port]' '--up[UI/admin port]' \\
+      '--mcp-port[MCP port]' '--mp[MCP port]' \\
+      '--ws-port[extension WebSocket port]' '--wp[extension WebSocket port]'
     return
   fi
   if (( CURRENT >= 3 )) && [[ $words[2] == agent ]]; then
@@ -181,7 +195,7 @@ _aevra "$@"
   param($wordToComplete, $commandAst, $cursorPosition)
   $elements = $commandAst.CommandElements
   if ($elements.Count -ge 2 -and $elements[1].Value -eq 'start') {
-    @('--ui') | Where-Object { $_ -like "$wordToComplete*" }
+    @('--ui','--basePort','--gateway-port','--gp','--ui-port','--up','--mcp-port','--mp','--ws-port','--wp') | Where-Object { $_ -like "$wordToComplete*" }
     return
   }
   if ($elements.Count -ge 2 -and $elements[1].Value -eq 'agent') {

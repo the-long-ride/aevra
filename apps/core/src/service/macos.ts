@@ -6,6 +6,7 @@ export class MacosServiceAdapter implements UserServiceAdapter {
     private nodeExe: string,
     private cliPath: string,
     private io: ServiceIo,
+    private startArgs: string[] = [],
   ) {}
   get file() {
     return path.join(this.io.home, 'Library', 'LaunchAgents', `${this.label}.plist`);
@@ -14,7 +15,10 @@ export class MacosServiceAdapter implements UserServiceAdapter {
     return `gui/${this.io.uid ?? 501}`;
   }
   async install() {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${this.label}</string><key>ProgramArguments</key><array><string>${esc(this.nodeExe)}</string><string>${esc(this.cliPath)}</string><string>start</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/></dict></plist>`;
+    const args = [this.nodeExe, this.cliPath, 'start', ...this.startArgs]
+      .map((arg) => `<string>${esc(arg)}</string>`)
+      .join('');
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${this.label}</string><key>ProgramArguments</key><array>${args}</array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/></dict></plist>`;
     await this.io.write(this.file, xml);
   }
   async start() {
