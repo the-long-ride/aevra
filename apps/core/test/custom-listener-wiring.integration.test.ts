@@ -81,7 +81,7 @@ test('runtime worker binds the requested WebSocket port in the child process', a
     rmSync(dir, { recursive: true, force: true });
   });
   await manager.start();
-  const reply = await manager.execute({
+  const reply = await manager.execute!({
     sessionId: 'admin:browser',
     workspaceId: 'system',
     roots: [],

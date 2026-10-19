@@ -1,15 +1,30 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.3.0`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.3.1`
 
 ## Ports and listeners (fixed hosts)
 
-| Listener       | Address                                                                | Env override         |
-| -------------- | ---------------------------------------------------------------------- | -------------------- |
-| Public Gateway | `https://localhost:47830` or `http://...` (binds `127.0.0.1`)          | `AEVRA_PUBLIC_PORT`  |
-| Admin UI/API   | `https://localhost:47831` (binds `127.0.0.1`)                          | `AEVRA_ADMIN_PORT`   |
-| Browser bridge | `ws://127.0.0.1:47833` (extension transport, started on first connect) | `AEVRA_BROWSER_PORT` |
-| Remote MCP     | `https://localhost:47832` (binds `127.0.0.1`)                          | `AEVRA_MCP_PORT`     |
+| Listener       | Address                                                          | Env override         |
+| -------------- | ---------------------------------------------------------------- | -------------------- |
+| Public Gateway | `https://localhost:47830` or `http://...` (binds `127.0.0.1`)    | `AEVRA_PUBLIC_PORT`  |
+| Admin UI/API   | `https://localhost:47831` (binds `127.0.0.1`)                    | `AEVRA_ADMIN_PORT`   |
+| Browser bridge | `ws://127.0.0.1:47833` (extension transport, checked at startup) | `AEVRA_BROWSER_PORT` |
+| Remote MCP     | `https://localhost:47832` (binds `127.0.0.1`)                    | `AEVRA_MCP_PORT`     |
+
+## CLI listener overrides
+
+`aevra start --ui --basePort=50000` selects gateway `50000`, UI/admin/pairing
+`50001`, MCP `50002`, and WebSocket `50003`. Alternatively select any subset with
+`--gateway-port/--gp`, `--ui-port/--up`, `--mcp-port/--mp`, and `--ws-port/--wp`.
+Both equals and separate-value syntax work. CLI values override the corresponding
+environment values for this invocation; unselected values retain normal resolution.
+Base and individual modes cannot be mixed. Ports must be distinct decimal integers
+in `1..65535`; the base maximum is `65532`. Duplicate logical flags are rejected.
+
+Service install/start/restart accept and retain the same options. Later UI/status
+and agent-management commands follow the live instance in the same state directory
+through `listeners.json`. See [the implemented contract](12-custom-startup-ports.md)
+for startup propagation, rollback and service-selection retention.
 
 ## Environment variables
 

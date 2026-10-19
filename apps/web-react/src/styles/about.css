@@ -90,6 +90,10 @@
   gap: 10px;
 }
 
+.about-links-list li {
+  line-height: 1.5;
+}
+
 .about-links-list li a {
   display: inline-block;
   color: var(--accent);
@@ -99,6 +103,11 @@
 
 .about-links-list li a:hover {
   text-decoration: underline;
+}
+
+.about-link-note {
+  color: var(--mute);
+  font-size: 12px;
 }
 
 /* Guide AI section */

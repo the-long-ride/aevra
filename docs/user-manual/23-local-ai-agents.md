@@ -219,6 +219,13 @@ product's **pairing port**:
 | Aevra         | 47831        | 47832    | 47833                    |
 | Aevra Browser | 47841        | 47842    | 47843                    |
 
+These are defaults. `aevra start --ui --basePort=50000` uses pairing `50001`,
+MCP `50002`, and WebSocket `50003`. `aevra-browser serve --basePort=50100` uses
+pairing `50100`, MCP `50101`, and WebSocket `50102`. Individual listener flags also
+work. Root CLI agent installation discovers the running core's actual endpoints
+from its state directory. Reinstall existing HTTP/stdio registrations after a
+root endpoint change to refresh the stored endpoint and CA information.
+
 Custom configured ports work too. Successful pairing switches the active server;
 failed pairing preserves the previous connection. Both servers may run, but the
 extension connects to one at a time. Saved credentials, authenticated connection

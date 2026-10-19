@@ -118,7 +118,9 @@ listening or that a browser session is attached. The Aevra Browser control
 settings show listener, authenticated socket, and attached browser status.
 If the popup says **Pair again**, generate a new code and pair again. If the
 listener reports a port failure, free port 47833 or configure another browser
-port, then restart Aevra.
+port, then restart Aevra. For example, `aevra start --ui --wp=53000` changes only
+the WebSocket port. `--basePort=50000` moves pairing to `50001` and WebSocket to
+`50003`; enter `50001` in the extension popup. See [custom ports](02-first-start.md#custom-ports).
 
 Once paired and granted host browser access, ask your agent to connect:
 

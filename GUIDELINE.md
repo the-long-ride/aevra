@@ -2,7 +2,9 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current source version is **1.3.0**. It includes command understanding,
+The current source version is **1.3.1**. For custom startup listener blocks and
+individual port aliases, see [the implemented port contract](docs/specs/12-custom-startup-ports.md).
+It includes command understanding,
 workspace containment, typed command rules, efficient browser/control plans,
 cross-platform shared-semantic desktop control, MCP upstream servers, and
 workspace manifests. Version 1.1.2 fixed missing compiled modules in npm
@@ -154,7 +156,7 @@ synthesizes host pointer/keyboard input. Use background `desktop_describe` plus
 legacy foreground input and pixel capture; macOS/Linux portable mode reports
 those capabilities unavailable.
 
-Strict `isolated` mode is not a label for the ordinary worker: v1.3.0 refuses
+Strict `isolated` mode is not a label for the ordinary worker: v1.3.1 refuses
 it until a separately provisioned runner has passed containment qualification.
 Read [Desktop control](docs/user-manual/19-desktop-control.md) before enabling it.
 

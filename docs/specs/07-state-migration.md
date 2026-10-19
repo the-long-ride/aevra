@@ -1,6 +1,6 @@
 # 07 — State & Schema
 
-**Audience:** engineers & AI agents · **Scope:** on-disk state and schema evolution · **Verified against:** `1.3.0`
+**Audience:** engineers & AI agents · **Scope:** on-disk state and schema evolution · **Verified against:** `1.3.1`
 
 ## State directory
 
@@ -13,6 +13,12 @@
 `AEVRA_STATE_DIR` overrides the default location. Contents include `aevra.db` (SQLite, WAL), `local-control.secret`, `recovery/`, `secrets.vault`, `backups/`, and `worker.sock` on POSIX.
 
 ## Schema
+
+Foreground startup also publishes `listeners.json` after readiness. This transient
+record contains the owning PID/ID and actual gateway/admin/MCP/WebSocket ports,
+without credentials. CLI commands use a validated live record for discovery;
+shutdown removes only its own record. It does not replace saved configuration or
+require a database migration. See [custom startup ports](12-custom-startup-ports.md).
 
 `node:sqlite` uses ordered migrations in `packages/store/src/migrations.ts`:
 

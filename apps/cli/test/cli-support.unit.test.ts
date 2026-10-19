@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   cloudflareSetupNeedsAccess,
   completionText,
+  creditLine,
   formatCliError,
   readyLines,
   usageText,
@@ -50,6 +51,8 @@ test('aevra start ready output renders the service endpoints as a table', () => 
     '│ Dashboard      │ https://localhost:47831     │',
     '└────────────────┴─────────────────────────────┘',
     '',
+    creditLine(),
+    '',
   ]);
   assert.doesNotMatch(lines.join('\n'), /Press Ctrl\+C/);
   assert.doesNotMatch(lines.join('\n'), /\x1b\[/);
@@ -89,4 +92,22 @@ test('missing admin credentials print a friendly message instead of a stack', ()
   assert.match(message, /ADMIN_CREDENTIALS_REQUIRED/);
   assert.match(message, /Set both AEVRA_USERNAME and AEVRA_PASSWORD/);
   assert.doesNotMatch(message, /at loadAdminCredentials/);
+});
+
+test('credit line links the author and repository when hyperlinks are supported', () => {
+  assert.equal(
+    creditLine(false),
+    'Author: the-long-ride (https://github.com/the-long-ride) // Repo: the-long-ride/aevra (https://github.com/the-long-ride/aevra)',
+  );
+  const linked = creditLine(true);
+  const esc = String.fromCharCode(27);
+  const st = esc + String.fromCharCode(92);
+  assert.ok(
+    linked.includes(`${esc}]8;;https://github.com/the-long-ride${st}the-long-ride${esc}]8;;${st}`),
+  );
+  assert.ok(
+    linked.includes(
+      `${esc}]8;;https://github.com/the-long-ride/aevra${st}the-long-ride/aevra${esc}]8;;${st}`,
+    ),
+  );
 });
