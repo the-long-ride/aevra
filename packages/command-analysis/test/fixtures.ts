@@ -78,7 +78,7 @@ export function makePolicyFixture(analysis: CommandAnalysis): CommandPolicyInput
     rules: [],
     authority: { valid: true, commandCapability: true, reasons: [] },
     network: { outcome: 'allow', reasons: [] },
-    yolo: { active: true, mode: 'workspace' },
+    yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
     criticalAlwaysConfirm: false,
     scriptTrust: 'trusted',
   };
