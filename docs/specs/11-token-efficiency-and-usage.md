@@ -1,6 +1,6 @@
 # Token Efficiency and Usage
 
-**Audience:** engineers & AI agents · **Scope:** result shaping, tool surface, token statistics · **Verified against:** `1.3.1`
+**Audience:** engineers & AI agents · **Scope:** result shaping, tool surface, token statistics · **Verified against:** `1.3.2`
 
 ## Result shaping
 

@@ -1,6 +1,6 @@
 # Aevra Software Specs
 
-For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.3.1`.
+For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Verified against `1.3.2`.
 
 | #   | File                                                           | Answers the question                                      |
 | --- | -------------------------------------------------------------- | --------------------------------------------------------- |
@@ -19,6 +19,7 @@ For engineers and AI agents. Each file answers one question in ≤ 2 minutes. Ve
 Release feature contracts:
 
 - [Custom startup ports](12-custom-startup-ports.md): listener blocks, aliases, validation, discovery and service persistence.
+- [File transfer user manual](../user-manual/24-file-transfer.md): binary/streaming files_download and files_upload, limits, one-time link routes.
 
 - [Browser control](../browser-control.md) and [browser user manual](../user-manual/18-browser-control.md)
 - [Canvas control reliability design](../superpowers/specs/2026-09-27-browser-canvas-control-reliability-design.md) and [native coordinate input design](../superpowers/specs/2026-09-27-browser-native-coordinate-input-design.md)

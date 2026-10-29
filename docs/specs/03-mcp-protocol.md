@@ -1,27 +1,27 @@
 # 03 — MCP Protocol
 
-**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.3.1`
+**Audience:** engineers & AI agents · **Scope:** transport, session lifecycle, tools, errors · **Verified against:** `1.3.2`
 
 ## Transport
 
-Streamable HTTP JSON-RPC 2.0 over TLS at `https://localhost:47830/mcp` (or `/mcp/<connector-token>`, or over loopback HTTP if `localProtocol: http` is configured), protocol version `2025-06-18`. Requests: `POST` (JSON-RPC body), `DELETE` (session disconnect). `GET /health` is unauthenticated `{ok:true}`. Max request body: 1 MB.
+Streamable HTTP JSON-RPC 2.0 over TLS at `https://localhost:47830/mcp` (or `/mcp/<connector-token>`, or over loopback HTTP if `localProtocol: http` is configured), protocol version `2025-06-18`. Requests: `POST` (JSON-RPC body), `DELETE` (session disconnect). `GET /health` is unauthenticated `{ok:true}`. Max request body: 1 MB, except `tools/call` of `files_download`, which may carry the inline transfer limit plus base64 overhead (OAuth routes stay at 1 MB). `GET /files/<secret>` serves one-time `files_upload` links on the same origin; it is not an MCP route.
 
 Aevra does not keep a tool HTTP request open for the lifetime of a long-running command. Long work returns a managed process ID and is observed through bounded follow-up tool calls, so an MCP client may reconnect at the transport level without depending on one multi-minute response.
 
 ## Session lifecycle
 
-1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.3.1"}`.
+1. `initialize` -> server creates a fresh session, returns header `mcp-session-id: ses_<uuid>` and `serverInfo {name:"Aevra", version:"1.3.2"}`.
 2. Every subsequent `POST` carries that header; `DELETE` disconnects. The session's admission identity (actor + subject + durable OAuth connection when present) must match on every call.
 3. OAuth reconnects create a fresh MCP session. Remembered connection-scoped workspace grants are restored automatically; session-only workspace leases are restored only while their original expiry is still valid.
 4. A normal reconnect never auto-replays a mutating request whose response was lost. `operation_get` and `operation_list` let the same OAuth connection inspect durable operation outcomes before deciding what to do next. Managed process records likewise outlive one HTTP request.
 
-## Tool vocabulary (74 discoverable tools)
+## Tool vocabulary (79 discoverable tools)
 
 | Group      | Tools                                                                                                                                                                                                                                                                                                                |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status     | `aevra_status` (reports session, leases, capabilities, and `execution.system` host capability snapshot) `control_access_status` (reports host-control connection grants `browser.control` and `desktop.control`)                                                                                                     |
 | Workspace  | `workspace_list` `workspace_select` `workspace_current`                                                                                                                                                                                                                                                              |
-| Files      | `file_list` `file_read_many` `file_search` `search` `file_write_many` `file_move` `file_delete`                                                                                                                                                                                                                      |
+| Files      | `file_list` `file_read_many` `file_search` `search` `file_write_many` `file_move` `file_delete` `files_download` `files_upload`                                                                                                                                                                                      |
 | Command    | `command_run_many` `shell_run`                                                                                                                                                                                                                                                                                       |
 | Git        | `git_status` `git_add` `git_diff` `git_log` `git_branch` `git_commit` `git_push`                                                                                                                                                                                                                                     |
 | Processes  | `process_start` `process_list` `process_status` `process_wait` `process_logs` `process_stop` `process_restart`                                                                                                                                                                                                       |
@@ -37,6 +37,8 @@ The public MCP discovery surface exposes batch tools as the normal interface for
 
 - `file_read_many` accepts one to 32 reads, preserves input ordering, uses bounded concurrency, and returns a result for each requested path.
 - `file_write_many` accepts one to 32 creates, replacements, or patches. Its item schema is discriminated by operation, duplicate target paths are rejected before dispatch, and each mutation still uses the ordinary approval, recovery, conflict, and workspace-lock path.
+- `files_download` and `files_upload` accept one to 64 entries or paths per call, ask for one HIGH `files:transfer` approval per batch (skipped under YOLO risk `do-whatever`), and report per-entry results. Server `_meta` (name, version, description, icon) is sent only on `initialize`, `server/discover`, `tools/list` and base-tool results.
+- Tools switched off in Settings > Tools (`tools.disabled`) are absent from `tools/list` and refused by name. The server has no notification stream, so `notifications/tools/list_changed` is not sent; clients see changes on their next `tools/list` or reconnect.
 - `command_run_many` accepts one to 16 commands and uses bounded scheduling while serializing commands whose effects may conflict.
 
 The singular primitives `file_read`, `file_create`, `file_write`, `file_patch`, and `command_run` remain internal service operations used by batch delegation and backward-compatible direct calls. They are intentionally omitted from `tools/list` and are not part of model-facing tool selection.
@@ -185,7 +187,7 @@ tier. Temporary outages remain visible as degraded. A changed catalog enters
 Needs review and stops serving until the operator acknowledges the diff. A
 disconnect just before a call fails rather than replaying it; reconnect must
 validate the catalog first. These dynamic upstream entries are additional to
-the 74 discoverable built-in tools listed above.
+the 79 discoverable built-in tools listed above.
 
 An operator can disable a registered upstream (`aevra mcp disable <id>`, the
 Web UI switch, or `POST /api/mcp/upstreams/{id}/disable`; `enable` reverses
