@@ -4,6 +4,7 @@ export const ADMIN_SURFACE = {
     { id: 'workspaces', label: 'Workspaces' },
     { id: 'permissions', label: 'Permissions' },
     { id: 'sessions', label: 'Sessions' },
+    { id: 'connectors', label: 'Connectors' },
     { id: 'audit', label: 'Audit' },
     { id: 'settings', label: 'Settings' },
     { id: 'data', label: 'Data' },

@@ -44,9 +44,9 @@ test('all four agents coexist across products, reinstall, transport switch and c
     mkdirSync(path.dirname(claude.config), { recursive: true });
     writeFileSync(claude.config, '{"custom":true,"mcpServers":{"other":{"command":"other"}}}\n');
     await manageAgent(base);
-    assert.equal(serial, 4);
+    assert.equal(serial, 6);
     await manageAgent(base);
-    assert.equal(serial, 4);
+    assert.equal(serial, 6);
     assert.ok(lstatSync(path.join(home, '.claude/skills/aevra')).isSymbolicLink());
     const browser = {
       ...base,
@@ -58,7 +58,7 @@ test('all four agents coexist across products, reinstall, transport switch and c
     await manageAgent({ ...base, target: 'codex', transport: 'http' });
     assert.equal(revoked.length, 1);
     const status = await manageAgent({ ...base, operation: 'status' });
-    assert.equal(status.registrations.length, 4);
+    assert.equal(status.registrations.length, 6);
     await manageAgent({ ...base, operation: 'uninstall' });
     assert.ok(!existsSync(path.join(home, '.agents/skills/aevra')));
     assert.ok(existsSync(path.join(home, '.agents/skills/aevra-browser/SKILL.md')));
@@ -67,7 +67,7 @@ test('all four agents coexist across products, reinstall, transport switch and c
     assert.equal(remaining.custom, true);
     assert.deepEqual(Object.keys(remaining.mcpServers), ['other']);
     assert.ok(!existsSync(path.join(home, '.claude/skills/aevra-browser')));
-    assert.equal(revoked.length, 9);
+    assert.equal(revoked.length, 13);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

@@ -32,7 +32,9 @@ export function classifySensitivity(input: SensitivityInput): Sensitivity {
   // same file. That turned every declared `protectedPaths` entry into a
   // speed bump anyone could step around by rewriting the argument.
   const canonical = normalizeLogicalPath(
-    process.platform === 'win32' ? input.path.replace(/^[a-z]:[\\/]/i, '/') : input.path,
+    process.platform === 'win32'
+      ? input.path.replace(/^\/?[a-z]:(?:[\\/]|$)/i, '/')
+      : input.path,
   );
   let configured: Sensitivity = input.mountPolicy ?? 'NORMAL';
   for (const rule of input.userPatterns ?? []) {

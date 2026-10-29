@@ -53,7 +53,7 @@ test('detect returns one entry per agent and finds a config home', async () => {
     const list = await f.run({ operation: 'detect' });
     assert.deepEqual(
       list.map((row: any) => row.target),
-      ['codex', 'claude-code', 'opencode', 'antigravity'],
+      ['codex', 'claude-code', 'opencode', 'antigravity', 'antigravity-cli', 'antigravity-ide'],
     );
     const codex = list.find((row: any) => row.target === 'codex');
     assert.equal(codex.found, true);

@@ -32,6 +32,7 @@ import { runUiCommand } from './commands/ui-command.js';
 import {
   cloudflareSetupNeedsAccess,
   completionText,
+  desktopHelperNoticeLines,
   formatCliError,
   readyLines,
   usageText,
@@ -168,8 +169,16 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         return 0;
       },
       about: async (current) => runAboutCommand(current, { log: console.log }),
-      start: (current) =>
-        runStartCommand(config, current, {
+      start: (current) => {
+        let cachedResolution: ReturnType<typeof resolveHelperBinaryPath> | undefined;
+        const getResolution = () => {
+          if (!cachedResolution) {
+            cachedResolution = resolveHelperBinaryPath({ warn: () => {} });
+          }
+          return cachedResolution;
+        };
+
+        return runStartCommand(config, current, {
           run: (currentConfig, hooks) =>
             runStartWithDiscovery(currentConfig, {
               signals: process,
@@ -177,7 +186,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
               onReady: hooks.onReady,
             }),
           readyLines: (info) =>
-            readyLines({ ...info, desktopHelperReady: Boolean(resolveHelperBinaryPath().path) }),
+            readyLines({ ...info, desktopHelperReady: Boolean(getResolution().path) }),
+          desktopHelperNoticeLines: () => desktopHelperNoticeLines(getResolution()),
           openUi: async (currentConfig, destination) => {
             const url = await createAuthenticatedUiUrl(currentConfig, admin, destination);
             openBrowser(url);
@@ -185,7 +195,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
           },
           error: console.error,
           formatError: formatCliError,
-        }),
+        });
+      },
       ui: (current) =>
         runUiCommand(config, current, {
           createUrl: (currentConfig) => createAuthenticatedUiUrl(currentConfig, admin),

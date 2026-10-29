@@ -5,7 +5,10 @@ import path from 'node:path';
 import test from 'node:test';
 import { evaluateRuntimeCommand } from '../src/command-evaluation.js';
 
-function runtimeContext(root: string, options: { denyNetwork?: boolean } = {}) {
+function runtimeContext(
+  root: string,
+  options: { denyNetwork?: boolean; risk?: 'do-whatever' | 'prevent-high-risk' } = {},
+) {
   const lease = {
     workspaceId: 'ws-1',
     capabilities: ['commands.run', 'network'],
@@ -32,7 +35,7 @@ function runtimeContext(root: string, options: { denyNetwork?: boolean } = {}) {
     },
     deps: {
       settings: {
-        get: () => ({ mode: 'unrestricted' }),
+        get: () => ({ mode: 'unrestricted', risk: options.risk ?? 'do-whatever' }),
       },
       operations: {
         classifyNetwork: (destination: string) => ({
@@ -57,7 +60,7 @@ function runtimeContext(root: string, options: { denyNetwork?: boolean } = {}) {
   } as any;
 }
 
-test('evaluateRuntimeCommand shows in-scope YOLO overriding current network DENY', async () => {
+test('evaluateRuntimeCommand shows do-whatever YOLO overriding current network DENY', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'aevra-command-eval-network-'));
   try {
     const result = await evaluateRuntimeCommand(
@@ -80,17 +83,46 @@ test('evaluateRuntimeCommand shows in-scope YOLO overriding current network DENY
   }
 });
 
+test('evaluateRuntimeCommand allows inside-workspace command under prevent-high-risk unrestricted YOLO', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'aevra-command-eval-prevent-'));
+  try {
+    const result = await evaluateRuntimeCommand(
+      runtimeContext(root, { denyNetwork: true, risk: 'prevent-high-risk' }),
+      's1',
+      'ws-1',
+      {
+        kind: 'argv',
+        executable: 'git',
+        argv: ['git', 'push'],
+        cwdLogical: '/',
+        executionMode: 'host',
+        networkDestinations: ['example.com'],
+      },
+    );
+    // Inside the workspace unrestricted matches workspace scope; outside commands keep
+    // the network deny (command-decision-yolo-split.unit.test.ts).
+    assert.equal(result.decision.outcome, 'allow');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('evaluateRuntimeCommand carries classified CRITICAL risk into analysis and decision', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'aevra-command-eval-critical-'));
   try {
-    const result = await evaluateRuntimeCommand(runtimeContext(root), 's1', 'ws-1', {
-      kind: 'argv',
-      executable: 'bash',
-      argv: ['bash', '-lc', 'sudo rm -rf /tmp/example'],
-      cwdLogical: '/',
-      executionMode: 'host',
-      networkDestinations: [],
-    });
+    const result = await evaluateRuntimeCommand(
+      runtimeContext(root, { risk: 'prevent-high-risk' }),
+      's1',
+      'ws-1',
+      {
+        kind: 'argv',
+        executable: 'bash',
+        argv: ['bash', '-lc', 'sudo rm -rf /tmp/example'],
+        cwdLogical: '/',
+        executionMode: 'host',
+        networkDestinations: [],
+      },
+    );
 
     assert.ok(result.analysis.nodes.length > 0);
     assert.ok(result.analysis.nodes.every((node) => node.risk === 'CRITICAL'));

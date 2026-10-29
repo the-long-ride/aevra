@@ -38,7 +38,9 @@ test('nothing present gives one not-found entry per target in order', () =>
     assert.equal(byTarget(list, 'codex').configPath, path.join(home, '.codex'));
     assert.equal(byTarget(list, 'claude-code').configPath, path.join(home, '.claude.json'));
     assert.equal(byTarget(list, 'opencode').configPath, path.join(home, '.config', 'opencode'));
-    assert.equal(byTarget(list, 'antigravity').configPath, path.join(home, '.gemini'));
+    assert.equal(byTarget(list, 'antigravity').configPath, path.join(home, '.gemini', 'antigravity'));
+    assert.equal(byTarget(list, 'antigravity-cli').configPath, path.join(home, '.gemini', 'antigravity-cli'));
+    assert.equal(byTarget(list, 'antigravity-ide').configPath, path.join(home, '.gemini', 'config'));
   }));
 
 test('an executable on PATH is found with path evidence', () =>
@@ -143,7 +145,27 @@ test('antigravity is found by ~/.gemini alone', () =>
     const entry = byTarget(detectAgents({ home, env: { PATH: bin } }), 'antigravity');
     assert.equal(entry.found, true);
     assert.equal(entry.evidence, 'config');
-    assert.equal(entry.configPath, path.join(home, '.gemini'));
+    assert.equal(entry.configPath, path.join(home, '.gemini', 'antigravity'));
+  }));
+
+test('antigravity variants are found by their directories and executables', () =>
+  sandbox((home, bin) => {
+    writeFileSync(path.join(bin, 'agy'), 'plain words');
+    const cliByPath = byTarget(
+      detectAgents({ home, env: { PATH: bin }, platform: 'linux' }),
+      'antigravity-cli',
+    );
+    assert.equal(cliByPath.found, true);
+    assert.equal(cliByPath.evidence, 'path');
+
+    mkdirSync(path.join(home, '.gemini', 'config'), { recursive: true });
+    const ideByConfig = byTarget(
+      detectAgents({ home, env: { PATH: bin }, platform: 'linux' }),
+      'antigravity-ide',
+    );
+    assert.equal(ideByConfig.found, true);
+    assert.equal(ideByConfig.evidence, 'config');
+    assert.equal(ideByConfig.configPath, path.join(home, '.gemini', 'config'));
   }));
 
 test('opencode configPath honours XDG_CONFIG_HOME', () =>

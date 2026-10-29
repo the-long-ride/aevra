@@ -95,9 +95,13 @@ export const handleWorkspaceRoutes: AdminRouteHandler = async (req, res, url, co
   }
   if (match && method === 'POST') {
     const input = await readAdminBody(req);
+    const rawHostRoot = String(input.hostRoot ?? '').trim();
+    const rawLogicalPath = String(input.logicalPath ?? '').trim();
+    const hostRoot = rawHostRoot || rawLogicalPath;
+    const logicalPath = rawLogicalPath || hostRoot;
     const mount = context.workspaces.addMount(match[1], {
-      logicalPath: String(input.logicalPath),
-      hostRoot: String(input.hostRoot),
+      logicalPath,
+      hostRoot,
       capabilities: (input.capabilities ?? []) as Capability[],
       sensitivityPolicyId: input.sensitivityPolicyId,
     });
@@ -115,6 +119,12 @@ export const handleWorkspaceRoutes: AdminRouteHandler = async (req, res, url, co
     sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
     return true;
   }
+  if (match && (method === 'PATCH' || method === 'PUT')) {
+    const input = await readAdminBody(req);
+    context.workspaces.updateMount?.(match[1], input);
+    sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
+    return true;
+  }
 
   match = path.match(/^\/api\/workspaces\/([^/]+)\/admission$/);
   if (match && method === 'POST') {
@@ -125,6 +135,15 @@ export const handleWorkspaceRoutes: AdminRouteHandler = async (req, res, url, co
       String(input.profileId ?? 'developer'),
       input.admission === 'ask' ? 'ask' : 'auto',
     );
+    sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
+    return true;
+  }
+
+  const admissionDeleteMatch = path.match(/^\/api\/workspaces\/([^/]+)\/admissions?\/([^/]+)$/);
+  if (admissionDeleteMatch && method === 'DELETE') {
+    const wsId = decodeURIComponent(admissionDeleteMatch[1]!);
+    const actor = decodeURIComponent(admissionDeleteMatch[2]!);
+    context.profiles?.unmapActor?.(actor, wsId);
     sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
     return true;
   }

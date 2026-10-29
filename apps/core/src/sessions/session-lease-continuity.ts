@@ -64,7 +64,7 @@ export function restoreRememberedWorkspaces(
   session: SecuritySession,
   admitWorkspace: (workspaceId: string, profileId: string) => unknown,
 ) {
-  if (!session.actor.startsWith('oauth:')) return;
+  if (!session.actor.startsWith('oauth:') && !session.actor.startsWith('connector:')) return;
   for (const grant of repo.listRememberedWorkspaceGrants(session.subject)) {
     try {
       admitWorkspace(grant.workspaceId, grant.profileId);
@@ -97,6 +97,23 @@ export function grantRememberedWorkspaceAcrossSessions(input: {
     if (session.id === input.source.id || !granted) granted = admitted.lease;
   }
   return granted;
+}
+
+/** Slides the idle expiry of a session's live leases forward (one workspace when given). */
+export function extendLeases(
+  leaseRows: Iterable<WorkspaceLease>,
+  sessionId: string,
+  now: Date,
+  idleMs: number,
+  workspaceId?: string,
+) {
+  const expiresAt = new Date(now.getTime() + idleMs).toISOString();
+  for (const lease of leaseRows) {
+    if (lease.sessionId !== sessionId) continue;
+    if (workspaceId && lease.workspaceId !== workspaceId) continue;
+    if (Date.parse(lease.expiresAt) <= now.getTime()) continue;
+    lease.expiresAt = expiresAt;
+  }
 }
 
 export function revokeConnectionSessions(input: {
@@ -133,7 +150,7 @@ export function revokeWorkspaceAccess(input: {
 }) {
   const session = input.sessions.get(input.sessionId);
   if (!session) return false;
-  if (session.actor.startsWith('oauth:')) {
+  if (session.actor.startsWith('oauth:') || session.actor.startsWith('connector:')) {
     return revokeRememberedWorkspaceAcrossSessions({
       repo: input.repo,
       sessions: input.sessions.values(),

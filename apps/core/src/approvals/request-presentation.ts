@@ -1,6 +1,7 @@
 import { redactText } from '../../../../packages/security/src/dlp.js';
 import { stripControlCharacters } from '../../../../packages/security/src/untrusted.js';
 import type { FrozenOperationTicket } from './approval-service.js';
+import { presentTransfer } from './transfer-presentation.js';
 
 export interface ApprovalPresentation {
   title: string;
@@ -92,6 +93,9 @@ function presentApprovalContent(ticket: FrozenOperationTicket): ApprovalPresenta
   const family = String(ticket.operation?.family ?? ''),
     payload: any = ticket.payload ?? {},
     args: any = payload.args ?? {};
+  if (family === 'files:transfer' && payload.transfer) {
+    return presentTransfer(ticket, payload.transfer);
+  }
   if (ticket.scope === 'host' && family === 'host-control:request')
     return {
       title: 'Host control access',

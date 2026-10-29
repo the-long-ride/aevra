@@ -4,5 +4,6 @@ export * from './browser-links.js';
 export * from './connector-notes.js';
 export * from './surface.js';
 export * from './token-usage.js';
+export * from './tool-switches.js';
 export * from './tunnel-tools.js';
 export * from './mcp-upstream.js';

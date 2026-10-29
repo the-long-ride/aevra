@@ -26,6 +26,8 @@ test('every host tool maps to a group', () => {
     search: 'files',
     file_read_many: 'files',
     file_write_many: 'files',
+    files_download: 'files',
+    files_upload: 'files',
     shell_run: 'commands',
     command_run_many: 'commands',
     process_start: 'commands',

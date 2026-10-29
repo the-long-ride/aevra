@@ -40,6 +40,8 @@ function workspaceLocation(
         skills: [],
       };
     case 'antigravity':
+    case 'antigravity-cli':
+    case 'antigravity-ide':
       return {
         config: path.join(root, '.agents', 'mcp_config.json'),
         kind: 'json',
@@ -68,10 +70,6 @@ export function agentLocation(
   }
   const open = path.join(env.XDG_CONFIG_HOME || path.join(home, '.config'), 'opencode');
   const gemini = path.join(home, '.gemini');
-  const current = path.join(gemini, 'config/mcp_config.json');
-  const legacy = path.join(gemini, 'antigravity/mcp_config.json');
-  if (target === 'antigravity' && existsSync(current) && existsSync(legacy))
-    throw new Error('AGENT_CONFIG_CONFLICT: two Antigravity profiles exist; select one explicitly');
   switch (target) {
     case 'codex':
       return {
@@ -101,13 +99,24 @@ export function agentLocation(
       };
     case 'antigravity':
       return {
-        config: existsSync(legacy) ? legacy : current,
+        config: path.join(gemini, 'antigravity', 'mcp_config.json'),
         kind: 'json',
         entryPath: ['mcpServers'],
-        skills: [
-          path.join(gemini, existsSync(legacy) ? 'antigravity/skills' : 'config/skills'),
-          path.join(gemini, 'antigravity-cli/skills'),
-        ],
+        skills: [path.join(gemini, 'antigravity', 'skills')],
+      };
+    case 'antigravity-cli':
+      return {
+        config: path.join(gemini, 'antigravity-cli', 'mcp_config.json'),
+        kind: 'json',
+        entryPath: ['mcpServers'],
+        skills: [path.join(gemini, 'antigravity-cli', 'skills')],
+      };
+    case 'antigravity-ide':
+      return {
+        config: path.join(gemini, 'config', 'mcp_config.json'),
+        kind: 'json',
+        entryPath: ['mcpServers'],
+        skills: [path.join(gemini, 'config', 'skills')],
       };
   }
 }
@@ -131,7 +140,7 @@ export function nativeEntry(
         headers: { Authorization: `Bearer ${credential.token}` },
         enabled: true,
       };
-    if (target === 'antigravity')
+    if (target === 'antigravity' || target === 'antigravity-cli' || target === 'antigravity-ide')
       return {
         serverUrl: options.endpoint,
         headers: { Authorization: `Bearer ${credential.token}` },

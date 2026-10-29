@@ -28,6 +28,7 @@ export function createRuntimeConnectionServices(
   const profiles = new CapabilityProfileService(raw);
   const connectionLimiter = new ConnectionRateLimiter();
   const invalidBearerLimiter = new IpRateLimiter(30, 1);
+  const connectorLimiter = new IpRateLimiter(30, 1);
   const sessions = new SessionManager(
     sessionRepo,
     profiles,
@@ -53,5 +54,13 @@ export function createRuntimeConnectionServices(
     grantHandler,
     (connId) => connectionLimiter.clear(connId),
   );
-  return { workspaces, profiles, connectionLimiter, invalidBearerLimiter, sessions, connections };
+  return {
+    workspaces,
+    profiles,
+    connectionLimiter,
+    invalidBearerLimiter,
+    connectorLimiter,
+    sessions,
+    connections,
+  };
 }

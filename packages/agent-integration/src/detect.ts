@@ -17,11 +17,13 @@ export interface DetectInput {
   platform?: NodeJS.Platform;
 }
 
-const EXECUTABLE: Record<AgentTarget, string> = {
-  codex: 'codex',
-  'claude-code': 'claude',
-  opencode: 'opencode',
-  antigravity: 'antigravity',
+const EXECUTABLES: Record<AgentTarget, string[]> = {
+  codex: ['codex'],
+  'claude-code': ['claude'],
+  opencode: ['opencode'],
+  antigravity: ['antigravity'],
+  'antigravity-cli': ['agy', 'antigravity-cli'],
+  'antigravity-ide': ['antigravity-ide'],
 };
 
 function isKind(file: string, kind: 'file' | 'directory'): boolean {
@@ -93,8 +95,41 @@ function configPlace(target: AgentTarget, input: DetectInput): ConfigPlace {
       return { configPath: dir, evidence };
     }
     case 'antigravity': {
-      const dir = path.join(home, '.gemini');
-      return { configPath: dir, evidence: [{ file: dir, kind: 'directory' }] };
+      const dir = path.join(home, '.gemini', 'antigravity');
+      const file = path.join(dir, 'mcp_config.json');
+      const gemini = path.join(home, '.gemini');
+      return {
+        configPath: dir,
+        evidence: [
+          { file, kind: 'file' },
+          { file: dir, kind: 'directory' },
+          { file: gemini, kind: 'directory' },
+        ],
+      };
+    }
+    case 'antigravity-cli': {
+      const dir = path.join(home, '.gemini', 'antigravity-cli');
+      const file = path.join(dir, 'mcp_config.json');
+      const settings = path.join(dir, 'settings.json');
+      return {
+        configPath: dir,
+        evidence: [
+          { file, kind: 'file' },
+          { file: settings, kind: 'file' },
+          { file: dir, kind: 'directory' },
+        ],
+      };
+    }
+    case 'antigravity-ide': {
+      const dir = path.join(home, '.gemini', 'config');
+      const file = path.join(dir, 'mcp_config.json');
+      return {
+        configPath: dir,
+        evidence: [
+          { file, kind: 'file' },
+          { file: dir, kind: 'directory' },
+        ],
+      };
     }
   }
 }
@@ -104,7 +139,7 @@ export function detectAgents(input: DetectInput): DetectedAgent[] {
   return AGENT_TARGETS.map((target) => {
     const place = configPlace(target, input);
     let evidence: DetectedAgent['evidence'] = 'none';
-    if (onPath(EXECUTABLE[target], input.env, platform)) evidence = 'path';
+    if (EXECUTABLES[target].some((exe) => onPath(exe, input.env, platform))) evidence = 'path';
     else if (place.evidence.some((item) => isKind(item.file, item.kind))) evidence = 'config';
     return {
       target,

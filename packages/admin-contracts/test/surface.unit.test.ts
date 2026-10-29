@@ -20,6 +20,7 @@ test('navigation and dashboard section ordering are stable', () => {
       'workspaces',
       'permissions',
       'sessions',
+      'connectors',
       'audit',
       'settings',
       'data',

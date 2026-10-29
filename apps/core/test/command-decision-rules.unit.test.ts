@@ -59,7 +59,7 @@ function makePolicyInput(overrides: Partial<CommandPolicyInput> = {}): CommandPo
     rules: [],
     authority: { valid: true, commandCapability: true, reasons: [] },
     network: { outcome: 'allow', reasons: [] },
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
     criticalAlwaysConfirm: false,
     scriptTrust: 'trusted',
     ...overrides,
@@ -189,7 +189,7 @@ test('command-decision branches: network approval, deny rules, dynamic scope, an
   const netInput = makePolicyInput({
     analysis,
     network: { outcome: 'approval', reasons: [{ code: 'NET_APPROVAL', message: 'net' }] },
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
   });
   assert.equal(decideCommand(netInput).outcome, 'approval');
 
@@ -223,13 +223,13 @@ test('command-decision branches: network approval, deny rules, dynamic scope, an
   // 3. Dynamic and outside scope
   const unknownScopeInput = makePolicyInput({
     analysis: makeMockAnalysis({ scope: 'unknown' }),
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
   });
   assert.equal(decideCommand(unknownScopeInput).outcome, 'approval');
 
   const outsideScopeInput = makePolicyInput({
     analysis: makeMockAnalysis({ scope: 'outside' }),
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
   });
   assert.equal(decideCommand(outsideScopeInput).outcome, 'approval');
 
@@ -242,7 +242,7 @@ test('command-decision branches: network approval, deny rules, dynamic scope, an
   // 5. Expired rule
   const expiredInput = makePolicyInput({
     analysis,
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
     rules: [
       {
         id: 'exp_1',

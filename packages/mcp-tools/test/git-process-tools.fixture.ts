@@ -1,6 +1,7 @@
 export function processGitTestContext(
   options: {
     yolo?: boolean;
+    yoloRisk?: 'prevent-high-risk' | 'do-whatever';
     workerFailure?: boolean;
     permissionOutcome?: 'allow' | 'deny' | 'approval';
   } = {},
@@ -87,7 +88,9 @@ export function processGitTestContext(
         changes,
         settings: {
           get: (key: string, fallback: any) =>
-            key === 'policy.yolo' ? { mode: 'unrestricted' } : fallback,
+            key === 'policy.yolo'
+              ? { mode: 'unrestricted', risk: options.yoloRisk ?? 'do-whatever' }
+              : fallback,
         },
       },
       oneTimeCapabilities: new Set<string>(),

@@ -19,6 +19,7 @@ export interface SkillReadableMcpService {
   promptsList?(): { prompts: any[] } | Promise<{ prompts: any[] }>;
   promptGet?(sessionId: string, name?: string, args?: unknown): Promise<any>;
   upstreamToolDefinitions?(): unknown[] | Promise<unknown[]>;
+  disabledToolNames?(): ReadonlySet<string>;
 }
 
 type AccessResult =
@@ -73,6 +74,10 @@ export class SessionSkillAccessGate {
 
   async upstreamToolDefinitions() {
     return (await this.inner.upstreamToolDefinitions?.()) ?? [];
+  }
+
+  disabledToolNames(): ReadonlySet<string> {
+    return this.inner.disabledToolNames?.() ?? new Set();
   }
 
   async resourceRead(sessionId: string, uri: string) {

@@ -103,7 +103,30 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
   }
 
   if (path === '/api/connectors' && method === 'GET') {
-    sendAdminResponse(res, 200, context.connectors?.list?.() ?? []);
+    const list = context.connectors?.list?.() ?? [];
+    const enriched = list.map((connector: any) => {
+      const grants =
+        context.connectors?.listWorkspaceGrants?.(connector.id) ??
+        connector.workspaceGrants ??
+        [];
+      const wsIds = Array.from(
+        new Set([
+          ...grants.map((g: any) => g.workspaceId),
+          ...(connector.workspaceId ? [connector.workspaceId] : []),
+        ]),
+      );
+      return {
+        ...connector,
+        workspaceIds: wsIds,
+        workspaceGrants: grants.length
+          ? grants
+          : wsIds.map((id) => ({
+              workspaceId: id,
+              profileId: connector.profileCap ?? 'read-only',
+            })),
+      };
+    });
+    sendAdminResponse(res, 200, enriched);
     return true;
   }
 
@@ -145,9 +168,26 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
       expiresAt = new Date(time).toISOString();
     }
 
+    const rawWsIds = Array.isArray(input.workspaceIds)
+      ? input.workspaceIds.map(String).filter(Boolean)
+      : input.workspaceId
+        ? [String(input.workspaceId)]
+        : [];
+    const workspaceGrants = Array.isArray(input.workspaceGrants)
+      ? input.workspaceGrants.map((g: any) => ({
+          workspaceId: String(g.workspaceId),
+          profileId: String(g.profileId || input.profileCap || 'read-only'),
+        }))
+      : rawWsIds.map((wid) => ({
+          workspaceId: wid,
+          profileId: String(input.profileCap || 'read-only'),
+        }));
+
     const { connector, token } = context.connectors.create({
       name,
-      workspaceId: input.workspaceId ? String(input.workspaceId) : null,
+      workspaceId: rawWsIds[0] ?? (input.workspaceId ? String(input.workspaceId) : null),
+      workspaceIds: rawWsIds,
+      workspaceGrants,
       profileCap: input.profileCap ? String(input.profileCap) : null,
       expiresAt,
     });
@@ -210,6 +250,99 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
     });
     sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
     return true;
+  }
+
+  match = path.match(/^\/api\/connectors\/([^/]+)\/workspaces(?:\/([^/]+))?$/);
+  if (match && ['GET', 'POST', 'DELETE'].includes(method)) {
+    const connectorId = decodeURIComponent(match[1]!);
+    const connector = context.connectors
+      ?.list?.()
+      .find((entry: any) => String(entry.id) === connectorId);
+    if (!connector) {
+      sendAdminResponse(res, 404, {
+        error: { code: 'NOT_FOUND', message: 'Connector not found' },
+      });
+      return true;
+    }
+
+    if (method === 'GET') {
+      const grants =
+        context.connectors?.listWorkspaceGrants?.(connectorId) ??
+        connector.workspaceGrants ??
+        [];
+      sendAdminResponse(res, 200, {
+        connectorId,
+        grants,
+        workspaceIds: grants.map((g: any) => g.workspaceId),
+      });
+      return true;
+    }
+
+    if (method === 'POST') {
+      const body = await readAdminBody(req);
+      const workspaceId = String(body.workspaceId ?? '').trim();
+      const profileId = String(body.profileId ?? connector.profileCap ?? 'read-only').trim();
+      if (!workspaceId) {
+        sendAdminResponse(res, 400, {
+          error: { code: 'INVALID_REQUEST', message: 'workspaceId required' },
+        });
+        return true;
+      }
+      context.connectors?.grantWorkspace?.(connectorId, workspaceId, profileId);
+      const actor = `connector:${connector.name}`;
+      const sessions = context.sessions?.list?.() ?? [];
+      for (const s of sessions) {
+        if (s.subject === connectorId || s.actor === actor) {
+          try {
+            context.sessions?.admitWorkspace?.(s.id, workspaceId, profileId);
+          } catch {
+            /* best-effort */
+          }
+        }
+      }
+      context.audit?.append?.({
+        actor: 'admin',
+        operation: 'connector.workspace_grant',
+        target: `${connectorId}:${workspaceId}`,
+        result: 'ok',
+        redactionCount: 0,
+        class: 'normal',
+      });
+      sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
+      return true;
+    }
+
+    if (method === 'DELETE') {
+      const workspaceId = decodeURIComponent(match[2] ?? '');
+      if (!workspaceId) {
+        sendAdminResponse(res, 400, {
+          error: { code: 'INVALID_REQUEST', message: 'workspaceId required' },
+        });
+        return true;
+      }
+      context.connectors?.revokeWorkspace?.(connectorId, workspaceId);
+      const actor = `connector:${connector.name}`;
+      const sessions = context.sessions?.list?.() ?? [];
+      for (const s of sessions) {
+        if (s.subject === connectorId || s.actor === actor) {
+          try {
+            context.sessions?.revokeWorkspace?.(s.id, workspaceId);
+          } catch {
+            /* best-effort */
+          }
+        }
+      }
+      context.audit?.append?.({
+        actor: 'admin',
+        operation: 'connector.workspace_revoke',
+        target: `${connectorId}:${workspaceId}`,
+        result: 'ok',
+        redactionCount: 0,
+        class: 'normal',
+      });
+      sendAdminResponse(res, 200, { ok: true, revision: Date.now() });
+      return true;
+    }
   }
 
   match = path.match(/^\/api\/connectors\/([^/]+)\/rotate$/);

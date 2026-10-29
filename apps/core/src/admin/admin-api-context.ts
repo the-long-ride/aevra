@@ -147,6 +147,7 @@ export function createCoreToolService(
     desktopAccess: deps.desktopAccess,
     desktopAppCatalog: deps.desktopAppCatalog,
     systemCapabilities: deps.systemCapabilities,
+    transferLinks: deps.transferLinks,
     browserPairing: deps.browserPairing,
     browserPolicy: deps.browserPolicy,
     manifests: new ManifestService(workspaces),

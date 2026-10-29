@@ -12,8 +12,9 @@ import type { ConnectorProfile } from '../../../../packages/mcp-tools/src/tool-g
 import type { UsageMeter } from '../usage/usage-meter.js';
 import type { McpActivityLog } from './activity-log.js';
 import { McpActivityRecorder } from './activity-recorder.js';
+import { readMcpBody } from './body-cap.js';
 import { McpDiagnostics } from './diagnostics.js';
-import { readJson, remoteIp, sendJson } from './http-response.js';
+import { remoteIp, sendJson } from './http-response.js';
 import {
   resolveMcpIdentity,
   type ConnectorAdmission,
@@ -52,6 +53,13 @@ export interface McpIngressServerOptions {
   usage?: UsageMeter | undefined;
   connectorProfile?: ((actor: string) => ConnectorProfile | undefined) | undefined;
   connectNotice?: ((actor: string) => string | null) | undefined;
+  /** Serves `GET /files/<secret>` one-time links; absent means those paths are 404. */
+  fileLinks?: (
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+    trustForwardedClientIp?: boolean,
+  ) => Promise<void>;
 }
 
 export class McpIngressServer {
@@ -152,6 +160,10 @@ export class McpIngressServer {
     }
     if (await handleOAuthRoute(req, res, url, this.options.oauth, this.trustsForwardedClientIp()))
       return;
+    if (path.startsWith('/files/') && this.options.fileLinks && !this.safeMode()) {
+      await this.options.fileLinks(req, res, url, this.trustsForwardedClientIp());
+      return;
+    }
 
     const connectorMatch = path.match(/^\/mcp\/([A-Za-z0-9_-]+)$/);
     if (path !== '/mcp' && !connectorMatch) {
@@ -219,7 +231,7 @@ export class McpIngressServer {
       return;
     }
 
-    const body = await readJson(req);
+    const body = await readMcpBody(req, this.runtime?.service?.transferInlineLimitBytes?.());
     this.diagnostics.recordMethod(body?.method);
     if (isModernRequest(req, body)) {
       await handleModernRuntimeRequest(req, res, identity, body, {

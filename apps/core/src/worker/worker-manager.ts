@@ -169,13 +169,13 @@ export class WorkerManager {
     }
     return Buffer.from(this.browserKey);
   }
-  async execute(input: AuthorizedWorkerInput): Promise<WorkerResult> {
+  private sign(input: AuthorizedWorkerInput) {
     if (!this.client || !this.signer)
       throw Object.assign(new Error('Execution Worker unavailable'), {
         code: 'EXECUTOR_UNAVAILABLE',
       });
     const now = Date.now();
-    const envelope = this.signer.sign({
+    return this.signer.sign({
       version: 1,
       daemonInstanceId: this.daemonInstanceId,
       operationId: `op_${randomUUID()}`,
@@ -190,7 +190,25 @@ export class WorkerManager {
       operation: input.operation,
       ...(input.expectedState ? { expectedState: input.expectedState } : {}),
     });
-    return this.client.execute(envelope);
+  }
+  async execute(input: AuthorizedWorkerInput): Promise<WorkerResult> {
+    const envelope = this.sign(input);
+    return this.client!.execute(envelope);
+  }
+  async executeWithUpload(
+    input: AuthorizedWorkerInput,
+    source: AsyncIterable<Uint8Array>,
+  ): Promise<WorkerResult> {
+    const envelope = this.sign(input);
+    const run = this.client!.executeWithUpload;
+    if (!run) throw streamsUnavailable();
+    return run.call(this.client, envelope, source);
+  }
+  async executeWithDownload(input: AuthorizedWorkerInput) {
+    const envelope = this.sign(input);
+    const run = this.client!.executeWithDownload;
+    if (!run) throw streamsUnavailable();
+    return run.call(this.client, envelope);
   }
   private async stopChild() {
     const child = this.child;
@@ -220,4 +238,8 @@ export class WorkerManager {
     await this.stopChild();
     if (process.platform !== 'win32') rmSync(this.endpoint, { force: true });
   }
+}
+
+function streamsUnavailable() {
+  return Object.assign(new Error('Worker streaming unavailable'), { code: 'EXECUTOR_UNAVAILABLE' });
 }

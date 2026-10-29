@@ -1,6 +1,7 @@
 export type AevraErrorCode =
   | 'CAPABILITY_REQUIRED'
   | 'TOOL_GROUP_DISABLED'
+  | 'TOOL_DISABLED'
   | 'SESSION_WORKSPACE_REQUIRED'
   | 'WORKSPACE_REQUIRED'
   | 'WORKSPACE_ACCESS_REQUIRED'
@@ -36,7 +37,17 @@ export type AevraErrorCode =
   | 'DESKTOP_ACCESS_ALREADY_ALLOWED'
   | 'DESKTOP_HOST_UNVERIFIED'
   | 'NOTE_NOT_FOUND'
-  | 'NOTE_NOT_DELETABLE';
+  | 'NOTE_NOT_DELETABLE'
+  | 'FILE_EXISTS'
+  | 'FILE_CHANGED'
+  | 'URL_NOT_PUBLIC'
+  | 'URL_SCHEME'
+  | 'TOO_MANY_REDIRECTS'
+  | 'SIZE_LIMIT'
+  | 'URL_TIMEOUT'
+  | 'INLINE_TOO_LARGE'
+  | 'BATCH_LIMIT'
+  | 'PUBLIC_URL_REQUIRED';
 export type Capability =
   | 'files.read'
   | 'files.search'
@@ -199,3 +210,4 @@ export * from './command-analysis.js';
 export * from './control.js';
 export * from './control-parse.js';
 export * from './token-estimate.js';
+export * from './file-transfer.js';

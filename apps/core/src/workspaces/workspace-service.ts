@@ -34,6 +34,9 @@ export class WorkspaceService {
   deleteMount(id: string) {
     this.repo.deleteMount(id);
   }
+  updateMount(id: string, input: any) {
+    this.repo.updateMount(id, input);
+  }
   listMountsLocal(workspaceId: string) {
     return this.repo.listMounts(workspaceId);
   }

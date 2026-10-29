@@ -273,7 +273,7 @@ test('evaluateAndDecideCommand: default logical cwd root is inside production wo
   }
 });
 
-test('evaluateAndDecideCommand: unrestricted YOLO overrides current network deny for non-critical command', async () => {
+test('evaluateAndDecideCommand: do-whatever YOLO overrides current network deny for non-critical command', async () => {
   const tempDir = path.join(tmpdir(), `aevra-network-deny-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
   try {
@@ -321,9 +321,29 @@ test('evaluateAndDecideCommand: unrestricted YOLO overrides current network deny
       rawDestinations: ['example.com'],
       isYolo: true,
       yoloMode: 'unrestricted',
+      yoloRisk: 'do-whatever',
       riskFloor: 'HIGH',
     });
     assert.equal(decision.outcome, 'allow');
+
+    const { decision: preventDecision } = await evaluateAndDecideCommand(context, 's1', {
+      commandRequest: {
+        kind: 'argv',
+        argv: ['git', 'push'],
+        cwdLogical: '/',
+        executionMode: 'host',
+        networkDestinations: ['example.com'],
+      },
+      permissionMatcher: 'git:push',
+      rawDestinations: ['example.com'],
+      isYolo: true,
+      yoloMode: 'unrestricted',
+      yoloRisk: 'prevent-high-risk',
+      riskFloor: 'HIGH',
+    });
+    // Inside the workspace unrestricted behaves like workspace scope (allowed); the
+    // network deny is kept for outside commands (see command-decision-yolo-split).
+    assert.equal(preventDecision.outcome, 'allow');
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

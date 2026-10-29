@@ -1,12 +1,9 @@
 import type { FrozenOperationTicket } from '../../../apps/core/src/approvals/approval-service.js';
 import { validateCommandApprovalBinding } from '../../../apps/core/src/approvals/command-binding.js';
-import {
-  normalizeYoloMode,
-  type CommandAnalysis,
-  type CommandRequest,
-} from '../../protocol/src/index.js';
+import { type CommandAnalysis, type CommandRequest } from '../../protocol/src/index.js';
 import { evaluateAndDecideCommand } from './command-decision-bridge.js';
 import type { McpRuntimeContext } from './service-types.js';
+import { readYoloPolicy } from './yolo-mode.js';
 
 export async function freshCommandAnalysis(
   context: McpRuntimeContext,
@@ -37,9 +34,7 @@ export async function freshCommandAnalysis(
     sessionId,
     risk: ticket.operation.risk,
   });
-  const yoloMode = normalizeYoloMode(
-    context.deps.settings?.get<{ mode?: string }>('policy.yolo', { mode: 'workspace' })?.mode,
-  );
+  const yoloPolicy = readYoloPolicy(context);
 
   const evaluationContext = { ...context, workspaceId: lease.workspaceId } as McpRuntimeContext;
   const { analysis, decision } = await evaluateAndDecideCommand(evaluationContext, sessionId, {
@@ -47,7 +42,8 @@ export async function freshCommandAnalysis(
     permissionMatcher,
     rawDestinations: request.networkDestinations ?? [],
     isYolo: Boolean(context.sessions.isYolo?.(sessionId)),
-    yoloMode,
+    yoloMode: yoloPolicy.mode,
+    yoloRisk: yoloPolicy.risk,
     legacyDecision: legacyDecision?.outcome === 'deny' ? legacyDecision : undefined,
     riskFloor: payload.riskFloor ?? ticket.operation.risk,
   });

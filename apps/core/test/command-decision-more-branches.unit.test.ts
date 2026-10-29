@@ -59,7 +59,7 @@ function makeInput(overrides: Partial<CommandPolicyInput> = {}): CommandPolicyIn
     rules: [],
     authority: { valid: true, commandCapability: true, reasons: [] },
     network: { outcome: 'allow', reasons: [] },
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
     criticalAlwaysConfirm: false,
     scriptTrust: 'trusted',
     ...overrides,
@@ -112,7 +112,7 @@ test('command-decision: exact approval and critical checks with yolo combination
       makeInput({
         analysis: criticalAnalysis,
         criticalAlwaysConfirm: true,
-        yolo: { active: true, mode: 'unrestricted' },
+        yolo: { active: true, mode: 'unrestricted', risk: 'prevent-high-risk' },
       }),
     ).outcome,
     'approval',
@@ -124,7 +124,7 @@ test('command-decision: exact approval and critical checks with yolo combination
       makeInput({
         analysis: criticalAnalysis,
         criticalAlwaysConfirm: false,
-        yolo: { active: true, mode: 'unrestricted' },
+        yolo: { active: true, mode: 'unrestricted', risk: 'prevent-high-risk' },
       }),
     ).outcome,
     'approval',
@@ -136,7 +136,7 @@ test('command-decision: exact approval and critical checks with yolo combination
       makeInput({
         analysis: criticalAnalysis,
         criticalAlwaysConfirm: false,
-        yolo: { active: true, mode: 'workspace' },
+        yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
       }),
     ).outcome,
     'approval',
@@ -146,13 +146,19 @@ test('command-decision: exact approval and critical checks with yolo combination
   const outsideAnalysis = makeAnalysis({ scope: 'outside' });
   assert.equal(
     decideCommand(
-      makeInput({ analysis: outsideAnalysis, yolo: { active: true, mode: 'unrestricted' } }),
+      makeInput({
+        analysis: outsideAnalysis,
+        yolo: { active: true, mode: 'unrestricted', risk: 'do-whatever' },
+      }),
     ).outcome,
     'allow',
   );
   assert.equal(
     decideCommand(
-      makeInput({ analysis: outsideAnalysis, yolo: { active: true, mode: 'workspace' } }),
+      makeInput({
+        analysis: outsideAnalysis,
+        yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
+      }),
     ).outcome,
     'approval',
   );
@@ -160,13 +166,19 @@ test('command-decision: exact approval and critical checks with yolo combination
   const unknownAnalysis = makeAnalysis({ scope: 'unknown' });
   assert.equal(
     decideCommand(
-      makeInput({ analysis: unknownAnalysis, yolo: { active: true, mode: 'unrestricted' } }),
+      makeInput({
+        analysis: unknownAnalysis,
+        yolo: { active: true, mode: 'unrestricted', risk: 'do-whatever' },
+      }),
     ).outcome,
     'allow',
   );
   assert.equal(
     decideCommand(
-      makeInput({ analysis: unknownAnalysis, yolo: { active: true, mode: 'workspace' } }),
+      makeInput({
+        analysis: unknownAnalysis,
+        yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
+      }),
     ).outcome,
     'approval',
   );
@@ -174,13 +186,20 @@ test('command-decision: exact approval and critical checks with yolo combination
   // Script trust changed
   assert.equal(
     decideCommand(
-      makeInput({ scriptTrust: 'changed', yolo: { active: true, mode: 'unrestricted' } }),
+      makeInput({
+        scriptTrust: 'changed',
+        yolo: { active: true, mode: 'unrestricted', risk: 'do-whatever' },
+      }),
     ).outcome,
     'allow',
   );
   assert.equal(
-    decideCommand(makeInput({ scriptTrust: 'changed', yolo: { active: true, mode: 'workspace' } }))
-      .outcome,
+    decideCommand(
+      makeInput({
+        scriptTrust: 'changed',
+        yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
+      }),
+    ).outcome,
     'allow',
   );
 
@@ -189,7 +208,7 @@ test('command-decision: exact approval and critical checks with yolo combination
     decideCommand(
       makeInput({
         network: { outcome: 'approval', reasons: [] },
-        yolo: { active: true, mode: 'unrestricted' },
+        yolo: { active: true, mode: 'unrestricted', risk: 'do-whatever' },
       }),
     ).outcome,
     'allow',
@@ -198,7 +217,7 @@ test('command-decision: exact approval and critical checks with yolo combination
     decideCommand(
       makeInput({
         network: { outcome: 'approval', reasons: [] },
-        yolo: { active: true, mode: 'workspace' },
+        yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
       }),
     ).outcome,
     'allow',
@@ -210,7 +229,7 @@ test('command-decision: exact approval and critical checks with yolo combination
     decideCommand(
       makeInput({
         scriptTrust: 'unapproved',
-        yolo: { active: true, mode: 'workspace' },
+        yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
       }),
     ).outcome,
     'allow',
@@ -222,7 +241,7 @@ test('command-decision: exact approval and critical checks with yolo combination
     decideCommand(
       makeInput({
         analysis: makeAnalysis({ parseStatus: 'unsupported', scope: 'inside' }),
-        yolo: { active: true, mode: 'workspace' },
+        yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
       }),
     ).outcome,
     'allow',
@@ -231,7 +250,7 @@ test('command-decision: exact approval and critical checks with yolo combination
     decideCommand(
       makeInput({
         analysis: makeAnalysis({ parseStatus: 'unsupported', scope: 'unknown' }),
-        yolo: { active: true, mode: 'workspace' },
+        yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
       }),
     ).outcome,
     'approval',
@@ -240,7 +259,7 @@ test('command-decision: exact approval and critical checks with yolo combination
     decideCommand(
       makeInput({
         analysis: makeAnalysis({ parseStatus: 'unsupported', scope: 'unknown' }),
-        yolo: { active: true, mode: 'unrestricted' },
+        yolo: { active: true, mode: 'unrestricted', risk: 'do-whatever' },
       }),
     ).outcome,
     'allow',
@@ -252,7 +271,7 @@ test('command-decision: exact approval and critical checks with yolo combination
     decideCommand(
       makeInput({
         network: { outcome: 'deny', reasons: [] },
-        yolo: { active: true, mode: 'workspace' },
+        yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
       }),
     ).outcome,
     'allow',
@@ -261,7 +280,7 @@ test('command-decision: exact approval and critical checks with yolo combination
     decideCommand(
       makeInput({
         network: { outcome: 'deny', reasons: [] },
-        yolo: { active: true, mode: 'unrestricted' },
+        yolo: { active: true, mode: 'unrestricted', risk: 'do-whatever' },
       }),
     ).outcome,
     'allow',

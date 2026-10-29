@@ -61,3 +61,12 @@ test('structured sanitizer treats __proto__ as inert data', () => {
   assert.match(JSON.stringify(sanitized), /"__proto__"/);
   assert.equal(JSON.stringify(sanitized).includes('synthetic-secret'), false);
 });
+
+test('structured sanitizer hides the one-time link segment of a url key', () => {
+  const out = sanitizeStructuredSecrets({
+    url: 'https://host.example/files/onetime-link-words?x=1',
+    other: { url: 'https://host.example/docs/page' },
+  }) as any;
+  assert.equal(out.url, 'https://host.example/files/[REDACTED]');
+  assert.equal(out.other.url, 'https://host.example/docs/page');
+});

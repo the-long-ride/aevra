@@ -20,7 +20,10 @@ export interface AgentCliCommand {
 
 export type AgentParse = AgentCliCommand | { command: 'agent-help' };
 
-const ALIASES: Record<string, AgentTarget> = { claude: 'claude-code' };
+const ALIASES: Record<string, AgentTarget> = {
+  claude: 'claude-code',
+  agy: 'antigravity-cli',
+};
 const ACTIONS = ['list', 'install', 'uninstall'];
 
 function target(value: string): AgentTarget | 'all' {

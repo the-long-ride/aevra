@@ -6,6 +6,8 @@ import type {
   CommandDecision,
   CommandPolicyInput,
   CommandRequest,
+  YoloPolicyMode,
+  YoloRisk,
 } from '../../protocol/src/command-analysis.js';
 import { analyzeCommand } from '../../command-analysis/src/analyze.js';
 import { buildChildEnvironment, environmentNeedsApproval } from '../../security/src/environment.js';
@@ -27,7 +29,8 @@ export async function evaluateAndDecideCommand(
     permissionMatcher: string;
     rawDestinations: string[];
     isYolo: boolean;
-    yoloMode: 'workspace' | 'unrestricted';
+    yoloMode: YoloPolicyMode;
+    yoloRisk?: YoloRisk;
     networkApproval?: any;
     legacyDecision?: { outcome: 'allow' | 'deny' | 'approval'; reason: string };
     riskFloor?: import('../../protocol/src/index.js').RiskTier;
@@ -294,6 +297,7 @@ export async function evaluateAndDecideCommand(
     yolo: {
       active: input.isYolo,
       mode: input.yoloMode,
+      risk: input.yoloRisk ?? 'prevent-high-risk',
     },
     criticalAlwaysConfirm: true,
     scriptTrust,

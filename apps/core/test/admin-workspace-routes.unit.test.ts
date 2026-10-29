@@ -218,6 +218,21 @@ test('workspace mount routes cover local remote fallback add and delete', async 
   );
   assert.deepEqual(calls.filter((row) => row[0] === 'addMount').at(-1)[2].capabilities, []);
 
+  const absoluteOnly = request('POST', { hostRoot: 'D:/design-system/icons' });
+  const absoluteOnlyRes = response();
+  await handleWorkspaceRoutes(
+    absoluteOnly,
+    absoluteOnlyRes,
+    new URL(`${BASE}/api/workspaces/w1/mounts`),
+    context,
+  );
+  assert.deepEqual(calls.filter((row) => row[0] === 'addMount').at(-1)[2], {
+    logicalPath: 'D:/design-system/icons',
+    hostRoot: 'D:/design-system/icons',
+    capabilities: [],
+    sensitivityPolicyId: undefined,
+  });
+
   const removed = response();
   assert.equal(
     await handleWorkspaceRoutes(

@@ -1,6 +1,7 @@
 import { advertisedToolDefinitions } from './registry-advertised.js';
 import { asToolError } from './errors.js';
 import { splitImageContent, type McpImageBlock } from './mcp-image-content.js';
+import { assertToolEnabled, serviceDisabledTools, withoutDisabledTools } from './tool-switches.js';
 import { shapeToolResult } from './result-shaper/shape.js';
 import type { McpToolService } from './service.js';
 import {
@@ -56,7 +57,12 @@ export async function handleJsonRpc(
       return {
         jsonrpc: '2.0',
         id,
-        result: { tools: [...advertisedToolDefinitions(groups), ...upstream] },
+        result: {
+          tools: withoutDisabledTools(
+            [...advertisedToolDefinitions(groups), ...upstream],
+            serviceDisabledTools(service),
+          ),
+        },
       };
     }
     if (body?.method === 'resources/list')
@@ -139,6 +145,7 @@ export async function handleJsonRpc(
       const name = String(body.params?.name ?? ''),
         args = body.params?.arguments ?? {};
       assertToolGroupEnabled(name, options.profile?.toolGroups);
+      assertToolEnabled(name, serviceDisabledTools(service));
       // Image blocks ride beside the result, never inside its text or structuredContent.
       const { data, images } = splitImageContent(
         await service.call(sessionId, name, args, options.profile),

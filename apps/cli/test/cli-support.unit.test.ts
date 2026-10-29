@@ -4,6 +4,7 @@ import {
   cloudflareSetupNeedsAccess,
   completionText,
   creditLine,
+  desktopHelperNoticeLines,
   formatCliError,
   readyLines,
   usageText,
@@ -92,6 +93,33 @@ test('missing admin credentials print a friendly message instead of a stack', ()
   assert.match(message, /ADMIN_CREDENTIALS_REQUIRED/);
   assert.match(message, /Set both AEVRA_USERNAME and AEVRA_PASSWORD/);
   assert.doesNotMatch(message, /at loadAdminCredentials/);
+});
+
+test('desktopHelperNoticeLines formats warning and instructions when helper is missing', () => {
+  // 1. Missing override with no binary found
+  const missingOverride = desktopHelperNoticeLines({
+    missingOverride: '/custom/missing/helper.exe',
+  });
+  assert.ok(missingOverride.some((line) => line.includes('AEVRA_DESKTOP_HELPER_PATH points to a missing file')));
+  assert.ok(missingOverride.some((line) => line.includes('/custom/missing/helper.exe')));
+  assert.ok(missingOverride.some((line) => line.includes('cargo build --release -p aevra-desktop-helper')));
+
+  // 2. Missing override with fallback binary found
+  const fallback = desktopHelperNoticeLines({
+    missingOverride: '/custom/missing/helper.exe',
+    path: '/bundled/helper.exe',
+  });
+  assert.ok(fallback.some((line) => line.includes('Falling back to helper binary at:')));
+  assert.ok(fallback.some((line) => line.includes('/bundled/helper.exe')));
+
+  // 3. No override and no binary installed
+  const notInstalled = desktopHelperNoticeLines({});
+  assert.ok(notInstalled.some((line) => line.includes('Desktop helper binary is not installed')));
+  assert.ok(notInstalled.some((line) => line.includes('cargo build --release -p aevra-desktop-helper')));
+
+  // 4. Helper binary found without override issue
+  const healthy = desktopHelperNoticeLines({ path: '/bundled/helper.exe' });
+  assert.deepEqual(healthy, []);
 });
 
 test('credit line links the author and repository when hyperlinks are supported', () => {

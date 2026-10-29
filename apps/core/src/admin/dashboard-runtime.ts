@@ -83,9 +83,12 @@ function sessionConnection(session: any, workspaceNames: Map<string, string>) {
   const workspaceIds = leases.map((lease: any) => String(lease?.workspaceId ?? '')).filter(Boolean);
   const workspaces = workspaceIds.map((id: string) => workspaceNames.get(id) ?? id);
   const capabilities = [...new Set(leases.flatMap((lease: any) => lease?.capabilities ?? []))];
+  const isConnector = String(session.actor ?? '').startsWith('connector:');
+  const connectorId = isConnector ? session.subject : undefined;
   return {
     id: session.id,
     sessionId: session.id,
+    connectorId,
     actor: session.actor,
     client: String(session.actor ?? '').replace(/^(oauth:|connector:)/, ''),
     provider: authType(String(session.actor ?? '')),

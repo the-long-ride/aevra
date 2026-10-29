@@ -1,5 +1,4 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { CoreConfig } from './config.js';
 import { createRuntimeRepositories } from './runtime-repositories.js';
@@ -11,7 +10,6 @@ import { HostControlApproval } from './control/host-control-approval.js';
 import { installHostControlRevocation } from './control/host-control-revocation.js';
 import { SecurityGuard } from './security/security-guard.js';
 import { ManifestService } from './workspaces/manifest-service.js';
-import { IpRateLimiter } from './mcp/rate-limit.js';
 import { createConnectorAdmission } from './mcp/connector-admission.js';
 import { McpActivityLog } from './mcp/activity-log.js';
 import { AEVRA_VERSION } from './version.js';
@@ -49,9 +47,11 @@ import {
 import { SessionSkillAccessGate } from '../../../packages/mcp-tools/src/skill-access-gate.js';
 import type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
 import { RuntimeExposureWiring } from './exposure/runtime-wiring.js';
+import { exposureOrigins } from './exposure/exposure-origins.js';
 import type { KeepAwakeService } from './power/keep-awake-service.js';
 import { createRuntimeKeepAwakeService } from './power/runtime-keep-awake.js';
 import { createRuntimeUsage } from './usage/runtime-usage.js';
+import { fileLinksFor } from './files/runtime-file-links.js';
 export type { CoreRuntime, RuntimeDependencies } from './runtime-types.js';
 export async function createCoreRuntime(
   config: CoreConfig,
@@ -94,7 +94,6 @@ export async function createCoreRuntime(
       if (started) return;
       try {
         prepareStateDirectory(config);
-        await mkdir(config.recoveryDir, { recursive: true, mode: 0o700 });
         const startup = await prepareRuntimeStartup(config, deps);
         const { systemCapabilities, tls, adminCredentialVerifier } = startup;
         db = (deps.databaseOpen ?? AevraDatabase.open)(config.databasePath);
@@ -114,12 +113,24 @@ export async function createCoreRuntime(
           connectorRepo,
           oauthRepo,
         } = createRuntimeRepositories(raw);
-        const connectorBindings = (subject: string) => connectorRepo.getBindings(subject);
+        const connectorBindings = (subject: string) => {
+          const b = connectorRepo.getBindings(subject);
+          if (!b) return null;
+          const grants = connectorRepo.listWorkspaceGrants?.(subject) ?? [];
+          const wsIds = Array.from(
+            new Set([...grants.map((g: any) => g.workspaceId), ...(b.workspaceId ? [b.workspaceId] : [])]),
+          );
+          return {
+            ...b,
+            workspaceIds: wsIds,
+          };
+        };
         const {
           workspaces,
           profiles,
           connectionLimiter,
           invalidBearerLimiter,
+          connectorLimiter,
           sessions,
           connections,
         } = createRuntimeConnectionServices(config, raw, {
@@ -182,12 +193,9 @@ export async function createCoreRuntime(
         const hostControlApproval = new HostControlApproval(sessions, hostControlAccess, approvals);
         const metrics = new MetricsService(),
           browserPairing = createBrowserPairingService(settings, wm, workerGateway, config),
-          browserPolicy = createBrowserOriginPolicyService(settings, config, () => [
-            exposureWiring?.gatewayUrl(),
-            exposureWiring?.publicUrl(),
-            exposureWiring?.adminPublicUrl(),
-            ...(exposureWiring?.trustedAdminOrigins() ?? []),
-          ]),
+          browserPolicy = createBrowserOriginPolicyService(settings, config, () =>
+            exposureOrigins(exposureWiring),
+          ),
           desktopPolicy = createDesktopPolicyService(settings),
           desktopAccess = createDesktopAccessService(
             db!,
@@ -202,6 +210,18 @@ export async function createCoreRuntime(
           dataServices = await createRuntimeDataServices(config, db);
         const mcpUpstreams = createMcpUpstreams(db, workerGateway, dataServices.secretStore);
         usageWiring = createRuntimeUsage(raw, settings);
+        const gatewayTrustSecret = randomBytes(32).toString('base64url');
+        exposureWiring = new RuntimeExposureWiring(
+          config,
+          settings,
+          oauthRepo,
+          tls,
+          deps.cloudflare,
+          gatewayTrustSecret,
+          audit,
+        );
+        const links = [sessions, workspaces, workerGateway, audit, exposureWiring] as const;
+        const files = fileLinksFor(...links, () => connectorsAdmission);
         const tools = adminRuntime.createCoreToolService(
           sessions,
           workspaces,
@@ -229,6 +249,7 @@ export async function createCoreRuntime(
             browserPolicy,
             upstreams: mcpUpstreams,
             ...usageWiring.tools,
+            ...files.tools,
           },
         );
         const remoteTools = new SessionSkillAccessGate(tools, sessions, approvals);
@@ -236,16 +257,6 @@ export async function createCoreRuntime(
         await bootstrap.revokeAll();
         const controlSecret = ensureLocalControlSecret(config.stateDir);
         const localFilesystem = new LocalFilesystemService();
-        const gatewayTrustSecret = randomBytes(32).toString('base64url');
-        exposureWiring = new RuntimeExposureWiring(
-          config,
-          settings,
-          oauthRepo,
-          tls,
-          deps.cloudflare,
-          gatewayTrustSecret,
-          audit,
-        );
         const localTls = tls.serverOptions;
         const staticDir = fileURLToPath(new URL('../../web', import.meta.url));
         const oauth = exposureWiring.oauth;
@@ -309,7 +320,6 @@ export async function createCoreRuntime(
             }),
         );
         const verifier = exposureWiring.verifier,
-          connectorLimiter = new IpRateLimiter(30, 1),
           connectorsAdmission = createConnectorAdmission(connectorRepo, connectorLimiter);
         mcp = new McpIngressServer(
           config.mcpHost,
@@ -329,6 +339,7 @@ export async function createCoreRuntime(
             connectionLimiter,
             invalidBearerLimiter,
             ...usageWiring.mcp,
+            ...files.mcp,
           },
         );
         await Promise.all([admin.start(), mcp.start()]);

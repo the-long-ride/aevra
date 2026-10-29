@@ -4,6 +4,7 @@ import type {
   CommandPolicyInput,
   CommandRequest,
 } from '../../../../../packages/protocol/src/command-analysis.js';
+import { normalizeYoloPolicy } from '../../../../../packages/protocol/src/command-analysis.js';
 import { decideCommand } from '../../policy/command-decision.js';
 import { readAdminBody, sendAdminResponse } from './http.js';
 import type { AdminRouteHandler } from './types.js';
@@ -119,10 +120,15 @@ export const handleCommandExplainRoutes: AdminRouteHandler = async (req, res, ur
     const yoloSetting = context.settings?.get?.('policy.yolo', { mode: 'workspace' }) ?? {};
     const yoloActive =
       input.yoloActive !== undefined ? Boolean(input.yoloActive) : Boolean(yoloSetting.active);
+    const storedYolo = normalizeYoloPolicy(yoloSetting);
     const yoloMode =
-      input.yoloMode === 'unrestricted' || yoloSetting.mode === 'unrestricted'
+      input.yoloMode === 'unrestricted' || storedYolo.mode === 'unrestricted'
         ? 'unrestricted'
         : 'workspace';
+    const yoloRisk =
+      input.yoloRisk === 'do-whatever' || storedYolo.risk === 'do-whatever'
+        ? 'do-whatever'
+        : 'prevent-high-risk';
 
     const policyInput: CommandPolicyInput = {
       analysis,
@@ -132,11 +138,14 @@ export const handleCommandExplainRoutes: AdminRouteHandler = async (req, res, ur
       yolo: {
         active: yoloActive,
         mode: yoloMode,
+        risk: yoloRisk,
       },
       criticalAlwaysConfirm:
-        input.criticalAlwaysConfirm !== undefined
-          ? Boolean(input.criticalAlwaysConfirm)
-          : Boolean(context.settings?.get?.('policy.critical.alwaysConfirm', false)),
+        yoloActive && yoloRisk === 'do-whatever'
+          ? false
+          : input.criticalAlwaysConfirm !== undefined
+            ? Boolean(input.criticalAlwaysConfirm)
+            : Boolean(context.settings?.get?.('policy.critical.alwaysConfirm', false)),
       scriptTrust: 'not-applicable',
     };
 

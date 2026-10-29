@@ -12,6 +12,7 @@ interface ReadyInfo {
 export interface StartCommandDependencies<Config> {
   run(config: Config, hooks: { onReady(info: ReadyInfo): void | Promise<void> }): Promise<number>;
   readyLines(info: ReadyInfo): string[];
+  desktopHelperNoticeLines?(): string[];
   openUi(config: Config, destination: AdminUiDestination): Promise<void>;
   error(message: string): void;
   formatError(error: unknown): string;
@@ -26,6 +27,10 @@ export async function runStartCommand<Config>(
     return await dependencies.run(config, {
       async onReady(info) {
         for (const line of dependencies.readyLines(info)) {
+          dependencies.error(line);
+        }
+
+        for (const line of dependencies.desktopHelperNoticeLines?.() ?? []) {
           dependencies.error(line);
         }
 

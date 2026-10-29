@@ -1,3 +1,4 @@
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { WorkerGateway } from '../../../packages/mcp-tools/src/service.js';
 import type { CoreConfig } from './config.js';
@@ -237,6 +238,7 @@ async function resolveRuntimeSystemCapabilities(deps: RuntimeDependencies) {
 }
 
 export async function prepareRuntimeStartup(config: CoreConfig, deps: RuntimeDependencies) {
+  await mkdir(config.recoveryDir, { recursive: true, mode: 0o700 });
   const systemCapabilities = await resolveRuntimeSystemCapabilities(deps);
   const tls = await resolveRuntimeTls(config, deps);
   const adminCredentialVerifier = await config.createAdminCredentialVerifier();
@@ -270,7 +272,17 @@ export function runtimeWorkerGateway(
   safeMode: boolean,
 ): WorkerGateway {
   if (safeMode || typeof worker.execute !== 'function') return unavailableWorkerGateway();
-  return { execute: (input) => worker.execute!(input) };
+  const streams = worker as Partial<WorkerGateway>;
+  return {
+    execute: (input) => worker.execute!(input),
+    // Only offered when the worker can stream; callers fall back to a typed error.
+    ...(typeof streams.executeWithUpload === 'function'
+      ? { executeWithUpload: (input, source) => streams.executeWithUpload!(input, source) }
+      : {}),
+    ...(typeof streams.executeWithDownload === 'function'
+      ? { executeWithDownload: (input) => streams.executeWithDownload!(input) }
+      : {}),
+  };
 }
 function unavailableWorkerGateway(): WorkerGateway {
   return {

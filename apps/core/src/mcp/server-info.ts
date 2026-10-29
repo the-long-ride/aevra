@@ -28,7 +28,7 @@ export function aevraServerInfo(baseUrl?: string): AevraServerInfo {
     name: 'Aevra',
     version: AEVRA_VERSION,
     description:
-      'Use Claude, ChatGPT, Grok, etc. chat to control your workspace. Operations remain protected by Aevra permissions and approval controls.',
+      'Aevra gives AI agents controlled access to this device: files, shell, git, browser, desktop and linked MCP servers, all behind Aevra approvals and policy.',
   };
   if (baseUrl) {
     info.icons = [

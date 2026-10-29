@@ -106,4 +106,11 @@ export class WorkspaceRepository {
   deleteMount(id: string) {
     this.db.prepare('DELETE FROM external_mounts WHERE id=?').run(id);
   }
+  updateMount(id: string, input: { capabilities?: Capability[]; logicalPath?: string }) {
+    if (input.capabilities) {
+      this.db
+        .prepare('UPDATE external_mounts SET capabilities_json=? WHERE id=?')
+        .run(JSON.stringify(input.capabilities), id);
+    }
+  }
 }
