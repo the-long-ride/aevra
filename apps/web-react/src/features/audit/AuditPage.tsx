@@ -1,6 +1,7 @@
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
+import { useToast } from '../../components/Toast';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
 
@@ -36,6 +37,8 @@ async function load(signal: AbortSignal): Promise<AuditData> {
 export function AuditPage() {
   const resource = useApiResource(load);
   const dialog = useDialog();
+  const { toast, success, error } = useToast();
+
   const clear = async () => {
     if (
       !(await dialog.confirm({
@@ -48,8 +51,13 @@ export function AuditPage() {
     ) {
       return;
     }
-    await requestJson('/api/audit', { method: 'DELETE' });
-    await resource.refresh();
+    try {
+      await requestJson('/api/audit', { method: 'DELETE' });
+      success('Audit history cleared.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
   return (
     <PageState loading={resource.loading} error={resource.error}>
@@ -102,6 +110,7 @@ export function AuditPage() {
           emptyText="No audit events."
         />
       </section>
+      {toast}
     </PageState>
   );
 }

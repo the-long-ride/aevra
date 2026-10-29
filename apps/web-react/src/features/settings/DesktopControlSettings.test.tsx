@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -362,5 +363,15 @@ describe('DesktopControlSettings', () => {
     window.localStorage.setItem('aevra.custom_desktop_apps', 'invalid-json{');
     mount({ mode: 'allowlist', applications: [] });
     expect(screen.getByRole('heading', { name: 'Desktop control' })).toBeInTheDocument();
+  });
+
+  it('keeps revoke grant buttons strictly square and overrides mobile touch inflation', () => {
+    const settingsCss = readFileSync('src/styles/settings.css', 'utf8');
+    expect(settingsCss).toMatch(/\.desktop-app-grant-revoke\s*\{[^}]*width:\s*28px/);
+    expect(settingsCss).toMatch(/\.desktop-app-grant-revoke\s*\{[^}]*height:\s*28px/);
+    expect(settingsCss).toMatch(/\.desktop-app-grant-revoke\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1/);
+
+    const tweaksCss = readFileSync('src/styles/layout-tweaks.css', 'utf8');
+    expect(tweaksCss).toMatch(/@media\s*\(max-width:\s*640px\)[\s\S]*?\.desktop-app-grant-revoke[\s\S]*?height:\s*28px/);
   });
 });

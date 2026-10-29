@@ -30,6 +30,20 @@ export const detected: DetectedAgent[] = [
     configPath: '',
     scopes: ['user', 'workspace'],
   },
+  {
+    target: 'antigravity-cli',
+    found: false,
+    evidence: 'none',
+    configPath: '',
+    scopes: ['user', 'workspace'],
+  },
+  {
+    target: 'antigravity-ide',
+    found: false,
+    evidence: 'none',
+    configPath: '',
+    scopes: ['user', 'workspace'],
+  },
 ];
 
 export const workspaces = [

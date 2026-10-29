@@ -1,4 +1,5 @@
 import type { WorkspaceSummary } from '@aevra/admin-contracts';
+import { SwapControl } from '../../components/SwapControl';
 import { Switch } from '../../components/Switch';
 import type { AgentScope } from './agent-service';
 
@@ -21,27 +22,18 @@ export function ScopeFields({
   return (
     <fieldset className="agent-modal-group" disabled={disabled}>
       <legend>Scope</legend>
-      <div className="agent-scope-card" data-selected={scope === 'user'}>
-        <label className="agent-scope-option">
-          <input
-            type="radio"
-            name="agent-scope"
-            checked={scope === 'user'}
-            onChange={() => onScope('user')}
-          />
-          <span>Global (all my projects)</span>
-        </label>
-      </div>
-      <div className="agent-scope-card" data-selected={active}>
-        <label className="agent-scope-option">
-          <input
-            type="radio"
-            name="agent-scope"
-            checked={active}
-            onChange={() => onScope('workspace')}
-          />
-          <span>Only these workspaces</span>
-        </label>
+      <SwapControl
+        name="agent-scope"
+        ariaLabel="Scope"
+        value={scope}
+        disabled={disabled}
+        onChange={onScope}
+        options={[
+          { value: 'user', label: 'Global (all my projects)' },
+          { value: 'workspace', label: 'Only these workspaces' },
+        ]}
+      />
+      {active && (
         <div
           className="agent-workspace-list"
           role="group"
@@ -56,13 +48,13 @@ export function ScopeFields({
                 key={workspace.id}
                 label={workspace.hostRoot ? workspace.name : `${workspace.name} (no folder path)`}
                 checked={workspaceIds.includes(workspace.id)}
-                disabled={disabled || !active || !workspace.hostRoot}
+                disabled={disabled || !workspace.hostRoot}
                 onChange={() => onToggleWorkspace(workspace.id)}
               />
             ))
           )}
         </div>
-      </div>
+      )}
     </fieldset>
   );
 }

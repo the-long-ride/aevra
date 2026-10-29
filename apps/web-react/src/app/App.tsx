@@ -3,9 +3,11 @@ import { useCallback, useRef, useState, type ComponentType } from 'react';
 import { AppShell } from '../components/AppShell';
 import { DialogProvider } from '../components/Dialog';
 import { useDialogEnterKey } from '../components/dialog-enter-key';
+import { useToast } from '../components/Toast';
 import { AdminAuthGate } from '../features/auth/AdminAuthGate';
 import { AuditPage } from '../features/audit/AuditPage';
 import { AboutPage } from '../features/about/AboutPage';
+import { ConnectorsPage } from '../features/connectors/ConnectorsPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { DataPage } from '../features/data/DataPage';
 import { GuidePage } from '../features/guide/GuidePage';
@@ -29,6 +31,7 @@ const pageRegistry: Record<AdminPageId, ComponentType> = {
   workspaces: WorkspacesPage,
   permissions: PermissionsPage,
   sessions: SessionsPage,
+  connectors: ConnectorsPage,
   audit: AuditPage,
   settings: SettingsPage,
   data: DataPage,
@@ -45,6 +48,7 @@ function AuthenticatedApp({ theme, onToggleTheme }: { theme: Theme; onToggleThem
   const drawerRefreshRef = useRef<(() => Promise<void>) | null>(null);
   const Page = pageRegistry[page];
   const welcome = useWelcome();
+  const { toast } = useToast();
   useDialogEnterKey();
 
   const handleNewPending = useCallback((data: RequestsData) => {
@@ -120,6 +124,7 @@ function AuthenticatedApp({ theme, onToggleTheme }: { theme: Theme; onToggleThem
           onDismiss={handleModalDismiss}
         />
       ) : null}
+      {toast}
     </DialogProvider>
   );
 }

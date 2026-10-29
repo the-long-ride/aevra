@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
@@ -58,14 +59,55 @@ test('renders the ready Cloudflare status with endpoints and health rows', () =>
 
   expect(screen.getByText('Cloudflare')).toBeInTheDocument();
   expect(screen.getByText('Tunnel healthy')).toBeInTheDocument();
+  expect(screen.getByText('Tunnel healthy')).toHaveClass('status-success');
+  expect(document.querySelector('.remote-provider .status')).toBeNull();
   expect(screen.getByText('https://127.0.0.1:47830')).toBeInTheDocument();
   expect(screen.getByText('https://aevra.example.com')).toBeInTheDocument();
   expect(screen.getByText('https://aevra.example.com/mcp')).toBeInTheDocument();
   const health = screen.getByLabelText('Exposure health');
   expect(health).toHaveTextContent('Provider processrunning');
+  expect(screen.getByText('running')).toHaveClass('status-success');
+  expect(screen.getByText('valid')).toHaveClass('status-success');
   expect(health).toHaveTextContent('TLSvalid');
   expect(health).not.toHaveTextContent('Public HTTPS');
   expect(screen.getByText('2026-08-21T10:00:00.000Z')).toBeInTheDocument();
+});
+
+test('styles health row values with green (success) or red (danger) based on status', () => {
+  installApiFixtures();
+  renderPanel(
+    exposure({
+      state: 'ready',
+      message: 'Exposure is ready.',
+      health: {
+        providerProcess: 'ready',
+        gateway: 'reachable',
+        publicHttps: 'unreachable',
+        admin: 'reachable',
+        mcp: 'reachable',
+        oauth: 'healthy',
+        tls: 'ready',
+      },
+    }),
+  );
+
+  expect(screen.getByText('Exposure is ready.')).toHaveClass('status-success');
+  expect(document.querySelector('.remote-provider .status')).toBeNull();
+
+  const readyItems = screen.getAllByText('ready');
+  expect(readyItems.length).toBeGreaterThanOrEqual(2);
+  for (const item of readyItems) {
+    expect(item).toHaveClass('status-success');
+  }
+
+  const reachableItems = screen.getAllByText('reachable');
+  expect(reachableItems.length).toBeGreaterThanOrEqual(3);
+  for (const item of reachableItems) {
+    expect(item).toHaveClass('status-success');
+  }
+
+  expect(screen.getByText('healthy')).toHaveClass('status-success');
+  expect(screen.getByText('unreachable')).toHaveClass('status-danger');
 });
 
 test('falls back to placeholders for unconfigured local exposure with restart required', () => {
@@ -255,4 +297,11 @@ test('network failures during endpoint tests surface the error message', async (
 
   await user.click(screen.getByRole('button', { name: 'Test endpoint' }));
   expect(await screen.findByText('offline')).toBeInTheDocument();
+});
+
+test('remote access panel styles enforce a readable single-column endpoint grid and balanced health grid on mobile', () => {
+  const css = readFileSync('src/styles/dashboard.css', 'utf8');
+  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.remote-status-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
+  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.remote-access-head\s*>\s*button\s*\{[^}]*width:\s*100%/);
+  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.remote-health-item:last-child:nth-child\(odd\)\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
 });

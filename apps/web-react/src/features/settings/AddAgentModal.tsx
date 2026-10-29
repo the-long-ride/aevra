@@ -116,12 +116,51 @@ export function AddAgentModal({
         : detected.length === 0
           ? 'No agents detected'
           : '';
+
+  const footer =
+    step === 'form' ? (
+      <div className="agent-modal-foot-actions">
+        <button type="button" onClick={requestClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="primary"
+          disabled={!ready || busy}
+          onClick={() => void run(true)}
+        >
+          {busy ? `Previewing${ELLIPSIS}` : 'Preview'}
+        </button>
+      </div>
+    ) : step === 'preview' && preview ? (
+      <div className="agent-modal-foot-actions">
+        <button type="button" onClick={() => go('form')} disabled={busy}>
+          Back
+        </button>
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || !previewUsable}
+          onClick={() => void run(false)}
+        >
+          {busy ? `Installing${ELLIPSIS}` : 'Install'}
+        </button>
+      </div>
+    ) : step === 'done' ? (
+      <div className="agent-modal-foot-actions">
+        <button type="button" className="primary" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    ) : null;
+
   return (
     <ManagementModal
       open
       title="Connect an AI agent"
       onClose={requestClose}
       className={step === 'form' ? 'agent-modal-size-form' : 'agent-modal-size-compact'}
+      footer={footer}
     >
       {error && <p role="alert">{error}</p>}
       {step === 'form' && (
@@ -182,37 +221,11 @@ export function AddAgentModal({
               resetOutcomes();
             }}
           />
-          <div className="actions">
-            <button type="button" onClick={requestClose} disabled={busy}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={!ready || busy}
-              onClick={() => void run(true)}
-            >
-              {busy ? `Previewing${ELLIPSIS}` : 'Preview'}
-            </button>
-          </div>
         </div>
       )}
       {step === 'preview' && preview && (
         <div className="agent-modal-form">
           <PreviewPanel preview={preview} workspaces={workspaces} headingRef={heading} />
-          <div className="actions">
-            <button type="button" onClick={() => go('form')} disabled={busy}>
-              Back
-            </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={busy || !previewUsable}
-              onClick={() => void run(false)}
-            >
-              {busy ? `Installing${ELLIPSIS}` : 'Install'}
-            </button>
-          </div>
         </div>
       )}
       {step === 'done' && (
@@ -222,11 +235,6 @@ export function AddAgentModal({
           </h3>
           <OutcomeList results={outcomes} workspaces={workspaces} />
           <p>Restart or refresh each agent so it picks up the new connection.</p>
-          <div className="actions">
-            <button type="button" className="primary" onClick={onClose}>
-              Done
-            </button>
-          </div>
         </div>
       )}
     </ManagementModal>

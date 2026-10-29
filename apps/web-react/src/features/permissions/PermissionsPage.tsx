@@ -13,6 +13,7 @@ import { requestJson } from '../../services/api-client';
 import { CommandRuleEditor } from './CommandRuleEditor';
 import {
   CAPABILITIES,
+  buildActorOptions,
   buildSessionOptions,
   buildWorkspaceOptions,
   loadPermissionsData,
@@ -23,7 +24,8 @@ export function PermissionsPage() {
   const dialog = useDialog();
   const [adding, setAdding] = useState(false);
   const [commandEnabled, setCommandEnabled] = useState(false);
-  const { toast, error } = useToast();
+  const { toast, success, error } = useToast();
+  const [selectedActors, setSelectedActors] = useState<string[]>([]);
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
   const [v2ModalOpen, setV2ModalOpen] = useState(false);
@@ -33,6 +35,7 @@ export function PermissionsPage() {
   const closeAddRules = () => {
     setAdding(false);
     setCommandEnabled(false);
+    setSelectedActors([]);
     setSelectedWorkspaceIds([]);
     setSelectedSessionIds([]);
   };
@@ -66,6 +69,7 @@ export function PermissionsPage() {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+      success(editingV2Row ? 'Command rule updated.' : 'Command rule created.');
       setV2ModalOpen(false);
       setEditingV2Row(null);
       await resource.refresh();
@@ -86,6 +90,7 @@ export function PermissionsPage() {
       await requestJson(`/api/permissions/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
+      success('Permission rule revoked.');
       await resource.refresh();
     } catch (cause) {
       error(cause);
@@ -122,6 +127,7 @@ export function PermissionsPage() {
             .filter(Boolean),
         }),
       });
+      success('Permission rules created.');
       closeAddRules();
       await resource.refresh();
     } catch (cause) {
@@ -131,6 +137,11 @@ export function PermissionsPage() {
 
   const workspaceOptions = buildWorkspaceOptions(resource.data?.workspaces);
   const sessionOptions = buildSessionOptions(resource.data?.sessions, resource.data?.workspaces);
+  const actorOptions = buildActorOptions(
+    resource.data?.connectors,
+    resource.data?.connections,
+    resource.data?.sessions,
+  );
 
   return (
     <PageState loading={resource.loading} error={resource.error}>
@@ -168,10 +179,21 @@ export function PermissionsPage() {
         <form className="permission-bulk permission-modal-form" onSubmit={createRules}>
           <section className="form-section">
             <h3>Who gets access?</h3>
-            <label className="field">
-              <span>Connector actors</span>
-              <input name="actors" placeholder="connector:ChatGPT, oauth:Claude" required />
-            </label>
+            <p className="muted" style={{ margin: 0 }}>
+              Grant capabilities to registered connectors, OAuth apps, or session actors.
+            </p>
+            <div className="field">
+              <label htmlFor="connector-actors-input">Connector actors</label>
+              <SearchableMultiSelect
+                id="connector-actors-input"
+                name="actors"
+                placeholder="Search connector or enter actor (e.g. connector:ChatGPT, oauth:Claude)…"
+                options={actorOptions}
+                values={selectedActors}
+                onChange={setSelectedActors}
+              />
+              <small>Select from registered connectors or enter custom actor IDs.</small>
+            </div>
           </section>
           <section className="form-section">
             <h3>Where does it apply?</h3>

@@ -1,6 +1,6 @@
 import type { ExposureStatus, KeepAwakeStatus, WorkspaceSummary } from '@aevra/admin-contracts';
 import { requestJson } from '../../services/api-client';
-import type { YoloMode } from './YoloPolicySettings';
+import type { YoloPolicy } from './YoloPolicySettings';
 import type { BrowserControlState } from './BrowserControlSettings';
 
 export interface HookSetting {
@@ -25,7 +25,7 @@ export interface SettingsData {
   commandFamilies: Record<string, string>;
   networkRules: Array<Record<string, unknown>>;
   execution: Record<string, unknown>;
-  yolo: { mode: YoloMode };
+  yolo: YoloPolicy;
   hooks: HookSetting[];
   profiles: Array<Record<string, unknown>>;
   secretRefs: Array<Record<string, unknown> | string>;
@@ -57,8 +57,8 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
     requestJson<Record<string, unknown>>('/api/execution-settings', options),
     // Tolerated on its own: a core without this route must not blank the whole
     // Settings page, and the narrow mode is the safe assumption.
-    requestJson<{ mode: YoloMode }>('/api/policy/yolo', options).catch(
-      () => ({ mode: 'workspace' }) as { mode: YoloMode },
+    requestJson<Partial<YoloPolicy>>('/api/policy/yolo', options).catch(
+      () => ({}) as Partial<YoloPolicy>,
     ),
     requestJson<HookSetting[]>('/api/hooks', options),
     requestJson<Array<Record<string, unknown>>>('/api/environment-profiles', options),
@@ -81,7 +81,10 @@ export async function loadSettings(signal?: AbortSignal): Promise<SettingsData> 
     commandFamilies,
     networkRules,
     execution,
-    yolo: { mode: yolo?.mode === 'unrestricted' ? 'unrestricted' : 'workspace' },
+    yolo: {
+      mode: yolo?.mode === 'unrestricted' ? 'unrestricted' : 'workspace',
+      risk: yolo?.risk === 'do-whatever' ? 'do-whatever' : 'prevent-high-risk',
+    },
     hooks,
     profiles,
     secretRefs,

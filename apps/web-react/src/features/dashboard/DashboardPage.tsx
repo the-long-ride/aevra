@@ -3,6 +3,7 @@ import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
 import { Switch } from '../../components/Switch';
+import { useToast } from '../../components/Toast';
 import { usePollingResource } from '../../hooks/use-polling-resource';
 import { ConnectorModal } from './ConnectorModal';
 import { ConnectionDetailModal, type ActiveConnection } from './ConnectionDetailModal';
@@ -18,6 +19,7 @@ import { TransportValidationModal } from './TransportValidationModal';
 export function DashboardPage() {
   const resource = usePollingResource({ load: loadDashboard, intervalMs: 2000 });
   const dialog = useDialog();
+  const { toast, success } = useToast();
   const [connectorModalOpen, setConnectorModalOpen] = useState(false);
   const [runtimeModal, setRuntimeModal] = useState<RuntimeModalKind | null>(null);
   const [transportModalOpen, setTransportModalOpen] = useState(false);
@@ -88,6 +90,9 @@ export function DashboardPage() {
       );
       if (selectedConnection?.id && succeeded.has(selectedConnection.id))
         setSelectedConnection(null);
+      if (succeeded.size) {
+        success(`${succeeded.size} connection${succeeded.size === 1 ? '' : 's'} revoked.`);
+      }
       await resource.refresh();
       if (failed) {
         void dialog.message({
@@ -121,6 +126,7 @@ export function DashboardPage() {
         });
       }
       if (selectedConnection?.id === row.id) setSelectedConnection(null);
+      success('Connection revoked.');
       await resource.refresh();
     } catch (err: any) {
       void dialog.message({
@@ -351,6 +357,7 @@ export function DashboardPage() {
         open={connectorModalOpen}
         onClose={() => setConnectorModalOpen(false)}
         onCreated={resource.refresh}
+        workspaces={data.workspaces}
       />
       <ConnectionDetailModal
         connection={selectedLive}
@@ -358,6 +365,7 @@ export function DashboardPage() {
         onClose={() => setSelectedConnection(null)}
         onChanged={resource.refresh}
       />
+      {toast}
     </>
   );
 }

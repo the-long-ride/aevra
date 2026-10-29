@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { SwapControl, type SwapOption } from '../../components/SwapControl';
 import { Switch } from '../../components/Switch';
 
 interface DesktopModeSelectorProps {
@@ -6,6 +7,11 @@ interface DesktopModeSelectorProps {
   disabled: boolean;
   onModeChange: (mode: 'allowlist' | 'denylist') => void;
 }
+
+const DESKTOP_MODE_OPTIONS: SwapOption<'allowlist' | 'denylist'>[] = [
+  { value: 'denylist', label: 'Allow all apps' },
+  { value: 'allowlist', label: 'Only these apps' },
+];
 
 export const DesktopModeSelector = memo(function DesktopModeSelector({
   mode,
@@ -15,38 +21,14 @@ export const DesktopModeSelector = memo(function DesktopModeSelector({
   return (
     <fieldset className="console-fieldset">
       <legend>Apps computer use can touch</legend>
-      <div
-        className="console-radio-group"
-        role="radiogroup"
-        aria-label="Apps computer use can touch"
-      >
-        <label
-          className={`console-radio-option${mode === 'denylist' ? ' is-selected' : ''}${disabled ? ' is-disabled' : ''}`}
-        >
-          <input
-            type="radio"
-            name="desktopMode"
-            value="denylist"
-            checked={mode === 'denylist'}
-            disabled={disabled}
-            onChange={() => onModeChange('denylist')}
-          />
-          <span>Allow all apps</span>
-        </label>
-        <label
-          className={`console-radio-option${mode === 'allowlist' ? ' is-selected' : ''}${disabled ? ' is-disabled' : ''}`}
-        >
-          <input
-            type="radio"
-            name="desktopMode"
-            value="allowlist"
-            checked={mode === 'allowlist'}
-            disabled={disabled}
-            onChange={() => onModeChange('allowlist')}
-          />
-          <span>Only these apps</span>
-        </label>
-      </div>
+      <SwapControl
+        name="desktopMode"
+        ariaLabel="Apps computer use can touch"
+        value={mode}
+        disabled={disabled}
+        options={DESKTOP_MODE_OPTIONS}
+        onChange={onModeChange}
+      />
       <p className="section-note console-radio-hint">
         {mode === 'denylist'
           ? 'Only a few sensitive apps stay blocked.'

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
+import { useToast } from '../../components/Toast';
 import { HookCreateModal } from './HookCreateModal';
 import { deleteResource, patchJson, type HookSetting } from './settings-service';
 
@@ -13,6 +14,7 @@ export function HooksSettings({
 }) {
   const dialog = useDialog();
   const [creating, setCreating] = useState(false);
+  const { toast, error, success } = useToast();
 
   const handleDelete = async (id: string) => {
     const confirmed = await dialog.confirm({
@@ -22,8 +24,25 @@ export function HooksSettings({
       confirmTone: 'danger',
     });
     if (!confirmed) return;
-    await deleteResource(`/api/hooks/${encodeURIComponent(id)}`);
-    await onChanged();
+    try {
+      await deleteResource(`/api/hooks/${encodeURIComponent(id)}`);
+      success('Lifecycle hook deleted.');
+      await onChanged();
+    } catch (cause) {
+      error(cause);
+    }
+  };
+
+  const handleToggle = async (row: HookSetting) => {
+    try {
+      await patchJson(`/api/hooks/${encodeURIComponent(row.id)}`, {
+        enabled: !row.enabled,
+      });
+      success(row.enabled ? 'Lifecycle hook disabled.' : 'Lifecycle hook enabled.');
+      await onChanged();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   return (
@@ -72,11 +91,7 @@ export function HooksSettings({
               <div className="actions">
                 <button
                   type="button"
-                  onClick={() =>
-                    void patchJson(`/api/hooks/${encodeURIComponent(row.id)}`, {
-                      enabled: !row.enabled,
-                    }).then(onChanged)
-                  }
+                  onClick={() => void handleToggle(row)}
                 >
                   {row.enabled ? 'Disable' : 'Enable'}
                 </button>
@@ -97,8 +112,15 @@ export function HooksSettings({
       />
 
       {creating ? (
-        <HookCreateModal onClose={() => setCreating(false)} onCreated={onChanged} />
+        <HookCreateModal
+          onClose={() => setCreating(false)}
+          onCreated={async () => {
+            success('Lifecycle hook created.');
+            await onChanged();
+          }}
+        />
       ) : null}
+      {toast}
     </section>
   );
 }

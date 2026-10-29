@@ -32,6 +32,24 @@ describe('AboutPage', () => {
     expect(issuesLink).toHaveAttribute('target', '_blank');
   });
 
+  test('renders support section with star and donate links', async () => {
+    render(<AboutPage />);
+    expect(
+      await screen.findByRole('heading', { name: /support & community/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/giving the repository a star on GitHub/i)).toBeInTheDocument();
+
+    const starLink = screen.getByRole('link', { name: /star on github/i });
+    expect(starLink).toHaveAttribute('href', 'https://github.com/the-long-ride/aevra');
+    expect(starLink).toHaveAttribute('target', '_blank');
+    expect(starLink).toHaveAttribute('rel', 'noreferrer');
+
+    const donateLink = screen.getByRole('link', { name: /donate \/ sponsor/i });
+    expect(donateLink).toHaveAttribute('href', 'https://github.com/the-long-ride');
+    expect(donateLink).toHaveAttribute('target', '_blank');
+    expect(donateLink).toHaveAttribute('rel', 'noreferrer');
+  });
+
   test('renders specialized fork repository links for desktop and browser use', async () => {
     render(<AboutPage />);
     const desktopLink = await screen.findByRole('link', { name: 'aevra-desktop-use' });

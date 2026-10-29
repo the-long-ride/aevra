@@ -20,7 +20,7 @@ export function CommandPolicySettings({
   const dialog = useDialog();
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { toast, error } = useToast();
+  const { toast, error, success } = useToast();
 
   const close = () => setCreating(false);
 
@@ -36,6 +36,7 @@ export function CommandPolicySettings({
     delete next[family];
     try {
       await patchJson('/api/policy/command-families', next);
+      success('Command-family override removed.');
       await onChanged();
     } catch (cause) {
       error(cause);
@@ -51,6 +52,7 @@ export function CommandPolicySettings({
         ...families,
         [String(value.family)]: value.effect,
       });
+      success('Command-family override saved.');
       close();
       await onChanged().catch(() => undefined);
     } catch (cause) {

@@ -308,7 +308,7 @@
   background: color-mix(in srgb, var(--warning) 5%, var(--canvas));
 }
 
-.secret-result code {
+.secret-result > code {
   overflow: auto;
   padding: 8px;
 }

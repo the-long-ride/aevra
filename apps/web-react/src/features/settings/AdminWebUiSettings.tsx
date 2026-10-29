@@ -73,6 +73,12 @@ export function AdminWebUiSettings({
               value={newTrustedAdminOrigin}
               onChange={(event) => onNewTrustedOriginChange(event.target.value)}
               placeholder="https://admin.example.com"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onAddTrustedOrigin();
+                }
+              }}
             />
             <button type="button" onClick={onAddTrustedOrigin}>
               Add trusted origin
@@ -89,7 +95,17 @@ export function AdminWebUiSettings({
         </div>
       </div>
       {originsOpen ? (
-        <ManagementModal open title="Trusted Admin origins" onClose={() => setOriginsOpen(false)}>
+        <ManagementModal
+          open
+          title="Trusted Admin origins"
+          className="trusted-origin-modal"
+          onClose={() => setOriginsOpen(false)}
+          footer={
+            <button type="button" className="primary" onClick={() => setOriginsOpen(false)}>
+              Done
+            </button>
+          }
+        >
           <div className="trusted-origin-modal-list">
             {trustedAdminOrigins.map((origin, index) => (
               <div className="trusted-origin-row" key={`${origin}-${index}`}>

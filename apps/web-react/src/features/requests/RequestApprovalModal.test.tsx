@@ -87,6 +87,32 @@ test('long command text is exposed through a bounded ellipsis surface with full 
   expect(preview).toHaveAttribute('title', '$ ' + longCommand);
 });
 
+test('long multiline commands render inside request-detail with actions preserved', () => {
+  installApiFixtures();
+  const multilineScript = Array.from({ length: 40 }, (_, i) => `echo "step ${i + 1}"`).join('\n');
+  renderModal(
+    makeData({
+      approvals: [
+        {
+          ...commandApproval,
+          presentation: {
+            ...commandApproval.presentation,
+            preview: multilineScript,
+          },
+        } as any,
+      ],
+    }),
+  );
+
+  const dialog = screen.getByRole('dialog', { name: 'Approval request' });
+  const detail = dialog.querySelector('.request-detail');
+  expect(detail).toBeInTheDocument();
+  const preview = detail?.querySelector('.request-preview');
+  expect(preview).toHaveTextContent('echo "step 40"');
+  expect(screen.getByRole('button', { name: 'Run once' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+});
+
 test('approval modal shows pending count when multiple requests exist', () => {
   installApiFixtures();
   renderModal(

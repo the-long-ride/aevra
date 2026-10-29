@@ -1,6 +1,7 @@
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
+import { useToast } from '../../components/Toast';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
 
@@ -19,6 +20,7 @@ async function load(signal: AbortSignal) {
 export function ChangesPanel({ contained = false }: { contained?: boolean }) {
   const resource = useApiResource(load);
   const dialog = useDialog();
+  const { toast, success, error } = useToast();
 
   const rename = async (row: ChangeRow) => {
     const name = await dialog.prompt({
@@ -29,11 +31,16 @@ export function ChangesPanel({ contained = false }: { contained?: boolean }) {
       required: true,
     });
     if (!name?.trim()) return;
-    await requestJson(`/api/changes/${encodeURIComponent(row.id)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ name: name.trim() }),
-    });
-    await resource.refresh();
+    try {
+      await requestJson(`/api/changes/${encodeURIComponent(row.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      success('Change set renamed.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const mutate = async (row: ChangeRow, action: 'commit' | 'rollback') => {
@@ -48,11 +55,16 @@ export function ChangesPanel({ contained = false }: { contained?: boolean }) {
     ) {
       return;
     }
-    await requestJson(`/api/changes/${encodeURIComponent(row.id)}/${action}`, {
-      method: 'POST',
-      body: '{}',
-    });
-    await resource.refresh();
+    try {
+      await requestJson(`/api/changes/${encodeURIComponent(row.id)}/${action}`, {
+        method: 'POST',
+        body: '{}',
+      });
+      success(action === 'commit' ? 'Change set kept.' : 'Change set rolled back.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   return (
@@ -110,6 +122,7 @@ export function ChangesPanel({ contained = false }: { contained?: boolean }) {
         rowKey={(row) => row.id}
         emptyText="No change sets."
       />
+      {toast}
     </PageState>
   );
 }

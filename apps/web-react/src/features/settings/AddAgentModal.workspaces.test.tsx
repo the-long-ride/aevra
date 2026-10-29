@@ -78,14 +78,14 @@ describe('AddAgentModal multiple workspaces', () => {
 
   it('needs a workspace switched on, disables the list for global scope and handles none', () => {
     renderModal();
-    expect(screen.getByRole('switch', { name: 'Docs' })).toBeDisabled();
+    expect(screen.queryByRole('switch', { name: 'Docs' })).not.toBeInTheDocument();
     pickWorkspaces();
     expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
     expect(screen.getByRole('switch', { name: 'Remote only (no folder path)' })).toBeDisabled();
     fireEvent.click(screen.getByRole('switch', { name: 'Docs' }));
     expect(screen.getByRole('button', { name: 'Preview' })).toBeEnabled();
     fireEvent.click(screen.getByRole('radio', { name: 'Global (all my projects)' }));
-    expect(screen.getByRole('switch', { name: 'Docs' })).toBeDisabled();
+    expect(screen.queryByRole('switch', { name: 'Docs' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Preview' })).toBeEnabled();
   });
 
@@ -93,6 +93,7 @@ describe('AddAgentModal multiple workspaces', () => {
     render(
       <AddAgentModal detected={detected} workspaces={[]} onClose={vi.fn()} onChanged={vi.fn()} />,
     );
+    fireEvent.click(screen.getByRole('radio', { name: 'Only these workspaces' }));
     expect(screen.getByText('No workspaces registered yet.')).toBeInTheDocument();
     expect(screen.queryByRole('switch', { name: 'Main' })).not.toBeInTheDocument();
   });

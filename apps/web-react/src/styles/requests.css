@@ -257,9 +257,14 @@
 /* Quick approval modal — appears in-viewport when new requests arrive */
 
 .approval-modal-backdrop {
+  --approval-modal-top-offset: max(60px, 8vh);
+  --approval-modal-bottom-offset: max(16px, env(safe-area-inset-bottom, 16px));
   z-index: 95;
   align-items: flex-start;
-  padding-top: max(80px, 12vh);
+  justify-items: center;
+  padding: 16px;
+  padding-top: var(--approval-modal-top-offset);
+  padding-bottom: var(--approval-modal-bottom-offset);
   background: transparent;
   pointer-events: none;
 }
@@ -267,8 +272,9 @@
 .approval-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(480px, calc(100vw - 24px));
-  max-height: min(720px, calc(100vh - 32px));
+  width: min(500px, calc(100vw - 24px));
+  max-height: calc(100vh - var(--approval-modal-top-offset, 60px) - var(--approval-modal-bottom-offset, 16px));
+  max-height: calc(100dvh - var(--approval-modal-top-offset, 60px) - var(--approval-modal-bottom-offset, 16px));
   overflow: hidden;
   border: 1px solid var(--hairline-strong);
   background: var(--canvas);
@@ -371,14 +377,41 @@
   line-height: 1.4;
 }
 
-.approval-modal .approval-command-target,
-.approval-modal .request-preview,
+.approval-modal .request-detail {
+  min-width: 0;
+  max-height: min(280px, 36vh);
+  overflow-y: auto;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.approval-modal .approval-command-target {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.approval-modal .request-preview {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .approval-modal .request-saved-matcher code {
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 
 .approval-modal-actions {
@@ -392,7 +425,23 @@
 
 @media (max-width: 640px) {
   .approval-modal-backdrop {
-    padding-top: max(60px, 10vh);
+    --approval-modal-top-offset: max(8px, env(safe-area-inset-top, 8px));
+    --approval-modal-bottom-offset: max(8px, env(safe-area-inset-bottom, 8px));
+    align-items: flex-end;
+    padding: 8px;
+    padding-top: var(--approval-modal-top-offset);
+    padding-bottom: var(--approval-modal-bottom-offset);
+  }
+
+  .approval-modal {
+    width: 100%;
+    max-width: 100vw;
+    max-height: calc(100vh - var(--approval-modal-top-offset, 8px) - var(--approval-modal-bottom-offset, 8px));
+    max-height: calc(100dvh - var(--approval-modal-top-offset, 8px) - var(--approval-modal-bottom-offset, 8px));
+  }
+
+  .approval-modal .request-detail {
+    max-height: min(220px, 30vh);
   }
 }
 

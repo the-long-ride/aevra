@@ -1,3 +1,4 @@
+import { SwapControl } from '../../components/SwapControl';
 import { Switch } from '../../components/Switch';
 import type { AgentScope, AgentTransport, DetectedAgent } from './agent-service';
 
@@ -21,43 +22,51 @@ export function AgentChecklist({
   return (
     <fieldset className="agent-modal-group" disabled={disabled}>
       <legend>Agents</legend>
-      {detected.map((agent) => {
-        const { target } = agent;
-        const done = installed.includes(target);
-        const usable = agent.found || forced.includes(target);
-        const hint = done ? 'Installed' : agent.found ? `Found: ${agent.configPath}` : 'Not found';
-        return (
-          <div
-            className="agent-modal-row agent-agent-card"
-            role="group"
-            aria-label={target}
-            key={target}
-          >
-            <div className="agent-agent-text">
-              <Switch
-                label={<strong>{target}</strong>}
-                checked={selected.includes(target)}
-                disabled={disabled || !usable || done}
-                aria-describedby={`agent-hint-${target}`}
-                onChange={() => onToggle(target)}
-              />
-              <span id={`agent-hint-${target}`} className="agent-modal-hint">
-                {hint}
-              </span>
+      <div className="agent-checklist-items">
+        {detected.map((agent) => {
+          const { target } = agent;
+          const done = installed.includes(target);
+          const usable = agent.found || forced.includes(target);
+          const hint = done ? 'Installed' : agent.found ? `Found: ${agent.configPath}` : 'Not found';
+          return (
+            <div
+              className="agent-agent-card"
+              role="group"
+              aria-label={target}
+              key={target}
+            >
+              <div className="agent-agent-name">
+                <Switch
+                  label={<strong>{target}</strong>}
+                  checked={selected.includes(target)}
+                  disabled={disabled || !usable || done}
+                  aria-describedby={`agent-hint-${target}`}
+                  onChange={() => onToggle(target)}
+                />
+              </div>
+              <div className="agent-agent-meta">
+                <span
+                  id={`agent-hint-${target}`}
+                  className={`agent-modal-hint${agent.found ? ' agent-agent-path' : ''}${done ? ' agent-agent-installed' : ''}`}
+                  title={agent.found ? agent.configPath : undefined}
+                >
+                  {hint}
+                </span>
+                {!agent.found && !done && (
+                  <Switch
+                    containerClassName="agent-modal-anyway"
+                    label="Install anyway"
+                    aria-label={`Install ${target} anyway`}
+                    checked={forced.includes(target)}
+                    disabled={disabled}
+                    onChange={() => onForce(target)}
+                  />
+                )}
+              </div>
             </div>
-            {!agent.found && !done && (
-              <Switch
-                containerClassName="agent-modal-anyway"
-                label="Install anyway"
-                aria-label={`Install ${target} anyway`}
-                checked={forced.includes(target)}
-                disabled={disabled}
-                onChange={() => onForce(target)}
-              />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </fieldset>
   );
 }
@@ -79,20 +88,24 @@ export function TransportField({
   return (
     <fieldset className="agent-modal-group" disabled={disabled}>
       <legend>Connection</legend>
-      <label htmlFor="agent-modal-transport">Transport</label>
-      <select
-        id="agent-modal-transport"
+      <SwapControl
+        name="agent-transport"
+        ariaLabel="Transport"
         value={transport}
-        aria-describedby={workspace ? 'agent-transport-reason' : undefined}
-        onChange={(event) => onTransport(event.target.value as AgentTransport)}
-      >
-        <option value="stdio">stdio (recommended)</option>
-        <option value="http" disabled={workspace}>
-          HTTP
-        </option>
-      </select>
+        disabled={disabled}
+        onChange={onTransport}
+        options={[
+          { value: 'stdio', label: 'stdio (recommended)' },
+          {
+            value: 'http',
+            label: 'HTTP',
+            disabled: workspace,
+            hint: workspace ? 'Workspace connections use stdio only' : undefined,
+          },
+        ]}
+      />
       {workspace && (
-        <>
+        <div className="agent-transport-notes">
           <p id="agent-transport-reason" className="agent-modal-hint">
             HTTP embeds a bearer token, so workspace connections use stdio only.
           </p>
@@ -106,7 +119,7 @@ export function TransportField({
               Codex.
             </p>
           )}
-        </>
+        </div>
       )}
     </fieldset>
   );

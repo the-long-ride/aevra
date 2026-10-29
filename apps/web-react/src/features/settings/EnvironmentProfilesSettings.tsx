@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DataTable } from '../../components/DataTable';
+import { useToast } from '../../components/Toast';
 import { EnvironmentProfileCreateModal } from './EnvironmentProfileCreateModal';
 
 export function EnvironmentProfilesSettings({
@@ -10,6 +11,7 @@ export function EnvironmentProfilesSettings({
   onChanged(): Promise<void>;
 }) {
   const [creating, setCreating] = useState(false);
+  const { toast, success } = useToast();
   return (
     <section className="panel settings-compact-panel">
       <div className="panel-head compact-panel-head">
@@ -36,8 +38,15 @@ export function EnvironmentProfilesSettings({
         ]}
       />
       {creating ? (
-        <EnvironmentProfileCreateModal onClose={() => setCreating(false)} onCreated={onChanged} />
+        <EnvironmentProfileCreateModal
+          onClose={() => setCreating(false)}
+          onCreated={async () => {
+            success('Environment profile created.');
+            await onChanged();
+          }}
+        />
       ) : null}
+      {toast}
     </section>
   );
 }

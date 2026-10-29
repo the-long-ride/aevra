@@ -121,3 +121,18 @@ test('traps Tab across visible disclosure summaries and ignores collapsed descen
   await user.keyboard('{Tab}');
   expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
 });
+
+test('renders modal footer when footer prop is provided', () => {
+  render(
+    <ManagementModal
+      open
+      title="Modal with footer"
+      onClose={() => {}}
+      footer={<button type="button">Footer Action</button>}
+    >
+      <p>Body content</p>
+    </ManagementModal>,
+  );
+  expect(screen.getByRole('button', { name: 'Footer Action' })).toBeInTheDocument();
+  expect(document.querySelector('.management-modal-foot')).toBeInTheDocument();
+});

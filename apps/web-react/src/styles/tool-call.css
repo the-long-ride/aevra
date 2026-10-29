@@ -322,7 +322,7 @@
 
 .approval-modal-details .json-detail-tree,
 .approval-modal-details .json-detail-raw {
-  max-height: min(52vh, 480px);
+  max-height: min(42vh, 400px);
 }
 
 @media (max-width: 900px) {

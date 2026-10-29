@@ -58,3 +58,11 @@ it('shows Credential missing when the connector is gone, and Never used otherwis
   expect(within(gone!).queryByText('Never used')).not.toBeInTheDocument();
   expect(within(unused!).getByText('Never used')).toBeInTheDocument();
 });
+
+it('renders action buttons with refresh icon for update and [x] for remove', () => {
+  mount();
+  const updateBtn = screen.getByRole('button', { name: 'Update Aevra for codex (Global)' });
+  const removeBtn = screen.getByRole('button', { name: 'Remove Aevra from codex (Global)' });
+  expect(updateBtn.querySelector('svg')).toBeInTheDocument();
+  expect(removeBtn).toHaveTextContent('[x]');
+});

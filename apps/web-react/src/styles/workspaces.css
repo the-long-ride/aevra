@@ -175,3 +175,10 @@
   fill: currentColor;
   flex-shrink: 0;
 }
+
+.mount-capability-dropdown,
+.admission-profile-dropdown,
+.admission-mode-dropdown {
+  width: 140px;
+  min-width: 130px;
+}

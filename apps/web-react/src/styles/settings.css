@@ -7,6 +7,12 @@
   gap: 10px;
 }
 
+.settings-column-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .settings-compact-panel {
   padding: 12px;
 }
@@ -54,6 +60,24 @@
 .compact-settings-actions {
   gap: 6px;
   margin-top: 2px;
+}
+
+.execution-panel button.secondary {
+  width: fit-content;
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 4px 10px;
+}
+
+.file-transfer-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: end;
+}
+
+.file-transfer-action button {
+  min-height: 34px;
 }
 
 .compact-settings-row {
@@ -141,7 +165,8 @@
 
   .settings-grid.settings-grid-compact > .panel,
   .settings-grid.settings-grid-compact > .wide,
-  .settings-grid.settings-grid-compact > .execution-panel {
+  .settings-grid.settings-grid-compact > .execution-panel,
+  .settings-grid.settings-grid-compact > .settings-column-stack {
     grid-column: 1;
   }
 
@@ -311,6 +336,26 @@
 .desktop-app-grant-row small {
   color: var(--mute);
   overflow-wrap: anywhere;
+}
+
+.desktop-app-grant-row button,
+.desktop-app-grant-revoke {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  max-width: 28px;
+  max-height: 28px;
+  aspect-ratio: 1 / 1;
+  align-self: center;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .desktop-app-picker-table .dt-scroll {

@@ -9,6 +9,13 @@
   gap: 10px;
 }
 
+@media (max-width: 900px) {
+  .remote-config-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
 .remote-config-section {
   display: grid;
   gap: 12px;
@@ -37,18 +44,53 @@
   margin-top: 4px;
 }
 
+.remote-admin-config {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--canvas);
+}
+
+.remote-admin-config .remote-config-section-head h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.remote-admin-config .remote-config-section-head p {
+  font-size: 11px;
+  color: var(--mute);
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
 .remote-admin-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  grid-template-columns: 1fr;
   gap: 16px;
-  align-items: start;
+}
+
+@media (min-width: 860px) {
+  .remote-admin-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: stretch;
+  }
 }
 
 .remote-admin-url-control,
 .remote-trusted-origins {
-  display: grid;
-  gap: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--surface-soft);
 }
 
 .remote-admin-label-row,
@@ -62,17 +104,24 @@
 
 .remote-admin-label-row label,
 .remote-trusted-origins > span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
+  color: var(--ink);
 }
 
 .remote-origin-badge {
-  flex: none;
-  border: 1px solid var(--hairline);
-  padding: 2px 6px;
-  font-size: 9px;
-  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .remote-admin-url-row,
@@ -85,6 +134,69 @@
 .remote-admin-url-row input,
 .trusted-origin-add input {
   min-width: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.remote-admin-url-row button,
+.trusted-origin-add button {
+  white-space: nowrap;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+.remote-admin-meta {
+  margin-top: auto;
+}
+
+.remote-admin-meta .field-help,
+.remote-trusted-origins .field-help {
+  color: var(--mute);
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.trusted-origin-view-all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: fit-content;
+  font-size: 11px;
+  padding: 6px 12px;
+  margin-top: auto;
+  border-radius: 4px;
+  color: var(--body);
+  background: var(--canvas);
+  border: 1px solid var(--hairline-strong);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.trusted-origin-view-all:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.trusted-origin-view-all:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 760px) {
+  .remote-admin-url-row,
+  .trusted-origin-add {
+    grid-template-columns: 1fr;
+  }
+
+  .remote-admin-url-row button,
+  .trusted-origin-add button,
+  .trusted-origin-view-all {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
 }
 
 .trusted-origin-list {
@@ -120,4 +232,58 @@
   background: transparent;
   font-size: 17px;
   line-height: 1;
+}
+
+.remote-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 0 0;
+  background: var(--canvas);
+  border-top: 1px solid var(--hairline);
+}
+
+.remote-actions .actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .remote-actions,
+  .remote-config .remote-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    padding: 12px 0 0;
+  }
+
+  .remote-actions .actions,
+  .remote-actions > .actions:only-child,
+  .remote-config .remote-actions .actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    margin: 0;
+    gap: 8px;
+  }
+
+  .remote-actions .actions button,
+  .remote-actions button,
+  .remote-config .remote-actions .actions button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    flex: none;
+    min-height: 40px;
+    min-width: 0;
+    margin: 0;
+    text-align: center;
+  }
 }

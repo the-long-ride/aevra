@@ -1,5 +1,6 @@
 import type { WorkspaceSummary } from '@aevra/admin-contracts';
 import { useEffect, useRef, useState } from 'react';
+import { RefreshIcon } from '../workspaces/WorkspaceIcons';
 import { lastUsedLabel } from './agent-time';
 import type { AgentRegistration } from './agent-service';
 
@@ -126,20 +127,30 @@ export function AgentConnectionsTable({
                       <div className="actions compact-settings-actions">
                         <button
                           type="button"
+                          className="agent-action-icon-btn"
                           disabled={!!pending || locked}
                           aria-label={`Update Aevra for ${item.target} (${scope})`}
+                          title={`Update Aevra for ${item.target}`}
                           onClick={() => onUpdate(item)}
                         >
-                          {mine === 'update' ? 'Working…' : 'Update'}
+                          <RefreshIcon
+                            className={
+                              mine === 'update'
+                                ? 'workspace-action-icon is-spinning'
+                                : 'workspace-action-icon'
+                            }
+                          />
                         </button>
                         <button
                           type="button"
                           ref={keep(`${key}|remove`)}
                           disabled={!!pending}
                           aria-label={`Remove Aevra from ${item.target} (${scope})`}
+                          title={`Remove Aevra from ${item.target}`}
+                          className="danger-button agent-action-icon-btn"
                           onClick={() => ask(key, `${key}|cancel`)}
                         >
-                          {mine === 'remove' ? 'Removing…' : 'Remove'}
+                          {mine === 'remove' ? '…' : '[x]'}
                         </button>
                       </div>
                     )}

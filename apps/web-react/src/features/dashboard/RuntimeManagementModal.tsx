@@ -2,6 +2,7 @@ import type { ConnectorSummary } from '@aevra/admin-contracts';
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { ManagementModal } from '../../components/ManagementModal';
+import { useToast } from '../../components/Toast';
 import { ChangesPanel } from '../changes/ChangesPanel';
 import { ProcessesPanel } from '../processes/ProcessesPanel';
 import { requestJson } from '../../services/api-client';
@@ -30,6 +31,7 @@ export function RuntimeManagementModal({
   onCreateConnector(): void;
 }) {
   const dialog = useDialog();
+  const { toast, success, error } = useToast();
 
   const revokeConnector = async (connector: ConnectorSummary) => {
     if (
@@ -42,8 +44,13 @@ export function RuntimeManagementModal({
     ) {
       return;
     }
-    await requestJson(`/api/connectors/${connector.id}`, { method: 'DELETE' });
-    await onRefresh();
+    try {
+      await requestJson(`/api/connectors/${connector.id}`, { method: 'DELETE' });
+      success(`Connector "${connector.name}" revoked.`);
+      await onRefresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   if (!kind) return null;
@@ -126,6 +133,7 @@ export function RuntimeManagementModal({
           />
         </>
       ) : null}
+      {toast}
     </ManagementModal>
   );
 }

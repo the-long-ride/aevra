@@ -61,6 +61,8 @@ async function installUiApi(page: Page) {
     '/api/agents/detect': [],
     '/api/desktop/apps': { apps: [], warnings: [] },
     '/api/desktop/app-grants': { grants: [] },
+    '/api/tool-switches': { tools: [] },
+    '/api/files/transfer-settings': { maxFileMb: 200, maxBatchMb: 500, inlineMb: 50 },
     '/api/desktop/policy': { mode: 'denylist', applications: [], unattributedInput: 'deny' },
   };
   for (const [path, json] of Object.entries(fixtures)) {

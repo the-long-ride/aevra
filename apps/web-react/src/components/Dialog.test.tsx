@@ -111,6 +111,25 @@ test('confirmation dialog resolves true or false', async () => {
   expect(screen.getByText('confirm:true')).toBeInTheDocument();
 });
 
+test('confirmation dialog listens to Enter key to confirm and Escape to cancel', async () => {
+  const user = userEvent.setup();
+  renderHarness();
+
+  // Test Enter key confirms
+  await user.click(screen.getByRole('button', { name: 'Open confirm' }));
+  expect(screen.getByRole('dialog', { name: 'Confirm action' })).toBeInTheDocument();
+  await user.keyboard('{Enter}');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByText('confirm:true')).toBeInTheDocument();
+
+  // Test Escape key cancels
+  await user.click(screen.getByRole('button', { name: 'Open confirm' }));
+  expect(screen.getByRole('dialog', { name: 'Confirm action' })).toBeInTheDocument();
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByText('confirm:false')).toBeInTheDocument();
+});
+
 test('choice dialog supports three buttons', async () => {
   const user = userEvent.setup();
   renderHarness();

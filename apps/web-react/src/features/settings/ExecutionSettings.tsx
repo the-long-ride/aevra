@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Dropdown } from '../../components/Dropdown';
+import { useToast } from '../../components/Toast';
 import { patchJson } from './settings-service';
 
 export function ExecutionSettings({
@@ -11,27 +12,36 @@ export function ExecutionSettings({
 }) {
   const [backend, setBackend] = useState(String(execution.sandboxBackend ?? 'auto'));
   const [advanced, setAdvanced] = useState(false);
+  const { toast, error, success } = useToast();
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = Object.fromEntries(new FormData(event.currentTarget));
-    await patchJson('/api/execution-settings', {
-      ...value,
-      workspaceDrainMs: Number(value.workspaceDrainMs),
-      searchMaxQueries: Number(value.searchMaxQueries),
-    });
-    await onChanged();
+    try {
+      await patchJson('/api/execution-settings', {
+        ...value,
+        workspaceDrainMs: Number(value.workspaceDrainMs),
+        searchMaxQueries: Number(value.searchMaxQueries),
+      });
+      success('Execution settings saved.');
+      await onChanged();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   return (
     <section className="panel settings-compact-panel execution-panel">
-      <div className="panel-head compact-panel-head">
-        <div>
-          <h3>Execution</h3>
-          <p>Choose isolation and cache behavior for workspace commands.</p>
-        </div>
-      </div>
       <form className="compact-settings-form" onSubmit={submit}>
+        <div className="panel-head compact-panel-head">
+          <div>
+            <h3>Execution</h3>
+            <p>Choose isolation and cache behavior for workspace commands.</p>
+          </div>
+          <button className="primary" data-surface-id="settings:save-execution">
+            Save execution
+          </button>
+        </div>
         <div className="compact-control-grid">
           <label className="field">
             <span>Sandbox backend</span>
@@ -70,7 +80,7 @@ export function ExecutionSettings({
         ) : null}
         <button
           type="button"
-          className="compact-disclosure"
+          className="secondary"
           aria-expanded={advanced}
           onClick={() => setAdvanced((value) => !value)}
         >
@@ -111,12 +121,8 @@ export function ExecutionSettings({
             />
           </>
         )}
-        <div className="compact-settings-actions">
-          <button className="primary" data-surface-id="settings:save-execution">
-            Save execution
-          </button>
-        </div>
       </form>
+      {toast}
     </section>
   );
 }
