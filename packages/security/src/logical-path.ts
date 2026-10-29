@@ -34,7 +34,10 @@ export function normalizeLogicalPath(value: string): string {
       continue;
     }
     const isDriveRoot = segments.length === 0 && /^[A-Za-z]:$/.test(segment);
-    if (process.platform === 'win32' && (/[ .]$/.test(segment) || (!isDriveRoot && segment.includes(':')))) {
+    if (
+      process.platform === 'win32' &&
+      (/[ .]$/.test(segment) || (!isDriveRoot && segment.includes(':')))
+    ) {
       throw Object.assign(new Error('Ambiguous Windows path segment'), { code: 'INVALID_REQUEST' });
     }
     segments.push(segment);

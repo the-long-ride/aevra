@@ -35,8 +35,16 @@ test('compact density adds the compact class and default does not', () => {
 
 test('responsive toolbar allows filter and rows page size to share the same row on small viewports', () => {
   const css = readFileSync('src/styles/data-table.css', 'utf8');
-  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.dt-filters\s*\{[^}]*display:\s*contents/);
-  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.dt-control-strip\s*\{[^}]*display:\s*flex/);
-  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.dt-filter\s*\{[^}]*flex:\s*1\s+1\s+140px/);
-  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.dt-size\s*\{[^}]*flex:\s*0\s+0\s+auto/);
+  expect(css).toMatch(
+    /@media\s*\(max-width:\s*760px\)[\s\S]*?\.dt-filters\s*\{[^}]*display:\s*contents/,
+  );
+  expect(css).toMatch(
+    /@media\s*\(max-width:\s*760px\)[\s\S]*?\.dt-control-strip\s*\{[^}]*display:\s*flex/,
+  );
+  expect(css).toMatch(
+    /@media\s*\(max-width:\s*760px\)[\s\S]*?\.dt-filter\s*\{[^}]*flex:\s*1\s+1\s+140px/,
+  );
+  expect(css).toMatch(
+    /@media\s*\(max-width:\s*760px\)[\s\S]*?\.dt-size\s*\{[^}]*flex:\s*0\s+0\s+auto/,
+  );
 });

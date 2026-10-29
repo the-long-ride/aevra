@@ -125,48 +125,14 @@ export function ConnectorModal({
   const localMcpUrl = `${origin}/mcp`;
   const tunnelMcpUrl = publicUrl ? `${publicUrl.replace(/\/$/, '')}/mcp` : `${origin}/mcp`;
 
-  const httpLocalSnippet = JSON.stringify(
-    {
-      mcpServers: {
-        [createdName || 'aevra']: {
-          url: localMcpUrl,
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      },
-    },
-    null,
-    2,
-  );
-
-  const httpTunnelSnippet = JSON.stringify(
-    {
-      mcpServers: {
-        [createdName || 'aevra']: {
-          url: tunnelMcpUrl,
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      },
-    },
-    null,
-    2,
-  );
-
-  const stdioSnippet = JSON.stringify(
-    {
-      mcpServers: {
-        [createdName || 'aevra']: {
-          command: 'aevra',
-          args: ['agent', 'serve'],
-        },
-      },
-    },
-    null,
-    2,
-  );
+  const serverName = createdName || 'aevra';
+  const mcpSnippet = (server: Record<string, unknown>) =>
+    JSON.stringify({ mcpServers: { [serverName]: server } }, null, 2);
+  const httpSnippet = (url: string) =>
+    mcpSnippet({ url, headers: { Authorization: `Bearer ${token}` } });
+  const httpLocalSnippet = httpSnippet(localMcpUrl);
+  const httpTunnelSnippet = httpSnippet(tunnelMcpUrl);
+  const stdioSnippet = mcpSnippet({ command: 'aevra', args: ['agent', 'serve'] });
 
   return (
     <div ref={layerRef} className="modal-backdrop" role="presentation" onMouseDown={onClose}>

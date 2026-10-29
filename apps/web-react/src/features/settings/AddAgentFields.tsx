@@ -27,14 +27,13 @@ export function AgentChecklist({
           const { target } = agent;
           const done = installed.includes(target);
           const usable = agent.found || forced.includes(target);
-          const hint = done ? 'Installed' : agent.found ? `Found: ${agent.configPath}` : 'Not found';
+          const hint = done
+            ? 'Installed'
+            : agent.found
+              ? `Found: ${agent.configPath}`
+              : 'Not found';
           return (
-            <div
-              className="agent-agent-card"
-              role="group"
-              aria-label={target}
-              key={target}
-            >
+            <div className="agent-agent-card" role="group" aria-label={target} key={target}>
               <div className="agent-agent-name">
                 <Switch
                   label={<strong>{target}</strong>}

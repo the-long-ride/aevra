@@ -38,6 +38,14 @@ async function canonicalExistingOrParent(candidate: string, mode: 'read' | 'writ
     return path.join(parent, path.basename(candidate));
   }
 }
+async function isHostPathOutsideRoot(logical: string, canonicalRoot: string): Promise<boolean> {
+  try {
+    const target = await realpath(logical);
+    return !inside(canonicalRoot, target);
+  } catch {
+    return false;
+  }
+}
 function normalizePrefix(value: string): string {
   const norm = ('/' + String(value ?? '').replaceAll('\\', '/'))
     .replace(/\/+/g, '/')
@@ -83,7 +91,19 @@ export async function resolveCapabilityPath(
   if (relative.split('/').some((x) => x === '..')) throw new WorkspaceEscapeError(logicalPath);
   const canonicalRoot = await realpath(root.hostRoot);
   const candidate = path.resolve(canonicalRoot, ...relative.split('/').filter(Boolean));
-  const canonical = await canonicalExistingOrParent(candidate, mode);
+  let canonical: string;
+  try {
+    canonical = await canonicalExistingOrParent(candidate, mode);
+  } catch (err) {
+    if (
+      prefix === '/' &&
+      (err as NodeJS.ErrnoException)?.code === 'ENOENT' &&
+      (await isHostPathOutsideRoot(logical, canonicalRoot))
+    ) {
+      throw new WorkspaceEscapeError(logicalPath);
+    }
+    throw err;
+  }
   if (!inside(canonicalRoot, canonical)) throw new WorkspaceEscapeError(logicalPath);
   return {
     rootId: root.id,

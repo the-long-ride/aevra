@@ -34,3 +34,18 @@ export function createRuntimeRepositories(raw: any) {
     oauthRepo: new OAuthRepository(raw),
   };
 }
+
+export function createConnectorBindings(connectorRepo: ConnectorRepository) {
+  return (subject: string) => {
+    const bindings = connectorRepo.getBindings(subject);
+    if (!bindings) return null;
+    const grants = connectorRepo.listWorkspaceGrants?.(subject) ?? [];
+    const workspaceIds = Array.from(
+      new Set([
+        ...grants.map((g: any) => g.workspaceId),
+        ...(bindings.workspaceId ? [bindings.workspaceId] : []),
+      ]),
+    );
+    return { ...bindings, workspaceIds };
+  };
+}

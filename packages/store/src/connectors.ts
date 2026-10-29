@@ -165,9 +165,13 @@ export class ConnectorRepository {
     } catch {
       /* ignore if oauth_workspace_grants table does not exist */
     }
-    const row = this.db.prepare('SELECT workspace_id workspaceId FROM connectors WHERE id=?').get(connectorId) as any;
+    const row = this.db
+      .prepare('SELECT workspace_id workspaceId FROM connectors WHERE id=?')
+      .get(connectorId) as any;
     if (row && !row.workspaceId) {
-      this.db.prepare('UPDATE connectors SET workspace_id=? WHERE id=?').run(workspaceId, connectorId);
+      this.db
+        .prepare('UPDATE connectors SET workspace_id=? WHERE id=?')
+        .run(workspaceId, connectorId);
     }
   }
   revokeWorkspace(connectorId: string, workspaceId: string): boolean {

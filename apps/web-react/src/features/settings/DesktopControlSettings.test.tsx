@@ -372,6 +372,8 @@ describe('DesktopControlSettings', () => {
     expect(settingsCss).toMatch(/\.desktop-app-grant-revoke\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1/);
 
     const tweaksCss = readFileSync('src/styles/layout-tweaks.css', 'utf8');
-    expect(tweaksCss).toMatch(/@media\s*\(max-width:\s*640px\)[\s\S]*?\.desktop-app-grant-revoke[\s\S]*?height:\s*28px/);
+    expect(tweaksCss).toMatch(
+      /@media\s*\(max-width:\s*640px\)[\s\S]*?\.desktop-app-grant-revoke[\s\S]*?height:\s*28px/,
+    );
   });
 });

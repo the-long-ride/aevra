@@ -33,7 +33,8 @@
   --radius-sm: 4px;
   --radius: 0px;
   --radius-lg: 0px;
-  --mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+  --mono:
+    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     'Liberation Mono', 'Courier New', monospace;
 }
 
@@ -71,7 +72,8 @@
   --radius-sm: 4px;
   --radius: 0px;
   --radius-lg: 0px;
-  --mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+  --mono:
+    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     'Liberation Mono', 'Courier New', monospace;
 }
 

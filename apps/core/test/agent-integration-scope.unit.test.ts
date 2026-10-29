@@ -72,7 +72,9 @@ test('scope all removes every scope and reports one result per agent', async () 
     const out = await f.run({ operation: 'uninstall', target: 'all', scope: 'all' });
     assert.deepEqual(
       out.results.map((row: any) => [row.target, row.ok]),
-      ['codex', 'claude-code', 'opencode', 'antigravity', 'antigravity-cli', 'antigravity-ide'].map((target) => [target, true]),
+      ['codex', 'claude-code', 'opencode', 'antigravity', 'antigravity-cli', 'antigravity-ide'].map(
+        (target) => [target, true],
+      ),
     );
     assert.deepEqual(await f.status(), []);
     assert.equal(f.revoked.length, 2);

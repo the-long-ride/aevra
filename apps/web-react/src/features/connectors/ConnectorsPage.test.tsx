@@ -20,8 +20,12 @@ describe('ConnectorsPage', () => {
 
   test('renders page title, subtitle, and new connector button', async () => {
     mount();
-    expect(await screen.findByRole('heading', { name: 'Connectors', level: 2 })).toBeInTheDocument();
-    expect(screen.getByText('Client connectors, authentication, and access grants.')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Connectors', level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Client connectors, authentication, and access grants.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New connector' })).toBeInTheDocument();
   });
 
@@ -152,9 +156,13 @@ describe('ConnectorsPage', () => {
     await screen.findByText('New connector');
     await user.click(screen.getByRole('button', { name: 'New connector' }));
 
-    expect(await screen.findByRole('dialog', { name: 'Create Bearer connector' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('dialog', { name: 'Create Bearer connector' }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Close' }));
-    expect(screen.queryByRole('dialog', { name: 'Create Bearer connector' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('dialog', { name: 'Create Bearer connector' }),
+    ).not.toBeInTheDocument();
   });
 
   test('displays capabilities dialog when clicking capabilities pill', async () => {

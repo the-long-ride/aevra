@@ -1,67 +1,15 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import type { WorkspaceSummary } from '@aevra/admin-contracts';
 import { DialogProvider } from '../../components/Dialog';
 import { installApiFixtures } from '../../test/api-fixtures';
-import { ConnectionDetailModal, type ActiveConnection } from './ConnectionDetailModal';
-
-const workspaces: WorkspaceSummary[] = [
-  { id: 'ws-1', name: 'Aevra', hostRoot: '/repo' },
-  { id: 'ws-2', name: 'Docs', hostRoot: '/docs' },
-];
-
-const connection: ActiveConnection = {
-  id: 'ses-chatgpt',
-  client: 'ChatGPT',
-  actor: 'oauth:ChatGPT',
-  provider: 'OAuth',
-  authType: 'OAuth',
-  yolo: true,
-  workspace: 'Aevra',
-  workspaces: ['Aevra'],
-  workspaceIds: ['ws-1'],
-  capabilities: ['files.read'],
-  status: 'active',
-};
-
-function mutationCall(
-  fetchMock: ReturnType<typeof installApiFixtures>,
-  path: string,
-  method: string,
-) {
-  return fetchMock.mock.calls.find(([input, init]) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.pathname + input.search
-          : input.url;
-    return url === path && String(init?.method ?? 'GET').toUpperCase() === method;
-  });
-}
-
-function renderModal(overrides: Partial<ActiveConnection> = {}) {
-  const onClose = vi.fn();
-  const onChanged = vi.fn(async () => undefined);
-  render(
-    <DialogProvider>
-      <ConnectionDetailModal
-        connection={{ ...connection, ...overrides }}
-        workspaces={workspaces}
-        onClose={onClose}
-        onChanged={onChanged}
-      />
-    </DialogProvider>,
-  );
-  return { onClose, onChanged };
-}
-
-function grantControls() {
-  const trigger = screen.getByRole('button', { name: 'Grant workspace' });
-  const confirm = screen.getByRole('button', { name: '[+]' });
-  return { trigger, confirm };
-}
+import { ConnectionDetailModal } from './ConnectionDetailModal';
+import {
+  grantControls,
+  mutationCall,
+  renderModal,
+  workspaces,
+} from './connection-detail-test-utils';
 
 test('renders nothing without a selected connection', () => {
   render(
@@ -359,65 +307,4 @@ test('host browser and desktop grants are independent for the exact OAuth connec
       mutationCall(fetchMock, '/api/connections/oauth-exact/control/desktop.control', 'DELETE'),
     ).toBeTruthy(),
   );
-});
-
-test('Bearer connector lists granted workspaces and allows granting new workspace', async () => {
-  const user = userEvent.setup();
-  const fetchMock = installApiFixtures();
-  const { onChanged } = renderModal({
-    id: 'con-test-1',
-    connectorId: 'con-test-1',
-    client: 'test-1',
-    name: 'test-1',
-    actor: 'connector:test-1',
-    authType: 'Bearer connector',
-    status: 'DISCONNECTED',
-    workspaceIds: [],
-    workspaces: [],
-    workspaceGrants: [],
-  });
-
-  expect(screen.getByText('No workspace granted to this connection.')).toBeInTheDocument();
-  await user.click(grantControls().confirm);
-  await waitFor(() =>
-    expect(mutationCall(fetchMock, '/api/connectors/con-test-1/workspaces', 'POST')).toBeTruthy(),
-  );
-  const call = mutationCall(fetchMock, '/api/connectors/con-test-1/workspaces', 'POST');
-  expect(JSON.parse(String(call?.[1]?.body))).toEqual({
-    workspaceId: 'ws-1',
-    profileId: 'read-only',
-  });
-  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
-});
-
-test('Bearer connector allows revoking a granted workspace', async () => {
-  const user = userEvent.setup();
-  const fetchMock = installApiFixtures();
-  const { onChanged } = renderModal({
-    id: 'con-test-1',
-    connectorId: 'con-test-1',
-    client: 'test-1',
-    name: 'test-1',
-    actor: 'connector:test-1',
-    authType: 'Bearer connector',
-    status: 'DISCONNECTED',
-    workspaceIds: ['ws-1'],
-    workspaces: ['Aevra'],
-    workspaceGrants: [{ workspaceId: 'ws-1', profileId: 'developer' }],
-  });
-
-  expect(screen.getByText('Aevra')).toBeInTheDocument();
-  const removeBtn = screen.getByRole('button', { name: 'Remove' });
-  await user.click(removeBtn);
-
-  const confirmDialog = screen.getByRole('dialog', { name: 'Remove workspace grant' });
-  expect(confirmDialog).toBeInTheDocument();
-  await user.click(within(confirmDialog).getByRole('button', { name: 'Remove' }));
-
-  await waitFor(() =>
-    expect(
-      mutationCall(fetchMock, '/api/connectors/con-test-1/workspaces/ws-1', 'DELETE'),
-    ).toBeTruthy(),
-  );
-  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
 });

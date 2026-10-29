@@ -38,9 +38,18 @@ test('nothing present gives one not-found entry per target in order', () =>
     assert.equal(byTarget(list, 'codex').configPath, path.join(home, '.codex'));
     assert.equal(byTarget(list, 'claude-code').configPath, path.join(home, '.claude.json'));
     assert.equal(byTarget(list, 'opencode').configPath, path.join(home, '.config', 'opencode'));
-    assert.equal(byTarget(list, 'antigravity').configPath, path.join(home, '.gemini', 'antigravity'));
-    assert.equal(byTarget(list, 'antigravity-cli').configPath, path.join(home, '.gemini', 'antigravity-cli'));
-    assert.equal(byTarget(list, 'antigravity-ide').configPath, path.join(home, '.gemini', 'config'));
+    assert.equal(
+      byTarget(list, 'antigravity').configPath,
+      path.join(home, '.gemini', 'antigravity'),
+    );
+    assert.equal(
+      byTarget(list, 'antigravity-cli').configPath,
+      path.join(home, '.gemini', 'antigravity-cli'),
+    );
+    assert.equal(
+      byTarget(list, 'antigravity-ide').configPath,
+      path.join(home, '.gemini', 'config'),
+    );
   }));
 
 test('an executable on PATH is found with path evidence', () =>

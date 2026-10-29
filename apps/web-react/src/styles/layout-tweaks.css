@@ -125,8 +125,12 @@ button {
   .approval-modal {
     width: 100vw;
     max-width: 100vw;
-    max-height: calc(100vh - max(16px, env(safe-area-inset-top, 8px) + env(safe-area-inset-bottom, 8px)));
-    max-height: calc(100dvh - max(16px, env(safe-area-inset-top, 8px) + env(safe-area-inset-bottom, 8px)));
+    max-height: calc(
+      100vh - max(16px, env(safe-area-inset-top, 8px) + env(safe-area-inset-bottom, 8px))
+    );
+    max-height: calc(
+      100dvh - max(16px, env(safe-area-inset-top, 8px) + env(safe-area-inset-bottom, 8px))
+    );
     overflow: hidden;
   }
 

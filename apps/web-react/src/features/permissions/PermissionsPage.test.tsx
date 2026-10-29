@@ -260,12 +260,8 @@ test('permission form allows searching and selecting multiple connectors from dr
         { id: 'conn-1', name: 'my-agent' },
         { id: 'conn-2', name: 'connector:already-prefixed' },
       ],
-      '/api/connections': [
-        { id: 'oauth-1', client: 'Claude', actor: 'oauth:Claude' },
-      ],
-      '/api/workspaces': [
-        { id: 'ws-main', name: 'Main Workspace', hostRoot: '/repos/main' },
-      ],
+      '/api/connections': [{ id: 'oauth-1', client: 'Claude', actor: 'oauth:Claude' }],
+      '/api/workspaces': [{ id: 'ws-main', name: 'Main Workspace', hostRoot: '/repos/main' }],
       '/api/sessions': [],
     },
   });

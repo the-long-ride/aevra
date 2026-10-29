@@ -171,7 +171,10 @@
   background: var(--canvas);
   border: 1px solid var(--hairline-strong);
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .trusted-origin-view-all:hover:not(:disabled) {

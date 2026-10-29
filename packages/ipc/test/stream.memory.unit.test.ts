@@ -31,6 +31,7 @@ async function sampler() {
   return {
     sample: () => {
       gc({ type: 'major', execution: 'sync' });
+      gc({ type: 'major', execution: 'sync' });
       peak = Math.max(peak, process.memoryUsage().arrayBuffers);
     },
     growth: () => peak - base,

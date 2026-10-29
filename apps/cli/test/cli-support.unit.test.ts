@@ -100,9 +100,15 @@ test('desktopHelperNoticeLines formats warning and instructions when helper is m
   const missingOverride = desktopHelperNoticeLines({
     missingOverride: '/custom/missing/helper.exe',
   });
-  assert.ok(missingOverride.some((line) => line.includes('AEVRA_DESKTOP_HELPER_PATH points to a missing file')));
+  assert.ok(
+    missingOverride.some((line) =>
+      line.includes('AEVRA_DESKTOP_HELPER_PATH points to a missing file'),
+    ),
+  );
   assert.ok(missingOverride.some((line) => line.includes('/custom/missing/helper.exe')));
-  assert.ok(missingOverride.some((line) => line.includes('cargo build --release -p aevra-desktop-helper')));
+  assert.ok(
+    missingOverride.some((line) => line.includes('cargo build --release -p aevra-desktop-helper')),
+  );
 
   // 2. Missing override with fallback binary found
   const fallback = desktopHelperNoticeLines({
@@ -115,7 +121,9 @@ test('desktopHelperNoticeLines formats warning and instructions when helper is m
   // 3. No override and no binary installed
   const notInstalled = desktopHelperNoticeLines({});
   assert.ok(notInstalled.some((line) => line.includes('Desktop helper binary is not installed')));
-  assert.ok(notInstalled.some((line) => line.includes('cargo build --release -p aevra-desktop-helper')));
+  assert.ok(
+    notInstalled.some((line) => line.includes('cargo build --release -p aevra-desktop-helper')),
+  );
 
   // 4. Helper binary found without override issue
   const healthy = desktopHelperNoticeLines({ path: '/bundled/helper.exe' });

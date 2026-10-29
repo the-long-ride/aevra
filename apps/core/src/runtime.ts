@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import type { CoreConfig } from './config.js';
-import { createRuntimeRepositories } from './runtime-repositories.js';
+import { createConnectorBindings, createRuntimeRepositories } from './runtime-repositories.js';
 import { createRuntimeConnectionServices } from './runtime-connection-services.js';
 import { AevraDatabase } from '../../../packages/store/src/database.js';
 import { HostControlGrantRepository } from '../../../packages/store/src/host-control-grants.js';
@@ -59,13 +59,12 @@ export async function createCoreRuntime(
 ): Promise<CoreRuntime> {
   let db: AevraDatabase | undefined,
     worker: WorkerClient | undefined,
-    admin: AdminServer | undefined,
-    mcp: McpIngressServer | undefined,
-    exposureWiring: RuntimeExposureWiring | undefined,
-    keepAwake: KeepAwakeService | undefined,
-    usageWiring: ReturnType<typeof createRuntimeUsage> | undefined,
+    admin: AdminServer | undefined;
+  let mcp: McpIngressServer | undefined, exposureWiring: RuntimeExposureWiring | undefined;
+  let keepAwake: KeepAwakeService | undefined,
     safeMode = false,
     started = false;
+  let usageWiring: ReturnType<typeof createRuntimeUsage> | undefined;
   const wm = createRuntimeWorkerManager(config, deps);
   const cleanup = async () => {
     await closeRuntimeResources(
@@ -99,6 +98,7 @@ export async function createCoreRuntime(
         db = (deps.databaseOpen ?? AevraDatabase.open)(config.databasePath);
         safeMode = !db.integrityCheck().ok;
         const raw = db.raw();
+        const repositories = createRuntimeRepositories(raw);
         const {
           settings,
           workspaceRepo,
@@ -112,19 +112,8 @@ export async function createCoreRuntime(
           processRepo,
           connectorRepo,
           oauthRepo,
-        } = createRuntimeRepositories(raw);
-        const connectorBindings = (subject: string) => {
-          const b = connectorRepo.getBindings(subject);
-          if (!b) return null;
-          const grants = connectorRepo.listWorkspaceGrants?.(subject) ?? [];
-          const wsIds = Array.from(
-            new Set([...grants.map((g: any) => g.workspaceId), ...(b.workspaceId ? [b.workspaceId] : [])]),
-          );
-          return {
-            ...b,
-            workspaceIds: wsIds,
-          };
-        };
+        } = repositories;
+        const connectorBindings = createConnectorBindings(connectorRepo);
         const {
           workspaces,
           profiles,
@@ -319,12 +308,11 @@ export async function createCoreRuntime(
               connectorFailedAttempts: connectorLimiter.totalFailures(),
             }),
         );
-        const verifier = exposureWiring.verifier,
-          connectorsAdmission = createConnectorAdmission(connectorRepo, connectorLimiter);
+        const connectorsAdmission = createConnectorAdmission(connectorRepo, connectorLimiter);
         mcp = new McpIngressServer(
           config.mcpHost,
           config.mcpPort,
-          verifier,
+          exposureWiring.verifier,
           undefined,
           () => safeMode,
           { sessions, service: remoteTools },

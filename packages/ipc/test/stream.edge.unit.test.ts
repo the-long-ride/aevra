@@ -143,3 +143,15 @@ test('stream frames sent before the handshake completes are ignored', async () =
   await new Promise<void>((res) => server.close(() => res()));
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('FrameDecoder handles split headers, coalesced frames with partial tails, and empty chunks', () => {
+  const decoder = new FrameDecoder();
+  const f1 = encodeFrame({ a: 1 });
+  const f2 = encodeFrame({ b: 'two' });
+
+  assert.deepEqual(decoder.push(Buffer.alloc(0)), []);
+  assert.deepEqual(decoder.push(f1.subarray(0, 2)), []);
+  assert.deepEqual(decoder.push(f1.subarray(2, 4)), []);
+  assert.deepEqual(decoder.push(Buffer.concat([f1.subarray(4), f2.subarray(0, 6)])), [{ a: 1 }]);
+  assert.deepEqual(decoder.push(f2.subarray(6)), [{ b: 'two' }]);
+});

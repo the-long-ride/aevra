@@ -96,8 +96,7 @@ export function ConnectionDetailModal({
 
   if (!connection?.id) return null;
 
-  const isConnector =
-    connection.authType === 'Bearer connector' || Boolean(connection.connectorId);
+  const isConnector = connection.authType === 'Bearer connector' || Boolean(connection.connectorId);
   const connectorId =
     connection.connectorId ??
     (isConnector
@@ -121,11 +120,7 @@ export function ConnectionDetailModal({
   };
 
   const revoke = async () => {
-    const target = durableOAuth
-      ? connection.connectionId!
-      : connectorId
-        ? connectorId
-        : sessionId!;
+    const target = durableOAuth ? connection.connectionId! : connectorId ? connectorId : sessionId!;
     const noun = durableOAuth ? 'connection' : isConnector ? 'connector' : 'session';
     if (
       !(await dialog.confirm({
@@ -143,10 +138,10 @@ export function ConnectionDetailModal({
     }
     await run(async () => {
       if (durableOAuth) {
-        await requestJson(
-          `/api/connections/${encodeURIComponent(target)}/revoke`,
-          { method: 'POST', body: '{}' },
-        );
+        await requestJson(`/api/connections/${encodeURIComponent(target)}/revoke`, {
+          method: 'POST',
+          body: '{}',
+        });
         success('Connection revoked.');
       } else if (connectorId) {
         await requestJson(`/api/connectors/${encodeURIComponent(connectorId)}`, {
@@ -160,10 +155,10 @@ export function ConnectionDetailModal({
         }
         success('Connector revoked.');
       } else {
-        await requestJson(
-          `/api/sessions/${encodeURIComponent(target)}/revoke`,
-          { method: 'POST', body: '{}' },
-        );
+        await requestJson(`/api/sessions/${encodeURIComponent(target)}/revoke`, {
+          method: 'POST',
+          body: '{}',
+        });
         success('Session revoked.');
       }
     });

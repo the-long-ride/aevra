@@ -47,9 +47,7 @@ export function buildUnifiedConnectors(
   durableConnections: Array<Record<string, unknown>>,
 ): ConnectorItem[] {
   const activeConnections = dashboard.snapshot.activeConnections ?? [];
-  const workspaceMap = new Map<string, string>(
-    dashboard.workspaces.map((ws) => [ws.id, ws.name]),
-  );
+  const workspaceMap = new Map<string, string>(dashboard.workspaces.map((ws) => [ws.id, ws.name]));
 
   const items: ConnectorItem[] = [];
   const matchedActiveIds = new Set<string>();
@@ -65,13 +63,14 @@ export function buildUnifiedConnectors(
         conn.id === bearer.id,
     ) as Record<string, any> | undefined;
 
-    const wsIds = Array.isArray(bearer.workspaceIds) && bearer.workspaceIds.length
-      ? bearer.workspaceIds
-      : bearer.workspaceId
-        ? [bearer.workspaceId]
-        : Array.isArray(active?.workspaceIds)
-          ? active.workspaceIds.map(String)
-          : [];
+    const wsIds =
+      Array.isArray(bearer.workspaceIds) && bearer.workspaceIds.length
+        ? bearer.workspaceIds
+        : bearer.workspaceId
+          ? [bearer.workspaceId]
+          : Array.isArray(active?.workspaceIds)
+            ? active.workspaceIds.map(String)
+            : [];
     const wsNames = wsIds.map((id) => workspaceMap.get(id) ?? id);
     const grants =
       bearer.workspaceGrants ??
@@ -99,8 +98,7 @@ export function buildUnifiedConnectors(
         status: 'CONNECTED',
         yolo: Boolean(active.yolo),
         workspace:
-          wsNames.join(', ') ||
-          (typeof active.workspace === 'string' ? active.workspace : null),
+          wsNames.join(', ') || (typeof active.workspace === 'string' ? active.workspace : null),
         workspaces: wsNames.length
           ? wsNames
           : Array.isArray(active.workspaces)
@@ -112,9 +110,8 @@ export function buildUnifiedConnectors(
         lastActivityAt:
           typeof active.lastActivityAt === 'string'
             ? active.lastActivityAt
-            : bearer.lastUsedAt ?? undefined,
-        connectedAt:
-          typeof active.connectedAt === 'string' ? active.connectedAt : bearer.createdAt,
+            : (bearer.lastUsedAt ?? undefined),
+        connectedAt: typeof active.connectedAt === 'string' ? active.connectedAt : bearer.createdAt,
         remoteIp: typeof active.remoteIp === 'string' ? active.remoteIp : null,
         revocable: true,
       });
@@ -175,8 +172,7 @@ export function buildUnifiedConnectors(
       capabilities: Array.isArray(activeObj.capabilities) ? activeObj.capabilities.map(String) : [],
       lastActivityAt:
         typeof activeObj.lastActivityAt === 'string' ? activeObj.lastActivityAt : undefined,
-      connectedAt:
-        typeof activeObj.connectedAt === 'string' ? activeObj.connectedAt : undefined,
+      connectedAt: typeof activeObj.connectedAt === 'string' ? activeObj.connectedAt : undefined,
       remoteIp: typeof activeObj.remoteIp === 'string' ? activeObj.remoteIp : null,
       revocable: true,
     });
@@ -205,7 +201,8 @@ export function buildUnifiedConnectors(
       workspaces: wsNames,
       workspaceIds: wsIds,
       capabilities: Array.isArray(durable.capabilities) ? durable.capabilities.map(String) : [],
-      lastActivityAt: typeof durable.lastActivityAt === 'string' ? durable.lastActivityAt : undefined,
+      lastActivityAt:
+        typeof durable.lastActivityAt === 'string' ? durable.lastActivityAt : undefined,
       connectedAt: typeof durable.connectedAt === 'string' ? durable.connectedAt : undefined,
       remoteIp: typeof durable.remoteIp === 'string' ? durable.remoteIp : null,
       revocable: true,

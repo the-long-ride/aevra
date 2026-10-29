@@ -39,7 +39,9 @@ describe('ConnectorModal', () => {
     expect(screen.getByLabelText('Workspace binding')).toBeInTheDocument();
     expect(screen.getByLabelText('Capability ceiling')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '+ Grant workspace…' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Alpha Workspace (/projects/alpha)' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'Alpha Workspace (/projects/alpha)' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create token' })).toBeInTheDocument();
   });
 
@@ -148,9 +150,7 @@ describe('ConnectorModal', () => {
       />,
     );
 
-    expect(
-      screen.getByText('No workspaces granted (default: none granted).'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('No workspaces granted (default: none granted).')).toBeInTheDocument();
 
     // Add Alpha Workspace
     await user.selectOptions(screen.getByLabelText('Workspace binding'), 'ws-1');
@@ -162,7 +162,9 @@ describe('ConnectorModal', () => {
 
     // Revoke Alpha Workspace
     await user.click(screen.getByRole('button', { name: 'Revoke Alpha Workspace' }));
-    expect(screen.queryByRole('button', { name: 'Revoke Alpha Workspace' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Revoke Alpha Workspace' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Revoke Beta Workspace' })).toBeInTheDocument();
 
     // Submit with remaining granted workspace

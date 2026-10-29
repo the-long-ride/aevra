@@ -17,6 +17,7 @@ import {
   buildSessionOptions,
   buildWorkspaceOptions,
   loadPermissionsData,
+  splitCsv,
 } from './permissions-helpers';
 
 export function PermissionsPage() {
@@ -111,20 +112,11 @@ export function PermissionsPage() {
         body: JSON.stringify({
           effect: form.get('effect'),
           scope: form.get('scope'),
-          actors: String(form.get('actors') ?? '')
-            .split(',')
-            .map((value) => value.trim())
-            .filter(Boolean),
+          actors: splitCsv(form.get('actors')),
           capabilities,
           commandMatchers: matchers,
-          workspaceIds: String(form.get('workspaceIds') ?? '')
-            .split(',')
-            .map((value) => value.trim())
-            .filter(Boolean),
-          sessionIds: String(form.get('sessionIds') ?? '')
-            .split(',')
-            .map((value) => value.trim())
-            .filter(Boolean),
+          workspaceIds: splitCsv(form.get('workspaceIds')),
+          sessionIds: splitCsv(form.get('sessionIds')),
         }),
       });
       success('Permission rules created.');

@@ -257,7 +257,9 @@ export function SearchableMultiSelect({
                       {option.description ? (
                         <>
                           {' '}
-                          <span className="searchable-select-option-desc">{option.description}</span>
+                          <span className="searchable-select-option-desc">
+                            {option.description}
+                          </span>
                         </>
                       ) : null}
                     </div>

@@ -10,7 +10,7 @@ const PROVIDER_LABELS: Record<ExposureStatus['provider'], string> = {
   external: 'External / Custom',
 };
 
-export function getHealthTone(value?: string | null): 'success' | 'danger' | 'warning' | 'mute' {
+function getHealthTone(value?: string | null): 'success' | 'danger' | 'warning' | 'mute' {
   if (!value) return 'mute';
   const norm = value.trim().toLowerCase();
   if (

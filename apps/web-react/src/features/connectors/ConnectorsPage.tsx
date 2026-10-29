@@ -7,11 +7,7 @@ import { useToast } from '../../components/Toast';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { ConnectionDetailModal } from '../dashboard/ConnectionDetailModal';
 import { ConnectorModal } from '../dashboard/ConnectorModal';
-import {
-  loadConnectorsData,
-  removeConnectorItem,
-  type ConnectorItem,
-} from './connectors-service';
+import { loadConnectorsData, removeConnectorItem, type ConnectorItem } from './connectors-service';
 
 export function ConnectorsPage() {
   const resource = useApiResource(loadConnectorsData);
@@ -27,12 +23,10 @@ export function ConnectorsPage() {
   const workspaces = resource.data?.workspaces ?? [];
 
   const selectedLive = selectedConnector?.id
-    ? connectors.find((row) => row.id === selectedConnector.id) ?? selectedConnector
+    ? (connectors.find((row) => row.id === selectedConnector.id) ?? selectedConnector)
     : null;
 
-  const selectableIds = connectors
-    .filter((row) => row.revocable)
-    .map((row) => row.id);
+  const selectableIds = connectors.filter((row) => row.revocable).map((row) => row.id);
 
   const selectedRows = connectors.filter((row) => selectedConnectorIds.has(row.id));
 
@@ -66,9 +60,7 @@ export function ConnectorsPage() {
 
     setRevoking(true);
     try {
-      const results = await Promise.allSettled(
-        selectedRows.map((row) => removeConnectorItem(row)),
-      );
+      const results = await Promise.allSettled(selectedRows.map((row) => removeConnectorItem(row)));
       const succeeded = new Set(
         selectedRows
           .filter((_, index) => results[index]?.status === 'fulfilled')

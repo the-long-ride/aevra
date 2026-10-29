@@ -274,11 +274,7 @@ export class SessionManager {
     }
     return { status: 'admitted', lease: this.leaseForWorkspace(session.id, workspaceId) ?? lease };
   }
-  /**
-   * Runs the restore owed by create()/reconnect, at most once per session.
-   * The pending marker is cleared first so the admitWorkspace() calls inside
-   * restoreMissingRememberedWorkspaces cannot re-enter through leases().
-   */
+  /** Runs the restore owed by create()/reconnect, at most once per session. */
   private ensureRememberedRestored(sessionId: string) {
     if (!this.pendingRememberedRestore.delete(sessionId)) return;
     const session = this.sessions.get(sessionId);

@@ -259,7 +259,8 @@ test('connector workspace routes allow listing, granting, revoking, and validati
   assert.equal(granted.status, 200);
   assert.ok(
     fx.calls.some(
-      (row) => row[0] === 'grantWorkspace' && row[1] === 'c1' && row[2] === 'w2' && row[3] === 'developer',
+      (row) =>
+        row[0] === 'grantWorkspace' && row[1] === 'c1' && row[2] === 'w2' && row[3] === 'developer',
     ),
   );
 

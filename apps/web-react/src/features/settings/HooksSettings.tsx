@@ -89,10 +89,7 @@ export function HooksSettings({
             search: false,
             render: (row) => (
               <div className="actions">
-                <button
-                  type="button"
-                  onClick={() => void handleToggle(row)}
-                >
+                <button type="button" onClick={() => void handleToggle(row)}>
                   {row.enabled ? 'Disable' : 'Enable'}
                 </button>
                 <button

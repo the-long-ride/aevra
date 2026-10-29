@@ -79,9 +79,7 @@ export function buildActorOptions(
     const name = c.name.trim();
     if (!name) continue;
     const actor =
-      name.startsWith('connector:') || name.startsWith('oauth:')
-        ? name
-        : `connector:${name}`;
+      name.startsWith('connector:') || name.startsWith('oauth:') ? name : `connector:${name}`;
     const key = actor.toLowerCase();
     if (!optionsMap.has(key)) {
       optionsMap.set(key, {
@@ -159,4 +157,11 @@ export function buildSessionOptions(
       description: wsInfo ? `${wsInfo} · ID: ${s.id}` : `ID: ${s.id}`,
     };
   });
+}
+
+export function splitCsv(value: FormDataEntryValue | null): string[] {
+  return String(value ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }

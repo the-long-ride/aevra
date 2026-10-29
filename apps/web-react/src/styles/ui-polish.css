@@ -346,3 +346,93 @@
   font-size: 10px;
   white-space: nowrap;
 }
+
+/* Swap / Segmented Control */
+.swap-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 4px;
+  background: var(--surface-soft);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.swap-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mute);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.swap-option:hover:not(.disabled):not(.active):not(.is-disabled) {
+  color: var(--ink);
+  background: var(--surface-card);
+}
+
+.swap-option.active,
+.swap-option.is-selected {
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 600;
+  border-color: var(--ink);
+}
+
+.swap-option.disabled,
+.swap-option.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.swap-radio-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  margin: 0;
+}
+
+.swap-option:has(.swap-radio-input:focus-visible),
+.swap-option:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.swap-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .swap-control {
+    display: flex;
+    width: 100%;
+  }
+
+  .swap-control .swap-option {
+    flex: 1 1 0;
+    justify-content: center;
+    text-align: center;
+    padding-inline: 8px;
+  }
+}

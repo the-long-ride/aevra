@@ -301,7 +301,13 @@ test('network failures during endpoint tests surface the error message', async (
 
 test('remote access panel styles enforce a readable single-column endpoint grid and balanced health grid on mobile', () => {
   const css = readFileSync('src/styles/dashboard.css', 'utf8');
-  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.remote-status-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
-  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.remote-access-head\s*>\s*button\s*\{[^}]*width:\s*100%/);
-  expect(css).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.remote-health-item:last-child:nth-child\(odd\)\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
+  expect(css).toMatch(
+    /@media\s*\(max-width:\s*760px\)[\s\S]*?\.remote-status-grid\s*\{[^}]*grid-template-columns:\s*1fr/,
+  );
+  expect(css).toMatch(
+    /@media\s*\(max-width:\s*760px\)[\s\S]*?\.remote-access-head\s*>\s*button\s*\{[^}]*width:\s*100%/,
+  );
+  expect(css).toMatch(
+    /@media\s*\(max-width:\s*760px\)[\s\S]*?\.remote-health-item:last-child:nth-child\(odd\)\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/,
+  );
 });
