@@ -125,7 +125,7 @@ test('manages mounts, admission, and modal close mechanisms', async () => {
       ],
     },
     mutationResponses: {
-      'POST /api/workspaces/ws-main/mounts': new Response('{}', { status: 200 }),
+      'POST /api/workspaces/ws-main/mounts': {},
       'DELETE /api/mounts/mount-1': new Response('{}', { status: 200 }),
       'POST /api/workspaces/ws-main/admission': new Response('{}', { status: 200 }),
     },
@@ -163,6 +163,52 @@ test('manages mounts, admission, and modal close mechanisms', async () => {
       capabilities: ['files.read', 'files.search'],
     });
   });
+
+  // Add mount with only absolute Local mount root (leaving Logical path blank)
+  await user.clear(within(details).getByLabelText('Logical path'));
+  await user.clear(within(details).getByLabelText('Local mount root'));
+  await user.type(within(details).getByLabelText('Local mount root'), 'D:\\design-system\\icons');
+  await user.click(within(details).getByRole('button', { name: 'Add mount' }));
+
+  await waitFor(() => {
+    const addMountCalls = fetchMock.mock.calls.filter(
+      ([url, init]) => url === '/api/workspaces/ws-main/mounts' && init?.method === 'POST',
+    );
+    expect(addMountCalls).toHaveLength(2);
+    expect(JSON.parse(String(addMountCalls[1]?.[1]?.body))).toEqual({
+      logicalPath: 'D:\\design-system\\icons',
+      hostRoot: 'D:\\design-system\\icons',
+      capabilities: ['files.read', 'files.search'],
+    });
+  });
+
+  // Add mount with absolute path in Logical path (leaving Local mount root blank)
+  await user.clear(within(details).getByLabelText('Logical path'));
+  await user.clear(within(details).getByLabelText('Local mount root'));
+  await user.type(within(details).getByLabelText('Logical path'), 'D:\\shared-lib');
+  await user.click(within(details).getByRole('button', { name: 'Add mount' }));
+
+  await waitFor(() => {
+    const addMountCalls = fetchMock.mock.calls.filter(
+      ([url, init]) => url === '/api/workspaces/ws-main/mounts' && init?.method === 'POST',
+    );
+    expect(addMountCalls).toHaveLength(3);
+    expect(JSON.parse(String(addMountCalls[2]?.[1]?.body))).toEqual({
+      logicalPath: 'D:\\shared-lib',
+      hostRoot: 'D:\\shared-lib',
+      capabilities: ['files.read', 'files.search'],
+    });
+  });
+
+  // Submitting empty mount form is a no-op
+  await user.clear(within(details).getByLabelText('Logical path'));
+  await user.clear(within(details).getByLabelText('Local mount root'));
+  await user.click(within(details).getByRole('button', { name: 'Add mount' }));
+  expect(
+    fetchMock.mock.calls.filter(
+      ([url, init]) => url === '/api/workspaces/ws-main/mounts' && init?.method === 'POST',
+    ),
+  ).toHaveLength(3);
 
   // Remove mount (cancel then confirm)
   const removeMountBtn = within(details).getByRole('button', { name: 'Remove' });

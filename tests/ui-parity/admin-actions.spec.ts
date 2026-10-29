@@ -113,7 +113,10 @@ for (const surface of ADMIN_SURFACES) {
     await saveExecution;
 
     await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
-    await page.getByRole('button', { name: /Connectors/ }).click();
+    await page
+      .locator('main')
+      .getByRole('button', { name: /Connectors/ })
+      .click();
     await page
       .getByRole('dialog', { name: 'Connectors' })
       .getByRole('button', { name: 'New connector', exact: true })
@@ -123,6 +126,6 @@ for (const surface of ADMIN_SURFACES) {
     await page.getByRole('button', { name: 'Create token', exact: true }).click();
     await createConnector;
     await expect(page.getByText('Copy this token now. It is shown once.')).toBeVisible();
-    await expect(page.getByText('secret-once')).toBeVisible();
+    await expect(page.getByText('secret-once', { exact: true })).toBeVisible();
   });
 }

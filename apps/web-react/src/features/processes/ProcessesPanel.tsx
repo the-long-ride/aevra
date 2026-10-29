@@ -1,6 +1,7 @@
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
+import { useToast } from '../../components/Toast';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
 
@@ -42,13 +43,24 @@ function processName(row: ProcessRow) {
 export function ProcessesPanel({ contained = false }: { contained?: boolean }) {
   const resource = useApiResource(load);
   const dialog = useDialog();
+  const { toast, success, error } = useToast();
 
   const mutate = async (id: string, action: 'stop' | 'restart' | 'forget') => {
-    await requestJson(`/api/processes/${encodeURIComponent(id)}/${action}`, {
-      method: 'POST',
-      body: '{}',
-    });
-    await resource.refresh();
+    const labels: Record<typeof action, string> = {
+      stop: 'Process stopped.',
+      restart: 'Process restarted.',
+      forget: 'Process forgotten.',
+    };
+    try {
+      await requestJson(`/api/processes/${encodeURIComponent(id)}/${action}`, {
+        method: 'POST',
+        body: '{}',
+      });
+      success(labels[action]);
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   return (
@@ -162,6 +174,7 @@ export function ProcessesPanel({ contained = false }: { contained?: boolean }) {
         rowKey={(row) => row.id}
         emptyText="No managed processes."
       />
+      {toast}
     </PageState>
   );
 }

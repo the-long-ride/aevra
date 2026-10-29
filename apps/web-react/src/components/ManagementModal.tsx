@@ -20,6 +20,7 @@ export function ManagementModal({
   surfaceId,
   closeSurfaceId,
   closeIcon = false,
+  footer,
 }: {
   open: boolean;
   title: string;
@@ -30,6 +31,7 @@ export function ManagementModal({
   closeSurfaceId?: string;
   /** Render the close control as an "x" icon button (accessible name stays "Close"). */
   closeIcon?: boolean;
+  footer?: ReactNode;
 }) {
   const titleId = useId();
   const { ref: layerRef, isTop } = useModalLayer();
@@ -134,6 +136,7 @@ export function ManagementModal({
           </button>
         </div>
         <div className="modal-body management-modal-body">{children}</div>
+        {footer ? <footer className="modal-foot management-modal-foot">{footer}</footer> : null}
       </section>
     </div>
   );

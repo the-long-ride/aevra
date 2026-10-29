@@ -20,18 +20,29 @@ import type { SessionManager } from '../../../apps/core/src/sessions/session-man
 import type { SkillsService } from '../../../apps/core/src/skills/skills-service.js';
 import type { WorkspaceService } from '../../../apps/core/src/workspaces/workspace-service.js';
 import type { ConnectorNotesPort } from './notes-port.js';
+import type { TransferLinkPort } from './transfer-link-port.js';
 import type { UpstreamRegistryService } from './upstream-port.js';
 
+export interface WorkerCallInput {
+  sessionId: string;
+  workspaceId: string;
+  scope?: WorkerScope;
+  roots: CapabilityRoot[];
+  operation: WorkerOperation;
+  expectedState?: Record<string, string>;
+  executionMode?: 'sandbox' | 'host';
+}
+
 export interface WorkerGateway {
-  execute(input: {
-    sessionId: string;
-    workspaceId: string;
-    scope?: WorkerScope;
-    roots: CapabilityRoot[];
-    operation: WorkerOperation;
-    expectedState?: Record<string, string>;
-    executionMode?: 'sandbox' | 'host';
-  }): Promise<WorkerResult>;
+  execute(input: WorkerCallInput): Promise<WorkerResult>;
+  /** Absent when the worker cannot stream (safe mode, test doubles). */
+  executeWithUpload?(
+    input: WorkerCallInput,
+    source: AsyncIterable<Uint8Array>,
+  ): Promise<WorkerResult>;
+  executeWithDownload?(
+    input: WorkerCallInput,
+  ): Promise<{ result: Promise<WorkerResult>; body: AsyncIterable<Uint8Array> }>;
 }
 
 export interface MetricsSink {
@@ -122,11 +133,14 @@ export interface McpToolDependencies {
   audit?: AuditService;
   connectorBindings?: (subject: string) => {
     workspaceId: string | null;
+    workspaceIds?: string[];
     profileCap: string | null;
   } | null;
   metrics?: MetricsSink;
   settings?: SettingsReader;
   systemCapabilities?: SystemCapabilitySnapshot;
+  /** One-time links for files_upload; absent when the core wires none. */
+  transferLinks?: TransferLinkPort;
   // Structural on purpose: mcp-tools must not depend on the core pairing
   // class for two accessors.
   browserPairing?: {

@@ -3,6 +3,14 @@ import { aevraServerInfo } from './server-info.js';
 
 export const MODERN_PROTOCOL_VERSION = '2026-07-28';
 const CACHE_TTL_MS = 60_000;
+/** Tools whose results carry the server identity meta (the connect/status flow). */
+export const SERVER_META_TOOLS: ReadonlySet<string> = new Set([
+  'aevra_status',
+  'workspace_list',
+  'workspace_select',
+  'workspace_current',
+]);
+const META_METHODS = new Set(['initialize', 'server/discover', 'tools/list']);
 const NAMED_METHODS = new Set(['tools/call', 'resources/read', 'prompts/get']);
 const CACHEABLE_METHODS = new Set([
   'tools/list',
@@ -117,11 +125,21 @@ function compareOrdinal(left: unknown, right: unknown) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-export function decorateModernResult(response: any, method?: string, baseUrl?: string) {
+function wantsServerMeta(method?: string, toolName?: string) {
+  if (META_METHODS.has(method ?? '')) return true;
+  return method === 'tools/call' && typeof toolName === 'string' && SERVER_META_TOOLS.has(toolName);
+}
+
+export function decorateModernResult(
+  response: any,
+  method?: string,
+  baseUrl?: string,
+  toolName?: string,
+) {
   if (!response?.result || response?.error) return response;
   const result = { ...response.result };
   result.resultType ??= 'complete';
-  result._meta = serverMeta(baseUrl, result._meta);
+  if (wantsServerMeta(method, toolName)) result._meta = serverMeta(baseUrl, result._meta);
   if (CACHEABLE_METHODS.has(method ?? '')) {
     result.ttlMs ??= CACHE_TTL_MS;
     result.cacheScope ??= 'private';

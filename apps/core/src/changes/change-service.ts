@@ -71,6 +71,17 @@ export class ChangeSetService {
       });
     return { changeSet: c, snapshotPath: destination, sizeBytes: v.sizeBytes };
   }
+  /** Best effort: drops a snapshot whose write failed, so no orphan stays in the recovery store. */
+  async discardSnapshot(sessionId: string, workspaceId: string, snapshotPath: string) {
+    const root = path.resolve(this.recoveryDir) + path.sep;
+    if (!path.resolve(snapshotPath).startsWith(root)) return;
+    await this.worker.execute({
+      sessionId,
+      workspaceId,
+      roots: this.workspaces.capabilityRoots(workspaceId),
+      operation: { kind: 'recovery.discard', snapshot: snapshotPath },
+    });
+  }
   async recordMutation(
     input: MutationRecordInput & { metadata?: Record<string, unknown> },
   ): Promise<void> {

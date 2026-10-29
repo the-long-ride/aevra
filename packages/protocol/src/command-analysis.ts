@@ -8,6 +8,22 @@ export function normalizeYoloMode(value: unknown): YoloPolicyMode {
   return value === 'unrestricted' ? 'unrestricted' : 'workspace';
 }
 
+/** What YOLO may do: prevent-high-risk still confirms CRITICAL work; do-whatever does not. */
+export type YoloRisk = 'prevent-high-risk' | 'do-whatever';
+
+/** mode is the scope axis (name kept for API compatibility); risk is the risk axis. */
+export interface YoloPolicy {
+  mode: YoloPolicyMode;
+  risk: YoloRisk;
+}
+
+export function normalizeYoloPolicy(value: unknown): YoloPolicy {
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    mode: normalizeYoloMode(record.mode),
+    risk: record.risk === 'do-whatever' ? 'do-whatever' : 'prevent-high-risk',
+  };
+}
 export interface CommandRequest {
   kind: 'argv' | 'script';
   executable?: string;
@@ -171,7 +187,7 @@ export interface CommandPolicyInput {
   }>;
   authority: { valid: boolean; commandCapability: boolean; reasons: Reason[] };
   network: { outcome: 'allow' | 'deny' | 'approval'; reasons: Reason[] };
-  yolo: { active: boolean; mode: 'workspace' | 'unrestricted' };
+  yolo: { active: boolean; mode: YoloPolicyMode; risk: YoloRisk };
   criticalAlwaysConfirm: boolean;
   scriptTrust: 'not-applicable' | 'trusted' | 'unapproved' | 'changed';
   exactApproval?: {

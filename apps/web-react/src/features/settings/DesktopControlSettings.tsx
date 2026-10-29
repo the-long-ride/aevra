@@ -274,13 +274,15 @@ export function DesktopControlSettings({
       role="region"
       aria-label="Desktop control"
     >
-      <div className="compact-settings-copy">
-        <h3>Desktop control</h3>
-        <span>
-          Restrict which apps computer use can see and act on. Grant desktop control to an exact AI
-          connection in Dashboard connection details; workspace access does not grant desktop
-          control.
-        </span>
+      <div className="panel-head compact-panel-head">
+        <div>
+          <h3>Desktop control</h3>
+          <p>
+            Restrict which apps computer use can see and act on. Grant desktop control to an exact
+            AI connection in Dashboard connection details; workspace access does not grant desktop
+            control.
+          </p>
+        </div>
       </div>
       <DesktopModeSelector
         mode={policy.mode}
@@ -326,7 +328,9 @@ export function DesktopControlSettings({
               </span>
               <button
                 type="button"
-                className="danger-button"
+                className="danger-button desktop-app-grant-revoke"
+                aria-label="Revoke"
+                title={`Revoke ${grant.displayName}`}
                 disabled={busyTarget !== null}
                 onClick={() =>
                   void revokeDesktopAppGrant(grant.id)
@@ -335,7 +339,7 @@ export function DesktopControlSettings({
                     .catch((cause: unknown) => error(cause))
                 }
               >
-                Revoke
+                ×
               </button>
             </div>
           ))}

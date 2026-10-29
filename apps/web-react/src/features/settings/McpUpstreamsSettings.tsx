@@ -166,14 +166,22 @@ export function McpUpstreamsSettings({
       confirmTone: 'danger',
     });
     if (!confirmed) return;
-    void run(() => remove(upstream.id));
+    void run(async () => {
+      await remove(upstream.id);
+      success(`MCP server "${upstream.name}" removed.`);
+    });
   };
   const submit = async (draft: UpstreamDraft) => {
     if (busy) return;
     setBusy(true);
     try {
-      if (editing) await update(editing.id, draft);
-      else await create(draft);
+      if (editing) {
+        await update(editing.id, draft);
+        success(`MCP server "${draft.name}" updated.`);
+      } else {
+        await create(draft);
+        success(`MCP server "${draft.name}" added.`);
+      }
       setAdding(false);
       setEditing(null);
       await refresh();
@@ -236,7 +244,12 @@ export function McpUpstreamsSettings({
             row={row}
             busy={busy}
             onHints={() => setHints(row)}
-            onToggle={(enabled) => void run(() => setEnabled(row.id, enabled))}
+            onToggle={(enabled) =>
+              void run(async () => {
+                await setEnabled(row.id, enabled);
+                success(enabled ? `Enabled ${row.name}.` : `Disabled ${row.name}.`);
+              })
+            }
             onTest={() => void runTest(row)}
             onEdit={() => {
               setAdding(false);
@@ -335,6 +348,7 @@ export function McpUpstreamsSettings({
           onAccept={(fingerprint) =>
             void run(async () => {
               await acknowledge(reviewing.id, fingerprint);
+              success(`Acknowledged changes for "${reviewing.name}".`);
               setReviewing(null);
             })
           }

@@ -60,6 +60,47 @@ export function creditLine(hyperlinks = Boolean(process.stderr.isTTY)): string {
   return `Author: ${link(AUTHOR_NAME, AUTHOR_URL, hyperlinks)} // Repo: ${link(REPO_NAME, REPO_URL, hyperlinks)}`;
 }
 
+export function desktopHelperNoticeLines(resolution: {
+  path?: string;
+  missingOverride?: string;
+}): string[] {
+  if (resolution.missingOverride && resolution.path) {
+    return [
+      `[aevra] Warning: AEVRA_DESKTOP_HELPER_PATH points to a missing file:`,
+      `[aevra]   ${resolution.missingOverride}`,
+      `[aevra] Falling back to helper binary at:`,
+      `[aevra]   ${resolution.path}`,
+      `[aevra] Tip: Update or unset AEVRA_DESKTOP_HELPER_PATH to silence this warning.`,
+      '',
+    ];
+  }
+
+  if (resolution.missingOverride && !resolution.path) {
+    return [
+      `[aevra] Warning: AEVRA_DESKTOP_HELPER_PATH points to a missing file:`,
+      `[aevra]   ${resolution.missingOverride}`,
+      `[aevra] Desktop control is disabled. To fix:`,
+      `[aevra]   1. Unset AEVRA_DESKTOP_HELPER_PATH or point it to an existing binary`,
+      `[aevra]   2. Or build locally: cargo build --release -p aevra-desktop-helper`,
+      `[aevra] Core, MCP, and Dashboard will continue running normally.`,
+      '',
+    ];
+  }
+
+  if (!resolution.path) {
+    return [
+      `[aevra] Notice: Desktop helper binary is not installed for ${process.platform}-${process.arch}.`,
+      `[aevra] Desktop control is disabled. To enable:`,
+      `[aevra]   Build locally: cargo build --release -p aevra-desktop-helper`,
+      `[aevra]   Or reinstall an official package with native helpers included.`,
+      `[aevra] Core, MCP, and Dashboard will continue running normally.`,
+      '',
+    ];
+  }
+
+  return [];
+}
+
 export function readyLines(info: {
   adminUrl: string;
   mcpUrl: string;

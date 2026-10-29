@@ -6,7 +6,7 @@ import { TOOL_GROUPS, toolGroupOf } from '../src/tool-groups.js';
 
 test('default tools/list stays within the size budget', () => {
   const size = JSON.stringify(advertisedToolDefinitions()).length;
-  assert.ok(size <= 55_000, `advertised tools/list is ${size} chars, budget 55000`);
+  assert.ok(size <= 56_000, `advertised tools/list is ${size} chars, budget 56000`);
 });
 
 test('advertised definitions list the same tools as the full registry', () => {

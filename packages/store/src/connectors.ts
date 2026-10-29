@@ -6,6 +6,8 @@ export interface ConnectorRecord {
   createdAt: string;
   lastUsedAt: string | null;
   workspaceId: string | null;
+  workspaceIds?: string[];
+  workspaceGrants?: Array<{ workspaceId: string; profileId: string }>;
   profileCap: string | null;
   expiresAt: string | null;
 }
@@ -19,6 +21,8 @@ export interface ConnectorTokenRecord {
 export interface ConnectorCreateInput {
   name: string;
   workspaceId?: string | null;
+  workspaceIds?: string[];
+  workspaceGrants?: Array<{ workspaceId: string; profileId: string }>;
   profileCap?: string | null;
   expiresAt?: string | null;
 }
@@ -28,12 +32,24 @@ export class ConnectorRepository {
     const x = typeof input === 'string' ? { name: input } : input;
     const token = randomBytes(16).toString('base64url');
     const hash = ConnectorRepository.hash(token);
+    const nowIso = new Date().toISOString();
+    const wsIds = Array.isArray(x.workspaceIds)
+      ? x.workspaceIds.map(String).filter(Boolean)
+      : x.workspaceId
+        ? [String(x.workspaceId)]
+        : [];
+    const primaryWsId = wsIds[0] ?? x.workspaceId ?? null;
+    const grants =
+      x.workspaceGrants ??
+      wsIds.map((wid) => ({ workspaceId: wid, profileId: x.profileCap ?? 'read-only' }));
     const connector: ConnectorRecord = {
       id: `con_${randomUUID()}`,
       name: x.name,
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
       lastUsedAt: null,
-      workspaceId: x.workspaceId ?? null,
+      workspaceId: primaryWsId,
+      workspaceIds: wsIds,
+      workspaceGrants: grants,
       profileCap: x.profileCap ?? null,
       expiresAt: x.expiresAt ?? null,
     };
@@ -50,6 +66,20 @@ export class ConnectorRepository {
         connector.profileCap,
         connector.expiresAt,
       );
+    if (grants.length) {
+      try {
+        const stmt = this.db.prepare(
+          `INSERT INTO oauth_workspace_grants(subject,workspace_id,profile_id,created_at,updated_at)
+           VALUES(?,?,?,?,?)
+           ON CONFLICT(subject,workspace_id) DO UPDATE SET profile_id=excluded.profile_id,updated_at=excluded.updated_at`,
+        );
+        for (const grant of grants) {
+          stmt.run(connector.id, grant.workspaceId, grant.profileId, nowIso, nowIso);
+        }
+      } catch {
+        /* ignore if oauth_workspace_grants table does not exist */
+      }
+    }
     return { connector, token };
   }
   list(): ConnectorRecord[] {
@@ -94,6 +124,11 @@ export class ConnectorRepository {
   }
   revoke(id: string) {
     this.db.prepare('DELETE FROM connectors WHERE id=?').run(id);
+    try {
+      this.db.prepare('DELETE FROM oauth_workspace_grants WHERE subject=?').run(id);
+    } catch {
+      /* ignore if oauth_workspace_grants table does not exist */
+    }
   }
   rotate(id: string, graceMs: number = 5 * 60_000): string | null {
     const row = this.db
@@ -116,6 +151,60 @@ export class ConnectorRepository {
     return row
       ? { workspaceId: row.workspaceId ?? null, profileCap: row.profileCap ?? null }
       : null;
+  }
+  grantWorkspace(connectorId: string, workspaceId: string, profileId = 'read-only') {
+    const now = new Date().toISOString();
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO oauth_workspace_grants(subject,workspace_id,profile_id,created_at,updated_at)
+           VALUES(?,?,?,?,?)
+           ON CONFLICT(subject,workspace_id) DO UPDATE SET profile_id=excluded.profile_id,updated_at=excluded.updated_at`,
+        )
+        .run(connectorId, workspaceId, profileId, now, now);
+    } catch {
+      /* ignore if oauth_workspace_grants table does not exist */
+    }
+    const row = this.db
+      .prepare('SELECT workspace_id workspaceId FROM connectors WHERE id=?')
+      .get(connectorId) as any;
+    if (row && !row.workspaceId) {
+      this.db
+        .prepare('UPDATE connectors SET workspace_id=? WHERE id=?')
+        .run(workspaceId, connectorId);
+    }
+  }
+  revokeWorkspace(connectorId: string, workspaceId: string): boolean {
+    let removed = false;
+    try {
+      removed =
+        this.db
+          .prepare('DELETE FROM oauth_workspace_grants WHERE subject=? AND workspace_id=?')
+          .run(connectorId, workspaceId).changes > 0;
+    } catch {
+      removed = false;
+    }
+    this.clearWorkspace(connectorId, workspaceId);
+    return removed;
+  }
+  listWorkspaceGrants(connectorId: string): Array<{ workspaceId: string; profileId: string }> {
+    try {
+      return this.db
+        .prepare(
+          'SELECT workspace_id workspaceId,profile_id profileId FROM oauth_workspace_grants WHERE subject=? ORDER BY workspace_id',
+        )
+        .all(connectorId) as Array<{ workspaceId: string; profileId: string }>;
+    } catch {
+      return [];
+    }
+  }
+  clearWorkspace(id: string, workspaceId: string) {
+    this.db
+      .prepare('UPDATE connectors SET workspace_id=NULL WHERE id=? AND workspace_id=?')
+      .run(id, workspaceId);
+  }
+  setWorkspace(id: string, workspaceId: string | null) {
+    this.db.prepare('UPDATE connectors SET workspace_id=? WHERE id=?').run(workspaceId, id);
   }
   recordUse(id: string) {
     const now = new Date().toISOString(),

@@ -7,6 +7,7 @@ import type { ConnectionStateStore } from './connection-state.js';
 import {
   detachedSessionIds,
   detachSession,
+  extendLeases,
   disconnectSessionImmediate,
   expireGraceSessionConnections,
   findMatchingConnectionLeases,
@@ -44,6 +45,7 @@ export class SessionManager {
   private yoloSessions = new Set<string>();
   private pendingRememberedRestore = new Set<string>();
   private disconnectedIdentities = new Map<string, DisconnectedIdentity>();
+  linkRevoker?: (connectionKey: string) => void;
   constructor(
     private repo: SessionRepository,
     private profiles: CapabilityProfileService,
@@ -52,7 +54,9 @@ export class SessionManager {
     private connections?: ConnectionStateStore,
     private reconnectGraceMs = 15 * 60_000,
   ) {}
-
+  private endLinks(sessionId: string) {
+    this.linkRevoker?.(this.connectionIdentity(sessionId)?.connectionId ?? sessionId);
+  }
   setSwitchDrainHandler(_handler: (...args: any[]) => Promise<void>) {}
   isSwitching(_sessionId: string) {
     return false;
@@ -148,8 +152,7 @@ export class SessionManager {
         leaseRows: this.leaseRows,
         repo: this.repo,
         clock: this.clock,
-        leaseForWorkspace: (sessionId, workspaceId) =>
-          this.leaseForWorkspace(sessionId, workspaceId),
+        leaseForWorkspace: (id, target) => this.leaseForWorkspace(id, target),
         revokeLease: (leaseId) => this.revokeLease(leaseId),
       });
       for (const oldSessionId of detachedIds) {
@@ -181,6 +184,7 @@ export class SessionManager {
     this.repo.revoke?.(id);
   }
   revokeConnection(connectionId: string, reason = 'ADMIN_REVOKE') {
+    this.linkRevoker?.(connectionId);
     revokeConnectionSessions({
       connectionId,
       sessions: this.sessions.values(),
@@ -195,13 +199,7 @@ export class SessionManager {
     if (!session) throw new Error('session not found');
     const now = this.clock.now();
     session.lastActivityAt = now.toISOString();
-    const expiresAt = new Date(now.getTime() + this.idleMs).toISOString();
-    for (const lease of this.leaseRows.values()) {
-      if (lease.sessionId !== id) continue;
-      if (workspaceId && lease.workspaceId !== workspaceId) continue;
-      if (Date.parse(lease.expiresAt) <= now.getTime()) continue;
-      lease.expiresAt = expiresAt;
-    }
+    extendLeases(this.leaseRows.values(), id, now, this.idleMs, workspaceId);
     return session;
   }
   leases(sessionId: string): WorkspaceLease[] {
@@ -243,11 +241,12 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error('session not found');
     const mapping = this.profiles.mapping(session.actor, workspaceId);
-    const remembered = session.actor.startsWith('oauth:')
-      ? this.repo
-          .listRememberedWorkspaceGrants(session.subject)
-          .find((grant) => grant.workspaceId === workspaceId)
-      : undefined;
+    const remembered =
+      session.actor.startsWith('oauth:') || session.actor.startsWith('connector:')
+        ? this.repo
+            .listRememberedWorkspaceGrants(session.subject)
+            .find((grant) => grant.workspaceId === workspaceId)
+        : undefined;
     let profileId = overrideProfileId ?? remembered?.profileId;
     if (!profileId && mapping?.admission === 'auto') profileId = mapping.profileId;
     if (!profileId) return { status: 'approval-required' };
@@ -275,11 +274,7 @@ export class SessionManager {
     }
     return { status: 'admitted', lease: this.leaseForWorkspace(session.id, workspaceId) ?? lease };
   }
-  /**
-   * Runs the restore owed by create()/reconnect, at most once per session.
-   * The pending marker is cleared first so the admitWorkspace() calls inside
-   * restoreMissingRememberedWorkspaces cannot re-enter through leases().
-   */
+  /** Runs the restore owed by create()/reconnect, at most once per session. */
   private ensureRememberedRestored(sessionId: string) {
     if (!this.pendingRememberedRestore.delete(sessionId)) return;
     const session = this.sessions.get(sessionId);
@@ -328,6 +323,7 @@ export class SessionManager {
     detachSession(this.context(), sessionId, (id) => this.revokeLease(id));
   }
   disconnect(sessionId: string) {
+    this.endLinks(sessionId);
     this.detach(sessionId);
   }
   expireGraceConnections() {
@@ -343,6 +339,7 @@ export class SessionManager {
     this.repo.invalidateAll();
   }
   private disconnectImmediate(sessionId: string, rememberIdentity: boolean) {
+    this.endLinks(sessionId);
     disconnectSessionImmediate(this.context(), sessionId, rememberIdentity, (id) =>
       this.revokeLease(id),
     );

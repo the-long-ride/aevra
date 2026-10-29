@@ -4,7 +4,12 @@ import { SecurityGuard } from '../../../apps/core/src/security/security-guard.js
 import { handleFileTool } from '../src/file-tools.js';
 
 function fixture(
-  options: { yolo?: boolean; downgradeSensitivePath?: boolean; workerSensitivity?: string } = {},
+  options: {
+    yolo?: boolean;
+    doWhatever?: boolean;
+    downgradeSensitivePath?: boolean;
+    workerSensitivity?: string;
+  } = {},
 ) {
   const calls: any[] = [];
   const operationCalls: any[] = [];
@@ -80,6 +85,12 @@ function fixture(
     approvals,
     deps: {
       security: new SecurityGuard(sessions, workspaces),
+      settings: {
+        get: (key: string, fallback: any) =>
+          key === 'policy.yolo' && options.doWhatever
+            ? { mode: 'unrestricted', risk: 'do-whatever' }
+            : fallback,
+      },
       operations,
       approvals,
     },
@@ -92,6 +103,15 @@ function fixture(
 
 test('SECRET file_read is denied before Worker dispatch', async () => {
   const { context, calls } = fixture({ yolo: true });
+  await assert.rejects(
+    () => handleFileTool(context, 'ses_1', 'file_read', { path: '/.env' }),
+    (error: any) => error?.code === 'CAPABILITY_REQUIRED',
+  );
+  assert.equal(calls.length, 0);
+});
+
+test('SECRET file_read is denied under do-whatever YOLO', async () => {
+  const { context, calls } = fixture({ yolo: true, doWhatever: true });
   await assert.rejects(
     () => handleFileTool(context, 'ses_1', 'file_read', { path: '/.env' }),
     (error: any) => error?.code === 'CAPABILITY_REQUIRED',

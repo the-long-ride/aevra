@@ -23,63 +23,69 @@ function response() {
   return res as any;
 }
 
-test('handleYoloPolicyRoutes: GET, PATCH, and method dispatch', async () => {
-  let stored = { mode: 'workspace' };
+const URL_YOLO = new URL('https://localhost/api/policy/yolo');
+
+function fixture(initial: unknown = { mode: 'workspace' }) {
+  const state: { stored: any; audits: any[] } = { stored: initial, audits: [] };
   const context: any = {
     settings: {
-      get: () => stored,
+      get: () => state.stored,
       set: (_k: string, v: any) => {
-        stored = v;
+        state.stored = v;
       },
     },
+    audit: { append: (e: any) => state.audits.push(e) },
   };
+  return { state, context };
+}
 
-  // GET
-  const resGet = response();
+async function call(context: any, method: string, body?: unknown) {
+  const res = response();
+  const handled = await handleYoloPolicyRoutes(request(method, body), res, URL_YOLO, context);
+  return { handled, body: res.body ? JSON.parse(res.body) : undefined };
+}
+
+test('handleYoloPolicyRoutes: GET returns both axes with defaults', async () => {
+  const { context } = fixture();
+  const out = await call(context, 'GET');
+  assert.equal(out.handled, true);
+  assert.deepEqual(out.body, { mode: 'workspace', risk: 'prevent-high-risk' });
+});
+
+test('handleYoloPolicyRoutes: PATCH mode keeps stored risk', async () => {
+  const { context, state } = fixture({ mode: 'unrestricted', risk: 'do-whatever' });
+  const out = await call(context, 'PATCH', { mode: 'workspace' });
+  assert.deepEqual(out.body, { mode: 'workspace', risk: 'do-whatever' });
+  assert.deepEqual(state.stored, { mode: 'workspace', risk: 'do-whatever' });
+});
+
+test('handleYoloPolicyRoutes: PATCH risk keeps stored mode and audits', async () => {
+  const { context, state } = fixture({ mode: 'unrestricted' });
+  const out = await call(context, 'PATCH', { risk: 'do-whatever' });
+  assert.deepEqual(out.body, { mode: 'unrestricted', risk: 'do-whatever' });
+  assert.equal(state.audits.length, 1);
+  assert.equal(state.audits[0].operation, 'policy.yolo.update');
+  assert.equal(state.audits[0].actor, 'admin');
+  assert.equal(state.audits[0].result, 'ok');
+});
+
+test('handleYoloPolicyRoutes: PATCH unknown values normalize to safe defaults', async () => {
+  const { context } = fixture({ mode: 'unrestricted', risk: 'do-whatever' });
+  const out = await call(context, 'PATCH', { mode: 'bogus', risk: 'bogus' });
+  assert.deepEqual(out.body, { mode: 'workspace', risk: 'prevent-high-risk' });
+});
+
+test('handleYoloPolicyRoutes: non-matching path and method', async () => {
+  const { context } = fixture();
+  const res = response();
   assert.equal(
     await handleYoloPolicyRoutes(
       request('GET'),
-      resGet,
-      new URL('https://localhost/api/policy/yolo'),
-      context,
-    ),
-    true,
-  );
-  assert.equal(JSON.parse(resGet.body).mode, 'workspace');
-
-  // PATCH
-  const resPatch = response();
-  assert.equal(
-    await handleYoloPolicyRoutes(
-      request('PATCH', { mode: 'unrestricted' }),
-      resPatch,
-      new URL('https://localhost/api/policy/yolo'),
-      context,
-    ),
-    true,
-  );
-  assert.equal(JSON.parse(resPatch.body).mode, 'unrestricted');
-  assert.equal(stored.mode, 'unrestricted');
-
-  // Non-matching path
-  assert.equal(
-    await handleYoloPolicyRoutes(
-      request('GET'),
-      response(),
+      res,
       new URL('https://localhost/api/other'),
       context,
     ),
     false,
   );
-
-  // Non-matching method
-  assert.equal(
-    await handleYoloPolicyRoutes(
-      request('DELETE'),
-      response(),
-      new URL('https://localhost/api/policy/yolo'),
-      context,
-    ),
-    false,
-  );
+  assert.equal((await call(context, 'DELETE')).handled, false);
 });

@@ -1,7 +1,7 @@
 # Aevra — Architecture & Usage Guide for AI Assistants (llm.txt)
 
 > **Specification & Operator Reference for Language Models**
-> Version: 1.3.0
+> Version: 1.3.2
 > Author: the-long-ride (made by <3)
 > Repository: https://github.com/the-long-ride/aevra
 > Issues: https://github.com/the-long-ride/aevra/issues
@@ -90,7 +90,7 @@ Execution Worker (Port 47833 WebSocket for Browser Extension)
 
 ---
 
-## 4. Built-in MCP Tools Reference (74 Tools)
+## 4. Built-in MCP Tools Reference (79 Tools)
 
 The model-facing surface favors bounded batch interfaces; singular file/command
 primitives remain internal implementation details.
@@ -104,6 +104,7 @@ primitives remain internal implementation details.
 
 - Files/search: `file_list`, `file_read_many`, `file_search`, `search`,
   `file_write_many`, `file_move`, `file_delete`. File contents are preserved verbatim.
+- Binary transfer: `files_download` (you send 1-64 files to the device: inline base64 or a public `url`, `overwrite` defaults to false) and `files_upload` (you pull 1-64 files from the device: inline when small, else a one-time link on the public URL). One local approval per batch. Each entry succeeds or fails alone.
 - Commands: `command_run_many` and `shell_run`. Supports optional `maxOutputChars` budget (256–200,000, default 16,000). Use managed processes for long-running work.
 - Processes: `process_start/list/status/wait/logs/stop/restart`.
 - Git: `git_status/add/diff/log/branch/commit/push`.
@@ -165,7 +166,7 @@ and are seen by connected clients on their next list (no `list_changed` is sent)
 
 ### Token Efficiency, Result Shaping & Transport (v1.2.0)
 
-- **Advertised Schema Compaction:** `tools/list` omits deprecated properties, default-false hints (`readOnlyHint`, `idempotentHint`), and bare output schemas, keeping definition size under 54,000 characters (~20% token savings).
+- **Advertised Schema Compaction:** `tools/list` omits deprecated properties, default-false hints (`readOnlyHint`, `idempotentHint`), and bare output schemas, keeping definition size under 56,000 characters (~20% token savings).
 - **Result Shaper:** Compacts tool results automatically at the MCP edge:
   - Unwraps `{ ok: true, value: X }` -> `X` on command/shell results.
   - Flattens batch arrays (`file_read_many`, `file_write_many`, `command_run_many`), dropping duplicate `path`, array `index`, and default `sensitivity: NORMAL`, while hoisting `untrusted` notices once to top level. Drops `failed: 0` and `skipped: 0` from summaries.
@@ -177,6 +178,13 @@ and are seen by connected clients on their next list (no `list_changed` is sent)
 - **Token Estimation & Analytics:** Estimates text tokens using `heuristic-v1` (ASCII `ceil(len/4)`, CJK/emoji 1.0, others 0.5). Accumulated in memory and flushed to SQLite (`token_usage` table) every 30s. Displayed in live stat boxes and SVG historical charts on the Admin Dashboard.
 - **HTTP Response Compression:** Gzip-compresses responses ≥ 1,024 bytes when the client sends `Accept-Encoding: gzip`.
 - **Bounded Activity Detail:** Sanitized in-memory activity logs are bounded to prevent memory bloating.
+
+### File Transfer, Tool Switches & YOLO Split (v1.3.2)
+
+- **File Transfer Tools:** `files_download` (pull files to workspace via inline base64 or verified public URLs with pinned DNS and MIME sniffing) and `files_upload` (push files out of workspace inline or via short-lived 5-minute single-use download links `GET /files/<secret>`). Configurable limits via Settings > File Transfer (`files.transfer`).
+- **Global Per-Tool Switches:** Operators can globally turn off individual built-in or linked upstream MCP tools in Settings > Tools (`tools.disabled`), removing them from `tools/list` and rejecting invocations by name. Core primitives remain locked on.
+- **YOLO Policy Split:** Split into independent Scope (`workspace|unrestricted`) and Risk (`prevent-high-risk|do-whatever`) settings (`policy.yolo`). Unrestricted scope lifts workspace boundary checks; `do-whatever` risk waives approvals for CRITICAL operations only when unrestricted scope is enabled.
+- **Connector Multi-Workspace Grants:** Connectors can be granted access to multiple workspaces upon creation or update (or none by default), with per-workspace admission profiles, admission modes, and external mount capability ceilings. Dual Local & Tunnel configuration snippets are generated side-by-side.
 
 ---
 
@@ -253,6 +261,12 @@ When you are acting as an AI assistant interacting with Aevra via MCP tools or g
   }
   ```
 - Instead of writing files one by one, use `file_write_many` for multi-file edits.
+
+### Tip 2b: Moving binary files
+
+- Send a file you made: `files_download` with `content` + `encoding: "base64"` and a `mimeType`. Send a big or existing file: use a public `url` (private and local addresses are refused).
+- Fetch a device file: `files_upload`. If a result entry has `delivery: "link"`, fetch `url` once within 5 minutes; the link works one time and dies when your connection is revoked.
+- Tools the owner switched off in Settings > Tools are not listed and are refused by name.
 
 ### Tip 3: Use managed processes for long-running commands
 

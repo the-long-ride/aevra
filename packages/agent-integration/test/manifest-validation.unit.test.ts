@@ -15,6 +15,8 @@ test('a v1 manifest upgrades every target to user scope with its own entry path'
     'claude-code': ['mcpServers'],
     opencode: ['mcp'],
     antigravity: ['mcpServers'],
+    'antigravity-cli': ['mcpServers'],
+    'antigravity-ide': ['mcpServers'],
   };
   for (const [target, entryPath] of Object.entries(expected)) {
     const f = manifestFixture();

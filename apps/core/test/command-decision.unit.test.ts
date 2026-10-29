@@ -59,7 +59,7 @@ function makePolicyInput(overrides: Partial<CommandPolicyInput> = {}): CommandPo
     rules: [],
     authority: { valid: true, commandCapability: true, reasons: [] },
     network: { outcome: 'allow', reasons: [] },
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
     criticalAlwaysConfirm: false,
     scriptTrust: 'trusted',
     ...overrides,
@@ -73,10 +73,10 @@ test('Selected DENY applies normally but active YOLO overrides it inside its sco
 
   assert.equal(decideCommand(deniedInput).outcome, 'deny');
 
-  deniedInput.yolo = { active: true, mode: 'workspace' };
+  deniedInput.yolo = { active: true, mode: 'workspace', risk: 'prevent-high-risk' };
   assert.equal(decideCommand(deniedInput).outcome, 'allow');
 
-  deniedInput.yolo = { active: true, mode: 'unrestricted' };
+  deniedInput.yolo = { active: true, mode: 'unrestricted', risk: 'do-whatever' };
   assert.equal(decideCommand(deniedInput).outcome, 'allow');
 });
 
@@ -107,21 +107,21 @@ test('Outside workspace requires approval in ordinary and workspace YOLO, waived
   // YOLO inactive
   const inputInactive = makePolicyInput({
     analysis: outsideAnalysis,
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
   });
   assert.equal(decideCommand(inputInactive).outcome, 'approval');
 
   // Workspace YOLO active -> MUST NOT waive scope prompt
   const inputWorkspaceYolo = makePolicyInput({
     analysis: outsideAnalysis,
-    yolo: { active: true, mode: 'workspace' },
+    yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
   });
   assert.equal(decideCommand(inputWorkspaceYolo).outcome, 'approval');
 
   // Unrestricted YOLO active -> scope prompt is waived
   const inputUnrestricted = makePolicyInput({
     analysis: outsideAnalysis,
-    yolo: { active: true, mode: 'unrestricted' },
+    yolo: { active: true, mode: 'unrestricted', risk: 'do-whatever' },
   });
   assert.equal(decideCommand(inputUnrestricted).outcome, 'allow');
 });
@@ -134,13 +134,13 @@ test('Dynamic or unknown scope requires approval under workspace YOLO', () => {
 
   const inputWorkspaceYolo = makePolicyInput({
     analysis: unknownAnalysis,
-    yolo: { active: true, mode: 'workspace' },
+    yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
   });
   assert.equal(decideCommand(inputWorkspaceYolo).outcome, 'approval');
 
   const inputUnrestricted = makePolicyInput({
     analysis: unknownAnalysis,
-    yolo: { active: true, mode: 'unrestricted' },
+    yolo: { active: true, mode: 'unrestricted', risk: 'do-whatever' },
   });
   assert.equal(decideCommand(inputUnrestricted).outcome, 'allow');
 });
@@ -148,13 +148,13 @@ test('Dynamic or unknown scope requires approval under workspace YOLO', () => {
 test('Changed project script follows the selected YOLO scope', () => {
   const inputWorkspaceYolo = makePolicyInput({
     scriptTrust: 'changed',
-    yolo: { active: true, mode: 'workspace' },
+    yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
   });
   assert.equal(decideCommand(inputWorkspaceYolo).outcome, 'allow');
 
   const inputUnrestricted = makePolicyInput({
     scriptTrust: 'changed',
-    yolo: { active: true, mode: 'unrestricted' },
+    yolo: { active: true, mode: 'unrestricted', risk: 'do-whatever' },
   });
   assert.equal(decideCommand(inputUnrestricted).outcome, 'allow');
 });
@@ -186,7 +186,7 @@ test('Mandatory critical confirmation requires approval even in unrestricted mod
     analysis: criticalAnalysis,
     selectedLegacyDecision: { outcome: 'deny', reason: 'remembered deny' },
     criticalAlwaysConfirm: true,
-    yolo: { active: true, mode: 'unrestricted' },
+    yolo: { active: true, mode: 'unrestricted', risk: 'prevent-high-risk' },
   });
   assert.equal(decideCommand(criticalInput).outcome, 'approval');
 });
@@ -207,7 +207,7 @@ test('critical YOLO resumes only the exact operator-approved command evidence', 
     decideCommand(
       makePolicyInput({
         analysis,
-        yolo: { active: true, mode: 'unrestricted' },
+        yolo: { active: true, mode: 'unrestricted', risk: 'prevent-high-risk' },
         exactApproval,
       }),
     ).outcome,
@@ -218,7 +218,7 @@ test('critical YOLO resumes only the exact operator-approved command evidence', 
     decideCommand(
       makePolicyInput({
         analysis,
-        yolo: { active: true, mode: 'unrestricted' },
+        yolo: { active: true, mode: 'unrestricted', risk: 'prevent-high-risk' },
         exactApproval: { ...exactApproval, authorityVerified: false },
       }),
     ).outcome,
@@ -229,7 +229,7 @@ test('critical YOLO resumes only the exact operator-approved command evidence', 
     decideCommand(
       makePolicyInput({
         analysis,
-        yolo: { active: true, mode: 'unrestricted' },
+        yolo: { active: true, mode: 'unrestricted', risk: 'prevent-high-risk' },
         exactApproval: { ...exactApproval, consumed: true },
       }),
     ).outcome,
@@ -255,7 +255,7 @@ test('Typed rule matching grants allow without prompt in ordinary mode', () => {
 
   const input = makePolicyInput({
     analysis,
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
     rules: [
       {
         id: 'rule_1',

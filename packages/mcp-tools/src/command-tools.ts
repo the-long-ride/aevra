@@ -3,7 +3,6 @@ import {
   environmentNeedsApproval,
 } from '../../security/src/environment.js';
 import {
-  normalizeYoloMode,
   type CommandRequest,
   type ExecutionMode,
   type RiskTier,
@@ -19,6 +18,7 @@ import { AevraToolError } from './errors.js';
 import { buildShellCommand, resolveShellKind, shellRiskFloor } from './shell-command.js';
 import { argsHash, maxRisk, oneTimeAllowed, requiredLease } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
+import { readYoloPolicy } from './yolo-mode.js';
 
 interface ShellSource {
   tool: 'shell_run';
@@ -142,9 +142,7 @@ export async function commandTool(
 
   let lease = requiredLease(context, sessionId);
   const session = context.sessions.get(sessionId)!;
-  const yoloMode = normalizeYoloMode(
-    context.deps.settings?.get<{ mode?: string }>('policy.yolo', { mode: 'workspace' })?.mode,
-  );
+  const yoloPolicy = readYoloPolicy(context);
   const isYolo = Boolean(context.sessions.isYolo?.(sessionId));
   const normalized = {
     family: permissionMatcher,
@@ -238,7 +236,8 @@ export async function commandTool(
     permissionMatcher,
     rawDestinations,
     isYolo,
-    yoloMode,
+    yoloMode: yoloPolicy.mode,
+    yoloRisk: yoloPolicy.risk,
     networkApproval,
     legacyDecision: commandDecision?.outcome === 'deny' ? commandDecision : undefined,
     riskFloor: risk,

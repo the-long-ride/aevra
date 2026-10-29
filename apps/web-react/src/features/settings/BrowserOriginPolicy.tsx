@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SwapControl, type SwapOption } from '../../components/SwapControl';
 import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 
@@ -11,7 +12,7 @@ export interface OriginPolicySnapshot {
   aevraPorts: number[];
 }
 
-const LOOPBACK_CHOICES: Array<{ value: LoopbackClass; label: string; hint: string }> = [
+const LOOPBACK_CHOICES: SwapOption<LoopbackClass>[] = [
   { value: 'BLOCKED', label: 'Refuse', hint: 'No local page may be driven.' },
   { value: 'SENSITIVE', label: 'Ask every time', hint: 'Each operation needs approval.' },
   { value: 'NORMAL', label: 'Allow', hint: 'Treated like any other site.' },
@@ -96,31 +97,14 @@ export function BrowserOriginPolicy({
     <div className="browser-origin-policy">
       <fieldset className="console-fieldset">
         <legend>Local pages (localhost and 127.0.0.1)</legend>
-        <div
-          className="console-radio-group"
-          role="radiogroup"
-          aria-label="Local pages (localhost and 127.0.0.1)"
-        >
-          {LOOPBACK_CHOICES.map((choice) => {
-            const isSelected = policy.loopbackClass === choice.value;
-            return (
-              <label
-                key={choice.value}
-                className={`console-radio-option${isSelected ? ' is-selected' : ''}${busy ? ' is-disabled' : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="loopbackClass"
-                  value={choice.value}
-                  checked={isSelected}
-                  disabled={busy}
-                  onChange={() => void submit(choice.value)}
-                />
-                <span>{choice.label}</span>
-              </label>
-            );
-          })}
-        </div>
+        <SwapControl
+          name="loopbackClass"
+          ariaLabel="Local pages (localhost and 127.0.0.1)"
+          value={policy.loopbackClass}
+          disabled={busy}
+          options={LOOPBACK_CHOICES}
+          onChange={(val) => void submit(val)}
+        />
         <p className="section-note console-radio-hint">
           {LOOPBACK_CHOICES.find((c) => c.value === policy.loopbackClass)?.hint}
         </p>
@@ -129,24 +113,39 @@ export function BrowserOriginPolicy({
         Aevra&apos;s own ports ({policy.aevraPorts.join(', ')}) are always refused. That rule is not
         configurable: it is what stops the agent reaching the surface that grants its capabilities.
       </p>
-      <label htmlFor="blockedHosts">Always refuse these hosts</label>
-      <input
-        id="blockedHosts"
-        value={blocked}
-        disabled={busy}
-        onChange={(event) => setBlocked(event.target.value)}
-      />
-      <label htmlFor="sensitiveHosts">Always ask before these hosts</label>
-      <input
-        id="sensitiveHosts"
-        value={sensitive}
-        disabled={busy}
-        onChange={(event) => setSensitive(event.target.value)}
-      />
+      <div className="browser-origin-hosts-grid">
+        <div className="browser-origin-host-field">
+          <div className="browser-origin-host-head">
+            <label htmlFor="blockedHosts">Always refuse these hosts</label>
+            <span className="badge danger">Refuse</span>
+          </div>
+          <input
+            id="blockedHosts"
+            value={blocked}
+            disabled={busy}
+            placeholder="e.g. internal.net, untrusted.org"
+            onChange={(event) => setBlocked(event.target.value)}
+          />
+        </div>
+        <div className="browser-origin-host-field">
+          <div className="browser-origin-host-head">
+            <label htmlFor="sensitiveHosts">Always ask before these hosts</label>
+            <span className="badge warning">Ask every time</span>
+          </div>
+          <input
+            id="sensitiveHosts"
+            value={sensitive}
+            disabled={busy}
+            placeholder="e.g. secure.bank.com, admin.corp"
+            onChange={(event) => setSensitive(event.target.value)}
+          />
+        </div>
+      </div>
       <p className="section-note">One entry covers that host and every subdomain of it.</p>
       <div className="actions compact-settings-actions">
         <button
           type="button"
+          className="primary"
           data-surface-id="browser:origin-policy-save"
           disabled={busy}
           onClick={() => void submit(policy.loopbackClass)}

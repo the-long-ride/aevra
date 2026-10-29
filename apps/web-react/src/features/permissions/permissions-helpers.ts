@@ -1,6 +1,7 @@
 import type { RemoteSessionSummary, WorkspaceSummary } from '@aevra/admin-contracts';
 import type { SearchOption } from '../../components/SearchableMultiSelect';
 import { requestJson } from '../../services/api-client';
+import type { RawConnectorRecord } from '../connectors/connectors-service';
 
 export interface PermissionRule extends Record<string, unknown> {
   id: string;
@@ -23,6 +24,8 @@ export interface PermissionsPageData {
   rules: PermissionRule[];
   workspaces: WorkspaceSummary[];
   sessions: RemoteSessionSummary[];
+  connectors?: RawConnectorRecord[];
+  connections?: Array<Record<string, unknown>>;
 }
 
 export const CAPABILITIES = [
@@ -45,10 +48,12 @@ export const CAPABILITIES = [
 ] as const;
 
 export async function loadPermissionsData(signal: AbortSignal): Promise<PermissionsPageData> {
-  const [rawRules, workspaces, sessions] = await Promise.all([
+  const [rawRules, workspaces, sessions, connectors, connections] = await Promise.all([
     requestJson<PermissionRule[]>('/api/permissions', { signal }),
     requestJson<WorkspaceSummary[]>('/api/workspaces', { signal }).catch(() => []),
     requestJson<RemoteSessionSummary[]>('/api/sessions', { signal }).catch(() => []),
+    requestJson<RawConnectorRecord[]>('/api/connectors', { signal }).catch(() => []),
+    requestJson<Array<Record<string, unknown>>>('/api/connections', { signal }).catch(() => []),
   ]);
   const rules = rawRules.map((row: any) => ({
     ...row,
@@ -59,7 +64,67 @@ export async function loadPermissionsData(signal: AbortSignal): Promise<Permissi
     expiresAt: row.expiresAt ?? row.expires_at ?? undefined,
     predicate_json: row.predicate_json ?? row.predicateJson,
   }));
-  return { rules, workspaces, sessions };
+  return { rules, workspaces, sessions, connectors, connections };
+}
+
+export function buildActorOptions(
+  connectors: Array<{ id?: string; name?: string }> = [],
+  connections: Array<{ id?: string; client?: string; actor?: string }> = [],
+  sessions: RemoteSessionSummary[] = [],
+): SearchOption[] {
+  const optionsMap = new Map<string, SearchOption>();
+
+  for (const c of connectors) {
+    if (!c || !c.name) continue;
+    const name = c.name.trim();
+    if (!name) continue;
+    const actor =
+      name.startsWith('connector:') || name.startsWith('oauth:') ? name : `connector:${name}`;
+    const key = actor.toLowerCase();
+    if (!optionsMap.has(key)) {
+      optionsMap.set(key, {
+        value: actor,
+        label: actor,
+        description: `Bearer connector${c.id ? ` · ID: ${c.id}` : ''}`,
+      });
+    }
+  }
+
+  for (const conn of connections) {
+    if (!conn) continue;
+    const rawActor =
+      conn.actor?.trim() ||
+      (conn.client?.trim()
+        ? conn.client.trim().startsWith('oauth:')
+          ? conn.client.trim()
+          : `oauth:${conn.client.trim()}`
+        : '');
+    if (!rawActor) continue;
+    const key = rawActor.toLowerCase();
+    if (!optionsMap.has(key)) {
+      optionsMap.set(key, {
+        value: rawActor,
+        label: rawActor,
+        description: `OAuth connection${conn.id ? ` · ID: ${conn.id}` : ''}`,
+      });
+    }
+  }
+
+  for (const s of sessions) {
+    if (!s || !s.actor) continue;
+    const rawActor = s.actor.trim();
+    if (!rawActor) continue;
+    const key = rawActor.toLowerCase();
+    if (!optionsMap.has(key)) {
+      optionsMap.set(key, {
+        value: rawActor,
+        label: rawActor,
+        description: `Active session actor · ID: ${s.id}`,
+      });
+    }
+  }
+
+  return Array.from(optionsMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 }
 
 export function buildWorkspaceOptions(workspaces: WorkspaceSummary[] = []): SearchOption[] {
@@ -92,4 +157,11 @@ export function buildSessionOptions(
       description: wsInfo ? `${wsInfo} · ID: ${s.id}` : `ID: ${s.id}`,
     };
   });
+}
+
+export function splitCsv(value: FormDataEntryValue | null): string[] {
+  return String(value ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }

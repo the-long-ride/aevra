@@ -31,7 +31,14 @@ export async function workspaceSelect(context: McpRuntimeContext, sessionId: str
   const bindings = session.actor.startsWith('connector:')
     ? (context.deps.connectorBindings?.(session.subject) ?? null)
     : null;
-  if (bindings?.workspaceId && bindings.workspaceId !== workspace.id) {
+  if (bindings?.workspaceIds && bindings.workspaceIds.length > 0) {
+    if (!bindings.workspaceIds.includes(workspace.id)) {
+      throw new AevraToolError(
+        'CAPABILITY_REQUIRED',
+        'Connector is bound to a different workspace',
+      );
+    }
+  } else if (bindings?.workspaceId && bindings.workspaceId !== workspace.id) {
     throw new AevraToolError('CAPABILITY_REQUIRED', 'Connector is bound to a different workspace');
   }
 

@@ -9,6 +9,7 @@ import { handleConnectionRoutes } from './connection-routes.js';
 import { handleConnectorNoteRoutes } from './connector-note-routes.js';
 import { handleConnectorProfileRoutes } from './connector-profile-routes.js';
 import { handleDesktopRoutes } from './desktop-routes.js';
+import { handleFileTransferSettingsRoutes } from './file-transfer-settings-routes.js';
 import { sendAdminResponse } from './http.js';
 import { handleLocalFilesystemRoutes } from './local-filesystem-routes.js';
 import { handleMcpUpstreamRoutes } from './mcp-upstream-routes.js';
@@ -17,6 +18,7 @@ import { handlePowerRoutes } from './power-routes.js';
 import { handleSessionConnectorRoutes } from './session-connector-routes.js';
 import { handleSettingsRoutes } from './settings-routes.js';
 import { handleSystemRoutes } from './system-routes.js';
+import { handleToolSwitchRoutes } from './tool-switch-routes.js';
 import type { AdminApiContext, AdminRouteHandler } from './types.js';
 import { handleUsageRoutes } from './usage-routes.js';
 import { handleWorkspaceRoutes } from './workspace-routes.js';
@@ -44,6 +46,8 @@ const handlers: AdminRouteHandler[] = [
   handleAccessRoutes,
   handleUsageRoutes,
   handleConnectorProfileRoutes,
+  handleToolSwitchRoutes,
+  handleFileTransferSettingsRoutes,
   handleConnectorNoteRoutes,
 ];
 

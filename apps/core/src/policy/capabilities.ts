@@ -103,6 +103,11 @@ export class CapabilityProfileService {
       )
       .run(actor, workspaceId, profileId, admission);
   }
+  unmapActor(actor: string, workspaceId: string) {
+    this.db
+      .prepare('DELETE FROM actor_workspace_profiles WHERE actor=? AND workspace_id=?')
+      .run(actor, workspaceId);
+  }
   mapping(actor: string, workspaceId: string) {
     return this.db
       .prepare(

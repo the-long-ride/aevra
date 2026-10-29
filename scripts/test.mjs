@@ -54,13 +54,16 @@ if (suite !== 'scripts') {
         if (suite === 'all' || suite === 'product') return true;
         const s = suffixes[suite];
         if (s && f.endsWith(s)) return true;
+        if (suite.includes('/') || suite.includes('\\') || suite.includes('.test.')) {
+          return f.replaceAll('\\', '/').includes(suite.replaceAll('\\', '/'));
+        }
         return suite === 'unit' && !Object.values(suffixes).some((x) => f.endsWith(x));
       }),
     );
 }
 if (ts.length) {
   const out = '.test-dist';
-  rmSync(out, { recursive: true, force: true });
+  rmSync(out, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   const c = spawnSync(
     'tsc',
     ['-p', 'tsconfig.json', '--noCheck', '--noEmit', 'false', '--outDir', out],

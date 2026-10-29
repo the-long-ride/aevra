@@ -175,3 +175,233 @@
   fill: currentColor;
   flex-shrink: 0;
 }
+
+.mount-capability-dropdown,
+.admission-profile-dropdown,
+.admission-mode-dropdown {
+  width: 140px;
+  min-width: 130px;
+}
+
+.connection-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.connection-detail .details-grid > div span {
+  color: var(--mute);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.connection-workspaces {
+  display: grid;
+  gap: 8px;
+}
+
+.connection-workspaces h3 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.connection-workspaces ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-workspaces li,
+.connection-grant {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.connection-workspace-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-grant > .dropdown:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.connection-profile-dropdown {
+  flex: 0 0 140px;
+  width: 140px;
+  min-width: 140px;
+}
+
+.connection-workspaces li button,
+.connection-grant button {
+  flex: 0 0 auto;
+  min-width: 32px;
+  height: 32px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.desktop-path-exposure-row {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--surface-soft);
+}
+
+.desktop-path-exposure-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  user-select: text;
+}
+
+.desktop-path-exposure-info {
+  display: grid;
+  gap: 2px;
+}
+
+.desktop-path-exposure-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.desktop-app-row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.desktop-app-action-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.desktop-app-action-btn:hover:not(:disabled) {
+  background: var(--hairline-strong);
+}
+
+.desktop-app-action-btn.danger-button {
+  color: var(--danger, #ff5555);
+}
+
+.desktop-app-action-btn.danger-button:hover:not(:disabled) {
+  background: rgba(255, 85, 85, 0.12);
+}
+
+.desktop-app-system-badge {
+  color: var(--mute);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.connector-snippets-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .connector-snippets-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.snippet-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.snippet-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.snippet-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.snippet-copy-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  min-height: 26px;
+  width: 26px;
+  height: 26px;
+  padding: 3px;
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  background: var(--canvas);
+  color: var(--ink);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.snippet-copy-icon-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.snippet-pre {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--surface-soft);
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+  max-height: 240px;
+  white-space: pre;
+}
+
+.snippet-pre code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  color: inherit !important;
+  border-radius: 0 !important;
+}

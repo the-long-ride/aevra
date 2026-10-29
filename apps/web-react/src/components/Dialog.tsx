@@ -112,19 +112,39 @@ function CommonDialog({
     onResolve({ actionId: request.cancelId ?? null, value });
   }, [onResolve, request.cancelId, value]);
 
+  const primaryAction =
+    (request.input
+      ? request.actions.find((action) => action.id === request.input?.submitId)
+      : undefined) ??
+    request.actions.find(
+      (action) =>
+        action.id !== request.cancelId && (action.tone === 'primary' || action.tone === 'danger'),
+    ) ??
+    request.actions.find((action) => action.id !== request.cancelId) ??
+    request.actions.find((action) => action.tone === 'primary' || action.tone === 'danger') ??
+    request.actions[request.actions.length - 1];
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !isTop()) return;
-      event.preventDefault();
-      cancel();
+      if (!isTop()) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancel();
+        return;
+      }
+      if (event.key === 'Enter') {
+        const target = event.target as HTMLElement | null;
+        if (target?.tagName === 'TEXTAREA') return;
+        if (target?.tagName === 'BUTTON') return;
+        event.preventDefault();
+        if (primaryAction) {
+          onResolve({ actionId: primaryAction.id, value });
+        }
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [cancel, isTop]);
-
-  const submitAction = request.input
-    ? request.actions.find((action) => action.id === request.input?.submitId)
-    : undefined;
+  }, [cancel, isTop, onResolve, primaryAction, value]);
 
   return (
     <div
@@ -141,8 +161,8 @@ function CommonDialog({
         aria-labelledby={titleId}
         onSubmit={(event) => {
           event.preventDefault();
-          if (!submitAction) return;
-          onResolve({ actionId: submitAction.id, value });
+          if (!primaryAction) return;
+          onResolve({ actionId: primaryAction.id, value });
         }}
       >
         <div className="modal-head">
@@ -164,15 +184,15 @@ function CommonDialog({
           ) : null}
         </div>
         <div className="modal-foot dialog-actions">
-          {request.actions.map((action, index) => {
-            const submit = request.input?.submitId === action.id;
+          {request.actions.map((action) => {
+            const isSubmit = primaryAction?.id === action.id;
             return (
               <button
                 key={action.id}
-                type={submit ? 'submit' : 'button'}
+                type={isSubmit ? 'submit' : 'button'}
                 className={actionClass(action.tone)}
-                autoFocus={!request.input && (action.tone === 'primary' || index === 0)}
-                onClick={submit ? undefined : () => onResolve({ actionId: action.id, value })}
+                autoFocus={!request.input ? isSubmit : false}
+                onClick={isSubmit ? undefined : () => onResolve({ actionId: action.id, value })}
               >
                 {action.label}
               </button>

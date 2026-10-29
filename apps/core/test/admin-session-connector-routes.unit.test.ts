@@ -67,6 +67,13 @@ function fixture() {
       return id === 'c1' ? 'rotated' : null;
     },
     revoke: (id: string) => calls.push(['connectorRevoke', id]),
+    grantWorkspace: (id: string, wsId: string, profileId: string) => {
+      calls.push(['grantWorkspace', id, wsId, profileId]);
+    },
+    revokeWorkspace: (id: string, wsId: string) => {
+      calls.push(['connectorRevokeWorkspace', id, wsId]);
+    },
+    listWorkspaceGrants: (_id: string) => [{ workspaceId: 'w1', profileId: 'read-only' }],
   };
   return {
     context: {
@@ -220,4 +227,57 @@ test('connector device grants are exact, independent, and audited without a work
   )[1];
   assert.equal(audit.connectionId, 'c1');
   assert.equal('workspaceId' in audit, false);
+});
+
+test('connector workspace routes allow listing, granting, revoking, and validating', async () => {
+  const fx = fixture();
+  // Missing connector
+  assert.equal((await call('/api/connectors/missing/workspaces', 'GET', fx.context)).status, 404);
+  assert.equal(
+    (await call('/api/connectors/missing/workspaces', 'POST', fx.context, { workspaceId: 'w1' }))
+      .status,
+    404,
+  );
+  assert.equal(
+    (await call('/api/connectors/missing/workspaces/w1', 'DELETE', fx.context)).status,
+    404,
+  );
+
+  // Missing workspaceId on POST
+  assert.equal((await call('/api/connectors/c1/workspaces', 'POST', fx.context, {})).status, 400);
+
+  // GET workspaces
+  const list = await call('/api/connectors/c1/workspaces', 'GET', fx.context);
+  assert.equal(list.status, 200);
+  assert.equal(list.value.grants[0].workspaceId, 'w1');
+
+  // POST grant workspace
+  const granted = await call('/api/connectors/c1/workspaces', 'POST', fx.context, {
+    workspaceId: 'w2',
+    profileId: 'developer',
+  });
+  assert.equal(granted.status, 200);
+  assert.ok(
+    fx.calls.some(
+      (row) =>
+        row[0] === 'grantWorkspace' && row[1] === 'c1' && row[2] === 'w2' && row[3] === 'developer',
+    ),
+  );
+
+  // DELETE revoke workspace
+  const revoked = await call('/api/connectors/c1/workspaces/w2', 'DELETE', fx.context);
+  assert.equal(revoked.status, 200);
+  assert.ok(
+    fx.calls.some(
+      (row) => row[0] === 'connectorRevokeWorkspace' && row[1] === 'c1' && row[2] === 'w2',
+    ),
+  );
+
+  const audits = fx.calls.filter((row) => row[0] === 'audit').map((row) => row[1]);
+  assert.ok(
+    audits.some((row) => row.operation === 'connector.workspace_grant' && row.target === 'c1:w2'),
+  );
+  assert.ok(
+    audits.some((row) => row.operation === 'connector.workspace_revoke' && row.target === 'c1:w2'),
+  );
 });

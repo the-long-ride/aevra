@@ -1,5 +1,6 @@
 import { HmacEnvelopeSigner } from '../../../packages/ipc/src/envelope.js';
 import { createIpcServer } from '../../../packages/ipc/src/server.js';
+import { StreamError } from '../../../packages/ipc/src/stream.js';
 import {
   parseOperationEnvelope,
   type WorkerResult,
@@ -18,11 +19,13 @@ export async function startWorkerServer(input: {
     async health() {
       return { ready: true, pid: process.pid };
     },
-    async execute(raw): Promise<WorkerResult> {
+    async execute(raw, ctx): Promise<WorkerResult> {
       try {
         const env = parseOperationEnvelope(raw);
-        return await dispatchWorkerOperation(signer.verify(env));
+        return await dispatchWorkerOperation(signer.verify(env), ctx);
       } catch (e) {
+        // A stream abort carries its own code to the core; it is not an auth failure.
+        if (e instanceof StreamError) throw e;
         return {
           ok: false,
           error: { code: 'UNAUTHORIZED', message: e instanceof Error ? e.message : String(e) },

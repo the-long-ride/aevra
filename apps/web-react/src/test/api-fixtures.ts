@@ -230,6 +230,19 @@ export function installApiFixtures(options: FixtureOptions = {}) {
     ],
     ['/api/admin-sessions', []],
     ['/api/sessions', []],
+    [
+      '/api/connectors',
+      [
+        {
+          id: 'connector-1',
+          name: 'Static client',
+          createdAt: '2026-08-19T00:00:00Z',
+          lastUsedAt: '2026-08-19T00:00:00Z',
+          workspaceId: 'ws-1',
+        },
+      ],
+    ],
+    ['/api/connections', []],
     ['/api/processes', []],
     ['/api/changes', []],
     ['/api/audit/verify', { valid: true }],
@@ -249,7 +262,7 @@ export function installApiFixtures(options: FixtureOptions = {}) {
     ],
     ['/api/policy/command-families', {}],
     ['/api/policy/network-rules', []],
-    ['/api/policy/yolo', { mode: 'workspace' }],
+    ['/api/policy/yolo', { mode: 'workspace', risk: 'prevent-high-risk' }],
     [
       '/api/execution-settings',
       {
@@ -308,7 +321,8 @@ export function installApiFixtures(options: FixtureOptions = {}) {
         },
       );
     }
-    if (url.includes('/mounts') && !routes.has(url)) return json([]);
+    if ((url.includes('/mounts') || url.includes('/admissions')) && !routes.has(url))
+      return json([]);
     const value = routes.get(url);
     if (value instanceof Response) return value;
     if (value !== undefined) return json(value);

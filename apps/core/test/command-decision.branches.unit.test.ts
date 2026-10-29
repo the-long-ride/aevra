@@ -61,7 +61,7 @@ function input(overrides: Record<string, unknown> = {}): any {
     rules: [],
     authority: { valid: true, commandCapability: true, reasons: [] },
     network: { outcome: 'allow', reasons: [] },
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
     criticalAlwaysConfirm: false,
     scriptTrust: 'trusted',
     ...overrides,
@@ -249,7 +249,7 @@ test('approval paths without YOLO: critical, partial syntax, scripts, network, e
         input({
           analysis: critical,
           exactApproval: exact,
-          yolo: { active: true, mode: 'workspace' },
+          yolo: { active: true, mode: 'workspace', risk: 'prevent-high-risk' },
         }),
       ) as any
     ).ruleIds,

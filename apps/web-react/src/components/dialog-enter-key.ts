@@ -32,7 +32,9 @@ export function useDialogEnterKey(): void {
       if (target?.closest(NATIVE_ENTER)) return;
       if (target instanceof HTMLInputElement && target.form?.querySelector(ENABLED_SUBMIT)) return;
 
-      const primary = dialog.querySelectorAll<HTMLButtonElement>('button.primary:not(:disabled)');
+      const primary = dialog.querySelectorAll<HTMLButtonElement>(
+        'button.primary:not(:disabled), button.danger-button:not(:disabled), button[type="submit"]:not(:disabled)',
+      );
       const button = primary[primary.length - 1];
       if (!button) return;
       event.preventDefault();

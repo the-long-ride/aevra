@@ -1,6 +1,6 @@
 # 09 — Configuration
 
-**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.3.1`
+**Audience:** engineers & AI agents · **Scope:** every supported runtime knob in one place · **Verified against:** `1.3.2`
 
 ## Ports and listeners (fixed hosts)
 
@@ -60,8 +60,10 @@ Remote Admin origins are normalized to exact HTTPS origins. Wildcards and embedd
 - `power.keepAwake`: `off|remote-connections|managed-processes|always`; default `always` (also holds the display on).
 - Transport validation checks runtime endpoints against encryption, loopback constraints, and provider requirements, classifying state as `secure`, `local-http`, `action-required`, or `invalid`.
 - `policy.desktop`: mode (`allow-all|allowlist|denylist`), allowed/denied `applications` list, `unattributedInput` (`allow|deny`), and desktop path-exposure settings. The authenticated host stores the shared custom app catalog and exact-path grants in SQLite; access requests are temporary, owner-bound SQLite records. The browser-local `aevra.custom_desktop_apps` key is retained only until each entry is imported through Settings.
-- `policy.yolo`: mode (`workspace|unrestricted`, default `workspace`), normalized via `normalizeYoloMode` across Admin API and runtime; managed via console radio controls and immediate persistence.
-- `browser.policy`: `loopbackClass` (`block|normal|trusted`), managed via console-styled radio controls.
+- `policy.yolo`: `{mode, risk}`. `mode` is the scope (`workspace|unrestricted`, default `workspace`), `risk` is `prevent-high-risk|do-whatever` (default `prevent-high-risk`); both normalized via `normalizeYoloPolicy` across Admin API and runtime and managed through two radio groups in Settings (choosing `do-whatever` asks for confirmation). `PATCH /api/policy/yolo` merges the supplied fields.
+- `tools.disabled`: `{names: string[]}`, the tools switched off globally (Aevra built-ins and linked MCP server tools by their namespaced name). Managed via `GET/PUT /api/tool-switches` (body `{disabled: string[]}`; core tools are locked on and rejected with `TOOL_LOCKED`). Disabled tools are absent from `tools/list` and refused by name.
+- `files.transfer`: `{maxFileMb, maxBatchMb, inlineMb}`, defaults 200, 500 and 50, each clamped to 1 to 10240 and forced so inline <= file <= batch. Managed via `GET/PATCH /api/files/transfer-settings`.
+- `browser.policy`: `loopbackClass` (`BLOCKED` Refuse | `SENSITIVE` Ask every time | `NORMAL` Allow, managed via segmented `SwapControl`), plus `blockedHosts` ("Always refuse these hosts") and `sensitiveHosts` ("Always ask before these hosts") managed in a responsive 2-column card grid.
 - Command-family overrides, network rules, environment profiles, secret references, hooks, permissions, and workspace mappings are managed through their dedicated Admin APIs/UI.
 - `mcp.connectorProfiles`: maps client actors (`connector:<name>`, `oauth:<client>`, `client:<id>`) to `{ toolGroups?: ToolGroup[], resultFormat?: ('both'|'text'|'structured') }`. Managed via `GET /api/connector-profiles` and `PUT /api/connector-profiles/:actor`.
 - Data export & import: `GET /api/data/export` outputs portable JSON configuration; UI `Data` tab manages file-based backup preview and restore.

@@ -21,6 +21,8 @@ import type { BackgroundActionInput, DesktopPolicy } from './desktop.js';
 import { DESKTOP_OPERATION_KINDS } from './desktop.js';
 import type { McpUpstreamCall } from './mcp-upstream.js';
 import { MCP_UPSTREAM_OPERATION_KINDS } from './mcp-upstream.js';
+import type { FileTransferOperation } from './file-transfer-ops.js';
+import { FILE_TRANSFER_OPERATION_KINDS } from './file-transfer-ops.js';
 import type { UpstreamTransportConfig } from '../../mcp-upstream/src/transport.js';
 import type {
   HostControlCapability,
@@ -114,6 +116,7 @@ export type WorkerOperation =
   | { kind: 'process.restart'; processId: string }
   | { kind: 'recovery.snapshot'; path: string; destination: string }
   | { kind: 'recovery.restore'; snapshot: string; path: string }
+  | { kind: 'recovery.discard'; snapshot: string }
   | {
       kind: 'browser.connect';
       transport: BrowserTransport;
@@ -209,6 +212,7 @@ export type WorkerOperation =
   | { kind: 'mcp.upstream.status'; upstreamId?: string }
   | { kind: 'mcp.upstream.catalog'; upstreamId: string }
   | { kind: 'mcp.upstream.call'; upstreamId: string; call: McpUpstreamCall }
+  | FileTransferOperation
   | { kind: 'sandbox.inspect' };
 
 export type WorkerScope =
@@ -285,10 +289,12 @@ const kinds = new Set<string>([
   'process.restart',
   'recovery.snapshot',
   'recovery.restore',
+  'recovery.discard',
   'sandbox.inspect',
   ...BROWSER_OPERATION_KINDS,
   ...DESKTOP_OPERATION_KINDS,
   ...MCP_UPSTREAM_OPERATION_KINDS,
+  ...FILE_TRANSFER_OPERATION_KINDS,
 ]);
 
 function obj(v: unknown): Record<string, unknown> {

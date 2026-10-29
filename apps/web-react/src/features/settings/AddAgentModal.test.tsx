@@ -34,7 +34,7 @@ describe('AddAgentModal selection', () => {
     expect(screen.getByRole('switch', { name: 'opencode' })).toBeDisabled();
     expect(screen.getByRole('switch', { name: 'opencode' })).not.toBeChecked();
     expect(screen.getByText('Found: /home/me/.codex/config.toml')).toBeInTheDocument();
-    expect(screen.getAllByText('Not found')).toHaveLength(2);
+    expect(screen.getAllByText('Not found')).toHaveLength(4);
   });
 
   it('Install anyway enables and selects an undetected agent', () => {
@@ -49,10 +49,11 @@ describe('AddAgentModal selection', () => {
 
   it('workspace scope disables HTTP, shows why, and falls back to stdio', () => {
     renderModal();
-    fireEvent.change(screen.getByLabelText('Transport'), { target: { value: 'http' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'HTTP' }));
+    expect(screen.getByRole('radio', { name: 'HTTP' })).toBeChecked();
     fireEvent.click(screen.getByRole('radio', { name: 'Only these workspaces' }));
-    expect(screen.getByLabelText('Transport')).toHaveValue('stdio');
-    expect(screen.getByRole('option', { name: 'HTTP' })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: 'stdio (recommended)' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'HTTP' })).toBeDisabled();
     expect(screen.getByText(/workspace connections use stdio only/i)).toBeInTheDocument();
     expect(screen.getByText(/No skill is installed for a single workspace/)).toBeInTheDocument();
     expect(screen.getByText(/Codex only loads project configuration/)).toBeInTheDocument();
@@ -60,7 +61,7 @@ describe('AddAgentModal selection', () => {
 
   it('disables a workspace without a folder path and requires a choice to preview', () => {
     renderModal();
-    expect(screen.getByRole('switch', { name: 'Main' })).toBeDisabled();
+    expect(screen.queryByRole('switch', { name: 'Main' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Only these workspaces' }));
     expect(screen.getByRole('switch', { name: 'Remote only (no folder path)' })).toBeDisabled();
     expect(screen.getByRole('switch', { name: 'Main' })).toBeEnabled();

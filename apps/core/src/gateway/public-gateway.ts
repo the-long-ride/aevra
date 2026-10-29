@@ -138,6 +138,7 @@ function usesMcpOrigin(pathname: string): boolean {
     pathname === '/health' ||
     pathname === '/mcp' ||
     pathname.startsWith('/mcp/') ||
+    pathname.startsWith('/files/') ||
     pathname === '/oauth' ||
     pathname.startsWith('/oauth/') ||
     pathname === '/.well-known' ||

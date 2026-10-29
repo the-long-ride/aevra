@@ -19,7 +19,7 @@ export function NetworkPolicySettings({
   const dialog = useDialog();
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { toast, error } = useToast();
+  const { toast, error, success } = useToast();
 
   const close = () => setCreating(false);
 
@@ -33,6 +33,7 @@ export function NetworkPolicySettings({
     if (!confirmed) return;
     try {
       await deleteResource(`/api/policy/network-rules/${id}`);
+      success('Network rule removed.');
       await onChanged();
     } catch (cause) {
       error(cause);
@@ -49,6 +50,7 @@ export function NetworkPolicySettings({
         port: Number(value.port),
         workspaceId: value.workspaceId || undefined,
       });
+      success('Network rule created.');
       close();
       await onChanged().catch(() => undefined);
     } catch (cause) {

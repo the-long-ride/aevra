@@ -4,26 +4,44 @@ import { gzip } from 'node:zlib';
 
 const gzipAsync = promisify(gzip);
 const GZIP_MIN_BYTES = 1024;
+/** Default request-body cap for every MCP and OAuth route. */
+export const MCP_BODY_BYTES = 1024 * 1024;
+/** Extra bytes read (not stored) past the cap so the client can still receive its 413. */
+const DRAIN_SLACK_BYTES = 8 * 1024 * 1024;
 
-async function readText(req: IncomingMessage) {
+export function tooLarge() {
+  return Object.assign(new Error('MCP request too large'), { status: 413 });
+}
+
+async function readText(req: IncomingMessage, maxBytes: number) {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     const buffer = Buffer.from(chunk);
     size += buffer.length;
-    if (size > 1024 * 1024) throw new Error('MCP request too large');
+    if (size > maxBytes) {
+      // Keep consuming without buffering, so the peer finishes its upload and reads the 413.
+      if (size > maxBytes + DRAIN_SLACK_BYTES) throw tooLarge();
+      continue;
+    }
     chunks.push(buffer);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  if (size > maxBytes) throw tooLarge();
+  return { text: Buffer.concat(chunks).toString('utf8'), size };
 }
 
-export async function readJson(req: IncomingMessage) {
-  const text = await readText(req);
-  return text ? JSON.parse(text) : {};
+/** Parses a JSON body of at most `maxBytes`; also reports the raw size read. */
+export async function readJsonSized(req: IncomingMessage, maxBytes = MCP_BODY_BYTES) {
+  const { text, size } = await readText(req, maxBytes);
+  return { body: text ? JSON.parse(text) : {}, size };
+}
+
+export async function readJson(req: IncomingMessage, maxBytes = MCP_BODY_BYTES) {
+  return (await readJsonSized(req, maxBytes)).body;
 }
 
 export async function readOAuthParams(req: IncomingMessage) {
-  const text = await readText(req);
+  const { text } = await readText(req, MCP_BODY_BYTES);
   const contentType = String(req.headers['content-type'] ?? '');
   if (contentType.includes('application/json')) {
     const value = text ? JSON.parse(text) : {};

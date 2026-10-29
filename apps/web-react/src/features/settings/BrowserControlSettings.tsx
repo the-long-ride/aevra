@@ -49,7 +49,7 @@ export function BrowserControlSettings({
   const [code, setCode] = useState<PairingCode | null>(null);
   const [busy, setBusy] = useState(false);
   const [unpairingId, setUnpairingId] = useState<string | null>(null);
-  const { toast, error } = useToast();
+  const { toast, error, success } = useToast();
   const pairings = status.pairings ?? [];
   const mutating = busy || unpairingId !== null;
 
@@ -71,6 +71,7 @@ export function BrowserControlSettings({
     setUnpairingId(pairing.pairingId);
     try {
       await unpair(pairing.pairingId);
+      success('Browser pairing removed.');
       await onChanged();
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
@@ -149,7 +150,12 @@ export function BrowserControlSettings({
           type="button"
           data-surface-id="browser:pair"
           disabled={mutating}
-          onClick={() => void run(async () => setCode(await createCode()))}
+          onClick={() =>
+            void run(async () => {
+              setCode(await createCode());
+              success('Pairing code generated.');
+            })
+          }
         >
           Pair extension
         </button>
@@ -158,7 +164,12 @@ export function BrowserControlSettings({
           className="danger"
           data-surface-id="browser:disconnect-all"
           disabled={mutating}
-          onClick={() => void run(revokeAll)}
+          onClick={() =>
+            void run(async () => {
+              await revokeAll();
+              success('All browsers disconnected.');
+            })
+          }
         >
           Disconnect all browsers
         </button>

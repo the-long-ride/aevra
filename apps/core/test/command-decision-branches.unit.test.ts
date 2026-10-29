@@ -59,7 +59,7 @@ function makeInput(overrides: Partial<CommandPolicyInput> = {}): CommandPolicyIn
     rules: [],
     authority: { valid: true, commandCapability: true, reasons: [] },
     network: { outcome: 'allow', reasons: [] },
-    yolo: { active: false, mode: 'workspace' },
+    yolo: { active: false, mode: 'workspace', risk: 'prevent-high-risk' },
     criticalAlwaysConfirm: false,
     scriptTrust: 'trusted',
     ...overrides,

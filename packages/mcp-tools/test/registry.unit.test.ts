@@ -25,6 +25,7 @@ const READ_ONLY_TOOLS = [
 
 const MUTATING_TOOLS = [
   'file_write_many',
+  'files_download',
   'command_run_many',
   'shell_run',
   'process_start',

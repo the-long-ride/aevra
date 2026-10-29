@@ -29,10 +29,15 @@ export function normalizeLogicalPath(value: string): string {
   for (const segment of raw.split('/')) {
     if (segment === '' || segment === '.') continue;
     if (segment === '..') {
+      if (segments.length === 1 && /^[A-Za-z]:$/.test(segments[0]!)) continue;
       segments.pop();
       continue;
     }
-    if (process.platform === 'win32' && (/[ .]$/.test(segment) || segment.includes(':'))) {
+    const isDriveRoot = segments.length === 0 && /^[A-Za-z]:$/.test(segment);
+    if (
+      process.platform === 'win32' &&
+      (/[ .]$/.test(segment) || (!isDriveRoot && segment.includes(':')))
+    ) {
       throw Object.assign(new Error('Ambiguous Windows path segment'), { code: 'INVALID_REQUEST' });
     }
     segments.push(segment);

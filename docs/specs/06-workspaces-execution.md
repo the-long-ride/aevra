@@ -1,6 +1,6 @@
 # 06 — Workspaces & Execution
 
-**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `1.3.1`
+**Audience:** engineers & AI agents · **Scope:** roots, files, commands, processes · **Verified against:** `1.3.2`
 
 A **workspace** is a registered host folder the AI may work in. Registration happens **only** in the localhost Web UI — the remote surface can never create or mutate roots.
 
@@ -21,6 +21,13 @@ The model-facing file tools batch even single-item work so clients do not need t
 - Every individual mutation delegates through the same security-sensitive primitive used by singular internal operations, preserving approvals, sensitivity handling, recovery journaling, conflict detection, and workspace mutation locks.
 
 The singular primitives `file_read`, `file_create`, `file_write`, and `file_patch` remain internal implementation operations and are not advertised through MCP `tools/list`.
+
+## File transfer (`files_download`, `files_upload`)
+
+- `files_download`: Transfers 1 to 64 files into the workspace from inline base64 or public URLs. URL fetches stream safely to temp files with pinned IP verification and MIME sniffing before placement.
+- `files_upload`: Pulls 1 to 64 files out of the workspace via inline payloads or short-lived (5-minute) one-time download links (`GET /files/<secret>`).
+- Enforces configurable limits (`files.transfer` in Settings): max file size (default 200 MB), max batch size (default 500 MB), and max inline size (default 50 MB).
+- Secret and protected paths are rejected per entry in every mode. Single batch asks for a single once-scoped `files:transfer` approval (skipped under YOLO risk `do-whatever`).
 
 ## Workspace manifest (`aevra.json`)
 

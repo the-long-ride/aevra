@@ -119,8 +119,14 @@ test('process start preserves cwdLogical and YOLO overrides standing deny for no
   assert.equal(allowed.processCalls[0]?.[3]?.cwdLogical, '/packages/api');
 });
 
-test('process start keeps classifier CRITICAL risk as mandatory approval under unrestricted YOLO', async () => {
-  const fx = context({ yolo: true });
+test('process start runs classifier CRITICAL work under do-whatever YOLO', async () => {
+  const fx = context({ yolo: true, yoloRisk: 'do-whatever' });
+  await processStart(fx.value, 's1', { executable: 'shutdown', args: [] });
+  assert.equal(fx.processCalls.length, 1);
+});
+
+test('process start keeps classifier CRITICAL risk as mandatory approval under prevent-high-risk YOLO', async () => {
+  const fx = context({ yolo: true, yoloRisk: 'prevent-high-risk' });
   await assert.rejects(
     () => processStart(fx.value, 's1', { executable: 'shutdown', args: [] }),
     (error: any) => error.code === 'APPROVAL_PENDING',

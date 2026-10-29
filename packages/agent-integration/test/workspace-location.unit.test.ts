@@ -24,6 +24,20 @@ test("user scope keeps today's paths and a one-element entry path", () =>
     assert.deepEqual(agentLocation('claude-code', home, {}).entryPath, ['mcpServers']);
     assert.deepEqual(agentLocation('opencode', home, {}).entryPath, ['mcp']);
     assert.deepEqual(agentLocation('antigravity', home, {}).entryPath, ['mcpServers']);
+    assert.deepEqual(agentLocation('antigravity-cli', home, {}).entryPath, ['mcpServers']);
+    assert.deepEqual(agentLocation('antigravity-ide', home, {}).entryPath, ['mcpServers']);
+    assert.equal(
+      agentLocation('antigravity', home, {}).config,
+      path.join(home, '.gemini', 'antigravity', 'mcp_config.json'),
+    );
+    assert.equal(
+      agentLocation('antigravity-cli', home, {}).config,
+      path.join(home, '.gemini', 'antigravity-cli', 'mcp_config.json'),
+    );
+    assert.equal(
+      agentLocation('antigravity-ide', home, {}).config,
+      path.join(home, '.gemini', 'config', 'mcp_config.json'),
+    );
     assert.ok(agentLocation('claude-code', home, {}).skills.length > 0);
   }));
 
@@ -44,6 +58,16 @@ test('workspace scope puts codex, opencode and antigravity entries under the roo
     assert.equal(anti.kind, 'json');
     assert.deepEqual(anti.entryPath, ['mcpServers']);
     assert.deepEqual(anti.skills, []);
+    const antiCli = agentLocation('antigravity-cli', home, {}, 'workspace', root);
+    assert.equal(antiCli.config, path.join(root, '.agents', 'mcp_config.json'));
+    assert.equal(antiCli.kind, 'json');
+    assert.deepEqual(antiCli.entryPath, ['mcpServers']);
+    assert.deepEqual(antiCli.skills, []);
+    const antiIde = agentLocation('antigravity-ide', home, {}, 'workspace', root);
+    assert.equal(antiIde.config, path.join(root, '.agents', 'mcp_config.json'));
+    assert.equal(antiIde.kind, 'json');
+    assert.deepEqual(antiIde.entryPath, ['mcpServers']);
+    assert.deepEqual(antiIde.skills, []);
   }));
 
 test('workspace opencode uses an existing opencode.jsonc', () =>

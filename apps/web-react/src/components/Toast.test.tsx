@@ -147,15 +147,18 @@ test('clearing one caller leaves the other notice visible', () => {
   expect(document.querySelectorAll('.toast-stack')).toHaveLength(1);
 });
 
-test('unmounting one caller preserves the other stack and dismiss timer', () => {
+test('unmounting one caller preserves the other stack and does not dismiss in-flight toasts', () => {
   const { rerender, unmount } = render(<Callers />);
   showConcurrentNotices();
   advance(1000);
   rerender(<Callers first={false} />);
-  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole('alert')).toHaveTextContent('Broke it');
   expect(screen.getByRole('status')).toHaveTextContent('Saved it');
   expect(document.querySelectorAll('.toast-stack')).toHaveLength(1);
-  advance(3000);
+  advance(2000);
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole('status')).toHaveTextContent('Saved it');
+  advance(1000);
   expect(screen.queryByRole('status')).toBeNull();
   unmount();
   expect(document.querySelector('.toast-stack')).toBeNull();

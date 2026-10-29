@@ -1,8 +1,9 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { DialogProvider } from '../../components/Dialog';
 import { installApiFixtures } from '../../test/api-fixtures';
+import { buildActorOptions } from './permissions-helpers';
 import { PermissionsPage } from './PermissionsPage';
 
 test('permission form renders every capability as a switch including skills and instructions', async () => {
@@ -248,4 +249,93 @@ test('handles edge case option labels for workspace and session selectors', asyn
   await user.click(await screen.findByRole('button', { name: 'Add rules' }));
   expect(screen.getByLabelText('Workspace IDs')).toBeInTheDocument();
   expect(screen.getByLabelText('Session IDs')).toBeInTheDocument();
+});
+
+test('permission form allows searching and selecting multiple connectors from dropdown', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures({
+    routes: {
+      '/api/permissions': [],
+      '/api/connectors': [
+        { id: 'conn-1', name: 'my-agent' },
+        { id: 'conn-2', name: 'connector:already-prefixed' },
+      ],
+      '/api/connections': [{ id: 'oauth-1', client: 'Claude', actor: 'oauth:Claude' }],
+      '/api/workspaces': [{ id: 'ws-main', name: 'Main Workspace', hostRoot: '/repos/main' }],
+      '/api/sessions': [],
+    },
+  });
+
+  render(
+    <DialogProvider>
+      <PermissionsPage />
+    </DialogProvider>,
+  );
+
+  await user.click(await screen.findByRole('button', { name: 'Add rules' }));
+
+  // Search and select first connector
+  const actorInput = screen.getByLabelText('Connector actors');
+  await user.type(actorInput, 'agent');
+  const agentOption = await screen.findByRole('option', { name: /my-agent/i });
+  expect(agentOption).toBeInTheDocument();
+  await user.click(agentOption);
+
+  expect(screen.getByRole('button', { name: 'Remove connector:my-agent' })).toBeInTheDocument();
+
+  // Search and select second connector (OAuth)
+  await user.type(actorInput, 'Claude');
+  const claudeOption = await screen.findByRole('option', { name: /Claude/i });
+  expect(claudeOption).toBeInTheDocument();
+  await user.click(claudeOption);
+
+  expect(screen.getByRole('button', { name: 'Remove oauth:Claude' })).toBeInTheDocument();
+
+  // Also select workspace
+  const wsInput = screen.getByLabelText('Workspace IDs');
+  await user.type(wsInput, 'Main');
+  await user.click(await screen.findByRole('option', { name: /Main Workspace/i }));
+
+  // Submit rules
+  await user.click(screen.getByRole('button', { name: 'Create rules' }));
+
+  const bulkCalls = fetchMock.mock.calls.filter(
+    ([url, init]) => url === '/api/permissions/bulk' && init?.method === 'POST',
+  );
+  expect(bulkCalls.length).toBe(1);
+  const payload = JSON.parse(String(bulkCalls[0][1]?.body));
+  expect(payload.actors).toEqual(['connector:my-agent', 'oauth:Claude']);
+  expect(payload.workspaceIds).toEqual(['ws-main']);
+});
+
+test('buildActorOptions correctly formats, deduplicates, and sorts connector options', () => {
+  const options = buildActorOptions(
+    [
+      { id: 'c1', name: 'ChatGPT' },
+      { id: 'c2', name: 'connector:Claude' },
+      { id: 'c3', name: '' },
+    ],
+    [
+      { id: 'conn1', client: 'Claude', actor: 'oauth:Claude' },
+      { id: 'conn2', client: 'Gemini' },
+    ],
+    [
+      { id: 'ses1', actor: 'oauth:Claude' },
+      { id: 'ses2', actor: 'connector:ChatGPT' },
+      { id: 'ses3', actor: 'custom-session-actor' },
+      { id: 'ses4', actor: '' },
+    ],
+  );
+
+  expect(options.map((o) => o.value)).toEqual([
+    'connector:ChatGPT',
+    'connector:Claude',
+    'custom-session-actor',
+    'oauth:Claude',
+    'oauth:Gemini',
+  ]);
+
+  // Handle empty or missing inputs
+  expect(buildActorOptions()).toEqual([]);
+  expect(buildActorOptions(undefined, undefined, undefined)).toEqual([]);
 });

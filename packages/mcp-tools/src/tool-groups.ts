@@ -27,7 +27,7 @@ export function toolGroupOf(name: string): 'core' | ToolGroup {
   if (UPSTREAM.test(name)) return 'upstream';
   if (name === 'aevra_status' || name === 'control_access_status') return 'core';
   if (CORE_PREFIXES.some((prefix) => name.startsWith(prefix))) return 'core';
-  if (name === 'search' || name.startsWith('file_')) return 'files';
+  if (name === 'search' || name.startsWith('file_') || name.startsWith('files_')) return 'files';
   if (name === 'shell_run' || name.startsWith('command_run') || name.startsWith('process_')) {
     return 'commands';
   }

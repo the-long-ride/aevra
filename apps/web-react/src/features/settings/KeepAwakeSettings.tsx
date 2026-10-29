@@ -19,7 +19,7 @@ export function KeepAwakeSettings({
 }) {
   const [mode, setMode] = useState<KeepAwakeMode>(status.mode);
   const [busy, setBusy] = useState(false);
-  const { toast, error } = useToast();
+  const { toast, error, success } = useToast();
   const stateLabel = status.supported
     ? status.reason
     : `Unavailable${status.message ? ` · ${status.message}` : ''}`;
@@ -29,6 +29,7 @@ export function KeepAwakeSettings({
     setBusy(true);
     try {
       await onSave(mode);
+      success('Keep awake policy saved.');
     } catch (cause) {
       error(cause);
     } finally {

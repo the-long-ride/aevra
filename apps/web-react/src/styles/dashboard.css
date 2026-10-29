@@ -224,6 +224,27 @@
   font-weight: 600;
 }
 
+.remote-health-item strong.status-success,
+.remote-health-item strong[data-status='success'],
+.remote-provider p.status-success,
+.remote-provider p[data-status='success'] {
+  color: var(--success);
+}
+
+.remote-health-item strong.status-danger,
+.remote-health-item strong[data-status='danger'],
+.remote-provider p.status-danger,
+.remote-provider p[data-status='danger'] {
+  color: var(--danger);
+}
+
+.remote-health-item strong.status-warning,
+.remote-health-item strong[data-status='warning'],
+.remote-provider p.status-warning,
+.remote-provider p[data-status='warning'] {
+  color: var(--warning);
+}
+
 .remote-health-checked {
   margin: 0;
   color: var(--mute);
@@ -319,13 +340,12 @@
 
 @media (max-width: 1023px) {
   .client-grid,
-  .remote-config-grid,
-  .remote-admin-layout {
+  .remote-config-grid {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .dashboard-section-body {
     padding: 10px;
   }
@@ -336,40 +356,49 @@
     grid-template-columns: 1fr 1fr;
   }
 
-  .remote-access-head,
-  .remote-actions {
+  .remote-access-head {
     display: grid;
-    align-items: stretch;
-  }
-
-  .remote-access-head > button,
-  .remote-actions .actions,
-  .remote-actions .actions button {
-    width: 100%;
-  }
-
-  .remote-admin-url-row,
-  .trusted-origin-add {
     grid-template-columns: 1fr;
-  }
-
-  .remote-admin-url-row button,
-  .trusted-origin-add button {
+    align-items: stretch;
     width: 100%;
+    gap: 10px;
   }
 
-  .remote-admin-meta {
-    display: grid;
-    justify-items: start;
+  .remote-access-head > button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 36px;
+  }
+
+  .remote-status-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .remote-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .remote-health-item:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .endpoint {
     display: grid;
     align-items: start;
+    gap: 4px;
+    padding: 8px 10px;
   }
 
   .endpoint code {
     width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    font-size: 11px;
   }
 
   .remote-endpoint {
@@ -390,58 +419,27 @@
   }
 }
 
-@media (max-width: 420px) {
-  .runtime-grid,
-  .recent-grid,
+@media (max-width: 640px) {
   .details-grid {
     grid-template-columns: 1fr;
   }
 }
 
-.connection-detail {
-  display: grid;
-  gap: 14px;
+@media (max-width: 420px) {
+  .runtime-grid,
+  .recent-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.connection-detail .details-grid > div span {
-  color: var(--mute);
-  font-size: 10px;
-  text-transform: uppercase;
+@media (max-width: 360px) {
+  .remote-health-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.connection-workspaces {
-  display: grid;
-  gap: 8px;
-}
-
-.connection-workspaces h3 {
-  margin: 0;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.connection-workspaces ul {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.connection-workspaces li,
-.connection-grant {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-}
-
-.connection-grant {
-  align-items: stretch;
-}
-
-.remote-actions > .actions:only-child {
-  margin-left: auto;
+@media (min-width: 761px) {
+  .remote-actions > .actions:only-child {
+    margin-left: auto;
+  }
 }

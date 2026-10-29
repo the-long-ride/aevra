@@ -126,6 +126,39 @@ export function AboutPage() {
             </ul>
           </div>
         </article>
+
+        <article className="about-card about-support-card">
+          <header className="about-card-head">
+            <h3>Support &amp; Community</h3>
+          </header>
+          <div className="about-card-body">
+            <p className="about-description">
+              If Aevra makes your AI workflows smoother, consider giving the repository a star on
+              GitHub to help others discover it, or donating to support ongoing development. Every
+              bit of encouragement keeps the project moving forward!
+            </p>
+            <div className="about-support-actions">
+              <a
+                href={REPOSITORY_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="about-support-btn primary-action"
+                data-surface-id="about:star-repo-link"
+              >
+                ★ Star on GitHub
+              </a>
+              <a
+                href={AUTHOR_PROFILE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="about-support-btn"
+                data-surface-id="about:donate-link"
+              >
+                ♥ Donate / Sponsor
+              </a>
+            </div>
+          </div>
+        </article>
       </div>
     </section>
   );

@@ -1,10 +1,11 @@
 import { classifyCommand } from '../../../apps/core/src/policy/command-family.js';
 import { commandPermissionMatcher } from '../../../apps/core/src/policy/command-matcher.js';
-import { normalizeYoloMode, type CommandRequest, type RiskTier } from '../../protocol/src/index.js';
+import { type CommandRequest, type RiskTier } from '../../protocol/src/index.js';
 import { evaluateAndDecideCommand } from './command-decision-bridge.js';
 import { AevraToolError } from './errors.js';
 import { maxRisk } from './service-helpers.js';
 import type { McpRuntimeContext } from './service-types.js';
+import { readYoloPolicy } from './yolo-mode.js';
 import { buildShellCommand, resolveShellKind, shellRiskFloor } from './shell-command.js';
 
 export async function evaluateRuntimeCommand(
@@ -96,15 +97,14 @@ export async function evaluateRuntimeCommand(
 
   const rawDestinations = request.networkDestinations ?? [];
 
-  const yoloMode = normalizeYoloMode(
-    context.deps.settings?.get<{ mode?: string }>('policy.yolo', { mode: 'workspace' })?.mode,
-  );
+  const yoloPolicy = readYoloPolicy(context);
   const result = await evaluateAndDecideCommand(scopedContext, sessionId, {
     commandRequest: request,
     permissionMatcher: matcher,
     rawDestinations,
     isYolo: Boolean(context.sessions.isYolo?.(sessionId)),
-    yoloMode,
+    yoloMode: yoloPolicy.mode,
+    yoloRisk: yoloPolicy.risk,
     legacyDecision: legacyDecision?.outcome === 'deny' ? legacyDecision : undefined,
     riskFloor,
   });

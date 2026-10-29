@@ -27,11 +27,16 @@ function isContained(rootDir: string, candidateDir: string, platform: HostPlatfo
 
 function resolveLogicalCwd(cwd: string, roots: CapabilityRoot[], platform: HostPlatform): string {
   const api = pathApi(platform);
+  if (platform === 'win32' && /^[A-Za-z]:[\\/]/.test(cwd)) {
+    return api.resolve(cwd);
+  }
   const norm = ('/' + cwd.replaceAll('\\', '/')).replace(/\/+/g, '/');
   const sorted = [...roots].sort((a, b) => b.logicalPrefix.length - a.logicalPrefix.length);
   for (const root of sorted) {
-    const prefix = root.logicalPrefix;
-    if (norm === prefix || norm.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`)) {
+    const prefix =
+      ('/' + root.logicalPrefix.replaceAll('\\', '/')).replace(/\/+/g, '/').replace(/\/$/, '') ||
+      '/';
+    if (norm === prefix || norm.startsWith(prefix === '/' ? '/' : `${prefix}/`)) {
       const rel = norm.slice(prefix.length).replace(/^\//, '');
       return api.resolve(root.hostRoot, ...rel.split('/').filter(Boolean));
     }

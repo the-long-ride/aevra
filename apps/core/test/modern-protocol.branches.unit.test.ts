@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { aevraServerInfo } from '../src/mcp/server-info.js';
 import {
   MODERN_PROTOCOL_VERSION,
   ModernProtocolError,
   decorateModernResult,
   isModernRequest,
+  SERVER_META_TOOLS,
   validateModernRequest,
 } from '../src/mcp/modern-protocol.js';
 
@@ -145,4 +147,60 @@ test('tools/list sorting treats missing names as empty strings', () => {
     decorated.result.tools.map((tool: any) => tool?.name),
     [undefined, undefined, 'a', 'a', 'b'],
   );
+});
+
+const SERVER_INFO_KEY = 'io.modelcontextprotocol/serverInfo';
+
+test('tools/call results omit server meta for non-base tools and keep caller meta', () => {
+  const decorated = decorateModernResult(
+    { result: { content: [], _meta: { custom: 1 } } },
+    'tools/call',
+    'https://example.test',
+    'file_read_many',
+  );
+  assert.equal(decorated.result._meta[SERVER_INFO_KEY], undefined);
+  assert.equal(decorated.result._meta.custom, 1);
+  const bare = decorateModernResult({ result: { content: [] } }, 'tools/call', undefined, 'x');
+  assert.equal('_meta' in bare.result, false);
+  const noName = decorateModernResult({ result: {} }, 'tools/call', 'https://example.test');
+  assert.equal('_meta' in noName.result, false);
+});
+
+test('base tools and handshake methods carry server meta with icons', () => {
+  for (const toolName of [
+    'aevra_status',
+    'workspace_list',
+    'workspace_select',
+    'workspace_current',
+  ]) {
+    const decorated = decorateModernResult(
+      { result: { content: [] } },
+      'tools/call',
+      'https://example.test',
+      toolName,
+    );
+    assert.equal(decorated.result._meta[SERVER_INFO_KEY].name, 'Aevra', toolName);
+    assert.ok(decorated.result._meta[SERVER_INFO_KEY].icons, toolName);
+  }
+  const list = decorateModernResult(
+    { result: { tools: [] } },
+    'tools/list',
+    'https://example.test',
+  );
+  assert.ok(list.result._meta[SERVER_INFO_KEY].icons);
+  assert.equal(SERVER_META_TOOLS.has('aevra_status'), true);
+  assert.equal(SERVER_META_TOOLS.has('file_list'), false);
+});
+
+test('cache hints still apply to non-base cacheable results without meta', () => {
+  const decorated = decorateModernResult({ result: { resources: [] } }, 'resources/list');
+  assert.equal(decorated.result.cacheScope, 'private');
+  assert.equal('_meta' in decorated.result, false);
+});
+
+test('server description names the capability areas and is ASCII', () => {
+  const { description } = aevraServerInfo();
+  assert.match(description, /files, shell, git, browser, desktop/);
+  assert.match(description, /linked MCP servers/);
+  assert.match(description, /^[\x20-\x7e]+$/);
 });

@@ -17,6 +17,10 @@
       "label": "Sessions"
     },
     {
+      "id": "connectors",
+      "label": "Connectors"
+    },
+    {
       "id": "audit",
       "label": "Audit"
     },

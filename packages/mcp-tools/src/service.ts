@@ -19,9 +19,11 @@ import { AevraToolError } from './errors.js';
 import { FAST_LANE_TOOL_NAMES, isFastLaneTool } from './fast-lane-schemas.js';
 import { handleFastLaneTool } from './fast-lane-tools.js';
 import { FILE_TOOL_NAMES, handleFileTool } from './file-tools.js';
+import { handleTransferTool, TRANSFER_TOOL_NAMES } from './transfer-tools.js';
 import { GIT_TOOL_NAMES, gitTool } from './git-tools.js';
 import { assertToolGroupEnabled, type ConnectorProfile } from './tool-groups.js';
 import { HookService } from './hook-service.js';
+import { assertToolEnabled, disabledToolNames } from './tool-switches.js';
 import { handleOperationTool, OPERATION_TOOL_NAMES } from './operation-tools.js';
 import { handleNotesTool, NOTES_TOOL_NAMES } from './notes-tools.js';
 import {
@@ -32,6 +34,12 @@ import {
 import { searchTool } from './search-tool.js';
 import { evaluateRuntimeCommand } from './command-evaluation.js';
 import { claimCapabilityProof } from './capability-approval-proof.js';
+import { redactToolArgsForHooks, redactToolResultForHooks } from './transfer-entries.js';
+import {
+  FILE_TRANSFER_SETTING_KEY,
+  normalizeTransferLimits,
+  transferLimitBytes,
+} from '../../protocol/src/file-transfer.js';
 import { resolveWorkspaceLease } from './service-helpers.js';
 import type {
   McpProxyOperation,
@@ -51,6 +59,7 @@ import { splitProxyName, splitProxyResourceUri } from './upstream-names.js';
 
 const TARGETED_WORKSPACE_TOOLS = new Set([
   ...FILE_TOOL_NAMES,
+  ...TRANSFER_TOOL_NAMES,
   ...FAST_LANE_TOOL_NAMES,
   ...GIT_TOOL_NAMES,
   'search',
@@ -140,19 +149,34 @@ export class McpToolService {
     };
     try {
       assertToolGroupEnabled(name, profile?.toolGroups);
-      const before = await this.hooks?.emit('before_tool_call', hookContext, { name, args });
+      const disabled = this.disabledToolNames();
+      assertToolEnabled(name, disabled);
+      const hookArgs = redactToolArgsForHooks(name, args);
+      const before = await this.hooks?.emit('before_tool_call', hookContext, {
+        name,
+        args: hookArgs,
+      });
       if (before?.blocked) {
         throw new AevraToolError('INVALID_REQUEST', before.reason ?? `Hook blocked ${name}`);
       }
-      const effective = before ? transformedToolCall(before.payload, name, args) : { name, args };
+      // A redacted payload must never come back as the call itself.
+      const effective =
+        before && hookArgs === args
+          ? transformedToolCall(before.payload, name, args)
+          : { name, args };
       assertToolGroupEnabled(effective.name, profile?.toolGroups);
+      assertToolEnabled(effective.name, disabled);
       const result = await this.callInner(sessionId, effective.name, effective.args);
+      const hookResult = redactToolResultForHooks(effective.name, result);
       const after = await this.hooks?.emit(
         'after_tool_call',
         { ...hookContext, tool: effective.name },
-        { name: effective.name, result },
+        { name: effective.name, result: hookResult },
       );
-      return after ? transformedToolResult(after.payload, result) : result;
+      if (!after) return result;
+      const transformed = transformedToolResult(after.payload, hookResult);
+      // An untouched redacted copy must not replace the real result.
+      return transformed === hookResult ? result : transformed;
     } catch (error) {
       await this.hooks?.emit('after_tool_call', hookContext, {
         name,
@@ -162,6 +186,17 @@ export class McpToolService {
     } finally {
       this.deps.metrics?.record(name, Date.now() - startedAt);
     }
+  }
+
+  /** Inline-bytes ceiling the HTTP ingress may buffer for a files_download call. */
+  transferInlineLimitBytes(): number {
+    const stored = this.deps.settings?.get(FILE_TRANSFER_SETTING_KEY, {});
+    return transferLimitBytes(normalizeTransferLimits(stored)).inline;
+  }
+
+  /** Tools switched off in Settings > Tools (locked core tools are never included). */
+  disabledToolNames(): ReadonlySet<string> {
+    return disabledToolNames(this.deps.settings);
   }
 
   private context(
@@ -207,6 +242,7 @@ export class McpToolService {
     args: any = {},
     proof?: HostApprovalProof | CapabilityApprovalProof,
   ) {
+    assertToolEnabled(name, this.disabledToolNames());
     const session = this.sessions.get(sessionId);
     if (!session) throw new AevraToolError('UNAUTHORIZED', 'Unknown Aevra session');
     if (proof && 'kind' in proof) claimCapabilityProof(proof, sessionId, { tool: name, args });
@@ -229,6 +265,7 @@ export class McpToolService {
     if (BASIC_TOOL_NAMES.has(name)) return handleBasicTool(context, sessionId, name, args);
     if (isFastLaneTool(name)) return handleFastLaneTool(context, sessionId, name, args);
     if (FILE_TOOL_NAMES.has(name)) return handleFileTool(context, sessionId, name, args);
+    if (TRANSFER_TOOL_NAMES.has(name)) return handleTransferTool(context, sessionId, name, args);
     if (name === 'search') return searchTool(context, sessionId, args);
     if (name === 'command_run') return commandTool(context, sessionId, args);
     if (name === 'shell_run') return shellTool(context, sessionId, args);

@@ -1,11 +1,9 @@
-import {
-  operationGetInputSchema,
-  operationListInputSchema,
-  operationSchema,
-} from './operation-tools.js';
+import { operationGetInputSchema, operationListInputSchema } from './operation-tools.js';
 import { fastLaneInputSchemas } from './fast-lane-schemas.js';
 import { emptySchema, inputSchemas, type JsonSchema } from './registry-input-schemas.js';
+import { anyObjectSchema, outputSchemas } from './registry-output-schemas.js';
 import { toolDescriptions } from './registry-descriptions.js';
+import { filesDownloadInputSchema, filesUploadInputSchema } from './registry-transfer-schemas.js';
 import { searchInputSchema } from './search-tool.js';
 
 export const STABLE_TOOL_NAMES = [
@@ -25,6 +23,8 @@ export const STABLE_TOOL_NAMES = [
   'file_write_many',
   'file_move',
   'file_delete',
+  'files_download',
+  'files_upload',
   'command_run',
   'command_run_many',
   'shell_run',
@@ -116,128 +116,11 @@ type ToolDescriptor = {
   annotations: ToolAnnotations;
 };
 
-const anyObjectSchema: JsonSchema = { type: 'object' };
-const processState = {
-  type: 'string',
-  enum: ['running', 'completed', 'failed', 'stopped', 'unknown'],
-};
-const processStatusProperties = {
-  processId: { type: 'string' },
-  name: { type: 'string' },
-  pid: { type: 'integer' },
-  startedAt: { type: 'string' },
-  lifecycle: { type: 'string', enum: ['stop-with-aevra', 'keep-running'] },
-  state: processState,
-  exitCode: { type: ['integer', 'null'] },
-  signal: { type: ['string', 'null'] },
-  finishedAt: { type: ['string', 'null'] },
-  durationMs: { type: ['number', 'null'], minimum: 0 },
-  marker: { type: 'string' },
-  logPath: { type: 'string' },
-  resultPath: { type: 'string' },
-};
-const processStatusSchema: JsonSchema = {
-  type: 'object',
-  properties: processStatusProperties,
-  required: [
-    'processId',
-    'pid',
-    'startedAt',
-    'lifecycle',
-    'state',
-    'exitCode',
-    'signal',
-    'finishedAt',
-    'durationMs',
-  ],
-  additionalProperties: false,
-};
-const fileListEntrySchema: JsonSchema = {
-  type: 'object',
-  properties: {
-    name: { type: 'string' },
-    type: { type: 'string', enum: ['directory', 'file', 'link', 'other'] },
-  },
-  required: ['name', 'type'],
-  additionalProperties: false,
-};
-const searchHitSchema: JsonSchema = {
-  type: 'object',
-  properties: {
-    path: { type: 'string' },
-    line: { type: 'integer' },
-    text: { type: 'string' },
-  },
-  required: ['path'],
-  additionalProperties: false,
-};
-const outputSchemas: Partial<Record<AevraToolName, JsonSchema>> = {
-  file_list: {
-    type: 'object',
-    properties: { entries: { type: 'array', items: fileListEntrySchema } },
-    required: ['entries'],
-    additionalProperties: false,
-  },
-  file_search: {
-    type: 'object',
-    properties: {
-      hits: { type: 'array', items: searchHitSchema },
-      untrusted: { type: 'boolean' },
-      notice: { type: 'string' },
-    },
-    required: ['hits'],
-    additionalProperties: false,
-  },
-  workspace_list: {
-    type: 'object',
-    properties: { workspaces: { type: 'array', items: anyObjectSchema } },
-    required: ['workspaces'],
-    additionalProperties: false,
-  },
-  process_start: anyObjectSchema,
-  process_list: {
-    type: 'object',
-    properties: { result: { type: 'array', items: processStatusSchema } },
-    required: ['result'],
-    additionalProperties: false,
-  },
-  process_status: processStatusSchema,
-  process_wait: processStatusSchema,
-  process_logs: {
-    type: 'object',
-    properties: {
-      processId: { type: 'string' },
-      cursor: { type: 'integer' },
-      lines: { type: 'array', items: { type: 'string' } },
-      state: processState,
-      exitCode: { type: ['integer', 'null'] },
-      signal: { type: ['string', 'null'] },
-      finishedAt: { type: ['string', 'null'] },
-      eof: { type: 'boolean' },
-    },
-    required: ['processId', 'cursor', 'lines', 'state', 'exitCode', 'signal', 'finishedAt', 'eof'],
-    additionalProperties: false,
-  },
-  process_stop: {
-    type: 'object',
-    properties: { processId: { type: 'string' }, stopped: { type: 'boolean' } },
-    required: ['processId', 'stopped'],
-    additionalProperties: false,
-  },
-  process_restart: processStatusSchema,
-  operation_get: operationSchema,
-  operation_list: {
-    type: 'object',
-    properties: { result: { type: 'array', items: operationSchema } },
-    required: ['result'],
-    additionalProperties: false,
-  },
-  skill_write: anyObjectSchema,
-  instructions_write: anyObjectSchema,
-};
 const operationInputs: Partial<Record<AevraToolName, JsonSchema>> = {
   operation_get: operationGetInputSchema,
   operation_list: operationListInputSchema,
+  files_download: filesDownloadInputSchema,
+  files_upload: filesUploadInputSchema,
 };
 
 const readOnly = new Set<AevraToolName>([
@@ -283,9 +166,11 @@ const readOnly = new Set<AevraToolName>([
 // so it can trigger anything that GUI exposes -- submitting a form, closing
 // a document without saving, confirming a purchase, deleting a file through
 // a file manager -- with no transaction to roll back and no diff to review
-// first, unlike a file write or a sandboxed command.
+// first, unlike a file write or a sandboxed command. files_download belongs
+// here too: it can overwrite files with bytes the agent chose.
 const destructive = new Set<AevraToolName>([
   'file_delete',
+  'files_download',
   'git_push',
   'change_rollback',
   'skill_write',
@@ -308,8 +193,11 @@ const destructive = new Set<AevraToolName>([
 // they drive the live OS desktop, not workspace-scoped state, so their
 // effect is on whatever application happens to be focused (or, for a
 // coordinate click, whatever the point resolves to) -- entirely outside
-// this codebase's own boundary.
+// this codebase's own boundary. files_download fetches arbitrary URLs;
+// files_upload hands file bytes to the agent, inline or by public link.
 const openWorld = new Set<AevraToolName>([
+  'files_download',
+  'files_upload',
   'git_push',
   'command_run',
   'command_run_many',
@@ -339,6 +227,7 @@ export function toolDefinitions(): ToolDescriptor[] {
         : name === 'search'
           ? searchInputSchema
           : (operationInputs[name] ?? inputSchemas[name] ?? emptySchema),
+    // files_upload keeps the open schema: its first reply may be an approval-pending object.
     outputSchema: outputSchemas[name] ?? anyObjectSchema,
     annotations: {
       readOnlyHint: readOnly.has(name),

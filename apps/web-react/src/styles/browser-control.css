@@ -216,3 +216,79 @@
   background: var(--ink-deep);
   border-color: var(--ink-deep);
 }
+
+/* Browser origin policy */
+.browser-origin-policy {
+  margin-top: 10px;
+}
+
+.browser-origin-hosts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+  margin-bottom: 8px;
+  align-items: stretch;
+}
+
+.browser-origin-host-field {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-soft);
+  border-radius: 4px;
+  margin: 0;
+}
+
+.browser-origin-host-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+}
+
+.browser-origin-host-head label {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  vertical-align: middle;
+}
+
+.browser-origin-host-head .badge {
+  margin: 0 !important;
+  flex-shrink: 0;
+  height: 22px;
+  min-height: 22px;
+  padding: 1px 7px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.browser-origin-host-field input {
+  margin: 0 !important;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .browser-origin-hosts-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 12px;
+    margin-bottom: 10px;
+  }
+
+  .browser-origin-policy .actions button {
+    width: 100%;
+  }
+}

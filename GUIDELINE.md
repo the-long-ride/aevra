@@ -2,7 +2,7 @@
 
 This document contains comprehensive instructions for building, installing from source, configuring as a service, developing, testing, and troubleshooting Aevra.
 
-The current source version is **1.3.1**. For custom startup listener blocks and
+The current source version is **1.3.2**. For custom startup listener blocks and
 individual port aliases, see [the implemented port contract](docs/specs/12-custom-startup-ports.md).
 It includes command understanding,
 workspace containment, typed command rules, efficient browser/control plans,

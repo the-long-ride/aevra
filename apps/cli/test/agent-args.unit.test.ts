@@ -27,6 +27,9 @@ test('install parses targets, the claude alias, all and duplicates', () => {
   });
   assert.deepEqual(cmd(['install', 'all']).targets, ['all']);
   assert.deepEqual(cmd(['install', 'antigravity']).targets, ['antigravity']);
+  assert.deepEqual(cmd(['install', 'agy']).targets, ['antigravity-cli']);
+  assert.deepEqual(cmd(['install', 'antigravity-cli']).targets, ['antigravity-cli']);
+  assert.deepEqual(cmd(['install', 'antigravity-ide']).targets, ['antigravity-ide']);
 });
 
 test('install parses every flag', () => {

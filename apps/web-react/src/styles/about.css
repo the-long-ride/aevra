@@ -6,7 +6,7 @@
 
 .about-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -108,6 +108,75 @@
 .about-link-note {
   color: var(--mute);
   font-size: 12px;
+}
+
+/* Support & Community section */
+.about-support-card {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+}
+
+.about-support-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.about-support-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  background: var(--surface-card);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.about-support-btn:hover {
+  background: var(--hairline-strong);
+  text-decoration: none;
+}
+
+.about-support-btn.primary-action {
+  background: var(--ink);
+  color: var(--on-ink);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+.about-support-btn.primary-action:hover {
+  background: var(--ink-deep);
+  border-color: var(--ink-deep);
+}
+
+@media (max-width: 768px) {
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .about-support-card {
+    grid-column: 1;
+  }
+
+  .about-support-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .about-support-btn {
+    width: 100%;
+  }
 }
 
 /* Guide AI section */

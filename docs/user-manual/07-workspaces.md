@@ -13,3 +13,5 @@ Aevra canonicalizes and validates the selected path again when the workspace is 
 A remote session may hold access to multiple remembered workspaces, but file, command, Git, and other workspace-scoped tool calls must resolve an authorized workspace explicitly when the session has more than one available root. Browser and desktop control use separate exact-connection host grants and require no selected workspace. Legacy `workspace` and `workspaceId` arguments on device tools are accepted but ignored for host authorization.
 
 External mounts use logical paths so remote MCP clients do not receive host filesystem paths as part of the remote workspace view.
+
+Connectors can be granted access to multiple workspaces upon creation or editing via the multi-select workspace dropdown in the Connector modal. Each granted workspace configures an admission profile (`full`, `read-only`, `custom`), admission mode (`standard`, `isolated`), and per-workspace external mount capability ceilings (`read-only`, `read-write`, `blocked`).

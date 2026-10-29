@@ -26,17 +26,30 @@ import {
   gitPush,
 } from '../../../packages/executor/src/git.js';
 import { resolveCapabilityPath } from '../../../packages/security/src/path-policy.js';
-import { snapshotFile, restoreFile } from '../../../packages/executor/src/recovery.js';
+import {
+  discardSnapshot,
+  restoreFile,
+  snapshotFile,
+} from '../../../packages/executor/src/recovery.js';
+import { StreamError } from '../../../packages/ipc/src/stream.js';
+import type { StreamContext } from '../../../packages/ipc/src/stream-server.js';
 import { processRuntime } from './process-runtime.js';
 import { dispatchBrowserOperation, isBrowserOperation } from './browser-dispatch.js';
 import { dispatchDesktopOperation, isDesktopOperation } from './desktop-dispatch.js';
 import { desktopRuntime } from './desktop-runtime.js';
 import { dispatchMcpUpstreamOperation, isMcpUpstreamOperation } from './mcp-upstream-dispatch.js';
 import { mcpUpstreamRuntime } from './mcp-upstream-runtime.js';
+import {
+  dispatchFileTransferOperation,
+  isFileTransferOperation,
+} from './file-transfer-dispatch.js';
 import { DockerBackend } from '../../../packages/executor/src/docker.js';
 import { PodmanBackend } from '../../../packages/executor/src/podman.js';
 
-export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promise<WorkerResult> {
+export async function dispatchWorkerOperation(
+  envelope: VerifiedEnvelope,
+  ctx?: StreamContext,
+): Promise<WorkerResult> {
   try {
     const op = envelope.operation;
     const roots = envelope.capabilityRoots;
@@ -130,6 +143,11 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
         value: await dispatchMcpUpstreamOperation(op, mcpUpstreamRuntime.registry()),
       };
     }
+    // Transfer operations resolve their own paths (they need read or write per
+    // operation), and their bytes ride the IPC stream in `ctx`, not the result.
+    if (isFileTransferOperation(op)) {
+      return { ok: true, value: await dispatchFileTransferOperation(op, roots, ctx) };
+    }
 
     const logicalCwd =
       (op.kind === 'command.run' || op.kind === 'process.start') && op.command.cwdLogical
@@ -193,6 +211,9 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
     if (op.kind === 'recovery.snapshot') {
       return { ok: true, value: await snapshotFile(op.path, op.destination, roots) };
     }
+    if (op.kind === 'recovery.discard') {
+      return { ok: true, value: await discardSnapshot(op.snapshot) };
+    }
     if (op.kind === 'recovery.restore') {
       return { ok: true, value: await restoreFile(op.snapshot, op.path, roots) };
     }
@@ -201,6 +222,9 @@ export async function dispatchWorkerOperation(envelope: VerifiedEnvelope): Promi
       error: { code: 'CAPABILITY_REQUIRED', message: `Operation ${op.kind} is not enabled yet` },
     };
   } catch (e) {
+    // A stream abort is the IPC layer's own signal and carries its code to the
+    // core; folding it into a result would deliver it after a partial body.
+    if (e instanceof StreamError) throw e;
     // `details` is forwarded only when the thrown error actually carries one
     // (so far only `DesktopDriverError` on the input-refused path does, to
     // carry the window identity and gate verdict through to the MCP tool

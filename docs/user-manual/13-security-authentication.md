@@ -42,7 +42,7 @@ A normal disconnect or reconnect does **not** automatically replay a mutating re
 
 Removing a remembered workspace from an OAuth connection clears that durable connection grant and revokes the workspace from every live session sharing the same OAuth subject, so lease repair cannot silently re-add an explicitly removed workspace.
 
-**Disconnect session** and **Revoke connection** are intentionally different Admin actions. Disconnecting one MCP session does not invalidate OAuth credentials. Revoking a connection invalidates its access and refresh credentials, revokes its live sessions and leases, clears remembered workspace grants, and disables YOLO.
+**Disconnect session** and **Revoke connection** are intentionally different Admin actions. Disconnecting one MCP session does not invalidate OAuth credentials. Revoking a connection invalidates its access and refresh credentials, revokes its live sessions and leases, clears remembered workspace grants, disables YOLO, and kills any open one-time file download links of that connection (so does disconnecting its session).
 
 ## Bearer connectors
 

@@ -36,6 +36,28 @@ function fixture(openError?: string) {
   };
 }
 
+test('start prints desktop helper notice lines before opening UI', async () => {
+  const state = fixture();
+  (state.dependencies as any).desktopHelperNoticeLines = () => [
+    '[aevra] Warning: AEVRA_DESKTOP_HELPER_PATH points to a missing file',
+  ];
+
+  const code = await runStartCommand(
+    {},
+    { command: 'start', uiDestination: '/' },
+    state.dependencies,
+  );
+
+  assert.equal(code, 4);
+  assert.deepEqual(state.errors, [
+    'ready https://localhost:47831',
+    'mcp https://localhost:47832',
+    '[aevra] Warning: AEVRA_DESKTOP_HELPER_PATH points to a missing file',
+    'opening /',
+    '[aevra] Press Ctrl+C to stop Aevra.',
+  ]);
+});
+
 test('start opens the React admin root and prints the stop hint last', async () => {
   const state = fixture();
   const code = await runStartCommand(

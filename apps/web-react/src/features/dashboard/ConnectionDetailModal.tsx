@@ -18,10 +18,12 @@ import { ConnectionWorkspaces } from './ConnectionWorkspaces';
 
 export interface ActiveConnection {
   id?: string;
+  connectorId?: string;
   connectionId?: string;
   sessionId?: string;
   sessionCount?: number;
   client?: string;
+  name?: string;
   actor?: string;
   provider?: string;
   authType?: string;
@@ -70,7 +72,7 @@ export function ConnectionDetailModal({
 }) {
   const dialog = useDialog();
   const { ref: layerRef } = useModalLayer();
-  const { toast, error } = useToast();
+  const { toast, error, success } = useToast();
   const [tab, setTab] = useConnectionTab(
     connection ? (connection.connectionId ?? connection.id) : undefined,
   );
@@ -94,8 +96,17 @@ export function ConnectionDetailModal({
 
   if (!connection?.id) return null;
 
+  const isConnector = connection.authType === 'Bearer connector' || Boolean(connection.connectorId);
+  const connectorId =
+    connection.connectorId ??
+    (isConnector
+      ? connection.id
+      : connection.actor?.startsWith('connector:')
+        ? connection.id
+        : undefined);
   const durableOAuth = connection.authType === 'OAuth' && Boolean(connection.connectionId);
-  const sessionId = connection.sessionId ?? (durableOAuth ? undefined : connection.id);
+  const sessionId =
+    connection.sessionId ?? (durableOAuth || isConnector ? undefined : connection.id);
   const tabs: ConnectionTab[] = connection.actor ? ['details', 'notes'] : ['details'];
   const activeTab: ConnectionTab = tabs.includes(tab) ? tab : 'details';
 
@@ -109,28 +120,48 @@ export function ConnectionDetailModal({
   };
 
   const revoke = async () => {
-    const target = durableOAuth ? connection.connectionId! : sessionId!;
-    const noun = durableOAuth ? 'connection' : 'session';
+    const target = durableOAuth ? connection.connectionId! : connectorId ? connectorId : sessionId!;
+    const noun = durableOAuth ? 'connection' : isConnector ? 'connector' : 'session';
     if (
       !(await dialog.confirm({
         title: `Revoke ${noun}`,
         message: durableOAuth
           ? `Revoke ${connection.client ?? target} OAuth credentials and prevent silent resume?`
-          : `Disconnect ${connection.client ?? target}?`,
+          : isConnector
+            ? `Revoke connector ${connection.client ?? connection.name ?? target}?`
+            : `Disconnect ${connection.client ?? target}?`,
         confirmLabel: durableOAuth ? 'Revoke connection' : 'Revoke',
         confirmTone: 'danger',
       }))
     ) {
       return;
     }
-    await run(() =>
-      requestJson(
-        durableOAuth
-          ? `/api/connections/${encodeURIComponent(target)}/revoke`
-          : `/api/sessions/${encodeURIComponent(target)}/revoke`,
-        { method: 'POST', body: '{}' },
-      ),
-    );
+    await run(async () => {
+      if (durableOAuth) {
+        await requestJson(`/api/connections/${encodeURIComponent(target)}/revoke`, {
+          method: 'POST',
+          body: '{}',
+        });
+        success('Connection revoked.');
+      } else if (connectorId) {
+        await requestJson(`/api/connectors/${encodeURIComponent(connectorId)}`, {
+          method: 'DELETE',
+        });
+        if (connection.sessionId) {
+          await requestJson(`/api/sessions/${encodeURIComponent(connection.sessionId)}/revoke`, {
+            method: 'POST',
+            body: '{}',
+          }).catch(() => undefined);
+        }
+        success('Connector revoked.');
+      } else {
+        await requestJson(`/api/sessions/${encodeURIComponent(target)}/revoke`, {
+          method: 'POST',
+          body: '{}',
+        });
+        success('Session revoked.');
+      }
+    });
     onClose();
   };
 
@@ -148,12 +179,13 @@ export function ConnectionDetailModal({
     ) {
       return;
     }
-    await run(() =>
-      requestJson(`/api/sessions/${encodeURIComponent(sessionId)}/yolo`, {
+    await run(async () => {
+      await requestJson(`/api/sessions/${encodeURIComponent(sessionId)}/yolo`, {
         method: enable ? 'POST' : 'DELETE',
         body: '{}',
-      }),
-    );
+      });
+      success(enable ? 'YOLO mode enabled.' : 'YOLO mode disabled.');
+    });
   };
 
   const details = (

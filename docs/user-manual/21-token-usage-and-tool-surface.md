@@ -12,6 +12,10 @@ Daily and all-time summary cards show a label and a larger main value. Saved tok
 
 Every tool Aevra advertises costs tokens in every conversation. Open **Connections**, choose a client and use **Tool surface** to switch off groups it does not need (for example Browser and Desktop for a coding-only client). The dialog shows the estimated saving. Changes apply the next time the client lists tools; reconnect the client if it does not refresh.
 
+### Switching tools off for every client
+
+Open **Settings > Tools** to turn single tools or whole groups off for all connectors, including tools of linked MCP servers. The core tools (`workspace_*`, `operation_*`, `approval_*`, `aevra_status`, `control_access_status`) are locked on. A switched-off tool disappears from `tools/list` and is refused if called by name. A tool reaches a client only when its Settings switch and the connector's group switch are both on. Aevra does not push list changes, so a client sees them on its next `tools/list` or after it reconnects.
+
 ## Shorter results
 
 Command output is cut to 16,000 characters per stream by default. Ask the AI to pass `maxOutputChars` (256-200,000) when it needs more or less. If a client cannot read structured results, leave **Result format** on the default; choose _Text only_ to send each result once and save roughly half the result tokens.

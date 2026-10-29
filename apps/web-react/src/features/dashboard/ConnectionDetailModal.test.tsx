@@ -1,68 +1,15 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import type { WorkspaceSummary } from '@aevra/admin-contracts';
 import { DialogProvider } from '../../components/Dialog';
 import { installApiFixtures } from '../../test/api-fixtures';
-import { ConnectionDetailModal, type ActiveConnection } from './ConnectionDetailModal';
-
-const workspaces: WorkspaceSummary[] = [
-  { id: 'ws-1', name: 'Aevra', hostRoot: '/repo' },
-  { id: 'ws-2', name: 'Docs', hostRoot: '/docs' },
-];
-
-const connection: ActiveConnection = {
-  id: 'ses-chatgpt',
-  client: 'ChatGPT',
-  actor: 'oauth:ChatGPT',
-  provider: 'OAuth',
-  authType: 'OAuth',
-  yolo: true,
-  workspace: 'Aevra',
-  workspaces: ['Aevra'],
-  workspaceIds: ['ws-1'],
-  capabilities: ['files.read'],
-  status: 'active',
-};
-
-function mutationCall(
-  fetchMock: ReturnType<typeof installApiFixtures>,
-  path: string,
-  method: string,
-) {
-  return fetchMock.mock.calls.find(([input, init]) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.pathname + input.search
-          : input.url;
-    return url === path && String(init?.method ?? 'GET').toUpperCase() === method;
-  });
-}
-
-function renderModal(overrides: Partial<ActiveConnection> = {}) {
-  const onClose = vi.fn();
-  const onChanged = vi.fn(async () => undefined);
-  render(
-    <DialogProvider>
-      <ConnectionDetailModal
-        connection={{ ...connection, ...overrides }}
-        workspaces={workspaces}
-        onClose={onClose}
-        onChanged={onChanged}
-      />
-    </DialogProvider>,
-  );
-  return { onClose, onChanged };
-}
-
-function grantControls() {
-  const buttons = screen.getAllByRole('button', { name: 'Grant workspace' });
-  const trigger = buttons.find((button) => button.getAttribute('aria-haspopup') === 'listbox')!;
-  const confirm = buttons.find((button) => button.getAttribute('aria-haspopup') !== 'listbox')!;
-  return { trigger, confirm };
-}
+import { ConnectionDetailModal } from './ConnectionDetailModal';
+import {
+  grantControls,
+  mutationCall,
+  renderModal,
+  workspaces,
+} from './connection-detail-test-utils';
 
 test('renders nothing without a selected connection', () => {
   render(

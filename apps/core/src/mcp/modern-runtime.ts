@@ -172,7 +172,7 @@ export async function handleModernRuntimeRequest(
         },
       },
     );
-    const result = decorateModernResult(raw, body?.method, deps.oauth?.issuer);
+    const result = decorateModernResult(raw, body?.method, deps.oauth?.issuer, body?.params?.name);
     deps.activity.finish(activity, result);
     await sendHookedResponse(res, hooks, context, 200, result, {
       req,

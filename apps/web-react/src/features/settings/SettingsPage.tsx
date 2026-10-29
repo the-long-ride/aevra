@@ -6,6 +6,7 @@ import { CommandPolicySettings } from './CommandPolicySettings';
 import { DesktopControlSettings } from './DesktopControlSettings';
 import { EnvironmentProfilesSettings } from './EnvironmentProfilesSettings';
 import { ExecutionSettings } from './ExecutionSettings';
+import { FileTransferSettings } from './FileTransferSettings';
 import { HooksSettings } from './HooksSettings';
 import { KeepAwakeSettings } from './KeepAwakeSettings';
 import { McpUpstreamsSettings } from './McpUpstreamsSettings';
@@ -13,6 +14,7 @@ import { NetworkPolicySettings } from './NetworkPolicySettings';
 import { RemoteAccessSettings } from './RemoteAccessSettings';
 import { useRemoteAccessHighlight } from './remote-access-highlight';
 import { SecretReferencesSettings } from './SecretReferencesSettings';
+import { ToolSwitchSettings } from './ToolSwitchSettings';
 import { YoloPolicySettings } from './YoloPolicySettings';
 import { loadSettings, patchJson, type SettingsData } from './settings-service';
 
@@ -62,7 +64,7 @@ export function SettingsPage() {
           status={data.power}
           onSave={(mode) => patchJson('/api/power/keep-awake', { mode }).then(refresh)}
         />
-        <ExecutionSettings execution={data.execution} onChanged={refresh} />
+        <YoloPolicySettings policy={data.yolo} onChanged={refresh} />
         <BrowserControlSettings status={data.browser} onChanged={refresh} />
         <DesktopControlSettings />
         <McpUpstreamsSettings />
@@ -95,7 +97,11 @@ export function SettingsPage() {
         />
         <EnvironmentProfilesSettings profiles={data.profiles} onChanged={refresh} />
         <SecretReferencesSettings secretRefs={data.secretRefs} onChanged={refresh} />
-        <YoloPolicySettings mode={data.yolo.mode} onChanged={refresh} />
+        <div className="settings-column-stack">
+          <ExecutionSettings execution={data.execution} onChanged={refresh} />
+          <FileTransferSettings />
+        </div>
+        <ToolSwitchSettings />
         <HooksSettings hooks={data.hooks} onChanged={refresh} />
       </div>
     </>

@@ -1,4 +1,11 @@
-export const AGENT_TARGETS = ['codex', 'claude-code', 'opencode', 'antigravity'] as const;
+export const AGENT_TARGETS = [
+  'codex',
+  'claude-code',
+  'opencode',
+  'antigravity',
+  'antigravity-cli',
+  'antigravity-ide',
+] as const;
 export type AgentTarget = (typeof AGENT_TARGETS)[number];
 export type Product = 'aevra' | 'aevra-browser';
 export type AgentTransport = 'stdio' | 'http';

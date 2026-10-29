@@ -1,6 +1,6 @@
 # 04 — Connectors
 
-**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `1.3.1`
+**Audience:** engineers & AI agents · **Scope:** the connector model and its lifecycle · **Verified against:** `1.3.2`
 
 A **connector** is a named admission credential for one AI client — the thing that makes "works with any web AI" true, because the client needs no auth capability at all: the credential _is_ the URL.
 
@@ -16,6 +16,9 @@ URL         → https://<public-url>/mcp/<token>
 - The plaintext token exists only in the create response and the user's paste. Only the SHA-256 hash is persisted.
 - Admitted identity: `actor: "connector:<name>"`, `subject: <connector id>` — flows into sessions, permissions, and audit like any actor.
 - Optional policy bindings: default workspace, capability profile ceiling, and token expiry TTL.
+- **Multi-workspace grants & admission profiles:** Connectors can be granted access to multiple workspaces simultaneously upon creation or update (defaulting to none granted). Each granted workspace configures an admission profile (`full`, `read-only`, `custom`), admission mode (`standard`, `isolated`), and external mount capability ceilings (`read-only`, `read-write`, `blocked`).
+- **Dual configuration snippets:** Connector creation and detail modals display both Local URL and Tunnel URL JSON configuration blocks side-by-side on desktop (stacked on mobile) with dedicated top-right icon copy buttons.
+- **Actor profile consistency:** Connectors link to an actor dropdown with consistent profile and admission data matching connector detail and permissions.
 
 > **Deprecated:** placing the token in the URL path is deprecated. Proxies, CDNs, and
 > error pages record request lines, so the credential can outlive the request it

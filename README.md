@@ -1,6 +1,6 @@
 # aevra
 
-Current source release: **1.3.0**. Standalone browser and desktop source releases: **1.0.0** each.
+Current source release: **1.3.2**. Standalone browser and desktop source releases: **1.0.0** each.
 
 <div align="center">
 
@@ -29,7 +29,7 @@ Current source release: **1.3.0**. Standalone browser and desktop source release
 
 **aevra** is a local **MCP execution gateway** that lets AI assistants (such as ChatGPT, Claude, and Grok), any AI platform with an MCP connector, and all AI coding agents (such as Cursor, Windsurf, Claude Code, Cline, Roo Code, and Copilot) work directly on your machine: edit files, run commands, manage Git repositories, automate desktop software, drive browsers, and bridge upstream MCP servers under explicit security boundaries.
 
-As a unified MCP gateway, aevra acts as both a secure execution host and an upstream proxy aggregator. It serves 74 built-in system tools while republishing external downstream MCP servers under collision-resistant namespaces (`server__tool`). When an AI client requests an action, aevra validates the request against your configured capability profile, enforces fine-grained path and command policies, prompts for human approval on sensitive operations, and records each action to a tamper-evident audit log.
+As a unified MCP gateway, aevra acts as both a secure execution host and an upstream proxy aggregator. It serves 79 built-in system tools while republishing external downstream MCP servers under collision-resistant namespaces (`server__tool`). When an AI client requests an action, aevra validates the request against your configured capability profile, enforces fine-grained path and command policies, prompts for human approval on sensitive operations, and records each action to a tamper-evident audit log.
 
 It supports any client or platform using the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) standard, runs on Windows, macOS, and Linux, and connects over local loopback, private networks, or public tunnels with floating-IP session continuity.
 
@@ -139,7 +139,7 @@ Most local MCP servers do one job (files, a shell, or a browser) and trust which
 
 ## Core features
 
-- **74 built-in MCP tools and fast lane interfaces:** Includes batch file operations, command execution, workspace management, Git actions, background processes, change sets, browser automation, and desktop control. Upstream MCP tools load dynamically under namespaced names.
+- **79 built-in MCP tools and fast lane interfaces:** Includes batch file operations, binary file transfer (`files_download`, `files_upload`), command execution, workspace management, Git actions, background processes, change sets, browser automation, and desktop control. Upstream MCP tools load dynamically under namespaced names.
 - **MCP tool documentation:** The server Detail modal shows searchable instructions, parameters, advisory flags and example arguments for recorded tools, with pending catalog changes clearly labeled.
 - **Token usage metering & live analytics:** Accurately measures incoming, outgoing, and saved tokens using a lightweight heuristic estimator (`heuristic-v1`). Non-sensitive metrics accumulate in memory and persist to SQLite (`token_usage` table) with automatic 7-day roll-up. The React Admin Dashboard features live stat cards and an interactive historical SVG chart (24h to all-time), and an All-time statistics modal with totals and tool/connector breakdowns. See the [token usage and tool surface guide](https://github.com/the-long-ride/aevra/blob/main/docs/user-manual/21-token-usage-and-tool-surface.md).
 - **Per-connector tool surface & result formats:** Customize advertised tool groups (`files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, `upstream`) per AI client to drastically reduce session token overhead. Select between dual `both`, `text`-only, or `structured` MCP result formats.

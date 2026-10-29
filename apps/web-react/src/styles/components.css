@@ -49,6 +49,7 @@
 .field,
 .stack-form {
   display: grid;
+  align-content: start;
   gap: 6px;
 }
 
@@ -194,6 +195,7 @@
 
 .form-section {
   display: grid;
+  align-content: start;
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--hairline);
@@ -236,14 +238,24 @@
 }
 
 .badge.good,
+.badge.success,
 .status.success {
   border-color: color-mix(in srgb, var(--success) 48%, transparent);
   color: var(--success);
 }
 
+.badge.warning,
 .status.warning {
   border-color: color-mix(in srgb, var(--warning) 48%, transparent);
   color: var(--warning);
+}
+
+.badge.danger,
+.badge.error,
+.status.danger,
+.status.error {
+  border-color: color-mix(in srgb, var(--danger) 48%, transparent);
+  color: var(--danger);
 }
 
 code {
@@ -293,7 +305,7 @@ pre {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -322,6 +334,7 @@ pre {
   display: grid;
   gap: 8px;
   width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
 }
 
 .toast {
@@ -333,6 +346,20 @@ pre {
   font-family: var(--mono);
   font-size: 12px;
   user-select: text;
+  pointer-events: auto;
+  cursor: pointer;
+  animation: toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition:
+    transform 140ms ease,
+    opacity 180ms ease;
+}
+
+.toast:hover {
+  transform: translateY(-2px);
+}
+
+.toast.toast-exit {
+  animation: toast-out 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .toast.success {
@@ -341,6 +368,28 @@ pre {
 
 .toast.error {
   border-color: var(--danger);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
 }
 
 .sr-only {
@@ -355,75 +404,6 @@ pre {
   .permission-bulk,
   .form-row {
     grid-template-columns: 1fr;
-  }
-
-  .dt-search {
-    flex-basis: 100%;
-    max-width: none;
-  }
-
-  .dt-toolbar {
-    align-items: stretch;
-  }
-
-  .dt-filters {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: stretch;
-    width: 100%;
-    gap: 8px 10px;
-  }
-
-  .dt-filter,
-  .dt-size {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    flex: initial;
-    width: 100%;
-  }
-
-  .dt-size {
-    max-width: 160px;
-  }
-
-  .dt-filter .dropdown,
-  .dt-size .dropdown {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .dt-filter select,
-  .dt-size select {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .dt-footer {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-
-  .dt-pagination {
-    flex-direction: column;
-    align-items: stretch;
-    text-align: center;
-    gap: 6px;
-  }
-
-  .dt-pages {
-    justify-content: center;
-  }
-
-  .dt-pages button {
-    min-height: 34px;
-    padding: 4px 10px;
-  }
-
-  .data-table,
-  .simple-table {
-    min-width: 640px;
   }
 
   .modal-backdrop {
@@ -468,8 +448,16 @@ pre {
   height: min(90dvh, 900px);
 }
 
-.management-modal > .modal-head {
+.management-modal > .modal-head,
+.management-modal > .modal-foot {
   flex: 0 0 auto;
+}
+
+.management-modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .management-modal-body {

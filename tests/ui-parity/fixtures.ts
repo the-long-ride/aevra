@@ -197,7 +197,7 @@ export async function installAdminApi(page: Page, options: FixtureOptions = {}) 
     ['/api/audit/export?format=json', []],
     ['/api/settings', {}],
     ['/api/policy/command-families', {}],
-    ['/api/policy/yolo', { mode: 'workspace' }],
+    ['/api/policy/yolo', { mode: 'workspace', risk: 'prevent-high-risk' }],
     ['/api/policy/network-rules', []],
     [
       '/api/execution-settings',

@@ -35,4 +35,23 @@
   .section-heading > button {
     flex: 0 0 auto;
   }
+
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .page-head > div:first-child {
+    width: 100%;
+  }
+
+  .page-head button,
+  .page-head > .primary,
+  .page-head > .secondary {
+    display: block;
+    width: 100%;
+    text-align: center;
+  }
 }

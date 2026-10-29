@@ -25,3 +25,4 @@
 23. [GNOME Wayland desktop access](22-wayland-desktop.md)
 
 - [Local AI agents and shared browser extension](23-local-ai-agents.md)
+- [File transfer](24-file-transfer.md)

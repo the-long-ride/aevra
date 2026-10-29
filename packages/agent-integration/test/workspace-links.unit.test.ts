@@ -21,6 +21,8 @@ function linkFolder(target: string, link: string): boolean {
 const cases: Array<[AgentTarget, string]> = [
   ['codex', '.codex'],
   ['antigravity', '.agents'],
+  ['antigravity-cli', '.agents'],
+  ['antigravity-ide', '.agents'],
 ];
 
 for (const [target, folder] of cases)

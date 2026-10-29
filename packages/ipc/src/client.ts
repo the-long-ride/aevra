@@ -2,7 +2,18 @@ import net from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { encodeFrame, FrameDecoder } from './framing.js';
 import { handshakeMac } from './envelope.js';
+import { socketLink } from './stream.js';
+import { StreamTable } from './stream-table.js';
+import {
+  runDownload,
+  runUpload,
+  type DownloadHandle,
+  type StreamCallOptions,
+  type StreamHost,
+} from './stream-client.js';
 import type { OperationEnvelope, WorkerResult } from '../../protocol/src/worker.js';
+
+export type { DownloadHandle, StreamCallOptions } from './stream-client.js';
 
 /** Transport slack on top of whatever the operation itself is allowed to take. */
 export const IPC_OVERHEAD_MS = 30_000;
@@ -30,7 +41,8 @@ class WorkerTransportError extends Error {
  * `process.wait` defaults to 15 seconds, so any command past ten seconds came
  * back as `worker timeout` while the worker carried on running it, and
  * `process_wait` could never succeed at its own default. The transport deadline
- * now derives from the operation it carries, so it outlives the work.
+ * now derives from the operation it carries, so it outlives the work. Chunked
+ * transfers use the same bound for the whole stream.
  */
 export function deadlineForEnvelope(envelope: OperationEnvelope): number {
   const operation = (envelope as { operation?: Record<string, unknown> } | undefined)?.operation;
@@ -42,6 +54,15 @@ export function deadlineForEnvelope(envelope: OperationEnvelope): number {
 
 export interface WorkerClient {
   execute(envelope: OperationEnvelope, signal?: AbortSignal): Promise<WorkerResult>;
+  executeWithUpload?(
+    envelope: OperationEnvelope,
+    source: AsyncIterable<Uint8Array>,
+    options?: StreamCallOptions,
+  ): Promise<WorkerResult>;
+  executeWithDownload?(
+    envelope: OperationEnvelope,
+    options?: StreamCallOptions,
+  ): Promise<DownloadHandle>;
   health(): Promise<{ ready: boolean; pid: number }>;
   close(): Promise<void>;
 }
@@ -57,6 +78,12 @@ export class SocketWorkerClient implements WorkerClient {
   private connecting?: Promise<void>;
   private next = 0;
   private pending = new Map<string, Pending>();
+  private streams = new StreamTable(socketLink(() => this.socket));
+  private streamHost: StreamHost = {
+    table: this.streams,
+    start: (type, build, deadlineMs) => this.start(type, build, deadlineMs),
+    reject: (requestId, error) => this.rejectPending(requestId, error),
+  };
   constructor(
     private endpoint: string,
     private secret: Buffer,
@@ -78,6 +105,7 @@ export class SocketWorkerClient implements WorkerClient {
     const socket = net.createConnection(this.endpoint);
     this.socket = socket;
     const decoder = new FrameDecoder();
+    let ready = false;
     let onReady: (() => void) | undefined;
     let onFailed: ((error: Error) => void) | undefined;
     socket.on('data', (c) => {
@@ -103,7 +131,11 @@ export class SocketWorkerClient implements WorkerClient {
           );
           // The server has proven itself and our 'ready' is on the wire, so
           // requests written from here on cannot race ahead of the handshake.
+          ready = true;
           onReady?.();
+        } else if (typeof f.type === 'string' && f.type.startsWith('stream')) {
+          // A peer that has not finished the handshake gets no say over streams.
+          if (ready) this.streams.handle(f);
         } else if (f.requestId) {
           const pending = this.pending.get(f.requestId);
           if (!pending) continue;
@@ -117,6 +149,7 @@ export class SocketWorkerClient implements WorkerClient {
     // waiting out their full deadline.
     const fail = (error: Error) => {
       onFailed?.(error);
+      this.streams.abortAll('WORKER_DISCONNECTED');
       this.settleAll(new WorkerTransportError(error.message, 'WORKER_DISCONNECTED'));
       if (this.socket === socket) this.socket = undefined;
     };
@@ -156,10 +189,22 @@ export class SocketWorkerClient implements WorkerClient {
       pending.reject(error);
     }
   }
-  private async rpc(type: string, payload: any, deadlineMs: number) {
+  private rejectPending(requestId: string, error: Error) {
+    const pending = this.pending.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pending.delete(requestId);
+    pending.reject(error);
+  }
+  /** Registers the reply slot, then writes the frame built for that request id. */
+  private async start(
+    type: string,
+    build: (requestId: string) => Record<string, unknown>,
+    deadlineMs: number,
+  ) {
     await this.connect();
     const requestId = `r${++this.next}`;
-    const p = new Promise<any>((resolve, reject) => {
+    const reply = new Promise<any>((resolve, reject) => {
       const timer = setTimeout(() => {
         if (!this.pending.delete(requestId)) return;
         reject(
@@ -171,13 +216,38 @@ export class SocketWorkerClient implements WorkerClient {
       }, deadlineMs);
       this.pending.set(requestId, { resolve, reject, timer });
     });
-    this.socket!.write(encodeFrame({ type, requestId, ...payload }));
-    return p;
+    this.socket!.write(encodeFrame({ type, requestId, ...build(requestId) }));
+    return { requestId, reply };
+  }
+  private async rpc(type: string, payload: any, deadlineMs: number) {
+    return (await this.start(type, () => payload, deadlineMs)).reply;
   }
   async execute(envelope: OperationEnvelope, signal?: AbortSignal): Promise<WorkerResult> {
     if (signal?.aborted) throw signal.reason;
     const r = await this.rpc('execute', { envelope }, deadlineForEnvelope(envelope));
     return r.result;
+  }
+  executeWithUpload(
+    envelope: OperationEnvelope,
+    source: AsyncIterable<Uint8Array>,
+    options: StreamCallOptions = {},
+  ): Promise<WorkerResult> {
+    return runUpload(
+      this.streamHost,
+      envelope,
+      source,
+      options.deadlineMs ?? deadlineForEnvelope(envelope),
+    );
+  }
+  executeWithDownload(
+    envelope: OperationEnvelope,
+    options: StreamCallOptions = {},
+  ): Promise<DownloadHandle> {
+    return runDownload(
+      this.streamHost,
+      envelope,
+      options.deadlineMs ?? deadlineForEnvelope(envelope),
+    );
   }
   async health() {
     const r = await this.rpc('health', {}, IPC_OVERHEAD_MS);
@@ -188,6 +258,7 @@ export class SocketWorkerClient implements WorkerClient {
     this.socket = undefined;
     // Callers waiting on this socket would otherwise hang until their own
     // deadline for a reply that can no longer arrive.
+    this.streams.abortAll('WORKER_DISCONNECTED');
     this.settleAll(new WorkerTransportError('worker client closed', 'WORKER_DISCONNECTED'));
     socket?.destroy();
   }

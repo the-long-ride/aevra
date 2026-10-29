@@ -28,6 +28,10 @@ export const toolDescriptions: Partial<Record<AevraToolName, string>> = {
     'Create, replace, or patch one or more files in a workspace, up to 32 changes per call, while preserving approvals, recovery, conflict checks, and workspace mutation locks.',
   file_move: 'Move or rename a path inside the active workspace.',
   file_delete: 'Delete a file or directory inside the active workspace.',
+  files_download:
+    'Write files from the agent to this device: per entry inline base64 or a public URL. Needs local approval.',
+  files_upload:
+    'Fetch files from this device for the agent: inline base64 when small, else a one-time link. Needs local approval.',
   command_run: 'Run a bounded command through Aevra execution and approval policy.',
   command_run_many:
     'Run one or more bounded commands through Aevra execution and approval policy, up to 16 per call, with bounded concurrency and conflict serialization.',

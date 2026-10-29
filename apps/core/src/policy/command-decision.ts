@@ -74,10 +74,13 @@ export function decideCommand(input: CommandPolicyInput): CommandDecision {
   const hasCriticalNode = analysis.nodes.some((n) => n.risk === 'CRITICAL');
   const exactDecision = exactApprovalDecision(input);
 
-  // YOLO is deliberately broad for ordinary commands, but CRITICAL remains an
-  // immutable human-confirmation boundary. An exact approved fingerprint may
-  // resume the critical command; otherwise a fresh approval is mandatory.
-  if (yolo.active && hasCriticalNode) {
+  // Two YOLO axes: risk (prevent-high-risk | do-whatever) and mode (scope).
+  // Under prevent-high-risk, CRITICAL remains a human-confirmation boundary. An
+  // exact approved fingerprint may resume the critical command; otherwise a fresh
+  // approval is mandatory. do-whatever lifts that boundary but not the scope.
+  const doWhatever = yolo.active && yolo.risk === 'do-whatever';
+  const scopeLifted = yolo.active && yolo.mode === 'unrestricted';
+  if (yolo.active && hasCriticalNode && !doWhatever) {
     if (exactDecision) return exactDecision;
     return {
       outcome: 'approval',
@@ -92,14 +95,15 @@ export function decideCommand(input: CommandPolicyInput): CommandDecision {
     };
   }
 
-  // Active YOLO overrides remembered command/network allow/deny policy for
-  // non-critical commands within the configured scope. Workspace mode requires
-  // conclusive inside-workspace analysis; unrestricted mode removes that Aevra
-  // workspace authorization boundary.
-  if (yolo.active && yolo.mode === 'unrestricted') {
+  // do-whatever overrides remembered allow/deny, network, script trust and
+  // unsupported-syntax checks within the configured scope. Workspace scope needs
+  // conclusive inside-workspace analysis; unrestricted scope has no scope limit.
+  // Inside-workspace work is allowed in both scopes (unrestricted is a superset of
+  // workspace); unrestricted only adds the outside-workspace reach.
+  if (doWhatever && scopeLifted) {
     return { outcome: 'allow', analysis, ruleIds: [] };
   }
-  if (yolo.active && yolo.mode === 'workspace' && analysis.scope === 'inside') {
+  if (yolo.active && analysis.scope === 'inside') {
     return { outcome: 'allow', analysis, ruleIds: [] };
   }
 
@@ -174,7 +178,7 @@ export function decideCommand(input: CommandPolicyInput): CommandDecision {
 
   // 9. Scope check (outside / unknown)
   if (analysis.scope === 'outside') {
-    if (!yolo.active || yolo.mode !== 'unrestricted') {
+    if (!scopeLifted) {
       return {
         outcome: 'approval',
         reasons: [
@@ -191,7 +195,7 @@ export function decideCommand(input: CommandPolicyInput): CommandDecision {
   }
 
   if (analysis.scope === 'unknown') {
-    if (!yolo.active || yolo.mode !== 'unrestricted') {
+    if (!scopeLifted) {
       return {
         outcome: 'approval',
         reasons: [
@@ -222,31 +226,27 @@ export function decideCommand(input: CommandPolicyInput): CommandDecision {
     };
   }
   if (scriptTrust === 'changed') {
-    if (!yolo.active || yolo.mode !== 'unrestricted') {
-      return {
-        outcome: 'approval',
-        reasons: [
-          {
-            code: 'SCRIPT_CHANGED',
-            message: 'Project script definition changed since prior approval',
-          },
-        ],
-        analysis,
-        suggestedRules: analysis.nodes.map(buildSuggestedRule),
-      };
-    }
+    return {
+      outcome: 'approval',
+      reasons: [
+        {
+          code: 'SCRIPT_CHANGED',
+          message: 'Project script definition changed since prior approval',
+        },
+      ],
+      analysis,
+      suggestedRules: analysis.nodes.map(buildSuggestedRule),
+    };
   }
 
   // 11. Network approval
   if (input.network?.outcome === 'approval') {
-    if (!yolo.active || yolo.mode !== 'unrestricted') {
-      return {
-        outcome: 'approval',
-        reasons: [...reasons, ...input.network.reasons],
-        analysis,
-        suggestedRules: [],
-      };
-    }
+    return {
+      outcome: 'approval',
+      reasons: [...reasons, ...input.network.reasons],
+      analysis,
+      suggestedRules: [],
+    };
   }
 
   // 12. Typed allow rules evaluation
@@ -269,6 +269,12 @@ export function decideCommand(input: CommandPolicyInput): CommandDecision {
 
   if (allNodesCovered) {
     return { outcome: 'allow', analysis, ruleIds: matchedRuleIds };
+  }
+
+  // prevent-high-risk + unrestricted: every guard above passed, so an ordinary
+  // unmatched command runs without a remembered rule.
+  if (scopeLifted) {
+    return { outcome: 'allow', analysis, ruleIds: [] };
   }
 
   // 13. Unmatched ordinary command requires approval

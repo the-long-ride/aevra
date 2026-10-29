@@ -84,6 +84,26 @@ export function redactText(
 const structuredSecretKey =
   /(?:^|_)(?:token|secret|password|credential|passphrase|code_verifier)(?:$|_)/i;
 const opaquePayloadKey = new Set(['content', 'patch']);
+// An object under one of these keys is opaque as a whole: names stay, every value goes.
+const opaqueObjectKey = new Set(['headers']);
+
+/** Drops userinfo, query, fragment and a one-time link secret from an http(s) URL; anything else is returned unchanged. */
+export function stripUrlDetail(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return value;
+    // The segment after /files/ is a one-time link secret.
+    const path = url.pathname.replace(/(\/files\/)[^/]+/, '$1[REDACTED]');
+    if (path === url.pathname && !url.search && !url.hash && !url.username && !url.password) {
+      return value;
+    }
+    return `${url.protocol}//${url.host}${path}`;
+  } catch {
+    // Unparseable: still cut the query and fragment, where a signature would sit.
+    const cut = value.search(/[?#]/);
+    return cut === -1 ? value : value.slice(0, cut);
+  }
+}
 
 function collectStructuredSecrets(
   value: unknown,
@@ -129,7 +149,7 @@ export function sanitizeStructuredSecrets(
       if ((key && opaquePayloadKey.has(key)) || (key && structuredSecretKey.test(key))) {
         return '[REDACTED]';
       }
-      return redactText(item, knownSecrets).text;
+      return redactText(key === 'url' ? stripUrlDetail(item) : item, knownSecrets).text;
     }
     const result = Object.create(null) as Record<string, unknown>;
     for (const [childKey, childValue] of Object.entries(item as Record<string, unknown>)) {
@@ -146,6 +166,18 @@ export function sanitizeStructuredSecrets(
               ? '[REDACTED]'
               : visit(value, name),
           ]),
+        );
+        continue;
+      }
+      const opaque = opaqueObjectKey.has(childKey.toLowerCase());
+      if (opaque && !(childValue && typeof childValue === 'object' && !Array.isArray(childValue))) {
+        // Malformed headers (string, array, number) are never pattern-scanned: redact whole.
+        result[childKey] = '[REDACTED]';
+        continue;
+      }
+      if (opaque && childValue && typeof childValue === 'object' && !Array.isArray(childValue)) {
+        result[childKey] = Object.fromEntries(
+          Object.keys(childValue as Record<string, unknown>).map((name) => [name, '[REDACTED]']),
         );
         continue;
       }

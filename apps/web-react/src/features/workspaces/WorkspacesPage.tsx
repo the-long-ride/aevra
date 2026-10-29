@@ -5,14 +5,22 @@ import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { useModalLayer } from '../../components/modal-layer';
 import { PageState } from '../../components/PageState';
+import { useToast } from '../../components/Toast';
 import { requestJson } from '../../services/api-client';
 import { AddWorkspaceModal } from './AddWorkspaceModal';
 import { CopyIcon, DetailIcon } from './WorkspaceIcons';
+import { WorkspaceAdmissionsSection } from './WorkspaceAdmissionsSection';
+import {
+  MOUNT_CAPABILITY_MAP,
+  MOUNT_CAPABILITY_OPTIONS,
+  getMountCapabilityPreset,
+} from './workspace-options';
 
 export function WorkspacesPage() {
   const resource = useWorkspaceRows();
   const { copiedId, copyWorkspaceId } = useCopiedWorkspaceId();
   const dialog = useDialog();
+  const { toast, success, error } = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const { ref: detailLayerRef } = useModalLayer();
@@ -29,11 +37,16 @@ export function WorkspacesPage() {
     ) {
       return;
     }
-    await requestJson(`/api/workspaces/${encodeURIComponent(row.id)}`, {
-      method: 'DELETE',
-    });
-    if (selectedId === row.id) setSelectedId(null);
-    await resource.refresh();
+    try {
+      await requestJson(`/api/workspaces/${encodeURIComponent(row.id)}`, {
+        method: 'DELETE',
+      });
+      if (selectedId === row.id) setSelectedId(null);
+      success(`Workspace "${row.name}" removed.`);
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const saveWorkspaceDetails = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -46,26 +59,57 @@ export function WorkspacesPage() {
       description: String(data.description ?? '').trim(),
       ...(hostRoot !== String(selected.hostRoot ?? '').trim() ? { hostRoot } : {}),
     };
-    await requestJson(`/api/workspaces/${encodeURIComponent(selected.id)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(update),
-    });
-    await resource.refresh();
+    try {
+      await requestJson(`/api/workspaces/${encodeURIComponent(selected.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(update),
+      });
+      success('Workspace updated.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const addMount = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selected) return;
     const data = Object.fromEntries(new FormData(event.currentTarget));
-    await requestJson(`/api/workspaces/${encodeURIComponent(selected.id)}/mounts`, {
-      method: 'POST',
-      body: JSON.stringify({
-        logicalPath: data.logicalPath,
-        hostRoot: data.hostRoot,
-        capabilities: ['files.read', 'files.search'],
-      }),
-    });
-    await resource.refresh();
+    const rawHostRoot = String(data.hostRoot ?? '').trim();
+    const rawLogicalPath = String(data.logicalPath ?? '').trim();
+    const hostRoot = rawHostRoot || rawLogicalPath;
+    const logicalPath = rawLogicalPath || hostRoot;
+    if (!hostRoot) return;
+    const preset = String(data.capabilities ?? 'read-only');
+    const capabilities = MOUNT_CAPABILITY_MAP[preset] ?? ['files.read', 'files.search'];
+    try {
+      await requestJson(`/api/workspaces/${encodeURIComponent(selected.id)}/mounts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          logicalPath,
+          hostRoot,
+          capabilities,
+        }),
+      });
+      success('External mount added.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
+  };
+
+  const updateMountCapabilities = async (mountId: string, preset: string) => {
+    const capabilities = MOUNT_CAPABILITY_MAP[preset] ?? ['files.read', 'files.search'];
+    try {
+      await requestJson(`/api/mounts/${encodeURIComponent(mountId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ capabilities }),
+      });
+      success('External mount updated.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const removeMount = async (mountId: string) => {
@@ -79,19 +123,15 @@ export function WorkspacesPage() {
     ) {
       return;
     }
-    await requestJson(`/api/mounts/${encodeURIComponent(mountId)}`, {
-      method: 'DELETE',
-    });
-    await resource.refresh();
-  };
-
-  const saveAdmission = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!selected) return;
-    await requestJson(`/api/workspaces/${encodeURIComponent(selected.id)}/admission`, {
-      method: 'POST',
-      body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))),
-    });
+    try {
+      await requestJson(`/api/mounts/${encodeURIComponent(mountId)}`, {
+        method: 'DELETE',
+      });
+      success('External mount removed.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   return (
@@ -167,7 +207,13 @@ export function WorkspacesPage() {
         />
       </section>
       {adding ? (
-        <AddWorkspaceModal onClose={() => setAdding(false)} onCreated={() => resource.refresh()} />
+        <AddWorkspaceModal
+          onClose={() => setAdding(false)}
+          onCreated={async () => {
+            success('Workspace created.');
+            await resource.refresh();
+          }}
+        />
       ) : null}
       {selected ? (
         <div
@@ -191,7 +237,6 @@ export function WorkspacesPage() {
             </div>
             <div className="modal-body workspace-details-body">
               <section className="form-section">
-                <h3>Workspace details</h3>
                 <form
                   className="workspace-details-form"
                   key={selected.id}
@@ -235,11 +280,23 @@ export function WorkspacesPage() {
                 <form className="form-row" onSubmit={addMount}>
                   <label className="field">
                     <span>Logical path</span>
-                    <input name="logicalPath" required />
+                    <input name="logicalPath" placeholder="Optional (/shared or absolute path)" />
                   </label>
                   <label className="field">
                     <span>Local mount root</span>
-                    <input name="hostRoot" required />
+                    <input
+                      name="hostRoot"
+                      placeholder="Absolute path (e.g. D:\shared or /opt/shared)"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Capabilities</span>
+                    <Dropdown
+                      name="capabilities"
+                      ariaLabel="Capabilities"
+                      defaultValue="read-only"
+                      options={MOUNT_CAPABILITY_OPTIONS}
+                    />
                   </label>
                   <button className="primary" data-surface-id="workspaces:add-mount">
                     Add mount
@@ -254,7 +311,15 @@ export function WorkspacesPage() {
                     {
                       key: 'capabilities',
                       label: 'Capabilities',
-                      value: (row) => (row.capabilities ?? []).join(', '),
+                      render: (row) => (
+                        <Dropdown
+                          className="mount-capability-dropdown"
+                          ariaLabel={`Capabilities for ${row.logicalPath || row.hostRoot}`}
+                          value={getMountCapabilityPreset(row.capabilities)}
+                          onChange={(val) => void updateMountCapabilities(row.id, val)}
+                          options={MOUNT_CAPABILITY_OPTIONS}
+                        />
+                      ),
                     },
                     {
                       key: 'actions',
@@ -264,10 +329,13 @@ export function WorkspacesPage() {
                       render: (row) => (
                         <button
                           type="button"
+                          className="danger-button"
+                          aria-label="Remove"
+                          title="Remove"
                           data-surface-id="workspaces:remove-mount"
                           onClick={() => void removeMount(row.id)}
                         >
-                          Remove
+                          [x]
                         </button>
                       ),
                     },
@@ -276,47 +344,17 @@ export function WorkspacesPage() {
                   emptyText="No external mounts."
                 />
               </section>
-              <section className="form-section">
-                <h3>Actor admission</h3>
-                <form className="form-row" onSubmit={saveAdmission}>
-                  <label className="field">
-                    <span>Actor</span>
-                    <input name="actor" placeholder="connector:ChatGPT" required />
-                  </label>
-                  <label className="field">
-                    <span>Profile</span>
-                    <Dropdown
-                      name="profileId"
-                      ariaLabel="Profile"
-                      defaultValue="developer"
-                      options={[
-                        { value: 'read-only', label: 'Read Only' },
-                        { value: 'developer', label: 'Developer' },
-                        { value: 'full-workspace', label: 'Full Workspace' },
-                      ]}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Admission</span>
-                    <Dropdown
-                      name="admission"
-                      ariaLabel="Admission"
-                      defaultValue="auto"
-                      options={[
-                        { value: 'auto', label: 'Auto-admit' },
-                        { value: 'ask', label: 'Ask every time' },
-                      ]}
-                    />
-                  </label>
-                  <button className="primary" data-surface-id="workspaces:save-admission">
-                    Save admission
-                  </button>
-                </form>
-              </section>
+              <WorkspaceAdmissionsSection
+                key={selected.id}
+                workspaceId={selected.id}
+                success={success}
+                error={error}
+              />
             </div>
           </section>
         </div>
       ) : null}
+      {toast}
     </PageState>
   );
 }

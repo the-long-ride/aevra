@@ -10,6 +10,61 @@ const PROVIDER_LABELS: Record<ExposureStatus['provider'], string> = {
   external: 'External / Custom',
 };
 
+function getHealthTone(value?: string | null): 'success' | 'danger' | 'warning' | 'mute' {
+  if (!value) return 'mute';
+  const norm = value.trim().toLowerCase();
+  if (
+    [
+      'ready',
+      'reachable',
+      'healthy',
+      'running',
+      'listening',
+      'ok',
+      'connected',
+      'active',
+      'valid',
+    ].includes(norm) ||
+    norm.startsWith('ready') ||
+    norm.startsWith('reachable') ||
+    norm.startsWith('healthy') ||
+    norm.startsWith('running') ||
+    norm.startsWith('listening') ||
+    norm.startsWith('connected')
+  ) {
+    return 'success';
+  }
+  if (
+    [
+      'unreachable',
+      'error',
+      'unavailable',
+      'failed',
+      'unhealthy',
+      'missing',
+      'stopped',
+      'degraded',
+      'disconnected',
+    ].includes(norm) ||
+    norm.startsWith('unreachable') ||
+    norm.startsWith('error') ||
+    norm.startsWith('unavailable') ||
+    norm.startsWith('failed') ||
+    norm.startsWith('unhealthy') ||
+    norm.startsWith('missing')
+  ) {
+    return 'danger';
+  }
+  if (
+    ['checking', 'pending', 'starting', 'reconnecting'].includes(norm) ||
+    norm.startsWith('checking') ||
+    norm.startsWith('pending')
+  ) {
+    return 'warning';
+  }
+  return 'mute';
+}
+
 function RemoteEndpoint({
   label,
   value,
@@ -95,6 +150,13 @@ export function RemoteAccessPanel({
     }
   };
 
+  const providerTone: 'success' | 'danger' | 'warning' | 'mute' =
+    status.state === 'ready'
+      ? 'success'
+      : status.state === 'error'
+        ? 'danger'
+        : getHealthTone(status.state);
+
   return (
     <div
       className="remote-access remote-access-status"
@@ -105,13 +167,10 @@ export function RemoteAccessPanel({
         <div className="remote-provider">
           <div>
             <b>{PROVIDER_LABELS[status.provider]}</b>
-            <p>{status.message ?? `Exposure is ${status.state}.`}</p>
+            <p className={`status-${providerTone}`} data-status={providerTone}>
+              {status.message ?? `Exposure is ${status.state}.`}
+            </p>
           </div>
-          <span
-            className={`status ${status.state === 'ready' ? 'success' : status.state === 'error' ? 'warning' : 'muted'}`}
-          >
-            {status.state}
-          </span>
         </div>
         <button type="button" onClick={testEndpoint}>
           Test endpoint
@@ -139,12 +198,17 @@ export function RemoteAccessPanel({
       </div>
       {healthRows.length ? (
         <div className="remote-health-grid" aria-label="Exposure health">
-          {healthRows.map(([label, value]) => (
-            <div key={label} className="remote-health-item">
-              <span>{label}</span>
-              <strong>{value}</strong>
-            </div>
-          ))}
+          {healthRows.map(([label, value]) => {
+            const tone = getHealthTone(value);
+            return (
+              <div key={label} className="remote-health-item">
+                <span>{label}</span>
+                <strong className={`status-${tone}`} data-status={tone}>
+                  {value}
+                </strong>
+              </div>
+            );
+          })}
         </div>
       ) : null}
       {status.checkedAt ? (

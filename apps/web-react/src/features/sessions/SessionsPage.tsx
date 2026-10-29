@@ -2,6 +2,7 @@ import type { RemoteSessionSummary, WorkspaceSummary } from '@aevra/admin-contra
 import { DataTable } from '../../components/DataTable';
 import { useDialog } from '../../components/Dialog';
 import { PageState } from '../../components/PageState';
+import { useToast } from '../../components/Toast';
 import { useApiResource } from '../../hooks/use-api-resource';
 import { requestJson } from '../../services/api-client';
 
@@ -37,6 +38,7 @@ async function load(signal: AbortSignal): Promise<SessionData> {
 export function SessionsPage() {
   const resource = useApiResource(load);
   const dialog = useDialog();
+  const { toast, success, error } = useToast();
   const data = resource.data;
 
   const revokeRemote = async (id: string) => {
@@ -47,11 +49,16 @@ export function SessionsPage() {
       confirmTone: 'danger',
     });
     if (!confirmed) return;
-    await requestJson(`/api/sessions/${encodeURIComponent(id)}/revoke`, {
-      method: 'POST',
-      body: '{}',
-    });
-    await resource.refresh();
+    try {
+      await requestJson(`/api/sessions/${encodeURIComponent(id)}/revoke`, {
+        method: 'POST',
+        body: '{}',
+      });
+      success('Session revoked.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const switchWorkspace = async (id: string) => {
@@ -63,11 +70,16 @@ export function SessionsPage() {
       required: true,
     });
     if (!workspaceId?.trim()) return;
-    await requestJson(`/api/sessions/${encodeURIComponent(id)}/workspace`, {
-      method: 'POST',
-      body: JSON.stringify({ workspaceId: workspaceId.trim(), timeoutMs: 60000 }),
-    });
-    await resource.refresh();
+    try {
+      await requestJson(`/api/sessions/${encodeURIComponent(id)}/workspace`, {
+        method: 'POST',
+        body: JSON.stringify({ workspaceId: workspaceId.trim(), timeoutMs: 60000 }),
+      });
+      success('Workspace switched.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const revokeLocal = async (idHash: string) => {
@@ -78,11 +90,16 @@ export function SessionsPage() {
       confirmTone: 'danger',
     });
     if (!confirmed) return;
-    await requestJson(`/api/admin-sessions/${encodeURIComponent(idHash)}/revoke`, {
-      method: 'POST',
-      body: '{}',
-    });
-    await resource.refresh();
+    try {
+      await requestJson(`/api/admin-sessions/${encodeURIComponent(idHash)}/revoke`, {
+        method: 'POST',
+        body: '{}',
+      });
+      success('Admin session revoked.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   const revokeOthers = async () => {
@@ -96,11 +113,16 @@ export function SessionsPage() {
     ) {
       return;
     }
-    await requestJson('/api/sessions/revoke-others', {
-      method: 'POST',
-      body: '{}',
-    });
-    await resource.refresh();
+    try {
+      await requestJson('/api/sessions/revoke-others', {
+        method: 'POST',
+        body: '{}',
+      });
+      success('Other sessions revoked.');
+      await resource.refresh();
+    } catch (cause) {
+      error(cause);
+    }
   };
 
   return (
@@ -203,6 +225,7 @@ export function SessionsPage() {
           rowKey={(row) => row.idHash}
         />
       </section>
+      {toast}
     </PageState>
   );
 }
