@@ -1,4 +1,5 @@
 import type { RuntimeExposureWiring } from '../exposure/runtime-wiring.js';
+import { AEVRA_VERSION } from '../version.js';
 
 interface RuntimeHealthInput {
   version: string;
@@ -10,7 +11,7 @@ interface RuntimeHealthInput {
   connectorFailedAttempts: number;
 }
 
-export function buildRuntimeHealth(input: RuntimeHealthInput) {
+function buildRuntimeHealth(input: RuntimeHealthInput) {
   const reachable = input.exposure?.tunnelHealth?.reachable;
   return {
     version: input.version,
@@ -24,4 +25,22 @@ export function buildRuntimeHealth(input: RuntimeHealthInput) {
     safeMode: input.safeMode,
     connectorFailedAttempts: input.connectorFailedAttempts,
   };
+}
+
+export function resolveRuntimeHealth(
+  worker: unknown,
+  mcp: { diagnosticsSnapshot?: () => unknown } | undefined,
+  exposure: { status?: () => any } | undefined,
+  safeMode: boolean,
+  failedAttempts: number,
+) {
+  return buildRuntimeHealth({
+    version: AEVRA_VERSION,
+    workerRunning: Boolean(worker),
+    mcpRunning: Boolean(mcp),
+    mcpDiagnostics: mcp?.diagnosticsSnapshot?.() ?? null,
+    exposure: exposure?.status?.() ?? null,
+    safeMode,
+    connectorFailedAttempts: failedAttempts,
+  });
 }

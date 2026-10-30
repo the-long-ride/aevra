@@ -25,16 +25,52 @@ export class OAuthMaintenance {
         .run(new Date(this.now().getTime() - maxAgeMs).toISOString()).changes,
     );
   }
-  deleteClient(id: string): 'not_found' | 'active_connections' | 'deleted' {
-    if (!this.db.prepare('SELECT 1 FROM oauth_clients WHERE client_id=?').get(id))
-      return 'not_found';
-    if (
-      this.db
-        .prepare("SELECT 1 FROM oauth_connections WHERE client_id=? AND status='ACTIVE'")
-        .get(id)
-    )
-      return 'active_connections';
-    this.db.prepare('DELETE FROM oauth_clients WHERE client_id=?').run(id);
+  deleteClient(id: string, force = false): 'not_found' | 'active_connections' | 'deleted' {
+    let clientId = id;
+    let byName = false;
+    let row = this.db.prepare('SELECT client_id FROM oauth_clients WHERE client_id=?').get(id) as
+      { client_id: string } | undefined;
+    if (!row) {
+      row = this.db.prepare('SELECT client_id FROM oauth_clients WHERE client_name=?').get(id) as
+        { client_id: string } | undefined;
+      if (!row) return 'not_found';
+      clientId = row.client_id;
+      byName = true;
+    }
+    const hasActive = byName
+      ? Boolean(
+          this.db
+            .prepare(
+              "SELECT 1 FROM oauth_connections WHERE client_id IN (SELECT client_id FROM oauth_clients WHERE client_name=?) AND status='ACTIVE'",
+            )
+            .get(id),
+        )
+      : Boolean(
+          this.db
+            .prepare("SELECT 1 FROM oauth_connections WHERE client_id=? AND status='ACTIVE'")
+            .get(clientId),
+        );
+    if (hasActive) {
+      if (!force) return 'active_connections';
+      if (byName) {
+        this.db
+          .prepare(
+            "UPDATE oauth_connections SET status='REVOKED', revoked_at=?, revoke_reason='CLIENT_DELETED' WHERE client_id IN (SELECT client_id FROM oauth_clients WHERE client_name=?) AND status='ACTIVE'",
+          )
+          .run(this.now().toISOString(), id);
+      } else {
+        this.db
+          .prepare(
+            "UPDATE oauth_connections SET status='REVOKED', revoked_at=?, revoke_reason='CLIENT_DELETED' WHERE client_id=? AND status='ACTIVE'",
+          )
+          .run(this.now().toISOString(), clientId);
+      }
+    }
+    if (byName) {
+      this.db.prepare('DELETE FROM oauth_clients WHERE client_name=?').run(id);
+    } else {
+      this.db.prepare('DELETE FROM oauth_clients WHERE client_id=?').run(clientId);
+    }
     return 'deleted';
   }
   trimPendingAuthorizationRequests(clientId: string, keep: number) {

@@ -81,11 +81,13 @@ test('dashboard snapshot aggregates runtime state and active connections', () =>
   assert.deepEqual(snapshot.connectors, [
     {
       id: 'oauth-client-1',
+      clientId: 'oauth-client-1',
+      actor: 'oauth:ChatGPT',
       name: 'ChatGPT',
       authType: 'OAuth',
       createdAt: '2026-08-17T12:00:00Z',
       lastUsedAt: '2026-08-18T00:01:00Z',
-      revocable: false,
+      revocable: true,
     },
     {
       id: 'conn-1',

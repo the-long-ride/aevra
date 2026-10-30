@@ -45,8 +45,8 @@ export class OAuthRepository {
   pruneUnconnectedClients(maxAgeMs: number) {
     return this.maintenance.pruneUnconnectedClients(maxAgeMs);
   }
-  deleteClient(id: string) {
-    return this.maintenance.deleteClient(id);
+  deleteClient(id: string, force = false) {
+    return this.maintenance.deleteClient(id, force);
   }
   trimPendingAuthorizationRequests(clientId: string, keep: number) {
     return this.maintenance.trimPendingAuthorizationRequests(clientId, keep);

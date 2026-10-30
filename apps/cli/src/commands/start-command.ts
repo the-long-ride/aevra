@@ -7,6 +7,7 @@ interface ReadyInfo {
   adminUrl: string;
   mcpUrl: string;
   gatewayUrl?: string;
+  browserUrl?: string;
 }
 
 export interface StartCommandDependencies<Config> {

@@ -84,6 +84,22 @@ test('never-connected clients are counted, pruned after 24h and deletable', () =
   repo.revokeConnection('sub_used', 'TEST');
   assert.equal(repo.deleteClient(used.clientId), 'deleted');
   assert.equal(repo.getClient(used.clientId), null);
+
+  const named = repo.registerClient({
+    clientName: 'NamedClient',
+    redirectUris: ['https://named.example/cb'],
+  });
+  assert.equal(repo.deleteClient('NamedClient'), 'deleted');
+  assert.equal(repo.getClient(named.clientId), null);
+
+  const forced = repo.registerClient({
+    clientName: 'ForcedClient',
+    redirectUris: ['https://forced.example/cb'],
+  });
+  connect(repo, forced.clientId, 'oauth:forced@https://forced.example', 'sub_forced');
+  assert.equal(repo.deleteClient(forced.clientId, false), 'active_connections');
+  assert.equal(repo.deleteClient(forced.clientId, true), 'deleted');
+  assert.equal(repo.getClient(forced.clientId), null);
   db.close();
 });
 

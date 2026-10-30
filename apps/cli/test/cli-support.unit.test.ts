@@ -32,6 +32,7 @@ test('aevra start ready output renders the service endpoints as a table', () => 
     gatewayUrl: 'http://127.0.0.1:47830',
     adminUrl: 'https://localhost:47831',
     mcpUrl: 'https://localhost:47832',
+    browserUrl: 'ws://127.0.0.1:47833',
     desktopHelperReady: true,
   });
   assert.deepEqual(lines, [
@@ -50,6 +51,7 @@ test('aevra start ready output renders the service endpoints as a table', () => 
     '│ Gateway        │ http://127.0.0.1:47830      │',
     '│ MCP            │ https://localhost:47832/mcp │',
     '│ Dashboard      │ https://localhost:47831     │',
+    '│ Extension WS   │ ws://127.0.0.1:47833        │',
     '└────────────────┴─────────────────────────────┘',
     '',
     creditLine(),

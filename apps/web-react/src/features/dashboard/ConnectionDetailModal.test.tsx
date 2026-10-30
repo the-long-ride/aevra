@@ -308,3 +308,31 @@ test('host browser and desktop grants are independent for the exact OAuth connec
     ).toBeTruthy(),
   );
 });
+
+test('removing an idle OAuth client registration calls delete client endpoint', async () => {
+  const user = userEvent.setup();
+  const fetchMock = installApiFixtures({
+    mutationResponses: {
+      'DELETE /api/oauth/clients/oauth_client_1': { ok: true },
+    },
+  });
+  const { onClose, onChanged } = renderModal({
+    id: 'oauth_client_1',
+    clientId: 'oauth_client_1',
+    sessionId: undefined,
+    connectionId: undefined,
+    authType: 'OAuth',
+    status: 'DISCONNECTED',
+  });
+
+  await user.click(screen.getByRole('button', { name: 'Remove client' }));
+  const confirmDialog = screen.getByRole('dialog', { name: 'Remove client' });
+  expect(confirmDialog).toHaveTextContent('Remove ChatGPT OAuth client registration?');
+  await user.click(within(confirmDialog).getByRole('button', { name: 'Remove client' }));
+
+  await waitFor(() =>
+    expect(mutationCall(fetchMock, '/api/oauth/clients/oauth_client_1', 'DELETE')).toBeTruthy(),
+  );
+  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+  expect(onClose).toHaveBeenCalled();
+});

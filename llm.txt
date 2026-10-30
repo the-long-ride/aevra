@@ -48,12 +48,19 @@ Execution Worker (Port 47833 WebSocket for Browser Extension)
    └─ Upstream MCP Proxies & Docker / Podman Sandbox
 ```
 
-### Port Allocation
+### Port Allocation & Custom Listeners
 
-- **Port 47830 (`AEVRA_PUBLIC_PORT`)**: Public gateway entry point for inbound web clients.
-- **Port 47831 (`AEVRA_ADMIN_PORT`)**: Local Admin Web UI and HTTP administrative API.
-- **Port 47832 (`AEVRA_MCP_PORT`)**: MCP HTTP / SSE transport protocol.
-- **Port 47833 (`AEVRA_BROWSER_PORT`)**: WebSocket listener for the paired Chromium browser extension.
+- **Default Ports**:
+  - **Port 47830 (`AEVRA_PUBLIC_PORT`)**: Public gateway entry point for inbound web clients.
+  - **Port 47831 (`AEVRA_ADMIN_PORT`)**: Local Admin Web UI and HTTP administrative API.
+  - **Port 47832 (`AEVRA_MCP_PORT`)**: MCP HTTP / SSE transport protocol.
+  - **Port 47833 (`AEVRA_BROWSER_PORT`)**: WebSocket listener for the paired Chromium browser extension.
+- **Custom Ports**:
+  - Shift all listeners using `--basePort=<port>` (e.g. `--basePort=50000` moves the block to `50000`–`50003`).
+  - Or override individual listeners: `--gateway-port` (`--gp`), `--ui-port` (`--up`), `--mcp-port` (`--mp`), and `--ws-port` (`--wp`).
+  - User service commands (`aevra service install|start|restart`) accept and persist these port configurations.
+- **Streaming IPC**:
+  - The Core daemon and Execution Worker communicate via local authenticated IPC (named pipes / Unix domain sockets) with streaming binary framing (`packages/ipc/src/stream.ts`) for high-throughput file transfers and safe discard/recovery on worker restarts.
 
 ---
 
@@ -88,6 +95,24 @@ Execution Worker (Port 47833 WebSocket for Browser Extension)
    - Operators can scope tools per client connection into tool groups: `core` (always on), `files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, and `upstream`.
    - Invoking a tool in a disabled group returns error code `TOOL_GROUP_DISABLED`.
 
+6. **YOLO Policy Settings (`policy.yolo` = `{mode, risk}`)**:
+   - Evaluated only when a connection has YOLO enabled.
+   - **Risk (`risk`)**:
+     - `prevent-high-risk` (default): CRITICAL actions, `policy.critical.alwaysConfirm`, and file transfers still ask for human approval.
+     - `do-whatever`: Waives confirmation for CRITICAL commands, permanent file deletion, and `git push` only when scope is `unrestricted`. Non-command tools (e.g. `files_download`, `files_upload`) skip approvals under `do-whatever` in either scope.
+   - **Scope (`mode`)**:
+     - `workspace` (default): Unattended execution is strictly constrained inside workspace roots. Commands outside or of unknown scope, host execution, and network access still prompt.
+     - `unrestricted`: Lifts scope boundaries, allowing directory actions outside registered workspaces.
+   - Conclusively workspace-scoped commands run unattended under any YOLO setting before rule checks. Secret paths and DLP rules strictly apply in all configurations.
+
+7. **Multi-Workspace Grants & Admission Profiles**:
+   - Connectors can be granted access to multiple workspaces simultaneously upon creation or update (or none by default).
+   - Each grant defines:
+     - **Admission Profile**: `full`, `read-only`, or `custom`.
+     - **Admission Mode**: `standard` or `isolated`.
+     - **External Mounts**: `read-only`, `read-write`, or `blocked`.
+   - Local and public tunnel configurations are generated side-by-side. Tool calls against multi-workspace sessions must provide the `workspace` parameter explicitly.
+
 ---
 
 ## 4. Built-in MCP Tools Reference (79 Tools)
@@ -95,16 +120,21 @@ Execution Worker (Port 47833 WebSocket for Browser Extension)
 The model-facing surface favors bounded batch interfaces; singular file/command
 primitives remain internal implementation details.
 
-### Status & Workspace
+### Status, Workspace & Connector Notes
 
 - Status: `aevra_status` (reports session, leases, capabilities, and system info), `control_access_status` (reports connection-level host browser/desktop grants).
 - Workspace: `workspace_list`, `workspace_select`, `workspace_current`.
+- Connector Notes:
+  - `notes_list`: List notes left by the human operator for the current connector (`id`, `title`, `preview`, `imageCount`, `aiCanDelete`, `readOnConnect`, `updatedAt`).
+  - `notes_read`: Read a note by `id` (returns text, metadata, and attached images up to 4 images / 2 MiB each as MCP image content).
+  - `notes_delete`: Permanently delete a note by `id` (only permitted when `aiCanDelete` is true).
 
 ### Files, Commands, Git, Processes
 
 - Files/search: `file_list`, `file_read_many`, `file_search`, `search`,
   `file_write_many`, `file_move`, `file_delete`. File contents are preserved verbatim.
-- Binary transfer: `files_download` (you send 1-64 files to the device: inline base64 or a public `url`, `overwrite` defaults to false) and `files_upload` (you pull 1-64 files from the device: inline when small, else a one-time link on the public URL). One local approval per batch. Each entry succeeds or fails alone.
+- Binary transfer: `files_download` (send 1-64 files to device: inline base64 or public `url`; streams to temp file, verifies pinned public DNS, reports `mimeMismatch`, `overwrite` defaults to false, snapshots files ≤ 20 MiB for recovery) and `files_upload` (pull 1-64 files from device: `delivery: "auto" | "inline" | "link"`; `auto` stays inline up to 4 MB then switches to links; `link` mints 5-minute single-use download links `GET /files/<secret>` on public origin). One `files:transfer` approval per batch (waived under YOLO risk `do-whatever`).
+- File transfer error codes: `FILE_EXISTS`, `FILE_CHANGED`, `URL_NOT_PUBLIC`, `URL_SCHEME`, `TOO_MANY_REDIRECTS`, `SIZE_LIMIT`, `URL_TIMEOUT`, `INLINE_TOO_LARGE`, `BATCH_LIMIT`, `PUBLIC_URL_REQUIRED`.
 - Commands: `command_run_many` and `shell_run`. Supports optional `maxOutputChars` budget (256–200,000, default 16,000). Use managed processes for long-running work.
 - Processes: `process_start/list/status/wait/logs/stop/restart`.
 - Git: `git_status/add/diff/log/branch/commit/push`.
@@ -154,10 +184,21 @@ and are seen by connected clients on their next list (no `list_changed` is sent)
 
 ### Local AI Agent Integration
 
-`aevra agent` connects local coding agents (`codex`, `claude-code` with the alias `claude`, `opencode`, `antigravity`) to a running Aevra. `aevra agent list` (alias `status`) shows each agent, whether it was detected (command name on `PATH` or a config home; no process is spawned), its scope (`global` or a workspace name), transport, state and last use. `aevra agent install` with no agent names acts on the detected agents after a `Proceed? [y/N]` question (`--yes` skips it; without a terminal and without `--yes` it prints the list and exits 1; `all` with nothing detected exits 1; `--dry-run` never prompts). Naming an agent installs it even if it was not detected. Several agents run independently and the exit code is 1 if any fails. `--json` prints one JSON document on stdout and never prints credential file paths or hashes.
+`aevra agent` connects local coding agents (`codex`, `claude-code` with alias `claude`, `opencode`, `antigravity`, `antigravity-cli` with alias `agy`, `antigravity-ide`) to a running Aevra. `aevra agent list` (alias `status`) shows each agent, whether it was detected (command name on `PATH` or a config home; no process is spawned), its scope (`global` or a workspace name), transport, state and last use. `aevra agent install` with no agent names acts on the detected agents after a `Proceed? [y/N]` question (`--yes` skips it; without a terminal and without `--yes` it prints the list and exits 1; `all` with nothing detected exits 1; `--dry-run` never prompts). Naming an agent installs it even if it was not detected. Several agents run independently and the exit code is 1 if any fails. `--json` prints one JSON document on stdout and never prints credential file paths or hashes.
 
 - Scope: `--scope user|workspace` (default `user`). `--workspace <name|id>` implies workspace scope and is resolved through the registered Aevra workspaces. `uninstall <agent>` without `--scope` removes the global connection; with `--workspace` and no `--scope` it removes that workspace connection; `uninstall all` without `--scope` removes every connection, global and workspace (API: `scope: 'all'`); with `--scope user` it removes global connections only and never touches workspace ones; each agent is removed independently, so one failing agent does not stop the others (exit code 1). `aevra agent uninstall --id <id>` (API: `credentialId`, uninstall only, not combinable with agent names, `all`, `--scope` or `--workspace`) removes exactly one connection by its connection id, also when its workspace folder was deleted or is no longer a registered Aevra workspace (the registration is removed and its credential revoked; a note says the entry file could not be edited); `agent list` prints the id of such orphaned connections, and Settings removes them with Remove (Update stays disabled).
-- Workspace scope is stdio only (`--transport http` is refused), installs no skill and creates no skill links. The entry goes to: Codex `<root>/.codex/config.toml` (Codex reads it for trusted projects only); Claude Code `~/.claude.json` (or `$CLAUDE_CONFIG_DIR/.claude.json`) under `projects[<root>]` (local scope, nothing written into the project folder); OpenCode `<root>/opencode.json` or an existing `opencode.jsonc`; Antigravity `<root>/.agents/mcp_config.json`.
+- Workspace scope is stdio only (`--transport http` is refused), installs no skill and creates no skill links. The entry goes to:
+  - Codex: `<root>/.codex/config.toml` (Codex reads it for trusted projects only)
+  - Claude Code: `~/.claude.json` (or `$CLAUDE_CONFIG_DIR/.claude.json`) under `projects[<root>]` (local scope, nothing written into the project folder)
+  - OpenCode: `<root>/opencode.json` or an existing `opencode.jsonc`
+  - Antigravity / Antigravity CLI / Antigravity IDE: `<root>/.agents/mcp_config.json`
+- User scope entry targets:
+  - Codex: `~/.codex/config.toml`
+  - Claude Code: `~/.claude.json`
+  - OpenCode: `~/.config/opencode/opencode.json`
+  - Antigravity: `~/.gemini/antigravity/mcp_config.json`
+  - Antigravity CLI: `~/.gemini/antigravity-cli/mcp_config.json`
+  - Antigravity IDE: `~/.gemini/config/mcp_config.json`
 - A project file tracked by git is refused with `AGENT_PROJECT_FILE_TRACKED`; otherwise it is added to the repository `info/exclude`. A symbolic link or directory junction on the way to the file inside the project is refused with `AGENT_PATH_CONFLICT`; a workspace folder that is the home folder or a filesystem root, or a project file that is the agent's own global file, is refused with `AGENT_OPTIONS_INVALID` (dry runs included). git runs only from an absolute `PATH` entry outside the project (device paths and 8.3 short names of the project are recognised); when the folder or a parent holds `.git` but no such git exists, the install goes ahead with the note `git could not be found outside the project folder <root>, so git tracking was not checked.` The link refusal also applies to uninstall and status: remove the link, uninstall again, then delete the leftover `aevra` entry by hand in the file the link pointed to. After install: trust the folder in Codex; start Claude Code in the folder and restart it.
 - The stdio bridge that generated configs start is `aevra agent serve --credential-file <file>`. It replaces `aevra mcp serve --stdio` with no alias: configs written by earlier local builds are refreshed by running `aevra agent install <agent>` again with the same scope (or Update in Settings): a changed stdio entry is rewritten in place and keeps its credential; after an MCP port or TLS CA change the stdio credential file gets the current endpoint and CA file (same id and token) and an HTTP entry is rewritten with the stored credential (never a new one); an identical connection is `no change`.
 - Uninstall acts only on registrations Aevra recorded: a hand-written `aevra` entry is left alone and does not block it; a managed entry, credential file or skill modified since install refuses the uninstall (nothing is removed) and root `aevra uninstall` then skips cleanup and `--purge`.
@@ -179,12 +220,13 @@ and are seen by connected clients on their next list (no `list_changed` is sent)
 - **HTTP Response Compression:** Gzip-compresses responses ≥ 1,024 bytes when the client sends `Accept-Encoding: gzip`.
 - **Bounded Activity Detail:** Sanitized in-memory activity logs are bounded to prevent memory bloating.
 
-### File Transfer, Tool Switches & YOLO Split (v1.3.2)
+### File Transfer, Tool Switches, Notes & YOLO Split (v1.3.2)
 
-- **File Transfer Tools:** `files_download` (pull files to workspace via inline base64 or verified public URLs with pinned DNS and MIME sniffing) and `files_upload` (push files out of workspace inline or via short-lived 5-minute single-use download links `GET /files/<secret>`). Configurable limits via Settings > File Transfer (`files.transfer`).
-- **Global Per-Tool Switches:** Operators can globally turn off individual built-in or linked upstream MCP tools in Settings > Tools (`tools.disabled`), removing them from `tools/list` and rejecting invocations by name. Core primitives remain locked on.
-- **YOLO Policy Split:** Split into independent Scope (`workspace|unrestricted`) and Risk (`prevent-high-risk|do-whatever`) settings (`policy.yolo`). Unrestricted scope lifts workspace boundary checks; `do-whatever` risk waives approvals for CRITICAL operations only when unrestricted scope is enabled.
+- **File Transfer Tools:** `files_download` (pull files to workspace via inline base64 or verified public URLs with pinned DNS and MIME sniffing) and `files_upload` (push files out of workspace inline or via short-lived 5-minute single-use download links `GET /files/<secret>`). Configurable limits via Settings > File Transfer (`files.transfer`, default 200 MB file, 500 MB batch, 50 MB inline).
+- **Global Per-Tool Switches:** Operators can globally turn off individual built-in or linked upstream MCP tools in Settings > Tools (`tools.disabled`), removing them from `tools/list` and rejecting invocations by name with `TOOL_DISABLED`. Core primitives (`workspace_*`, `operation_*`, `approval_*`, `aevra_status`, `control_access_status`) remain locked on (`TOOL_LOCKED`).
+- **YOLO Policy Split:** Split into independent Scope (`workspace|unrestricted`) and Risk (`prevent-high-risk|do-whatever`) settings (`policy.yolo`). Unrestricted scope lifts workspace boundary checks; `do-whatever` risk waives approvals for CRITICAL operations only when unrestricted scope is enabled. Non-command tools (such as file transfers) skip approvals under `do-whatever` in either scope.
 - **Connector Multi-Workspace Grants:** Connectors can be granted access to multiple workspaces upon creation or update (or none by default), with per-workspace admission profiles, admission modes, and external mount capability ceilings. Dual Local & Tunnel configuration snippets are generated side-by-side.
+- **Connector Notes:** Operators can leave persistent guidance, instructions, and up to 4 images per note for AI clients via the Notes tab in connection details. Tools: `notes_list`, `notes_read` (serves images as MCP image content), and `notes_delete` (only when `aiCanDelete` is enabled).
 
 ---
 
@@ -192,14 +234,14 @@ and are seen by connected clients on their next list (no `list_changed` is sent)
 
 | Command                                                                                                                       | Description                                                                                                                                                   |
 | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `aevra start [--ui]`                                                                                                          | Start the Core daemon and Execution Worker. Opens Admin UI if `--ui` is given.                                                                                |
+| `aevra start [--ui] [--basePort=<p>] [--gateway-port=<p>] [--ui-port=<p>] [--mcp-port=<p>] [--ws-port=<p>]`                   | Start the Core daemon and Execution Worker. Custom ports shift or set individual listeners. Opens Admin UI if `--ui` is given.                                |
 | `aevra ui [--logout-all]`                                                                                                     | Open the Admin Web UI in the default browser with an authenticated single-use token.                                                                          |
 | `aevra setup`                                                                                                                 | Run interactive onboarding wizard to configure remote access, tunnels, and initial workspace.                                                                 |
-| `aevra service install\|start\|stop\|restart\|status`                                                                         | Manage Aevra as a native user service (Windows Scheduled Tasks, Linux systemd, macOS LaunchAgents).                                                           |
+| `aevra service install\|start\|stop\|restart\|status`                                                                         | Manage Aevra as a native user service (Scheduled Tasks, systemd, LaunchAgents). Accepts and persists custom port options.                                     |
 | `aevra connectors list\|create <name>\|revoke <id>`                                                                           | Manage external AI connectors (e.g. ChatGPT, Claude).                                                                                                         |
 | `aevra connections list\|revoke <id>`                                                                                         | Inspect and revoke active client connections.                                                                                                                 |
 | `aevra mcp list\|add <name> --transport …\|remove <id>\|test <id>\|enable <id>\|disable <id>\|review <id>\|accept <id> --yes` | Configure, test, enable and disable upstream MCP server proxies; review and accept catalog changes.                                                           |
-| `aevra agent list\|status [--json]`                                                                                           | List local agents (Codex, Claude Code, OpenCode, Antigravity), whether they were detected, and their Aevra connections.                                       |
+| `aevra agent list\|status [--json]`                                                                                           | List local agents (Codex, Claude Code/claude, OpenCode, Antigravity, Antigravity CLI/agy, Antigravity IDE), detection status, and connections.                |
 | `aevra agent install [<agent>...\|all] [--scope user\|workspace] [--workspace <name>] [--yes] [--dry-run]`                    | Connect agents globally or to one workspace (`--transport stdio\|http`, http global only). With no agent names, acts on detected agents after a confirmation. |
 | `aevra agent uninstall <agent>...\|all [--scope user\|workspace] [--workspace <name>] [--dry-run]`                            | Remove agent connections.                                                                                                                                     |
 | `aevra uninstall [--dry-run] [--purge]`                                                                                       | Remove agent integrations, print a summary, then run product cleanup (only after agent removal succeeded).                                                    |
@@ -264,9 +306,13 @@ When you are acting as an AI assistant interacting with Aevra via MCP tools or g
 
 ### Tip 2b: Moving binary files
 
-- Send a file you made: `files_download` with `content` + `encoding: "base64"` and a `mimeType`. Send a big or existing file: use a public `url` (private and local addresses are refused).
-- Fetch a device file: `files_upload`. If a result entry has `delivery: "link"`, fetch `url` once within 5 minutes; the link works one time and dies when your connection is revoked.
-- Tools the owner switched off in Settings > Tools are not listed and are refused by name.
+- Send a file you made: `files_download` with `content` + `encoding: "base64"` and a `mimeType`. Send a big or existing file: use a public `url` (private and local addresses are refused after DNS resolution across redirects).
+- Fetch a device file: `files_upload`. Delivery modes:
+  - `delivery: "auto"` (default): stays inline base64 up to 4 MB total, then switches to links.
+  - `delivery: "inline"`: forces inline base64 up to the configured inline limit (default 50 MB). If links fail with `PUBLIC_URL_REQUIRED`, fall back to `inline`.
+  - `delivery: "link"`: always mints a one-time link `GET /files/<secret>` on your public MCP origin. Fetch it once within 5 minutes; it dies after 1 successful download or when your connection is revoked/disconnected.
+- File transfer errors to handle: `FILE_EXISTS`, `FILE_CHANGED`, `URL_NOT_PUBLIC`, `URL_SCHEME`, `TOO_MANY_REDIRECTS`, `SIZE_LIMIT`, `URL_TIMEOUT`, `INLINE_TOO_LARGE`, `BATCH_LIMIT`, `PUBLIC_URL_REQUIRED`.
+- Tools switched off in Settings > Tools are omitted from `tools/list` and refused by name with `TOOL_DISABLED`. Core tools remain permanently locked on (`TOOL_LOCKED`).
 
 ### Tip 3: Use managed processes for long-running commands
 
@@ -313,3 +359,19 @@ When you are acting as an AI assistant interacting with Aevra via MCP tools or g
 - If a tool invocation returns `TOOL_GROUP_DISABLED: Tool <name> is in the "<group>" group, which is disabled for this connector`, the administrator has filtered your tool surface in **Connections > Tool surface** to conserve context tokens.
 - Available groups: `core` (always on), `files`, `commands`, `git`, `changes`, `skills`, `browser`, `desktop`, `control`, `upstream`.
 - If your task strictly requires tools from a disabled group, inform the operator so they can toggle the group on in the Aevra Web UI.
+
+### Tip 10: Utilizing Connector Notes (`notes_list`, `notes_read`, `notes_delete`)
+
+- Human operators can attach notes and visual reference assets directly to your connector in the Web UI:
+  - Call `notes_list` to discover available notes for your connection.
+  - Call `notes_read` with `{ "id": "<note-id>" }` to retrieve full note markdown and attached images (PNG/JPEG/GIF/WebP, up to 4 images / 2 MiB each returned as native MCP image content blocks).
+  - Only call `notes_delete` if the user explicitly enabled `aiCanDelete: true` on that note and asked you to clean it up.
+- Visible notes with **Read on connect** enabled are automatically flagged during session establishment for immediate ingestion.
+
+### Tip 11: Adapting to YOLO Policy Risk & Scope
+
+- When operating with YOLO mode enabled:
+  - Commands conclusively within the workspace run unattended under any YOLO configuration.
+  - Commands outside the workspace or of unknown scope require human approval unless scope is set to `unrestricted`.
+  - Under risk `prevent-high-risk` (default), CRITICAL operations and file transfers still prompt for human approval. Under risk `do-whatever`, CRITICAL operations run unattended (when scope is `unrestricted`), and non-command tools (such as file transfers) skip approvals under either scope.
+  - Secret paths and DLP redaction remain enforced in all YOLO modes without exception.

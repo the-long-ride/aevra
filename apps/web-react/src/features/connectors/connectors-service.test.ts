@@ -187,4 +187,32 @@ describe('connectors-service', () => {
     await expect(removeConnectorItem(item)).rejects.toThrow('Network failure');
     spy.mockRestore();
   });
+
+  test('removeConnectorItem handles OAuth client deletion and groups duplicate registrations', async () => {
+    const spy = vi.spyOn(apiClient, 'requestJson').mockResolvedValue({});
+    const item: ConnectorItem = {
+      id: 'oauth-client-1',
+      clientId: 'oauth-client-1',
+      clientIds: ['oauth-client-1', 'oauth-client-2'],
+      name: 'Claude Code (aevra)',
+      client: 'Claude Code (aevra)',
+      authType: 'OAuth',
+      status: 'DISCONNECTED',
+      yolo: false,
+      workspace: null,
+      workspaces: [],
+      workspaceIds: [],
+      capabilities: [],
+      revocable: true,
+    };
+
+    await removeConnectorItem(item);
+    expect(spy).toHaveBeenCalledWith('/api/oauth/clients/oauth-client-1?force=true', {
+      method: 'DELETE',
+    });
+    expect(spy).toHaveBeenCalledWith('/api/oauth/clients/oauth-client-2?force=true', {
+      method: 'DELETE',
+    });
+    spy.mockRestore();
+  });
 });
