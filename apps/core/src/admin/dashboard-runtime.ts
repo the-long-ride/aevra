@@ -54,13 +54,15 @@ function buildConnectorInventory(context: any, sessions: any[]) {
     );
     return {
       id: String(client.clientId ?? actor),
+      clientId: client.clientId ? String(client.clientId) : undefined,
+      actor,
       name,
       authType: 'OAuth',
       createdAt: client.createdAt,
       lastUsedAt: newestTimestamp(
         matchingSessions.map((session: any) => session.lastActivityAt ?? session.createdAt),
       ),
-      revocable: false,
+      revocable: true,
     };
   });
   const bearerConnectors = (context.connectors?.list?.() ?? []).map((connector: any) => ({

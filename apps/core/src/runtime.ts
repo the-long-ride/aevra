@@ -12,10 +12,9 @@ import { SecurityGuard } from './security/security-guard.js';
 import { ManifestService } from './workspaces/manifest-service.js';
 import { createConnectorAdmission } from './mcp/connector-admission.js';
 import { McpActivityLog } from './mcp/activity-log.js';
-import { AEVRA_VERSION } from './version.js';
 import { MetricsService } from './metrics.js';
 import { AdminServer } from './admin/server.js';
-import { buildRuntimeHealth } from './admin/runtime-health.js';
+import { resolveRuntimeHealth } from './admin/runtime-health.js';
 import { McpIngressServer } from './mcp/server.js';
 import { AdminBootstrapService, ensureLocalControlSecret } from './admin/bootstrap.js';
 import * as adminRuntime from './admin/admin-api-context.js';
@@ -247,18 +246,15 @@ export async function createCoreRuntime(
         const remoteTools = new SessionSkillAccessGate(tools, sessions, approvals);
         const bootstrap = new AdminBootstrapService(raw);
         await bootstrap.revokeAll();
-        const controlSecret = ensureLocalControlSecret(config.stateDir);
-        const localFilesystem = new LocalFilesystemService();
         const localTls = tls.serverOptions;
-        const staticDir = fileURLToPath(new URL('../../web', import.meta.url));
         const oauth = exposureWiring.oauth;
         admin = adminRuntime.createRuntimeAdminServer(
           config,
           {
             bootstrap,
             credentialVerifier: adminCredentialVerifier,
-            controlSecret,
-            staticDir,
+            controlSecret: ensureLocalControlSecret(config.stateDir),
+            staticDir: fileURLToPath(new URL('../../web', import.meta.url)),
             localTls,
             exposureWiring,
             trustedAdminOrigins: config.trustedAdminOrigins,
@@ -276,7 +272,7 @@ export async function createCoreRuntime(
               audit,
               settings,
               exposureWiring,
-              localFilesystem,
+              localFilesystem: new LocalFilesystemService(),
               oauth,
               connections,
               hostControlAccess,
@@ -301,15 +297,13 @@ export async function createCoreRuntime(
             }),
           },
           () =>
-            buildRuntimeHealth({
-              version: AEVRA_VERSION,
-              workerRunning: Boolean(worker),
-              mcpRunning: Boolean(mcp),
-              mcpDiagnostics: mcp?.diagnosticsSnapshot() ?? null,
-              exposure: exposureWiring?.status() ?? null,
+            resolveRuntimeHealth(
+              worker,
+              mcp,
+              exposureWiring,
               safeMode,
-              connectorFailedAttempts: connectorLimiter.totalFailures(),
-            }),
+              connectorLimiter.totalFailures(),
+            ),
         );
         const connectorsAdmission = createConnectorAdmission(connectorRepo, connectorLimiter);
         mcp = new McpIngressServer(

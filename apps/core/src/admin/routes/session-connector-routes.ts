@@ -3,8 +3,14 @@ import type { AdminRouteHandler } from './types.js';
 
 const sendError = (res: any, status: number, code: string, message: string) =>
   sendAdminResponse(res, status, { error: { code, message } });
+const sendNotFound = (res: any, message: string) => {
+  sendError(res, 404, 'NOT_FOUND', message);
+  return true;
+};
 const sendOk = (res: any, extra: Record<string, unknown> = {}) =>
   sendAdminResponse(res, 200, { ok: true, revision: Date.now(), ...extra });
+const connectorTarget = (context: any, id: string) =>
+  String(context.connectors?.list?.().find((c: any) => c.id === id)?.name ?? id);
 
 function syncConnectorWorkspaceSessions(
   context: any,
@@ -43,10 +49,7 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
   let match = path.match(/^\/api\/sessions\/([^/]+)\/yolo$/);
   if (match && (method === 'POST' || method === 'DELETE')) {
     const session = context.sessions?.get?.(match[1]);
-    if (!session) {
-      sendError(res, 404, 'NOT_FOUND', 'Session not found');
-      return true;
-    }
+    if (!session) return sendNotFound(res, 'Session not found');
     try {
       const result =
         method === 'POST'
@@ -97,10 +100,7 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
   if (match && method === 'DELETE') {
     const sessionId = match[1]!;
     const workspaceId = decodeURIComponent(match[2]!);
-    if (!context.sessions?.get?.(sessionId)) {
-      sendError(res, 404, 'NOT_FOUND', 'Session not found');
-      return true;
-    }
+    if (!context.sessions?.get?.(sessionId)) return sendNotFound(res, 'Session not found');
     context.sessions?.revokeWorkspace?.(sessionId, workspaceId);
     sendOk(res);
     return true;
@@ -307,14 +307,8 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
   if (match && method === 'POST') {
     const connectorId = match[1]!;
     const token = context.connectors?.rotate?.(connectorId);
-    if (!token) {
-      sendError(res, 404, 'NOT_FOUND', 'Connector not found');
-      return true;
-    }
-    const target = String(
-      context.connectors?.list?.().find((connector: any) => connector.id === connectorId)?.name ??
-        connectorId,
-    );
+    if (!token) return sendNotFound(res, 'Connector not found');
+    const target = connectorTarget(context, connectorId);
     context.audit?.append?.({
       actor: 'admin',
       operation: 'connector.rotate',
@@ -330,14 +324,13 @@ export const handleSessionConnectorRoutes: AdminRouteHandler = async (req, res, 
   match = path.match(/^\/api\/connectors\/([^/]+)$/);
   if (match && method === 'DELETE') {
     const connectorId = match[1]!;
-    const target =
-      context.connectors?.list?.().find((connector: any) => connector.id === connectorId)?.name ??
-      connectorId;
+    const target = connectorTarget(context, connectorId);
     context.connectors?.revoke?.(connectorId);
+    context.oauth?.deleteClient?.(connectorId, true);
     context.audit?.append?.({
       actor: 'admin',
       operation: 'connector.revoke',
-      target: String(target),
+      target,
       result: 'ok',
       redactionCount: 0,
       class: 'security',

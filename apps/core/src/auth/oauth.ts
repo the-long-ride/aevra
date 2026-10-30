@@ -84,8 +84,8 @@ export class AevraOAuthService {
     return listOAuthClients(this.repo);
   }
 
-  deleteClient(id: string) {
-    return this.repo.deleteClient(id);
+  deleteClient(id: string, force = false) {
+    return this.repo.deleteClient(id, force);
   }
 
   beginAuthorization(

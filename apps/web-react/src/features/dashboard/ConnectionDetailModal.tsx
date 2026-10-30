@@ -21,6 +21,8 @@ export interface ActiveConnection {
   connectorId?: string;
   connectionId?: string;
   sessionId?: string;
+  clientId?: string;
+  clientIds?: string[];
   sessionCount?: number;
   client?: string;
   name?: string;
@@ -105,8 +107,13 @@ export function ConnectionDetailModal({
         ? connection.id
         : undefined);
   const durableOAuth = connection.authType === 'OAuth' && Boolean(connection.connectionId);
+  const isOAuthClient =
+    connection.authType === 'OAuth' &&
+    !durableOAuth &&
+    Boolean(connection.clientId || connection.clientIds?.length);
   const sessionId =
-    connection.sessionId ?? (durableOAuth || isConnector ? undefined : connection.id);
+    connection.sessionId ??
+    (durableOAuth || isConnector || isOAuthClient ? undefined : connection.id);
   const tabs: ConnectionTab[] = connection.actor ? ['details', 'notes'] : ['details'];
   const activeTab: ConnectionTab = tabs.includes(tab) ? tab : 'details';
 
@@ -120,17 +127,35 @@ export function ConnectionDetailModal({
   };
 
   const revoke = async () => {
-    const target = durableOAuth ? connection.connectionId! : connectorId ? connectorId : sessionId!;
-    const noun = durableOAuth ? 'connection' : isConnector ? 'connector' : 'session';
+    const target = durableOAuth
+      ? connection.connectionId!
+      : connectorId
+        ? connectorId
+        : isOAuthClient
+          ? (connection.clientId ?? connection.id!)
+          : sessionId!;
+    const noun = durableOAuth
+      ? 'connection'
+      : isConnector
+        ? 'connector'
+        : isOAuthClient
+          ? 'client'
+          : 'session';
     if (
       !(await dialog.confirm({
-        title: `Revoke ${noun}`,
+        title: isOAuthClient ? 'Remove client' : `Revoke ${noun}`,
         message: durableOAuth
           ? `Revoke ${connection.client ?? target} OAuth credentials and prevent silent resume?`
           : isConnector
             ? `Revoke connector ${connection.client ?? connection.name ?? target}?`
-            : `Disconnect ${connection.client ?? target}?`,
-        confirmLabel: durableOAuth ? 'Revoke connection' : 'Revoke',
+            : isOAuthClient
+              ? `Remove ${connection.client ?? connection.name ?? target} OAuth client registration?`
+              : `Disconnect ${connection.client ?? target}?`,
+        confirmLabel: durableOAuth
+          ? 'Revoke connection'
+          : isOAuthClient
+            ? 'Remove client'
+            : 'Revoke',
         confirmTone: 'danger',
       }))
     ) {
@@ -154,6 +179,16 @@ export function ConnectionDetailModal({
           }).catch(() => undefined);
         }
         success('Connector revoked.');
+      } else if (isOAuthClient) {
+        const clientIds = connection.clientIds?.length
+          ? connection.clientIds
+          : [connection.clientId ?? target];
+        for (const cId of clientIds) {
+          await requestJson(`/api/oauth/clients/${encodeURIComponent(cId)}`, {
+            method: 'DELETE',
+          });
+        }
+        success('OAuth client removed.');
       } else {
         await requestJson(`/api/sessions/${encodeURIComponent(target)}/revoke`, {
           method: 'POST',
@@ -283,11 +318,19 @@ export function ConnectionDetailModal({
             type="button"
             className="danger-button"
             data-surface-id={
-              durableOAuth ? 'connections:revoke-connection' : 'connections:revoke-session'
+              durableOAuth
+                ? 'connections:revoke-connection'
+                : isOAuthClient
+                  ? 'connections:revoke-client'
+                  : 'connections:revoke-session'
             }
             onClick={() => void revoke()}
           >
-            {durableOAuth ? 'Revoke connection' : 'Revoke session'}
+            {durableOAuth
+              ? 'Revoke connection'
+              : isOAuthClient
+                ? 'Remove client'
+                : 'Revoke session'}
           </button>
         </footer>
       </section>

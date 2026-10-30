@@ -46,7 +46,9 @@ export const handleAccessRoutes: AdminRouteHandler = async (req, res, url, conte
 
   const clientDelete = path.match(/^\/api\/oauth\/clients\/([^/]+)$/);
   if (clientDelete && method === 'DELETE') {
-    const outcome = context.oauth?.deleteClient?.(decodeURIComponent(clientDelete[1]));
+    const force = url.searchParams.get('force') === 'true';
+    const clientId = decodeURIComponent(clientDelete[1]!);
+    const outcome = context.oauth?.deleteClient?.(clientId, force);
     sendAdminResponse(
       res,
       outcome === 'deleted' ? 200 : outcome === 'active_connections' ? 409 : 404,

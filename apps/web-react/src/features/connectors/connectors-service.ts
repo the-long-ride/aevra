@@ -20,6 +20,8 @@ export interface ConnectorItem extends ActiveConnection {
   connectorId?: string;
   connectionId?: string;
   sessionId?: string;
+  clientId?: string;
+  clientIds?: string[];
   name: string;
   client: string;
   actor?: string;
@@ -79,63 +81,51 @@ export function buildUnifiedConnectors(
         profileId: bearer.profileCap ?? 'read-only',
       }));
 
+    const wsDisplay =
+      wsNames.join(', ') || (typeof active?.workspace === 'string' ? active.workspace : null);
+    const activeCaps = Array.isArray(active?.capabilities) ? active.capabilities.map(String) : [];
+    const caps = active ? activeCaps : bearer.profileCap ? [bearer.profileCap] : [];
+    const lastActive =
+      typeof active?.lastActivityAt === 'string'
+        ? active.lastActivityAt
+        : (bearer.lastUsedAt ?? undefined);
+    const connected =
+      typeof active?.connectedAt === 'string' ? active.connectedAt : bearer.createdAt;
+
     if (active) {
       matchedActiveIds.add(String(active.id ?? active.sessionId ?? ''));
-      items.push({
-        ...active,
-        id: bearer.id,
-        connectorId: bearer.id,
-        sessionId:
-          typeof active.sessionId === 'string'
-            ? active.sessionId
-            : typeof active.id === 'string'
-              ? active.id
-              : undefined,
-        name: bearer.name,
-        client: bearer.name,
-        actor: typeof active.actor === 'string' ? active.actor : `connector:${bearer.name}`,
-        authType: 'Bearer connector',
-        status: 'CONNECTED',
-        yolo: Boolean(active.yolo),
-        workspace:
-          wsNames.join(', ') || (typeof active.workspace === 'string' ? active.workspace : null),
-        workspaces: wsNames.length
-          ? wsNames
-          : Array.isArray(active.workspaces)
-            ? active.workspaces.map(String)
-            : [],
-        workspaceIds: wsIds,
-        workspaceGrants: grants,
-        capabilities: Array.isArray(active.capabilities) ? active.capabilities.map(String) : [],
-        lastActivityAt:
-          typeof active.lastActivityAt === 'string'
-            ? active.lastActivityAt
-            : (bearer.lastUsedAt ?? undefined),
-        connectedAt: typeof active.connectedAt === 'string' ? active.connectedAt : bearer.createdAt,
-        remoteIp: typeof active.remoteIp === 'string' ? active.remoteIp : null,
-        revocable: true,
-      });
-    } else {
-      items.push({
-        id: bearer.id,
-        connectorId: bearer.id,
-        name: bearer.name,
-        client: bearer.name,
-        actor: `connector:${bearer.name}`,
-        authType: 'Bearer connector',
-        status: 'DISCONNECTED',
-        yolo: false,
-        workspace: wsNames.join(', ') || null,
-        workspaces: wsNames,
-        workspaceIds: wsIds,
-        workspaceGrants: grants,
-        capabilities: bearer.profileCap ? [bearer.profileCap] : [],
-        lastActivityAt: bearer.lastUsedAt ?? undefined,
-        connectedAt: bearer.createdAt,
-        remoteIp: null,
-        revocable: true,
-      });
     }
+
+    items.push({
+      ...(active ?? {}),
+      id: bearer.id,
+      connectorId: bearer.id,
+      sessionId:
+        typeof active?.sessionId === 'string'
+          ? active.sessionId
+          : typeof active?.id === 'string'
+            ? active.id
+            : undefined,
+      name: bearer.name,
+      client: bearer.name,
+      actor: typeof active?.actor === 'string' ? active.actor : `connector:${bearer.name}`,
+      authType: 'Bearer connector',
+      status: active ? 'CONNECTED' : 'DISCONNECTED',
+      yolo: Boolean(active?.yolo),
+      workspace: wsDisplay,
+      workspaces: wsNames.length
+        ? wsNames
+        : Array.isArray(active?.workspaces)
+          ? active.workspaces.map(String)
+          : [],
+      workspaceIds: wsIds,
+      workspaceGrants: grants,
+      capabilities: caps,
+      lastActivityAt: lastActive,
+      connectedAt: connected,
+      remoteIp: typeof active?.remoteIp === 'string' ? active.remoteIp : null,
+      revocable: true,
+    });
   }
 
   // 2. Active connections not already matched to a bearer connector
@@ -155,9 +145,12 @@ export function buildUnifiedConnectors(
           : undefined;
     if (connId) matchedConnectionIds.add(connId);
 
+    const activeClientId = typeof activeObj.clientId === 'string' ? activeObj.clientId : undefined;
     items.push({
       ...activeObj,
       id: activeId,
+      clientId: activeClientId,
+      clientIds: activeClientId ? [activeClientId] : undefined,
       connectionId: connId,
       sessionId: typeof activeObj.sessionId === 'string' ? activeObj.sessionId : activeId,
       name: String(activeObj.client ?? activeObj.actor ?? activeId),
@@ -186,11 +179,15 @@ export function buildUnifiedConnectors(
 
     const wsIds = Array.isArray(durable.workspaceIds) ? durable.workspaceIds.map(String) : [];
     const wsNames = wsIds.map((id) => workspaceMap.get(id) ?? id);
+    const durableClientId =
+      typeof durable.clientId === 'string' ? String(durable.clientId) : undefined;
 
     items.push({
       ...(durable as any),
       id: connId,
       connectionId: connId,
+      clientId: durableClientId,
+      clientIds: durableClientId ? [durableClientId] : undefined,
       name: String(durable.client ?? durable.actor ?? connId),
       client: String(durable.client ?? durable.actor ?? connId),
       actor: typeof durable.actor === 'string' ? durable.actor : undefined,
@@ -214,12 +211,37 @@ export function buildUnifiedConnectors(
   for (const snap of snapshotConnectors) {
     const snapObj = snap as Record<string, any>;
     const snapName = String(snapObj.name ?? snapObj.id ?? '');
-    if (items.some((item) => item.name === snapName || item.id === snapObj.id)) continue;
+    const snapClientId =
+      typeof snapObj.clientId === 'string'
+        ? snapObj.clientId
+        : snapObj.authType === 'OAuth'
+          ? String(snapObj.id)
+          : undefined;
+    const snapActor = typeof snapObj.actor === 'string' ? snapObj.actor : undefined;
+
+    const existing = items.find(
+      (item) =>
+        item.id === snapObj.id ||
+        item.name === snapName ||
+        (snapClientId && item.clientId === snapClientId) ||
+        (snapActor && item.actor === snapActor),
+    );
+
+    if (existing) {
+      if (snapClientId) {
+        if (!existing.clientIds) existing.clientIds = existing.clientId ? [existing.clientId] : [];
+        if (!existing.clientIds.includes(snapClientId)) existing.clientIds.push(snapClientId);
+      }
+      continue;
+    }
 
     items.push({
       id: String(snapObj.id),
+      clientId: snapClientId,
+      clientIds: snapClientId ? [snapClientId] : undefined,
       name: snapName,
       client: snapName,
+      actor: snapActor,
       authType: snapObj.authType === 'OAuth' ? 'OAuth' : 'Bearer connector',
       status: 'DISCONNECTED',
       yolo: false,
@@ -256,61 +278,52 @@ export async function removeConnectorItem(item: ConnectorItem): Promise<void> {
   let attempted = 0;
   let succeeded = 0;
 
-  // 1. If it's a Bearer connector
-  if (item.connectorId) {
+  const tryCall = async (url: string, init?: RequestInit, bestEffort = false) => {
     attempted++;
     try {
-      await requestJson(`/api/connectors/${encodeURIComponent(item.connectorId)}`, {
-        method: 'DELETE',
-      });
+      await requestJson(url, init);
       succeeded++;
     } catch (err) {
-      errors.push(err);
-    }
-  }
-
-  // 2. If it's a durable OAuth connection
-  if (item.connectionId) {
-    attempted++;
-    try {
-      await requestJson(`/api/connections/${encodeURIComponent(item.connectionId)}/revoke`, {
-        method: 'POST',
-        body: '{}',
-      });
-      succeeded++;
-    } catch (err) {
-      errors.push(err);
-    }
-  }
-
-  // 3. If it has an active session
-  if (item.sessionId) {
-    attempted++;
-    try {
-      await requestJson(`/api/sessions/${encodeURIComponent(item.sessionId)}/revoke`, {
-        method: 'POST',
-        body: '{}',
-      });
-      succeeded++;
-    } catch (err) {
-      // Session might have been dropped when connector/connection was revoked
-      if (succeeded === 0) {
+      if (!bestEffort || succeeded === 0) {
         errors.push(err);
       }
     }
+  };
+
+  if (item.connectorId) {
+    await tryCall(`/api/connectors/${encodeURIComponent(item.connectorId)}`, { method: 'DELETE' });
+  }
+  if (item.connectionId) {
+    await tryCall(`/api/connections/${encodeURIComponent(item.connectionId)}/revoke`, {
+      method: 'POST',
+      body: '{}',
+    });
+  }
+  if (item.sessionId) {
+    await tryCall(
+      `/api/sessions/${encodeURIComponent(item.sessionId)}/revoke`,
+      { method: 'POST', body: '{}' },
+      true,
+    );
   }
 
-  // 4. Fallback if none of connectorId, connectionId, or sessionId were present
+  const clientIds = item.clientIds?.length
+    ? item.clientIds
+    : item.clientId
+      ? [item.clientId]
+      : item.authType === 'OAuth' && !item.connectionId && !item.connectorId
+        ? [item.id]
+        : [];
+  for (const cId of clientIds) {
+    await tryCall(
+      `/api/oauth/clients/${encodeURIComponent(cId)}?force=true`,
+      { method: 'DELETE' },
+      true,
+    );
+  }
+
   if (attempted === 0) {
-    const target = item.id;
-    try {
-      await requestJson(`/api/connectors/${encodeURIComponent(target)}`, {
-        method: 'DELETE',
-      });
-      succeeded++;
-    } catch (err) {
-      errors.push(err);
-    }
+    await tryCall(`/api/connectors/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
   }
 
   if (succeeded === 0 && errors.length > 0) {

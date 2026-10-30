@@ -134,6 +134,69 @@ describe('ConnectorsPage', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Connector revoked.');
   });
 
+  test('handles OAuth client revocation from table', async () => {
+    const fetchMock = installApiFixtures({
+      mutationResponses: {
+        'DELETE /api/oauth/clients/oauth_grok?force=true': { ok: true },
+      },
+      routes: {
+        '/api/connectors': [],
+        '/api/connections': [],
+        '/api/dashboard/runtime': {
+          status: { version: '0.1.0' },
+          uptimeSeconds: 100,
+          pending: { total: 0 },
+          stats: {
+            sessions: 0,
+            workspaceLeases: 0,
+            processes: 0,
+            openChanges: 0,
+            toolCalls: 0,
+            avgToolLatencyMs: null,
+            connectors: 1,
+          },
+          power: null,
+          system: {
+            detectedAt: '2026-08-27T12:00:00.000Z',
+            os: { platform: 'windows' },
+            runtime: { node: '24.7.0' },
+            tools: [],
+          },
+          transport: { state: 'secure' },
+          metrics: [],
+          activeConnections: [],
+          connectors: [
+            {
+              id: 'oauth_grok',
+              clientId: 'oauth_grok',
+              name: 'Grok',
+              authType: 'OAuth',
+              revocable: true,
+            },
+          ],
+        },
+      },
+    });
+
+    const user = userEvent.setup();
+    mount();
+
+    await screen.findByText('Grok');
+    const grokRow = screen.getByText('Grok').closest('tr')!;
+    const revokeBtn = within(grokRow).getByRole('button', { name: 'Revoke' });
+
+    await user.click(revokeBtn);
+    const confirmModal = await screen.findByRole('dialog', { name: 'Revoke connector' });
+    await user.click(within(confirmModal).getByRole('button', { name: 'Revoke' }));
+
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.map((c: any) => String(c[0]));
+      expect(calls.some((url: string) => url.includes('/api/oauth/clients/oauth_grok'))).toBe(true);
+    });
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Connector revoked.');
+  });
+
   test('opens details modal when clicking Details', async () => {
     const user = userEvent.setup();
     mount();
