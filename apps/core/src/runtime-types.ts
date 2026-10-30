@@ -10,6 +10,7 @@ export interface CoreRuntime {
   readonly adminUrl: string;
   readonly mcpUrl: string;
   readonly gatewayUrl: string;
+  readonly browserUrl?: string;
   readonly publicUrl: string | undefined;
   start(): Promise<void>;
   close(): Promise<void>;

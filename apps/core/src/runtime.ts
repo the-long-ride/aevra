@@ -86,6 +86,9 @@ export async function createCoreRuntime(
     get gatewayUrl() {
       return exposureWiring?.gatewayUrl() ?? `https://localhost:${config.publicPort}`;
     },
+    get browserUrl() {
+      return `ws://127.0.0.1:${config.browserPort ?? 47833}`;
+    },
     get publicUrl() {
       return exposureWiring?.publicUrl();
     },

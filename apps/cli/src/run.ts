@@ -9,7 +9,12 @@ export interface AevraSignalSource {
 export interface RunStartDependencies {
   signals: AevraSignalSource;
   createRuntime(config: CoreConfig): Promise<CoreRuntime>;
-  onReady?(info: { adminUrl: string; mcpUrl: string; gatewayUrl: string }): void | Promise<void>;
+  onReady?(info: {
+    adminUrl: string;
+    mcpUrl: string;
+    gatewayUrl: string;
+    browserUrl?: string;
+  }): void | Promise<void>;
 }
 
 export async function runStart(
@@ -23,6 +28,7 @@ export async function runStart(
       adminUrl: runtime.adminUrl,
       mcpUrl: runtime.mcpUrl,
       gatewayUrl: runtime.gatewayUrl,
+      browserUrl: runtime.browserUrl ?? `ws://127.0.0.1:${config.browserPort ?? 47833}`,
     });
   } catch (error) {
     await runtime.close();

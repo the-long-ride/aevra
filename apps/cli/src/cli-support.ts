@@ -18,6 +18,7 @@ function serviceTable(info: {
   adminUrl: string;
   mcpUrl: string;
   gatewayUrl?: string;
+  browserUrl?: string;
   desktopHelperReady: boolean;
 }): string[] {
   const rows: Array<[string, string]> = [
@@ -27,6 +28,7 @@ function serviceTable(info: {
     ...(info.gatewayUrl ? ([['Gateway', info.gatewayUrl]] as Array<[string, string]>) : []),
     ['MCP', `${info.mcpUrl}/mcp`],
     ['Dashboard', info.adminUrl],
+    ...(info.browserUrl ? ([['Extension WS', info.browserUrl]] as Array<[string, string]>) : []),
   ];
   const serviceWidth = Math.max(...rows.map(([service]) => service.length));
   const valueWidth = Math.max(...rows.map(([, value]) => value.length));
@@ -105,6 +107,7 @@ export function readyLines(info: {
   adminUrl: string;
   mcpUrl: string;
   gatewayUrl?: string;
+  browserUrl?: string;
   desktopHelperReady: boolean;
 }): string[] {
   return [
