@@ -22,6 +22,7 @@
 @import url('./layout-tweaks.css');
 @import url('./responsive.css');
 @import url('./requests.css');
+@import url('./approval-modal.css');
 @import url('./workspaces.css');
 @import url('./browser-control.css');
 @import url('./request-activity-chart.css');
