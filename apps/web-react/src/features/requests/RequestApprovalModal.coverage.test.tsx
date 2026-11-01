@@ -285,4 +285,62 @@ describe('RequestApprovalModal coverage', () => {
     // Non-tab key does nothing
     fireEvent.keyDown(window, { key: 'ArrowDown' });
   });
+
+  it('renders preview box with working copy button and structured actions', async () => {
+    installApiFixtures();
+    const writeTextSpy = vi.mocked(navigator.clipboard.writeText);
+    const data: RequestsData = {
+      approvals: [
+        {
+          id: 'app-preview',
+          state: 'PENDING',
+          actor: 'connector:BabyClaude',
+          sessionId: 'sess-1',
+          risk: 'MEDIUM',
+          operation: { family: 'git:status', capability: 'commands.run' },
+          payload: { permissionMatcher: 'git:status' },
+          presentation: {
+            title: 'Run script',
+            action: 'Execute',
+            target: 'repo',
+            preview: 'echo "hello world"',
+          },
+        } as any,
+      ],
+      oauth: [],
+      workspaces: [],
+    };
+
+    renderWithDialog(<RequestApprovalModal data={data} onActioned={vi.fn()} onDismiss={vi.fn()} />);
+
+    const dialog = screen.getByRole('dialog', { name: 'Approval request' });
+    const previewBox = dialog.querySelector('.approval-preview-box');
+    expect(previewBox).toBeInTheDocument();
+
+    const copyBtn = screen.getByRole('button', { name: 'Copy command' });
+    expect(copyBtn).toHaveTextContent('Copy');
+    fireEvent.click(copyBtn);
+    await waitFor(() => expect(writeTextSpy).toHaveBeenCalledWith('echo "hello world"'));
+    expect(copyBtn).toHaveTextContent('Copied');
+
+    const primaryGroup = dialog.querySelector<HTMLElement>('.approval-actions-primary-group');
+    expect(primaryGroup).toBeInTheDocument();
+    expect(within(primaryGroup!).getByRole('button', { name: 'Run once' })).toBeInTheDocument();
+    expect(within(primaryGroup!).getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+
+    const scopeGroup = dialog.querySelector<HTMLElement>('.approval-actions-scopes');
+    expect(scopeGroup).toBeInTheDocument();
+    expect(
+      within(scopeGroup!).getByRole('button', { name: 'Allow this session' }),
+    ).toBeInTheDocument();
+    expect(
+      within(scopeGroup!).getByRole('button', { name: 'Always in workspace' }),
+    ).toBeInTheDocument();
+    expect(
+      within(scopeGroup!).getByRole('button', { name: 'Always globally' }),
+    ).toBeInTheDocument();
+    expect(within(scopeGroup!).getByRole('button', { name: 'Enable YOLO' })).toBeInTheDocument();
+
+    writeTextSpy.mockClear();
+  });
 });

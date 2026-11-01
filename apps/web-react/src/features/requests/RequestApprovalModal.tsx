@@ -41,11 +41,30 @@ function ApprovalModalCard({
     Boolean(item.sessionId) &&
     (item.actor.startsWith('connector:') || item.actor.startsWith('oauth:'));
 
+  const allActions = actionsForApproval(item);
+  const hasOnce = allActions.some((a) => a.scope === 'once');
+  const primaryActions = allActions.filter(
+    (a) => a.scope === null || (hasOnce ? a.scope === 'once' : a.scope !== null),
+  );
+  const scopeActions = allActions.filter((a) => !primaryActions.includes(a));
+
   // A decision is in flight, or it failed. Both have to be visible: the buttons
   // POST to an endpoint that rejects a second decision on the same request, so an
   // unguarded double click turned a successful approval into a visible error.
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { toast, error: showError } = useToast();
+
+  const handleCopyPreview = async () => {
+    if (!presentation.preview) return;
+    try {
+      await navigator.clipboard.writeText(presentation.preview);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore
+    }
+  };
 
   const decide = async (act: () => Promise<void>) => {
     if (busy) return;
@@ -107,9 +126,23 @@ function ApprovalModalCard({
             {presentation.target}
           </span>
           {presentation.preview ? (
-            <code className="request-preview" title={presentation.preview}>
-              {presentation.preview}
-            </code>
+            <div className="approval-preview-box">
+              <div className="approval-preview-header">
+                <span className="approval-preview-title">Command preview</span>
+                <button
+                  type="button"
+                  className="approval-preview-copy-btn"
+                  title="Copy command"
+                  aria-label="Copy command"
+                  onClick={() => void handleCopyPreview()}
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <code className="request-preview" title={presentation.preview}>
+                {presentation.preview}
+              </code>
+            </div>
           ) : null}
           {matcher ? (
             <span className="request-saved-matcher">
@@ -125,30 +158,53 @@ function ApprovalModalCard({
           item={item}
           connectionHasMultipleSessions={presentation.connectionHasMultipleSessions}
         />
-        <div className="request-actions approval-modal-actions">
-          {actionsForApproval(item).map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              className={action.scope === 'once' ? 'primary' : ''}
-              data-surface-id={`approval-modal:${action.id}`}
-              disabled={busy}
-              onClick={() => void perform(action.scope)}
-            >
-              {action.label}
-            </button>
-          ))}
-          {yoloEligible ? (
-            <button
-              type="button"
-              className="yolo-action"
-              data-surface-id="approval-modal:yolo-session"
-              title="Allow this connector session to skip future approval prompts"
-              disabled={busy}
-              onClick={() => void enableYolo()}
-            >
-              Enable YOLO
-            </button>
+        <div className="request-actions approval-modal-actions structured-actions">
+          <div className="approval-actions-primary-group">
+            {primaryActions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className={
+                  action.scope === 'once' ? 'primary' : action.scope === null ? 'deny-action' : ''
+                }
+                data-surface-id={`approval-modal:${action.id}`}
+                disabled={busy}
+                onClick={() => void perform(action.scope)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+          {scopeActions.length > 0 || yoloEligible ? (
+            <div className="approval-actions-scopes">
+              <span className="approval-actions-scopes-label">Remember:</span>
+              <div className="approval-actions-scopes-group">
+                {scopeActions.map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className="scope-action"
+                    data-surface-id={`approval-modal:${action.id}`}
+                    disabled={busy}
+                    onClick={() => void perform(action.scope)}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+                {yoloEligible ? (
+                  <button
+                    type="button"
+                    className="yolo-action"
+                    data-surface-id="approval-modal:yolo-session"
+                    title="Allow this connector session to skip future approval prompts"
+                    disabled={busy}
+                    onClick={() => void enableYolo()}
+                  >
+                    Enable YOLO
+                  </button>
+                ) : null}
+              </div>
+            </div>
           ) : null}
         </div>
         {toast}

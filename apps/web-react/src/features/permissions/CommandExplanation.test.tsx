@@ -29,8 +29,12 @@ describe('CommandExplanation', () => {
       reasons: [{ code: 'OUTSIDE_TARGET', message: 'Target is outside workspace' }],
     };
 
-    render(<CommandExplanation analysis={analysis} />);
+    const { container } = render(<CommandExplanation analysis={analysis} />);
 
+    expect(container.querySelector('.command-explanation-card')).toHaveClass('is-outside');
+    expect(container.querySelector('.command-explanation-badge')).toHaveTextContent('outside');
+    expect(container.querySelector('.command-explanation-outside')).toBeInTheDocument();
+    expect(container.querySelector('.command-explanation-reasons')).toBeInTheDocument();
     expect(screen.getByText('Command Understanding')).toBeInTheDocument();
     expect(screen.getByText('outside')).toBeInTheDocument();
     expect(screen.getByText('npm')).toBeInTheDocument();
